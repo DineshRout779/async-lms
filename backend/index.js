@@ -12,12 +12,25 @@ app.use(express.json());
 
 const server = http.createServer(app);
 
-app.use('/api/v1/auth', require('./routes/auth'));
 app.use((req, res, next) => {
   console.log(
     `${new Date().toISOString()}: ${req.method} - ${req.originalUrl}`
   );
+  next();
 });
+
+app.use('/api/v1/auth', require('./routes/auth.routes'));
+app.use('/api/v1/users', require('./routes/user.routes'));
+app.use('/api/v1/onboarding', require('./routes/onboarding.routes'));
+app.use('/api/v1/colleges', require('./routes/college.routes'));
+app.use('/api/v1/subjects', require('./routes/subject.routes'));
+app.use('/api/v1/admin', require('./routes/admin.routes'));
+
+//  404 Catch-all (Place this at the very bottom)
+app.use((req, res) => {
+  res.status(404).json({ message: `Route ${req.originalUrl} not found` });
+});
+
 const io = new Server(server, {
   cors: { origin: '*' },
 });

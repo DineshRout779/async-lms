@@ -1,102 +1,142 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Github, GraduationCap } from 'lucide-react';
-import { loginService, signupService } from '@/services/auth';
-import { isAxiosError } from 'axios';
+import { GraduationCap } from 'lucide-react';
 import { useNavigate } from 'react-router';
+import toast from 'react-hot-toast';
+
+// Redux
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { loginUser, signupUser } from '@/features/auth/authThunks';
+import { clearAuthError } from '@/features/auth/authSlice';
+import { selectAuth } from '@/features/auth/authSelectors';
 
 type AuthMode = 'login' | 'signup';
 
 export default function Login() {
   const [authMode, setAuthMode] = useState<AuthMode>('signup');
-
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
 
+  const { status, isAuthenticated, user } = useAppSelector(selectAuth);
+  const isLoading = status === 'loading';
+
+  /**
+   * ---------------------------------------
+   * REDIRECT AFTER AUTH
+   * ---------------------------------------
+   */
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    // STUDENT FLOW
+    if (user.role === 'student') {
+      if (user.onboarding_step !== 'done') {
+        navigate(`/onboarding/${user.onboarding_step}`);
+      } else {
+        navigate('/dashboard/student');
+      }
+      return;
+    }
+
+    // FACILITATOR FLOW
+    if (user.role === 'facilitator') {
+      navigate('/dashboard/facilitator');
+      return;
+    }
+
+    // ADMIN FLOW
+    if (user.role === 'admin') {
+      navigate('/dashboard/admin');
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  /**
+   * ---------------------------------------
+   * TAB CHANGE
+   * ---------------------------------------
+   */
+  const handleTabChange = (v: string) => {
+    setAuthMode(v as AuthMode);
+    dispatch(clearAuthError());
+  };
+
+  /**
+   * ---------------------------------------
+   * VALIDATION
+   * ---------------------------------------
+   */
   const validateSignup = () => {
     if (!name || !email || !password || !confirmPassword) {
       throw new Error('All fields are required');
     }
-
     if (password !== confirmPassword) {
       throw new Error('Passwords do not match');
     }
-
     if (password.length < 8) {
       throw new Error('Password must be at least 8 characters');
     }
   };
 
-  const handleSubmit = async () => {
-    try {
-      setLoading(true);
+  /**
+   * ---------------------------------------
+   * SUBMIT
+   * ---------------------------------------
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
+    const toastId = toast.loading(
+      authMode === 'signup' ? 'Creating account...' : 'Signing in...'
+    );
+
+    try {
       if (authMode === 'signup') {
         validateSignup();
-
-        const res = await signupService({
-          name,
-          email,
-          password,
-        });
-
-        console.log('Signup success:', res.data);
+        await dispatch(
+          signupUser({ full_name: name, email, password })
+        ).unwrap();
+        toast.success('Account created successfully!', { id: toastId });
       } else {
         if (!email || !password) {
           throw new Error('Email and password are required');
         }
-
-        const res = await loginService({ email, password });
-        console.log('Login success:', res.data);
+        await dispatch(loginUser({ email, password })).unwrap();
+        toast.success('Login successful!', { id: toastId });
       }
-
-      navigate('/dashboard');
-    } catch (error: any) {
-      if (isAxiosError(error)) {
-        console.log(error.response?.data?.message || 'Authentication failed');
-      } else {
-        console.log(error.message);
-      }
-    } finally {
-      setLoading(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Authentication failed', { id: toastId });
     }
   };
 
   return (
     <div className='min-h-screen grid grid-cols-1 lg:grid-cols-2'>
-      {/* Left Illustration */}
       <div className='hidden lg:block border'>
         <img
           className='w-full h-full object-cover'
           src='https://images.pexels.com/photos/4170628/pexels-photo-4170628.jpeg'
-          alt=''
+          alt='Auth background'
         />
       </div>
 
-      {/* Right Auth Section */}
       <div className='flex items-center justify-center px-6'>
         <div className='w-full max-w-md'>
-          {/* Logo */}
           <div className='flex items-center gap-2 mb-6'>
             <div className='h-9 w-9 rounded-lg bg-foreground text-background flex items-center justify-center'>
               <GraduationCap className='h-5 w-5' />
             </div>
-            <span className='font-semibold text-lg'>CodeGuru</span>
+            <span className='font-semibold text-lg uppercase'>CodeGuru</span>
           </div>
 
-          {/* Tabs */}
           <Tabs
             value={authMode}
-            onValueChange={(v) => {
-              setAuthMode(v as AuthMode);
-            }}
+            onValueChange={handleTabChange}
             className='mb-6'
           >
             <TabsList className='grid grid-cols-2'>
@@ -105,25 +145,20 @@ export default function Login() {
             </TabsList>
           </Tabs>
 
-          {/* Form */}
-          <div className='space-y-4'>
+          <form onSubmit={handleSubmit} className='space-y-4'>
             {authMode === 'signup' && (
               <div>
                 <label className='text-sm font-medium'>Full Name</label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder='Enter your full name'
-                />
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
               </div>
             )}
 
             <div>
               <label className='text-sm font-medium'>Email</label>
               <Input
+                type='email'
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder='Enter your email'
               />
             </div>
 
@@ -133,7 +168,6 @@ export default function Login() {
                 type='password'
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder='Enter password'
               />
             </div>
 
@@ -144,72 +178,18 @@ export default function Login() {
                   type='password'
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder='Re-enter password'
                 />
               </div>
             )}
 
-            <Button
-              className='w-full mt-2'
-              disabled={loading}
-              onClick={handleSubmit}
-            >
-              {loading
-                ? 'Please wait...'
+            <Button type='submit' className='w-full' disabled={isLoading}>
+              {isLoading
+                ? 'Processing...'
                 : authMode === 'login'
                 ? 'Login'
                 : 'Create Account'}
             </Button>
-
-            <p className='text-center text-sm text-muted-foreground'>
-              {authMode === 'login' ? (
-                <>
-                  Don’t have an account?{' '}
-                  <button
-                    className='underline'
-                    onClick={() => setAuthMode('signup')}
-                  >
-                    Create your account
-                  </button>
-                </>
-              ) : (
-                <>
-                  Already have an account?{' '}
-                  <button
-                    className='underline'
-                    onClick={() => setAuthMode('login')}
-                  >
-                    Sign in
-                  </button>
-                </>
-              )}
-            </p>
-          </div>
-
-          {/* Divider */}
-          <div className='flex items-center gap-3 my-6'>
-            <div className='h-px flex-1 bg-border' />
-            <span className='text-xs text-muted-foreground'>OR</span>
-            <div className='h-px flex-1 bg-border' />
-          </div>
-
-          {/* OAuth */}
-          <div className='space-y-3'>
-            <Button variant='secondary' className='w-full flex gap-2'>
-              <svg width='16' height='16' viewBox='0 0 48 48'>
-                <path
-                  fill='#FFC107'
-                  d='M43.6 20.4H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.5 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.6z'
-                />
-              </svg>
-              Continue with Google
-            </Button>
-
-            {/* <Button variant='secondary' className='w-full flex gap-2'>
-              <Github className='h-4 w-4' />
-              Continue with GitHub
-            </Button> */}
-          </div>
+          </form>
         </div>
       </div>
     </div>

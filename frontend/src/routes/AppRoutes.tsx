@@ -1,9 +1,27 @@
+import { createBrowserRouter, RouterProvider } from 'react-router';
 import App from '@/App';
-import CodeEditor from '@/pages/CodeEditor';
+
+// Layouts & Auth
+import StudentDashboardLayout from '@/layouts/StudentDashboardLayout';
+
+// Public Pages
 import Home from '@/pages/Home';
 import Login from '@/pages/Login';
 import Signup from '@/pages/Signup';
-import { createBrowserRouter, RouterProvider } from 'react-router';
+import CodeEditor from '@/pages/CodeEditor';
+
+// Protected Pages
+import StudentDashboardHome from '@/pages/dashboard/student/StudentDashboardHome';
+import CollegeStep from '@/pages/onboarding/CollegeStep';
+import BatchStep from '@/pages/onboarding/BatchStep';
+import ProgramStep from '@/pages/onboarding/ProgramStep';
+import PrivateRoute from './PrivateRoute';
+import MyCourses from '@/pages/dashboard/student/MyCourses';
+import AdminDashboardLayout from '@/layouts/AdminDashboardLayout';
+import AdminHome from '@/pages/dashboard/admin/AdminHome';
+import AdminColleges from '@/pages/dashboard/admin/AdminColleges';
+import AdminCourses from '@/pages/dashboard/admin/AdminCourses';
+import NotFound from '@/pages/NotFound';
 
 const router = createBrowserRouter([
   {
@@ -25,6 +43,59 @@ const router = createBrowserRouter([
       {
         path: 'code-editor',
         element: <CodeEditor />,
+      },
+
+      // --- PROTECTED ROUTES (Requires Login) ---
+      {
+        element: <PrivateRoute />,
+        children: [
+          // Onboarding Flow
+          {
+            path: 'onboarding',
+            children: [
+              { path: 'college', element: <CollegeStep /> },
+              { path: 'batch', element: <BatchStep /> },
+              { path: 'program', element: <ProgramStep /> },
+            ],
+          },
+
+          // Student Dashboard
+          {
+            path: 'dashboard/student',
+            element: <StudentDashboardLayout />, // Wrapper for Sidebar + Header
+            children: [
+              {
+                index: true,
+                element: <StudentDashboardHome />,
+              },
+              // Future dashboard sub-pages go here:
+              { path: 'courses', element: <MyCourses /> },
+            ],
+          },
+
+          // Facilitator
+
+          // Admin Routes
+          {
+            path: 'dashboard/admin',
+            element: <AdminDashboardLayout />, // Wrapper for Sidebar + Header
+            children: [
+              {
+                index: true,
+                element: <AdminHome />,
+              },
+              // Future dashboard sub-pages go here:
+              { path: 'colleges', element: <AdminColleges /> },
+              { path: 'courses', element: <AdminCourses /> },
+            ],
+          },
+        ],
+      },
+
+      // --- FALLBACKS ---
+      {
+        path: '*',
+        element: <NotFound />,
       },
     ],
   },

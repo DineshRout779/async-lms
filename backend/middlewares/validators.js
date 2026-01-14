@@ -1,4 +1,4 @@
-const { body, validationResult } = require('express-validator');
+const { body, validationResult, query } = require('express-validator');
 
 // This function checks the results of the body() rules
 const handleValidationErrors = (req, res, next) => {
@@ -31,7 +31,7 @@ exports.validateLogin = validate([
 ]);
 
 exports.validateSignup = validate([
-  body('name').trim().notEmpty().withMessage('Name is required'),
+  body('full_name').trim().notEmpty().withMessage('full_name is required'),
   body('email')
     .isEmail()
     .withMessage('Please provide a valid email address')
