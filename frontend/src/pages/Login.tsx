@@ -3,30 +3,69 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Github, GraduationCap } from 'lucide-react';
-import { loginService } from '@/services/auth';
+import { loginService, signupService } from '@/services/auth';
 import { isAxiosError } from 'axios';
+import { useNavigate } from 'react-router';
 
-type AuthMode = 'signin' | 'signup';
+type AuthMode = 'login' | 'signup';
 
 export default function Login() {
-  const [authMode, setAuthMode] = useState<AuthMode>('signin');
+  const [authMode, setAuthMode] = useState<AuthMode>('signup');
+
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const navigate = useNavigate();
+
+  const validateSignup = () => {
+    if (!name || !email || !password || !confirmPassword) {
+      throw new Error('All fields are required');
+    }
+
+    if (password !== confirmPassword) {
+      throw new Error('Passwords do not match');
+    }
+
+    if (password.length < 8) {
+      throw new Error('Password must be at least 8 characters');
+    }
+  };
 
   const handleSubmit = async () => {
     try {
-      const res = await loginService({ email, password });
-      console.log('login res: ', res.data);
-    } catch (error) {
-      if (isAxiosError(error)) {
-        if (error.request) {
-          console.log('Error login req: ', error.request.message);
-        } else if (error.response) {
-          console.log('Error login res: ', error.response.data.message);
-        } else {
-          console.log('Login Error: ', error.message);
+      setLoading(true);
+
+      if (authMode === 'signup') {
+        validateSignup();
+
+        const res = await signupService({
+          name,
+          email,
+          password,
+        });
+
+        console.log('Signup success:', res.data);
+      } else {
+        if (!email || !password) {
+          throw new Error('Email and password are required');
         }
+
+        const res = await loginService({ email, password });
+        console.log('Login success:', res.data);
       }
+
+      navigate('/dashboard');
+    } catch (error: any) {
+      if (isAxiosError(error)) {
+        console.log(error.response?.data?.message || 'Authentication failed');
+      } else {
+        console.log(error.message);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -34,13 +73,11 @@ export default function Login() {
     <div className='min-h-screen grid grid-cols-1 lg:grid-cols-2'>
       {/* Left Illustration */}
       <div className='hidden lg:block border'>
-        <div className='h-screen'>
-          <img
-            className='w-full block object-cover h-full'
-            src='https://images.pexels.com/photos/4170628/pexels-photo-4170628.jpeg'
-            alt=''
-          />
-        </div>
+        <img
+          className='w-full h-full object-cover'
+          src='https://images.pexels.com/photos/4170628/pexels-photo-4170628.jpeg'
+          alt=''
+        />
       </div>
 
       {/* Right Auth Section */}
@@ -57,19 +94,32 @@ export default function Login() {
           {/* Tabs */}
           <Tabs
             value={authMode}
-            onValueChange={(v) => setAuthMode(v as AuthMode)}
+            onValueChange={(v) => {
+              setAuthMode(v as AuthMode);
+            }}
             className='mb-6'
           >
             <TabsList className='grid grid-cols-2'>
               <TabsTrigger value='signup'>Sign Up</TabsTrigger>
-              <TabsTrigger value='signin'>Sign In</TabsTrigger>
+              <TabsTrigger value='login'>Sign In</TabsTrigger>
             </TabsList>
           </Tabs>
 
           {/* Form */}
           <div className='space-y-4'>
+            {authMode === 'signup' && (
+              <div>
+                <label className='text-sm font-medium'>Full Name</label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder='Enter your full name'
+                />
+              </div>
+            )}
+
             <div>
-              <label className='text-sm font-medium'>Email id</label>
+              <label className='text-sm font-medium'>Email</label>
               <Input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -78,28 +128,41 @@ export default function Login() {
             </div>
 
             <div>
-              <div className='flex items-center justify-between'>
-                <label className='text-sm font-medium'>Password</label>
-                {authMode === 'signin' && (
-                  <button className='text-xs text-muted-foreground hover:underline'>
-                    Forgot password?
-                  </button>
-                )}
-              </div>
+              <label className='text-sm font-medium'>Password</label>
               <Input
                 type='password'
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder='Enter Password'
+                placeholder='Enter password'
               />
             </div>
 
-            <Button className='w-full mt-2' onClick={handleSubmit}>
-              {authMode === 'signin' ? 'Login' : 'Create Account'}
+            {authMode === 'signup' && (
+              <div>
+                <label className='text-sm font-medium'>Confirm Password</label>
+                <Input
+                  type='password'
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder='Re-enter password'
+                />
+              </div>
+            )}
+
+            <Button
+              className='w-full mt-2'
+              disabled={loading}
+              onClick={handleSubmit}
+            >
+              {loading
+                ? 'Please wait...'
+                : authMode === 'login'
+                ? 'Login'
+                : 'Create Account'}
             </Button>
 
             <p className='text-center text-sm text-muted-foreground'>
-              {authMode === 'signin' ? (
+              {authMode === 'login' ? (
                 <>
                   Don’t have an account?{' '}
                   <button
@@ -114,7 +177,7 @@ export default function Login() {
                   Already have an account?{' '}
                   <button
                     className='underline'
-                    onClick={() => setAuthMode('signin')}
+                    onClick={() => setAuthMode('login')}
                   >
                     Sign in
                   </button>
@@ -136,16 +199,16 @@ export default function Login() {
               <svg width='16' height='16' viewBox='0 0 48 48'>
                 <path
                   fill='#FFC107'
-                  d='M43.6 20.4H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.5 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.6z'
+                  d='M43.6 20.4H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.5 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.6z'
                 />
               </svg>
               Continue with Google
             </Button>
 
-            <Button variant='secondary' className='w-full flex gap-2'>
+            {/* <Button variant='secondary' className='w-full flex gap-2'>
               <Github className='h-4 w-4' />
               Continue with GitHub
-            </Button>
+            </Button> */}
           </div>
         </div>
       </div>
