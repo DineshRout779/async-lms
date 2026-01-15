@@ -4,6 +4,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const setupSocket = require('./socket');
+const path = require('path');
 require('./config/pg');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/v1/onboarding', require('./routes/onboarding.routes'));
 app.use('/api/v1/colleges', require('./routes/college.routes'));
 app.use('/api/v1/subjects', require('./routes/subject.routes'));
 app.use('/api/v1/admin', require('./routes/admin.routes'));
+app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 
 //  404 Catch-all (Place this at the very bottom)
 app.use((req, res) => {

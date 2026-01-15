@@ -22,6 +22,9 @@ import AdminHome from '@/pages/dashboard/admin/AdminHome';
 import AdminColleges from '@/pages/dashboard/admin/AdminColleges';
 import AdminCourses from '@/pages/dashboard/admin/AdminCourses';
 import NotFound from '@/pages/NotFound';
+import CourseViewLayout from '@/layouts/CourseLayout';
+import LessonView from '@/pages/dashboard/student/Lesson';
+import CourseIntro from '@/pages/dashboard/student/CourseIntro';
 
 const router = createBrowserRouter([
   {
@@ -70,6 +73,20 @@ const router = createBrowserRouter([
               },
               // Future dashboard sub-pages go here:
               { path: 'courses', element: <MyCourses /> },
+              {
+                path: 'courses/:slug',
+                element: <CourseViewLayout />,
+                children: [
+                  {
+                    index: true,
+                    element: <CourseIntro />, // A "Get Started" page
+                  },
+                  {
+                    path: 'lesson/:subtopicSlug',
+                    element: <LessonView />, // The actual content player
+                  },
+                ],
+              },
             ],
           },
 

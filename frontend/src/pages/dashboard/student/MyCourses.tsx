@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router';
 
 interface Subject {
   id: number;
@@ -12,11 +13,13 @@ interface Subject {
   description: string;
   isEnrolled: boolean;
   completed_at: string | null;
+  slug: string | null;
 }
 
 const MyCourses = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchMyCourses = async () => {
@@ -32,6 +35,10 @@ const MyCourses = () => {
     };
     fetchMyCourses();
   }, []);
+
+  const gotoCourse = ({ slug }: { slug: string | null }) => {
+    navigate(`/dashboard/student/courses/${slug}`);
+  };
 
   if (loading) {
     return (
@@ -92,7 +99,10 @@ const MyCourses = () => {
 
             <div className='flex items-center justify-between mt-auto'>
               {subject.isEnrolled ? (
-                <Button className='w-full bg-blue-600 hover:bg-blue-700 group-hover:gap-3 transition-all'>
+                <Button
+                  onClick={() => gotoCourse({ slug: subject.slug })}
+                  className='w-full bg-blue-600 hover:bg-blue-700 group-hover:gap-3 transition-all'
+                >
                   Continue Learning <ArrowRight className='w-4 h-4 ml-2' />
                 </Button>
               ) : (

@@ -1,18 +1,18 @@
-const pool = require('../config/pg');
+const router = require('express').Router();
+const {
+  getAllSubjects,
+  getCourseStructure,
+  getSubtopicContent,
+} = require('../controllers/subject.controller');
 const verifyToken = require('../middlewares/verfiyToken');
 
-const router = require('express').Router();
+// GET specific content when clicking a subtopic
+router.get('/content/:subtopicSlug', verifyToken, getSubtopicContent);
 
-// GET: Fetch all published subjects for the user to pick from
-router.get('/', verifyToken, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      'SELECT id, name, slug FROM subjects WHERE is_published = true ORDER BY order_index ASC'
-    );
-    res.json({ success: true, data: rows });
-  } catch (err) {
-    res.status(500).json({ message: 'Error fetching subjects' });
-  }
-});
+// Fetch all published subjects
+router.get('/', verifyToken, getAllSubjects);
+
+// GET a course and its hierarchy (topics/subtopics)
+router.get('/:slug', verifyToken, getCourseStructure);
 
 module.exports = router;
