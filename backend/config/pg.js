@@ -1,5 +1,4 @@
 const { Pool } = require('pg');
-const tables = require('./createTables');
 
 const pool = new Pool({
   host: process.env.PGHOST,
@@ -14,26 +13,18 @@ const pool = new Pool({
 
 (async () => {
   try {
-    await pool.connect();
-    console.log('Database connected!');
+    const client = await pool.connect();
+    // Accessing the host from the pool's own options
+    const connectedHost = pool.options.host;
+    const connectedDb = pool.options.database;
+
+    console.log(`✅ Database connected to host: ${connectedHost}`);
+    console.log(`📁 Target database: ${connectedDb}`);
+
+    client.release(); // Always release the client back to the pool
   } catch (error) {
-    console.log('Database connection Failed: ', error);
+    console.log('❌ Database connection Failed: ', error);
   }
 })();
-
-// (async () => {
-//   try {
-//     for (const [tableName, tableQuery] of Object.entries(tables)) {
-//       console.log(`Creating table: ${tableName}`);
-//       await pool.query(tableQuery);
-//     }
-
-//     console.log('All tables created successfully.');
-//     process.exit(0);
-//   } catch (error) {
-//     console.error('Error while creating tables:', error);
-//     process.exit(1);
-//   }
-// })();
 
 module.exports = pool;

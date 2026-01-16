@@ -1,2 +1,4 @@
 node_modules
 .env
+db_dump.sql
+learn-x.pem
