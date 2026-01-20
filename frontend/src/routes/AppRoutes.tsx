@@ -25,6 +25,8 @@ import NotFound from '@/pages/NotFound';
 import CourseViewLayout from '@/layouts/CourseLayout';
 import LessonView from '@/pages/dashboard/student/Lesson';
 import CourseIntro from '@/pages/dashboard/student/CourseIntro';
+import EditorProfile from '@/pages/playground/EditorProfile';
+import Assignments from '@/pages/dashboard/student/Assignments';
 
 const router = createBrowserRouter([
   {
@@ -43,11 +45,11 @@ const router = createBrowserRouter([
         path: 'signup',
         element: <Signup />,
       },
+      // editor
       {
         path: 'code-editor',
         element: <CodeEditor />,
       },
-
       // --- PROTECTED ROUTES (Requires Login) ---
       {
         element: <PrivateRoute />,
@@ -70,6 +72,14 @@ const router = createBrowserRouter([
               {
                 index: true,
                 element: <StudentDashboardHome />,
+              },
+              {
+                path: 'editor-profile',
+                element: <EditorProfile />,
+              },
+              {
+                path: 'assignments',
+                element: <Assignments />,
               },
               // Future dashboard sub-pages go here:
               { path: 'courses', element: <MyCourses /> },

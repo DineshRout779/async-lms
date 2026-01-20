@@ -5,17 +5,24 @@ import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import Editor from '@monaco-editor/react';
 import { Button } from '../components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
-import type { Language } from '../utils/languages';
 import { languages } from '../utils/languages';
 import FileTree, { buildFileTree } from '../components/common/FileTree';
 import { BOILERPLATES } from '../utils/boilerplates';
+import { useSearchParams } from 'react-router';
+import apiClient from '@/services/api';
+import { useAppSelector } from '@/app/hooks';
+import { selectUser } from '@/features/auth/authSelectors';
+
+type EditorEnvironment = {
+  projectId: string;
+  workspacePath: string;
+  profile: {
+    name: string;
+    language: string;
+    entry: string;
+    run: string;
+  };
+};
 
 type ProgramStatus = 'running' | 'finished' | 'failed';
 
@@ -41,10 +48,14 @@ type PlaygroundFile = {
 /* ---------- component ---------- */
 
 const CodeEditor = (): JSX.Element => {
+  const [searchParams] = useSearchParams();
+  const [env, setEnv] = useState<EditorEnvironment | null>(null);
+  const user = useAppSelector(selectUser);
+
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const [language, setLanguage] = useState<Language>(languages[0]);
+  const [language, setLanguage] = useState<string>('javascript');
 
   const [files, setFiles] = useState<PlaygroundFile[]>(
     BOILERPLATES[languages[0].value]
@@ -58,6 +69,48 @@ const CodeEditor = (): JSX.Element => {
   const [running, setRunning] = useState<boolean>(false);
 
   /* ---------- terminal setup ---------- */
+
+  useEffect(() => {
+    const fetchEnvironment = async () => {
+      const pid = searchParams.get('pid');
+      const cp = searchParams.get('cp');
+
+      if (!pid || !cp) {
+        return;
+      }
+
+      try {
+        const res = await apiClient.post(`/editor/start`, {
+          profile: cp,
+          project_id: pid,
+        });
+
+        console.log('res: ', res);
+        // below is the API response
+        /**
+         * {
+              "project_id": 1768851953198,
+              "profile": {
+                  "name": "JavaScript",
+                  "image": "playground-node-runner",
+                  "language": "javascript",
+                  "entry": "index.js",
+                  "run": "node index.js",
+                  "template": [
+                      "index.js"
+                  ]
+              },
+              "workspacePath": "\\workspaces\\3\\1768851953198"
+          }
+         */
+        setEnv(res.data);
+        setLanguage(res.data.profile.language);
+      } catch (error) {
+        console.log('Error fetching env data:', error);
+      }
+    };
+    fetchEnvironment();
+  }, []);
 
   useEffect(() => {
     if (!terminalContainerRef.current) return;
@@ -159,23 +212,13 @@ const CodeEditor = (): JSX.Element => {
     terminalRef.current.writeln('Running...\n');
 
     socket.emit('program:run', {
-      language: language.value,
+      userId: user?.id,
+      projectId: env?.projectId,
+      language,
       files,
     });
   };
 
-  const handleLanguageChange = (val: string) => {
-    const lang = languages.find((l) => l.value === val);
-    if (!lang) return;
-
-    setLanguage(lang);
-
-    const nextFiles = BOILERPLATES[lang.value];
-    if (nextFiles) {
-      setFiles(nextFiles);
-      setActiveFilePath(nextFiles[0].path);
-    }
-  };
   /* ---------- UI ---------- */
 
   return (
@@ -191,18 +234,8 @@ const CodeEditor = (): JSX.Element => {
       {/* Controls */}
       <div className='flex p-2 justify-between items-center'>
         {/* header */}
-        <h1 className='capitalize'>{language.label} Editor</h1>
+        <h1 className='capitalize'>{language} Editor</h1>
         <div className='flex items-center gap-4'>
-          <Select value={language.value} onValueChange={handleLanguageChange}>
-            <SelectTrigger className='w-45'>
-              <SelectValue placeholder='Select Language' />
-            </SelectTrigger>
-            <SelectContent>
-              {languages.map((lang) => (
-                <SelectItem value={lang.value}>{lang.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button onClick={runCode} disabled={running}>
             {running ? 'Running...' : 'Run'}
           </Button>
@@ -224,7 +257,7 @@ const CodeEditor = (): JSX.Element => {
         <div className='flex-1 p-2'>
           <Editor
             height='100%'
-            language={language.monaco}
+            language={language}
             value={activeFile?.content ?? ''}
             onChange={(value) => {
               setFiles((prev) =>

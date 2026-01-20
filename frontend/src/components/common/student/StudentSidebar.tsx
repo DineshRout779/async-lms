@@ -25,14 +25,22 @@ const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/student' },
   { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
   {
-    name: 'Submissions',
+    name: 'Assignments',
     icon: ClipboardList,
-    path: '/dashboard/student/submissions',
+    path: '/dashboard/student/assignments',
     badge: 3,
   },
-  { name: 'Code Playground', icon: Code, path: '/code-editor' },
+  {
+    name: 'Code Playground',
+    icon: Code,
+    path: '/dashboard/student/editor-profile',
+  },
   { name: 'Leaderboard', icon: Trophy, path: '/dashboard/student/leaderboard' },
-  { name: 'AI Assistant', icon: MessageSquare, path: '/ai-assistant' },
+  {
+    name: 'AI Assistant',
+    icon: MessageSquare,
+    path: '/dashboard/student/ai-assistant',
+  },
   { name: 'Profile', icon: User, path: '/profile' },
   { name: 'Settings', icon: Settings, path: '/settings' },
 ];
@@ -52,7 +60,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
   return (
     <aside
       className={cn(
-        'h-full flex flex-col transition-all duration-300 bg-[#1e2653] text-slate-300 shrink-0 overflow-hidden',
+        'h-full flex flex-col transition-all duration-300 bg-white text-[#1e2653] border-r border-[#ebe5e5] shrink-0 overflow-hidden',
         isOpen ? 'w-64' : 'w-20'
       )}
     >
@@ -63,7 +71,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
             C
           </div>
           {isOpen && (
-            <span className='font-bold text-xl text-white tracking-tight'>
+            <span className='font-bold text-xl text-[#1e2653] tracking-tight'>
               CodeGuru
             </span>
           )}
@@ -94,7 +102,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
                 'flex items-center justify-center gap-3 px-3 py-3 rounded-lg transition-all group relative',
                 isActive
                   ? 'bg-[#333d7c] text-white shadow-sm'
-                  : 'hover:bg-[#2a3469] hover:text-white'
+                  : 'hover:bg-[#f4f5f8] hover:text-[#1e2653]'
               )}
             >
               <item.icon
@@ -102,7 +110,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
                 className={cn(
                   isActive
                     ? 'text-white'
-                    : 'text-slate-400 group-hover:text-slate-300'
+                    : 'text-slate-400 group-hover:text-[#1e2653]'
                 )}
               />
 
@@ -112,7 +120,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
                     {item.name}
                   </span>
                   {item.badge && !isActive && (
-                    <span className='bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full'>
+                    <span className='bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full '>
                       {item.badge}
                     </span>
                   )}
@@ -127,7 +135,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
       </nav>
 
       {/* User Profile Section - Bottom matching Admin */}
-      <div className='p-4 border-t border-[#2a3469] bg-[#1a214d]'>
+      <div className='p-4 border-t border-[#ebe5e5]'>
         <div
           className={cn('flex items-center gap-3', !isOpen && 'justify-center')}
         >
@@ -136,7 +144,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
           </div>
           {isOpen && (
             <div className='min-w-0 flex-1'>
-              <p className='text-sm font-bold text-white truncate leading-tight'>
+              <p className='text-sm font-bold text-[#1e2653] truncate leading-tight'>
                 {user?.full_name}
               </p>
               <p className='text-[11px] text-slate-400 font-medium truncate'>

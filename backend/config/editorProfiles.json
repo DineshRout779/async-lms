@@ -1,0 +1,42 @@
+{
+  "javascript": {
+    "name": "JavaScript",
+    "image": "playground-node-runner",
+    "language": "javascript",
+    "entry": "index.js",
+    "run": "node index.js",
+    "template": ["index.js"]
+  },
+  "python": {
+    "name": "Python",
+    "image": "playground-python-runner",
+    "language": "python",
+    "entry": "main.py",
+    "run": "python main.py",
+    "template": ["main.py"]
+  },
+  "java": {
+    "name": "Java",
+    "image": "playground-java-runner",
+    "language": "java",
+    "entry": "Main.java",
+    "run": "javac Main.java && java Main",
+    "template": ["Main.java"]
+  },
+  "sql": {
+    "name": "SQL",
+    "image": "playground-sql-runner",
+    "language": "sql",
+    "entry": "queries.sql",
+    "run": "psql",
+    "template": ["queries.sql"]
+  },
+  "mern": {
+    "name": "MERN Stack",
+    "image": "playground-node-runner",
+    "language": "javascript",
+    "entry": "",
+    "run": "custom",
+    "template": []
+  }
+}
