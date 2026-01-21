@@ -41,5 +41,6 @@ const io = new Server(server, {
 setupSocket(io);
 
 server.listen(3001, () => {
-  console.log('Backend running on http://localhost:3001');
+  const ct = new Date().toLocaleTimeString();
+  console.log('Backend running on http://localhost:3001', ct);
 });

@@ -1,17 +1,18 @@
-const { runProgram } = require("./runnerService");
-const { ensureWorkspaceContainer } = require("./workspaceRuntime");
-const { createTerminal } = require("./terminalService");
+// socket.js
+const { runProgram } = require('./runnerService');
+const { ensureWorkspaceContainer } = require('./workspaceRuntime');
+const { createTerminal } = require('./terminalService');
 
 const PROFILE_RULES = {
   javascript: { timeout: 5000, maxOutput: 64 * 1024 },
   python: { timeout: 5000, maxOutput: 64 * 1024 },
-  mern: { timeout: null, maxOutput: 5 * 1024 * 1024 }
+  mern: { timeout: null, maxOutput: 5 * 1024 * 1024 },
 };
 
 let terminals = new Map();
 
 module.exports = function setupSocket(io) {
-  io.on("connection", (socket) => {
+  io.on('connection', (socket) => {
     let currentProcess = null;
     let timeoutHandle = null;
     let outputBytes = 0;
@@ -26,56 +27,68 @@ module.exports = function setupSocket(io) {
       currentProfile = null;
     };
 
-    socket.on("program:run", async ({ userId, projectId, profile, files }) => {
+    socket.on('program:run', async ({ userId, projectId, profile, files }) => {
       try {
-        if (profile === "mern") {
-          throw new Error("MERN must use workspace runtime");
+        console.log('Running program...', userId, projectId, profile, files);
+        if (profile === 'mern') {
+          throw new Error('MERN must use workspace runtime');
         }
 
         const proc = runProgram({ userId, projectId, profile, files });
         currentProcess = proc;
         currentProfile = profile;
 
-        socket.emit("program:status", "running");
+        socket.emit('program:status', 'running');
 
-        proc.stdout.on("data", (d) => socket.emit("program:stdout", d.toString()));
-        proc.stderr.on("data", (d) => socket.emit("program:stderr", d.toString()));
+        proc.stdout.on('data', (d) =>
+          socket.emit('program:stdout', d.toString())
+        );
+        proc.stderr.on('data', (d) =>
+          socket.emit('program:stderr', d.toString())
+        );
 
-        proc.on("close", () => {
-          socket.emit("program:status", "finished");
+        proc.on('close', () => {
+          socket.emit('program:status', 'finished');
           clearExecution();
         });
-
       } catch (err) {
-        socket.emit("program:stderr", String(err));
-        socket.emit("program:status", "failed");
+        console.log('error:', err);
+        socket.emit('program:stderr', String(err));
+        socket.emit('program:status', 'failed');
         clearExecution();
       }
     });
 
-    socket.on("workspace:start", async ({ userId, projectId, image }) => {
+    socket.on('workspace:start', async ({ userId, projectId }) => {
+      console.log('Workspace starting..');
       socket.workspace = { userId, projectId };
-      await ensureWorkspaceContainer({ userId, projectId, image });
-      socket.emit("workspace:ready");
+      await ensureWorkspaceContainer({ userId, projectId });
+      socket.emit('workspace:ready');
+      console.log('Workspace ready..');
     });
 
-    socket.on("terminal:start", () => {
+    socket.on('terminal:start', () => {
+      if (!socket.workspace) {
+        socket.emit('terminal:error', 'Workspace not started');
+        return;
+      }
+
       const { userId, projectId } = socket.workspace;
       const term = createTerminal({ userId, projectId });
 
       terminals.set(socket.id, term);
 
       term.onData((data) => {
-        socket.emit("terminal:output", data);
+        socket.emit('terminal:output', data);
       });
     });
 
-    socket.on("terminal:input", (data) => {
+    socket.on('terminal:input', (data) => {
       const term = terminals.get(socket.id);
       if (term) term.write(data);
     });
 
-    socket.on("disconnect", () => {
+    socket.on('disconnect', () => {
       const term = terminals.get(socket.id);
       if (term) term.kill();
       if (currentProcess) currentProcess.kill();

@@ -1,0 +1,11 @@
+{
+    "ignore": [
+        "**/workspaces/**",
+        "**/templates/**",
+        "node_modules",
+        "*.test.js",
+        ".git"
+    ],
+    "ext": "js,json",
+    "delay": "2500"
+}

@@ -5,9 +5,7 @@ import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import Editor from '@monaco-editor/react';
 import { Button } from '../components/ui/button';
-import { languages } from '../utils/languages';
 import FileTree, { buildFileTree } from '../components/common/FileTree';
-import { BOILERPLATES } from '../utils/boilerplates';
 import { useSearchParams } from 'react-router';
 import apiClient from '@/services/api';
 import { useAppSelector } from '@/app/hooks';
@@ -58,10 +56,7 @@ const CodeEditor = (): JSX.Element => {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [language, setLanguage] = useState<string>('javascript');
   const [files, setFiles] = useState<PlaygroundFile[]>([]);
-
-  const [activeFilePath, setActiveFilePath] = useState<string>(
-    BOILERPLATES[languages[0].value][0].path
-  );
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const activeFile = files.find((f) => f.path === activeFilePath);
 
   const [running, setRunning] = useState<boolean>(false);
@@ -101,7 +96,17 @@ const CodeEditor = (): JSX.Element => {
          */
         setEnv(res.data);
         setFiles(res.data.profile.files);
+        setActiveFilePath(res.data.profile.files[0]?.path);
         setLanguage(res.data.profile.language);
+
+        socket.emit('workspace:start', {
+          userId: user?.id,
+          projectId: res.data.projectId,
+        });
+
+        socket.once('workspace:ready', () => {
+          socket.emit('terminal:start');
+        });
       } catch (error) {
         console.log('Error fetching env data:', error);
       }
@@ -203,24 +208,11 @@ const CodeEditor = (): JSX.Element => {
   const runCode = () => {
     if (!env || !user) return;
 
-    const runConfig = {
-      userId: user.id,
-      projectId: env.projectId,
-      profile: language,
-      files,
-      image: env.profile.image,
-    };
-
     terminalRef.current?.clear();
 
-    if (language === 'mern') {
-      socket.emit('workspace:start', runConfig);
-      socket.once('workspace:ready', () => {
-        socket.emit('terminal:start');
-      });
-    } else {
-      socket.emit('program:run', runConfig);
-    }
+    const runCommand = env.profile.run + '\n';
+
+    socket.emit('terminal:input', runCommand);
   };
 
   /* ---------- UI ---------- */

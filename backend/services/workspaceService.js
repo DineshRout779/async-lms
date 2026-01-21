@@ -6,32 +6,37 @@ const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 const TEMPLATE_ROOT = path.join(__dirname, '..', 'templates');
 
 exports.provisionWorkspace = (userId, projectId, profile) => {
-  const workspacePath = path.join(
-    WORKSPACE_ROOT,
-    String(userId),
-    String(projectId)
-  );
+  try {
+    const workspacePath = path.join(
+      WORKSPACE_ROOT,
+      String(userId),
+      String(projectId)
+    );
 
-  const templatePath = path.join(TEMPLATE_ROOT, profile);
+    const templatePath = path.join(TEMPLATE_ROOT, profile);
 
-  console.log('Provisioning workspace:', workspacePath);
-  console.log('Using template:', templatePath);
+    console.log('Provisioning workspace:', workspacePath);
+    console.log('Using template:', templatePath);
 
-  // create workspace folder
-  fs.mkdirSync(workspacePath, { recursive: true });
+    // create workspace folder
+    fs.mkdirSync(workspacePath, { recursive: true });
 
-  // copy template only if workspace is empty
-  const existingFiles = fs.readdirSync(workspacePath);
+    // copy template only if workspace is empty
+    const existingFiles = fs.readdirSync(workspacePath);
 
-  if (existingFiles.length === 0) {
-    if (!fs.existsSync(templatePath)) {
-      throw new Error(`Template not found: ${templatePath}`);
+    if (existingFiles.length === 0) {
+      if (!fs.existsSync(templatePath)) {
+        throw new Error(`Template not found: ${templatePath}`);
+      }
+
+      copyRecursive(templatePath, workspacePath);
     }
 
-    copyRecursive(templatePath, workspacePath);
+    return workspacePath;
+  } catch (error) {
+    console.log('error:', error);
+    throw new Error(error.message);
   }
-
-  return workspacePath;
 };
 
 function copyRecursive(src, dest) {
