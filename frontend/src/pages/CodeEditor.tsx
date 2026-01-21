@@ -21,12 +21,13 @@ type EditorEnvironment = {
     language: string;
     entry: string;
     run: string;
+    image: string;
   };
 };
 
 type ProgramStatus = 'running' | 'finished' | 'failed';
 
-const socket: Socket = io('http://localhost:3001');
+const socket: Socket = io(import.meta.env.VITE_API_URL);
 
 /* ---------- terminal helpers ---------- */
 
@@ -56,10 +57,7 @@ const CodeEditor = (): JSX.Element => {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [language, setLanguage] = useState<string>('javascript');
-
-  const [files, setFiles] = useState<PlaygroundFile[]>(
-    BOILERPLATES[languages[0].value]
-  );
+  const [files, setFiles] = useState<PlaygroundFile[]>([]);
 
   const [activeFilePath, setActiveFilePath] = useState<string>(
     BOILERPLATES[languages[0].value][0].path
@@ -82,28 +80,27 @@ const CodeEditor = (): JSX.Element => {
       try {
         const res = await apiClient.post(`/editor/start`, {
           profile: cp,
-          project_id: pid,
+          projectId: pid,
         });
 
         console.log('res: ', res);
         // below is the API response
         /**
-         * {
-              "project_id": 1768851953198,
-              "profile": {
-                  "name": "JavaScript",
-                  "image": "playground-node-runner",
-                  "language": "javascript",
-                  "entry": "index.js",
-                  "run": "node index.js",
-                  "template": [
-                      "index.js"
-                  ]
-              },
-              "workspacePath": "\\workspaces\\3\\1768851953198"
+         *{
+            "projectId": "123",
+            "workspacePath": "/workspaces/5/123",
+            "profile": {
+              "name": "JavaScript",
+              "language": "javascript",
+              "entry": "index.js",
+              "run": "node index.js",
+              "image": "playground-node-runner",
+              "template": ["index.js"]
+            }
           }
          */
         setEnv(res.data);
+        setFiles(res.data.profile.files);
         setLanguage(res.data.profile.language);
       } catch (error) {
         console.log('Error fetching env data:', error);
@@ -203,20 +200,27 @@ const CodeEditor = (): JSX.Element => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [running]);
 
-  const runCode = (): void => {
-    if (!terminalRef.current || running) return;
+  const runCode = () => {
+    if (!env || !user) return;
 
-    setRunning(true);
-
-    terminalRef.current.clear();
-    terminalRef.current.writeln('Running...\n');
-
-    socket.emit('program:run', {
-      userId: user?.id,
-      projectId: env?.projectId,
-      language,
+    const runConfig = {
+      userId: user.id,
+      projectId: env.projectId,
+      profile: language,
       files,
-    });
+      image: env.profile.image,
+    };
+
+    terminalRef.current?.clear();
+
+    if (language === 'mern') {
+      socket.emit('workspace:start', runConfig);
+      socket.once('workspace:ready', () => {
+        socket.emit('terminal:start');
+      });
+    } else {
+      socket.emit('program:run', runConfig);
+    }
   };
 
   /* ---------- UI ---------- */
@@ -229,6 +233,7 @@ const CodeEditor = (): JSX.Element => {
         color: '#fff',
         display: 'flex',
         flexDirection: 'column',
+        fontFamily: 'monospace',
       }}
     >
       {/* Controls */}

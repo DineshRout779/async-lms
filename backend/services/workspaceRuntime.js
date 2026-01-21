@@ -1,46 +1,32 @@
-// File for Dev Environment
+// workspaceRuntime.js - runs long process
+const { spawn, spawnSync } = require("child_process");
 
-const { spawn } = require('child_process');
+function containerExists(name) {
+  const res = spawnSync("docker", ["inspect", name], { stdio: "ignore" });
+  console.log('container exists: ', res.status === 0);
+  return res.status === 0;
+}
 
-function startWorkspaceContainer({ userId, projectId, image }) {
-  const containerName = `workspace-${userId}-${projectId}`;
+async function ensureWorkspaceContainer({ userId, projectId, image }) {
+  const name = `workspace-${userId}-${projectId}`;
+
+  if (containerExists(name)) return;
+
   const workspacePath = `/workspaces/${userId}/${projectId}`;
 
-  const args = [
-    'run',
-    '-d',
-    '--name',
-    containerName,
-    '--memory=2g',
-    '--cpus=2',
-    '--pids-limit=256',
-    '--network=bridge',
-    '-v',
-    `${workspacePath}:/workspace`,
-    '-w',
-    '/workspace',
+  spawn("docker", [
+    "run",
+    "-d",
+    "--name", name,
+    "--memory=2g",
+    "--cpus=2",
+    "--pids-limit=256",
+    "--network=bridge",
+    "-v", `${workspacePath}:/workspace`,
+    "-w", "/workspace",
     image,
-    'sleep',
-    'infinity',
-  ];
-
-  return spawn('docker', args);
+    "sleep", "infinity"
+  ]);
 }
 
-function execInWorkspace({ userId, projectId, cmd }) {
-  const containerName = `workspace-${userId}-${projectId}`;
-
-  return spawn('docker', ['exec', '-it', containerName, ...cmd]);
-}
-
-function stopWorkspaceContainer({ userId, projectId }) {
-  const containerName = `workspace-${userId}-${projectId}`;
-
-  spawn('docker', ['rm', '-f', containerName]);
-}
-
-module.exports = {
-  startWorkspaceContainer,
-  execInWorkspace,
-  stopWorkspaceContainer,
-};
+module.exports = { ensureWorkspaceContainer };

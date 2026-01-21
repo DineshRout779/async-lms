@@ -1,12 +1,12 @@
-import axios from 'axios';
+import axios from "axios";
 
 const getToken = () => {
-  return localStorage.getItem('token');
+  return localStorage.getItem("token");
 };
 
 const apiClient = axios.create({
   // Ensure this matches your Vite/Env variable name
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL + "/api/v1",
 });
 
 // Request Interceptor: Adds the token to every outgoing request
@@ -31,7 +31,7 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       // Optional: Redirect to login or clear localStorage
-      console.error('Token expired or invalid');
+      console.error("Token expired or invalid");
     }
     return Promise.reject(error);
   }

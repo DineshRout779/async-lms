@@ -40,3 +40,10 @@ exports.validateSignup = validate([
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
 ]);
+
+
+// editor
+exports.validateEditorStartup = validate([
+  body('projectId').trim().notEmpty().withMessage('projectId is required'),
+  // body('profile').trim().notEmpty().withMessage('profile is required'),
+])

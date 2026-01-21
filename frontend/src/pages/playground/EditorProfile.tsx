@@ -11,10 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import {
   Code2,
   Terminal,
-  Database,
+  // Database,
   Layers,
   ChevronRight,
-  Cpu,
+  // Cpu,
   MonitorPlay,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -46,22 +46,22 @@ const ENVIRONMENTS: Environment[] = [
     tags: ['AI', 'Scripting'],
     color: 'border-t-blue-500',
   },
-  {
-    id: 'java',
-    name: 'Java',
-    description: 'Enterprise grade environment with Maven/Gradle.',
-    icon: <Cpu className='w-8 h-8 text-red-500' />,
-    tags: ['Enterprise', 'Backend'],
-    color: 'border-t-red-500',
-  },
-  {
-    id: 'sql',
-    name: 'SQL',
-    description: 'Relational database playground with PostgreSQL.',
-    icon: <Database className='w-8 h-8 text-cyan-500' />,
-    tags: ['Data', 'Database'],
-    color: 'border-t-cyan-500',
-  },
+  // {
+  //   id: 'java',
+  //   name: 'Java',
+  //   description: 'Enterprise grade environment with Maven/Gradle.',
+  //   icon: <Cpu className='w-8 h-8 text-red-500' />,
+  //   tags: ['Enterprise', 'Backend'],
+  //   color: 'border-t-red-500',
+  // },
+  // {
+  //   id: 'sql',
+  //   name: 'SQL',
+  //   description: 'Relational database playground with PostgreSQL.',
+  //   icon: <Database className='w-8 h-8 text-cyan-500' />,
+  //   tags: ['Data', 'Database'],
+  //   color: 'border-t-cyan-500',
+  // },
   {
     id: 'mern',
     name: 'MERN Stack',
