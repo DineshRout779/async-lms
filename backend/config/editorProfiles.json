@@ -1,39 +1,47 @@
 {
   "javascript": {
     "name": "JavaScript",
-    "image": "playground-node-runner",
+    "image": "playground-workspace-node",
     "language": "javascript",
     "entry": "index.js",
     "run": "node index.js",
-    "template": ["index.js"]
+    "template": [
+      "index.js"
+    ]
   },
   "python": {
     "name": "Python",
-    "image": "playground-python-runner",
+    "image": "playground-workspace-python",
     "language": "python",
     "entry": "main.py",
     "run": "python main.py",
-    "template": ["main.py"]
+    "template": [
+      "main.py"
+    ]
   },
   "java": {
     "name": "Java",
-    "image": "playground-java-runner",
+    "image": "playground-workspace-java",
     "language": "java",
     "entry": "Main.java",
     "run": "javac Main.java && java Main",
-    "template": ["Main.java"]
+    "template": [
+      "Main.java"
+    ]
   },
   "sql": {
     "name": "SQL",
-    "image": "playground-sql-runner",
+    "image": "playground-workspace-sql",
     "language": "sql",
     "entry": "queries.sql",
     "run": "psql",
-    "template": ["queries.sql"]
+    "template": [
+      "queries.sql"
+    ]
   },
   "mern": {
     "name": "MERN Stack",
-    "image": "playground-node-runner",
+    "image": "playground-workspace-node",
     "language": "javascript",
     "entry": "",
     "run": "custom",

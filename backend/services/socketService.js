@@ -1,70 +1,28 @@
-// socket.js
 const { runProgram } = require('./runnerService');
 const { ensureWorkspaceContainer } = require('./workspaceRuntime');
 const { createTerminal } = require('./terminalService');
 
-const PROFILE_RULES = {
-  javascript: { timeout: 5000, maxOutput: 64 * 1024 },
-  python: { timeout: 5000, maxOutput: 64 * 1024 },
-  mern: { timeout: null, maxOutput: 5 * 1024 * 1024 },
-};
-
-let terminals = new Map();
+const terminals = new Map();
 
 module.exports = function setupSocket(io) {
   io.on('connection', (socket) => {
-    let currentProcess = null;
-    let timeoutHandle = null;
-    let outputBytes = 0;
-    let currentProfile = null;
-
+    console.log('Socket connected:', socket.id);
     socket.workspace = null;
 
-    const clearExecution = () => {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-      currentProcess = null;
-      outputBytes = 0;
-      currentProfile = null;
-    };
-
-    socket.on('program:run', async ({ userId, projectId, profile, files }) => {
+    socket.on('workspace:start', async ({ userId, projectId, image }) => {
       try {
-        console.log('Running program...', userId, projectId, profile, files);
-        if (profile === 'mern') {
-          throw new Error('MERN must use workspace runtime');
-        }
+        console.log('Workspace starting..', userId, projectId, image);
 
-        const proc = runProgram({ userId, projectId, profile, files });
-        currentProcess = proc;
-        currentProfile = profile;
+        socket.workspace = { userId, projectId };
 
-        socket.emit('program:status', 'running');
+        await ensureWorkspaceContainer({ userId, projectId, image });
 
-        proc.stdout.on('data', (d) =>
-          socket.emit('program:stdout', d.toString())
-        );
-        proc.stderr.on('data', (d) =>
-          socket.emit('program:stderr', d.toString())
-        );
-
-        proc.on('close', () => {
-          socket.emit('program:status', 'finished');
-          clearExecution();
-        });
-      } catch (err) {
-        console.log('error:', err);
-        socket.emit('program:stderr', String(err));
-        socket.emit('program:status', 'failed');
-        clearExecution();
+        socket.emit('workspace:ready');
+        console.log('Workspace ready..');
+      } catch (error) {
+        console.error('Workspace error:', error.message);
+        socket.emit('workspace:error', error.message);
       }
-    });
-
-    socket.on('workspace:start', async ({ userId, projectId }) => {
-      console.log('Workspace starting..');
-      socket.workspace = { userId, projectId };
-      await ensureWorkspaceContainer({ userId, projectId });
-      socket.emit('workspace:ready');
-      console.log('Workspace ready..');
     });
 
     socket.on('terminal:start', () => {
@@ -78,11 +36,13 @@ module.exports = function setupSocket(io) {
 
       terminals.set(socket.id, term);
 
+      // Stream output to client
       term.onData((data) => {
         socket.emit('terminal:output', data);
       });
     });
 
+    // Receive keystrokes from client
     socket.on('terminal:input', (data) => {
       const term = terminals.get(socket.id);
       if (term) term.write(data);
@@ -91,7 +51,7 @@ module.exports = function setupSocket(io) {
     socket.on('disconnect', () => {
       const term = terminals.get(socket.id);
       if (term) term.kill();
-      if (currentProcess) currentProcess.kill();
+      terminals.delete(socket.id);
     });
   });
 };

@@ -10,31 +10,37 @@ function createTerminal({ userId, projectId }) {
   const name = `workspace-${userId}-${projectId}`;
 
   if (!containerExists(name)) {
-    console.log(`workspace container not running: `, name);
     throw new Error(`Workspace container not running`);
   }
 
-  return pty.spawn(
+  console.log('Attaching terminal to container:', name);
+
+  const shell = pty.spawn(
     'docker',
     [
       'exec',
       '-it',
       '-u',
-      'playground', // attach as playground user
+      'playground',
       '-w',
-      '/workspace', // start in workspace
+      '/workspace',
       name,
       'bash',
-      '--login', // load .bashrc
+      '--login',
     ],
     {
-      name: 'xterm-color',
+      name: 'xterm-256color',
       cols: 80,
-      rows: 24,
+      rows: 30,
       cwd: '/',
-      env: process.env,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+      },
     }
   );
+
+  return shell;
 }
 
 module.exports = { createTerminal };

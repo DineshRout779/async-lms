@@ -23,21 +23,21 @@ type EditorEnvironment = {
   };
 };
 
-type ProgramStatus = 'running' | 'finished' | 'failed';
+// type ProgramStatus = 'running' | 'finished' | 'failed';
+
+// const normalize = (data: string) => data.replace(/\n/g, '\r\n');
+
+// const writeStdout = (term: Terminal, data: string) => {
+//   term.write(normalize(data));
+// };
+
+// const writeStderr = (term: Terminal, data: string) => {
+//   term.write(`\x1b[31m${normalize(data)}\x1b[0m`);
+// };
 
 const socket: Socket = io(import.meta.env.VITE_API_URL);
 
 /* ---------- terminal helpers ---------- */
-
-const normalize = (data: string) => data.replace(/\n/g, '\r\n');
-
-const writeStdout = (term: Terminal, data: string) => {
-  term.write(normalize(data));
-};
-
-const writeStderr = (term: Terminal, data: string) => {
-  term.write(`\x1b[31m${normalize(data)}\x1b[0m`);
-};
 
 type PlaygroundFile = {
   path: string; // e.g. "index.js", "src/app.py"
@@ -98,11 +98,13 @@ const CodeEditor = (): JSX.Element => {
         setFiles(res.data.profile.files);
         setActiveFilePath(res.data.profile.files[0]?.path);
         setLanguage(res.data.profile.language);
-
-        socket.emit('workspace:start', {
+        const runConfig = {
           userId: user?.id,
           projectId: res.data.projectId,
-        });
+          image: res.data.profile.image,
+        };
+        console.log('runConfig:', runConfig);
+        socket.emit('workspace:start', runConfig);
 
         socket.once('workspace:ready', () => {
           socket.emit('terminal:start');
@@ -111,8 +113,8 @@ const CodeEditor = (): JSX.Element => {
         console.log('Error fetching env data:', error);
       }
     };
-    fetchEnvironment();
-  }, []);
+    user && fetchEnvironment();
+  }, [user]);
 
   useEffect(() => {
     if (!terminalContainerRef.current) return;
@@ -121,17 +123,11 @@ const CodeEditor = (): JSX.Element => {
 
     const terminal = new Terminal({
       cursorBlink: true,
-      cursorStyle: 'block',
-      scrollback: 1000,
-      fontFamily: 'JetBrains Mono, Fira Code, monospace',
+      fontFamily: 'JetBrains Mono, monospace',
       fontSize: 14,
-      lineHeight: 1.4,
-      letterSpacing: 0.4,
       theme: {
         background: '#020617',
         foreground: '#e5e7eb',
-        cursor: '#e5e7eb',
-        selectionBackground: '#334155',
       },
     });
 
@@ -139,50 +135,27 @@ const CodeEditor = (): JSX.Element => {
     terminal.open(terminalContainerRef.current);
     fitAddon.fit();
 
-    terminal.writeln('Playground ready.\n');
-
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    /* ----- socket listeners ----- */
+    terminal.writeln('Playground ready.\r\n');
 
-    socket.on('program:stdout', (data: string) => {
-      writeStdout(terminal, data);
+    // SEND keystrokes to backend
+    terminal.onData((data) => {
+      socket.emit('terminal:input', data);
     });
 
-    socket.on('program:stderr', (data: string) => {
-      writeStderr(terminal, data);
+    // RECEIVE output from backend
+    socket.on('terminal:output', (data: string) => {
+      terminal.write(data);
     });
 
-    socket.on(
-      'program:meta',
-      (meta: { durationMs: number; reason: string }) => {
-        terminal.writeln(
-          `[${meta.reason.replace('_', ' ')} in ${meta.durationMs} ms]`
-        );
-      }
-    );
-
-    socket.on('program:status', (status: ProgramStatus) => {
-      terminal.writeln(`\n[status: ${status}]`);
-
-      if (status === 'finished' || status === 'failed') {
-        setRunning(false);
-      }
-    });
-
-    const handleResize = () => {
-      fitAddon.fit();
-    };
-
+    const handleResize = () => fitAddon.fit();
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      socket.off('program:stdout');
-      socket.off('program:stderr');
-      socket.off('program:meta');
-      socket.off('program:status');
+      socket.off('terminal:output');
       terminal.dispose();
     };
   }, []);

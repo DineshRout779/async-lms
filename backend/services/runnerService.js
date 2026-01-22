@@ -7,11 +7,11 @@ const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
 const PROFILE_CONFIG = {
   javascript: {
-    image: 'playground-node-runner',
+    image: 'playground-workspace-node',
     command: ['node', 'index.js'],
   },
   python: {
-    image: 'playground-python-runner',
+    image: 'playground-workspace-python',
     command: ['python', 'main.py'],
   },
 };
