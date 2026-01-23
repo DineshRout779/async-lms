@@ -1,11 +1,15 @@
 {
+    "watch": [
+        "index.js",
+        "routes",
+        "services",
+        "controllers"
+    ],
     "ignore": [
-        "**/workspaces/**",
-        "**/templates/**",
+        "workspaces",
+        "templates",
         "node_modules",
-        "*.test.js",
         ".git"
     ],
-    "ext": "js,json",
-    "delay": "2500"
+    "ext": "js,json"
 }

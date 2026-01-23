@@ -1,134 +1,174 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { io, type Socket } from 'socket.io-client';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import Editor from '@monaco-editor/react';
 import { Button } from '../components/ui/button';
-import FileTree, { buildFileTree } from '../components/common/FileTree';
+import { Switch } from '@/components/ui/switch';
+import FileTreeExplorer, { type FileNode } from '../components/common/FileTree';
+import { createPath, deletePath, renamePath } from '@/services/files';
 import { useSearchParams } from 'react-router';
 import apiClient from '@/services/api';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import EditorTabs from '@/components/common/editor/EditorTabs';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/components/ui/resizable';
 
 type EditorEnvironment = {
   projectId: string;
   workspacePath: string;
   profile: {
     name: string;
-    language: string;
     entry: string;
     run: string;
     image: string;
   };
 };
 
-// type ProgramStatus = 'running' | 'finished' | 'failed';
-
-// const normalize = (data: string) => data.replace(/\n/g, '\r\n');
-
-// const writeStdout = (term: Terminal, data: string) => {
-//   term.write(normalize(data));
-// };
-
-// const writeStderr = (term: Terminal, data: string) => {
-//   term.write(`\x1b[31m${normalize(data)}\x1b[0m`);
-// };
-
-const socket: Socket = io(import.meta.env.VITE_API_URL);
-
-/* ---------- terminal helpers ---------- */
-
-type PlaygroundFile = {
-  path: string; // e.g. "index.js", "src/app.py"
+type Tab = {
+  path: string;
   content: string;
+  dirty: boolean;
+  language: string;
 };
 
-/* ---------- component ---------- */
+const getLanguageFromPath = (path: string): string => {
+  const parts = path.split('.');
+  if (parts.length < 2) return 'plaintext';
+  return (
+    {
+      js: 'javascript',
+      ts: 'typescript',
+      json: 'json',
+      py: 'python',
+      html: 'html',
+      css: 'css',
+    }[parts.pop()!] ?? 'plaintext'
+  );
+};
 
 const CodeEditor = (): JSX.Element => {
   const [searchParams] = useSearchParams();
-  const [env, setEnv] = useState<EditorEnvironment | null>(null);
   const user = useAppSelector(selectUser);
+
+  const [env, setEnv] = useState<EditorEnvironment | null>(null);
+  const [tree, setTree] = useState<FileNode[]>([]);
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [autoSave, setAutoSave] = useState(false);
+
+  const socketRef = useRef<Socket | null>(null);
 
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const [language, setLanguage] = useState<string>('javascript');
-  const [files, setFiles] = useState<PlaygroundFile[]>([]);
-  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-  const activeFile = files.find((f) => f.path === activeFilePath);
 
-  const [running, setRunning] = useState<boolean>(false);
+  const [ports, setPorts] = useState<number[]>([]);
+  const [activePort, setActivePort] = useState<number | null>(null);
+  const [showPreview, setShowPreview] = useState(true);
 
-  /* ---------- terminal setup ---------- */
+  const fsRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* =========================
+     Socket lifecycle
+  ========================= */
 
   useEffect(() => {
-    const fetchEnvironment = async () => {
-      const pid = searchParams.get('pid');
-      const cp = searchParams.get('cp');
-
-      if (!pid || !cp) {
-        return;
-      }
-
-      try {
-        const res = await apiClient.post(`/editor/start`, {
-          profile: cp,
-          projectId: pid,
-        });
-
-        console.log('res: ', res);
-        // below is the API response
-        /**
-         *{
-            "projectId": "123",
-            "workspacePath": "/workspaces/5/123",
-            "profile": {
-              "name": "JavaScript",
-              "language": "javascript",
-              "entry": "index.js",
-              "run": "node index.js",
-              "image": "playground-node-runner",
-              "template": ["index.js"]
-            }
-          }
-         */
-        setEnv(res.data);
-        setFiles(res.data.profile.files);
-        setActiveFilePath(res.data.profile.files[0]?.path);
-        setLanguage(res.data.profile.language);
-        const runConfig = {
-          userId: user?.id,
-          projectId: res.data.projectId,
-          image: res.data.profile.image,
-        };
-        console.log('runConfig:', runConfig);
-        socket.emit('workspace:start', runConfig);
-
-        socket.once('workspace:ready', () => {
-          socket.emit('terminal:start');
-        });
-      } catch (error) {
-        console.log('Error fetching env data:', error);
-      }
+    socketRef.current = io(import.meta.env.VITE_API_URL);
+    return () => {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
     };
-    user && fetchEnvironment();
+  }, []);
+
+  /* =========================
+     Workspace Bootstrap
+  ========================= */
+
+  useEffect(() => {
+    if (!user || !socketRef.current) return;
+
+    const pid = searchParams.get('pid');
+    const cp = searchParams.get('cp');
+    if (!pid || !cp) return;
+
+    let cancelled = false;
+
+    const boot = async () => {
+      const res = await apiClient.post('/editor/start', {
+        profile: cp,
+        projectId: pid,
+      });
+
+      if (cancelled) return;
+
+      setEnv(res.data);
+      terminalRef.current?.clear();
+
+      socketRef.current!.emit('workspace:start', {
+        userId: user.id,
+        projectId: res.data.projectId,
+        image: res.data.profile.image,
+      });
+
+      const onReady = async () => {
+        socketRef.current!.emit('terminal:start');
+        await loadTree(res.data.projectId);
+      };
+
+      socketRef.current!.on('workspace:ready', onReady);
+
+      return () => {
+        socketRef.current?.off('workspace:ready', onReady);
+      };
+    };
+
+    boot();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
+  /* =========================
+     FS Watcher
+  ========================= */
+
   useEffect(() => {
-    if (!terminalContainerRef.current) return;
+    if (!socketRef.current || !env) return;
+
+    const handler = () => {
+      if (fsRefreshTimer.current) {
+        clearTimeout(fsRefreshTimer.current);
+      }
+      fsRefreshTimer.current = setTimeout(() => {
+        loadTree(env.projectId);
+      }, 500);
+    };
+
+    socketRef.current.on('workspace:fs:update', handler);
+    return () => {
+      socketRef.current?.off('workspace:fs:update', handler);
+    };
+  }, [env]);
+
+  /* =========================
+     Terminal Setup
+  ========================= */
+
+  useEffect(() => {
+    if (!terminalContainerRef.current || !socketRef.current) return;
 
     const fitAddon = new FitAddon();
-
     const terminal = new Terminal({
       cursorBlink: true,
       fontFamily: 'JetBrains Mono, monospace',
       fontSize: 14,
-      theme: {
-        background: '#020617',
-        foreground: '#e5e7eb',
-      },
+      theme: { background: '#020617', foreground: '#e5e7eb' },
     });
 
     terminal.loadAddon(fitAddon);
@@ -138,125 +178,273 @@ const CodeEditor = (): JSX.Element => {
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    terminal.writeln('Playground ready.\r\n');
+    const onData = (data: string) => {
+      socketRef.current!.emit('terminal:input', data);
+    };
 
-    // SEND keystrokes to backend
-    terminal.onData((data) => {
-      socket.emit('terminal:input', data);
-    });
+    terminal.onData(onData);
 
-    // RECEIVE output from backend
-    socket.on('terminal:output', (data: string) => {
-      terminal.write(data);
-    });
+    const onOutput = (data: string) => terminal.write(data);
+    socketRef.current.on('terminal:output', onOutput);
 
-    const handleResize = () => fitAddon.fit();
-    window.addEventListener('resize', handleResize);
+    const observer = new ResizeObserver(() => fitAddon.fit());
+    observer.observe(terminalContainerRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      socket.off('terminal:output');
+      observer.disconnect();
+      socketRef.current?.off('terminal:output', onOutput);
       terminal.dispose();
     };
   }, []);
 
-  /* ---------- actions ---------- */
+  /* =========================
+     File System API
+  ========================= */
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const isRunShortcut = (e.ctrlKey || e.metaKey) && e.key === 'Enter';
+  const loadTree = async (projectId: string) => {
+    const res = await apiClient.get('/workspace/tree', {
+      params: { userId: user!.id, projectId },
+    });
 
-      if (isRunShortcut) {
-        e.preventDefault();
-        if (!running) {
-          runCode();
-        }
+    const newTree = res.data;
+    setTree(newTree);
+
+    const files = new Set<string>();
+    const walk = (nodes: FileNode[]) => {
+      for (const n of nodes) {
+        if (n.type === 'file') files.add(n.path);
+        if (n.children) walk(n.children);
       }
     };
+    walk(newTree);
 
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [running]);
-
-  const runCode = () => {
-    if (!env || !user) return;
-
-    terminalRef.current?.clear();
-
-    const runCommand = env.profile.run + '\n';
-
-    socket.emit('terminal:input', runCommand);
+    setTabs((prev) => prev.filter((t) => files.has(t.path)));
+    if (activeTab && !files.has(activeTab)) setActiveTab(null);
   };
 
-  /* ---------- UI ---------- */
+  const openFile = async (filePath: string) => {
+    if (!env) return;
+
+    const existing = tabs.find((t) => t.path === filePath);
+    if (existing) return setActiveTab(filePath);
+
+    const res = await apiClient.get('/workspace/file', {
+      params: { userId: user!.id, projectId: env.projectId, filePath },
+    });
+
+    setTabs((prev) => [
+      ...prev,
+      {
+        path: filePath,
+        content: res.data.content,
+        dirty: false,
+        language: getLanguageFromPath(filePath),
+      },
+    ]);
+    setActiveTab(filePath);
+  };
+
+  const updateActiveTab = (content: string) => {
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.path === activeTab ? { ...t, content, dirty: true } : t
+      )
+    );
+  };
+
+  /* =========================
+     Autosave (SAFE)
+  ========================= */
+
+  useEffect(() => {
+    if (!autoSave || !env) return;
+
+    const tab = tabs.find((t) => t.path === activeTab);
+    if (!tab || !tab.dirty) return;
+
+    const snapshot = { ...tab };
+
+    const timer = setTimeout(async () => {
+      await apiClient.post('/workspace/file', {
+        userId: user!.id,
+        projectId: env.projectId,
+        filePath: snapshot.path,
+        content: snapshot.content,
+      });
+
+      setTabs((prev) =>
+        prev.map((t) => (t.path === snapshot.path ? { ...t, dirty: false } : t))
+      );
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [tabs, activeTab, autoSave]);
+
+  /* =========================
+     Run Button
+  ========================= */
+
+  const runCode = () => {
+    if (!env) return;
+    terminalRef.current?.clear();
+    socketRef.current?.emit('terminal:input', env.profile.run + '\n');
+  };
+
+  /* ========================
+    PORT DETECTION
+  ========================= */
+
+  useEffect(() => {
+    if (!socketRef.current) return;
+
+    const handler = (ports: any) => {
+      if (!ports.length) return;
+      console.log('found ports', ports);
+      setPorts(ports.map((p: any) => p.port));
+      setActivePort((prev) => prev ?? ports[0].port);
+    };
+
+    socketRef.current.on('workspace:ports:update', handler);
+    return () => {
+      socketRef.current?.off('workspace:ports:update', handler);
+    };
+  }, []);
+
+  const active = tabs.find((t) => t.path === activeTab);
+
+  /* =========================
+     UI
+  ========================= */
 
   return (
-    <div
-      style={{
-        height: '100vh',
-        background: '#0f172a',
-        color: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-        fontFamily: 'monospace',
-      }}
-    >
-      {/* Controls */}
-      <div className='flex p-2 justify-between items-center'>
-        {/* header */}
-        <h1 className='capitalize'>{language} Editor</h1>
+    <div className='h-screen bg-slate-950 text-white flex flex-col'>
+      <div className='flex p-2 justify-between items-center border-b border-slate-800'>
+        <h1>Editor</h1>
         <div className='flex items-center gap-4'>
-          <Button onClick={runCode} disabled={running}>
-            {running ? 'Running...' : 'Run'}
-          </Button>
+          <div className='flex items-center gap-2'>
+            <span className='text-xs text-slate-400'>Autosave</span>
+            <Switch checked={autoSave} onCheckedChange={setAutoSave} />
+          </div>
+          <Button onClick={runCode}>Run</Button>
         </div>
       </div>
 
-      {/* Editor */}
-      <div className='flex flex-1 overflow-hidden'>
-        {/* File Explorer */}
-        <div className='w-64 bg-slate-900 p-2 overflow-auto border-r border-slate-700'>
-          <FileTree
-            nodes={buildFileTree(files)}
-            activePath={activeFilePath}
-            onSelect={setActiveFilePath}
-          />
-        </div>
-
-        {/* Editor */}
-        <div className='flex-1 p-2'>
-          <Editor
-            height='100%'
-            language={language}
-            value={activeFile?.content ?? ''}
-            onChange={(value) => {
-              setFiles((prev) =>
-                prev.map((f) =>
-                  f.path === activeFilePath ? { ...f, content: value ?? '' } : f
-                )
-              );
+      <ResizablePanelGroup
+        direction='horizontal'
+        className='flex-1 overflow-hidden'
+      >
+        <ResizablePanel defaultSize={20} minSize={15}>
+          <FileTreeExplorer
+            nodes={tree}
+            activePath={activeTab}
+            onSelect={openFile}
+            onCreate={async (path, type) => {
+              await createPath({
+                userId: user!.id,
+                projectId: env!.projectId,
+                path,
+                type,
+              });
+              loadTree(env!.projectId);
             }}
-            theme='vs-dark'
-            options={{
-              fontSize: 14,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              wordWrap: 'on',
+            onDelete={async (path) => {
+              await deletePath({
+                userId: user!.id,
+                projectId: env!.projectId,
+                path,
+              });
+              loadTree(env!.projectId);
             }}
+            onRename={async (o, n) => {
+              await renamePath({
+                userId: user!.id,
+                projectId: env!.projectId,
+                oldPath: o,
+                newPath: n,
+              });
+              loadTree(env!.projectId);
+            }}
+            onRefresh={() => loadTree(env!.projectId)}
           />
-        </div>
-      </div>
+        </ResizablePanel>
 
-      {/* Terminal */}
-      <div
-        ref={terminalContainerRef}
-        style={{
-          height: '60%',
-          background: '#020617',
-          padding: '8px',
-          borderTop: '1px solid #1e293b',
-        }}
-      />
+        <ResizableHandle />
+
+        <ResizablePanel defaultSize={80}>
+          <ResizablePanelGroup direction='vertical'>
+            <ResizablePanel defaultSize={65}>
+              <EditorTabs
+                tabs={tabs.map((t) => ({ path: t.path, dirty: t.dirty }))}
+                active={activeTab}
+                onSelect={setActiveTab}
+                onClose={(path) => {
+                  const tab = tabs.find((t) => t.path === path);
+                  if (tab?.dirty && !confirm(`Discard changes to ${path}?`))
+                    return;
+                  setTabs((prev) => prev.filter((t) => t.path !== path));
+                  if (activeTab === path) setActiveTab(null);
+                }}
+              />
+
+              <Editor
+                height='100%'
+                language={active?.language}
+                value={active?.content ?? ''}
+                onChange={(v) => updateActiveTab(v ?? '')}
+                theme='vs-dark'
+              />
+
+              {activePort && showPreview && (
+                <div className='h-75 border-t border-slate-800 bg-black'>
+                  <div className='flex items-center justify-between px-2 py-1 bg-slate-900'>
+                    <span className='text-xs text-slate-400'>
+                      Preview :{activePort}
+                    </span>
+
+                    <div className='flex gap-2'>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() =>
+                          window.open(
+                            `/preview/${user!.id}/${
+                              env!.projectId
+                            }/${activePort}`,
+                            '_blank'
+                          )
+                        }
+                      >
+                        Open
+                      </Button>
+
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => setShowPreview(false)}
+                      >
+                        Hide
+                      </Button>
+                    </div>
+                  </div>
+
+                  <iframe
+                    src={`http://localhost:3001/api/v1/preview/${user!.id}/${
+                      env!.projectId
+                    }/${activePort}`}
+                    className='w-full h-full border-none'
+                  />
+                </div>
+              )}
+            </ResizablePanel>
+
+            <ResizableHandle />
+
+            <ResizablePanel defaultSize={35} minSize={15}>
+              <div ref={terminalContainerRef} className='h-full bg-[#020617]' />
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 };
