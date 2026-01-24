@@ -68,7 +68,7 @@ const CodeEditor = (): JSX.Element => {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
-  const [ports, setPorts] = useState<number[]>([]);
+  // const [ports, setPorts] = useState<number[]>([]);
   const [activePort, setActivePort] = useState<number | null>(null);
   const [showPreview, setShowPreview] = useState(true);
 
@@ -300,7 +300,7 @@ const CodeEditor = (): JSX.Element => {
     const handler = (ports: any) => {
       if (!ports.length) return;
       console.log('found ports', ports);
-      setPorts(ports.map((p: any) => p.port));
+      // setPorts(ports.map((p: any) => p.port));
       setActivePort((prev) => prev ?? ports[0].port);
     };
 
