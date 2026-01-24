@@ -60,7 +60,7 @@ const CodeEditor = (): JSX.Element => {
   const [tree, setTree] = useState<FileNode[]>([]);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
-  const [autoSave, setAutoSave] = useState(false);
+  const [autoSave, setAutoSave] = useState(true);
 
   const socketRef = useRef<Socket | null>(null);
 
