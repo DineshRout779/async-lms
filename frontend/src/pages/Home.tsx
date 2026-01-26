@@ -1,12 +1,42 @@
+import { useAppSelector } from '@/app/hooks';
 import { Card, CardContent } from '@/components/ui/card';
+import { selectAuth } from '@/features/auth/authSelectors';
 import { GraduationCap, UserSquare2 } from 'lucide-react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 
 export default function Home() {
+  const { isAuthenticated, user } = useAppSelector(selectAuth);
   const navigate = useNavigate();
   const gotoLogin = (user_type: string) => {
     navigate(`/login?user_type=${user_type}`);
   };
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    // STUDENT FLOW
+    if (user.role === 'student') {
+      if (user.onboarding_step !== 'done') {
+        navigate(`/onboarding/${user.onboarding_step}`);
+      } else {
+        navigate('/dashboard/student');
+      }
+      return;
+    }
+
+    // FACILITATOR FLOW
+    if (user.role === 'facilitator') {
+      navigate('/dashboard/facilitator');
+      return;
+    }
+
+    // ADMIN FLOW
+    if (user.role === 'admin') {
+      navigate('/dashboard/admin');
+    }
+  }, [isAuthenticated, user, navigate]);
+
   return (
     <div className='min-h-screen w-full bg-muted flex items-center justify-center'>
       <div className='max-w-3xl w-full px-6 text-center'>

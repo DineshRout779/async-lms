@@ -41,8 +41,8 @@ const menuItems = [
     icon: MessageSquare,
     path: '/dashboard/student/ai-assistant',
   },
-  { name: 'Profile', icon: User, path: '/profile' },
-  { name: 'Settings', icon: Settings, path: '/settings' },
+  { name: 'Profile', icon: User, path: '/dashboard/student/profile' },
+  { name: 'Settings', icon: Settings, path: '/dashboard/student/settings' },
 ];
 
 export default function StudentSidebar({ isOpen }: StudentSidebarProps) {

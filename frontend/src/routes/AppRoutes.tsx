@@ -27,6 +27,10 @@ import LessonView from '@/pages/dashboard/student/Lesson';
 import CourseIntro from '@/pages/dashboard/student/CourseIntro';
 import EditorProfile from '@/pages/playground/EditorProfile';
 import Assignments from '@/pages/dashboard/student/Assignments';
+import Assistant from '@/pages/dashboard/student/Assistant';
+import Leaderboard from '@/pages/dashboard/student/Leaderboard';
+import StudentProfile from '@/pages/dashboard/student/StudentProfile';
+import StudentSettings from '@/pages/dashboard/student/StudentSettings';
 
 const router = createBrowserRouter([
   {
@@ -80,6 +84,22 @@ const router = createBrowserRouter([
               {
                 path: 'assignments',
                 element: <Assignments />,
+              },
+              {
+                path: 'ai-assistant',
+                element: <Assistant />,
+              },
+              {
+                path: 'leaderboard',
+                element: <Leaderboard />,
+              },
+              {
+                path: 'profile',
+                element: <StudentProfile />,
+              },
+              {
+                path: 'settings',
+                element: <StudentSettings />,
               },
               // Future dashboard sub-pages go here:
               { path: 'courses', element: <MyCourses /> },

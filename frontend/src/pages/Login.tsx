@@ -27,11 +27,7 @@ export default function Login() {
   const { status, isAuthenticated, user } = useAppSelector(selectAuth);
   const isLoading = status === 'loading';
 
-  /**
-   * ---------------------------------------
-   * REDIRECT AFTER AUTH
-   * ---------------------------------------
-   */
+  // REDIRECT AFTER AUTH
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
@@ -57,21 +53,13 @@ export default function Login() {
     }
   }, [isAuthenticated, user, navigate]);
 
-  /**
-   * ---------------------------------------
-   * TAB CHANGE
-   * ---------------------------------------
-   */
+  // Tab Change
   const handleTabChange = (v: string) => {
     setAuthMode(v as AuthMode);
     dispatch(clearAuthError());
   };
 
-  /**
-   * ---------------------------------------
-   * VALIDATION
-   * ---------------------------------------
-   */
+  // Validation
   const validateSignup = () => {
     if (!name || !email || !password || !confirmPassword) {
       throw new Error('All fields are required');
@@ -84,11 +72,6 @@ export default function Login() {
     }
   };
 
-  /**
-   * ---------------------------------------
-   * SUBMIT
-   * ---------------------------------------
-   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
