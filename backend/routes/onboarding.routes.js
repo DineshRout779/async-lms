@@ -96,7 +96,7 @@ router.post('/subjects', verifyToken, async (req, res) => {
 
     // 2. Update the user's onboarding status
     await client.query(
-      "UPDATE users SET onboarding_step = 'completed' WHERE id = $1",
+      "UPDATE users SET onboarding_step = 'done' WHERE id = $1",
       [userId]
     );
 
