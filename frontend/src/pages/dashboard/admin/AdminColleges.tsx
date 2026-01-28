@@ -1,12 +1,7 @@
-import { useEffect, useState } from 'react';
-import {
-  Plus,
-  MapPin,
-  Users,
-  BookOpen,
-  MoreHorizontal,
-  Loader2,
-} from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Plus, MapPin, MoreHorizontal, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,145 +13,149 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import toast from 'react-hot-toast';
-import apiClient from '@/services/api';
 
-interface College {
-  id: number;
+import apiClient from '@/services/api';
+import DeleteCollegeDialog from '@/components/common/admin/DeleteCollegeDialog';
+import CollegeFormDialog from '@/components/common/admin/CollegeFormDialog';
+
+/* ======================
+   Types (API aligned)
+====================== */
+
+export interface College {
+  id: string;
   name: string;
   short_code: string;
-  type: 'Barabari' | 'Normal';
-  location: string;
-  student_count: number;
-  course_count: number;
-  status: 'active' | 'inactive';
+  city: string;
+  state: string;
+  is_verified: boolean;
+  created_at: string;
 }
+
+/* ======================
+   Component
+====================== */
 
 export default function AdminColleges() {
   const [colleges, setColleges] = useState<College[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingCollege, setEditingCollege] = useState<College | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  /* ======================
+     Fetch Colleges
+  ====================== */
+
+  const fetchColleges = useCallback(async () => {
+    let isMounted = true;
+
+    try {
+      setLoading(true);
+      const res = await apiClient.get<{ data: College[] }>('/colleges');
+      if (isMounted) {
+        setColleges(res.data.data);
+      }
+    } catch {
+      toast.error('Failed to load colleges');
+    } finally {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     fetchColleges();
-  }, []);
+  }, [fetchColleges]);
 
-  const fetchColleges = async () => {
-    try {
-      setLoading(true);
-      // Replace with your actual API endpoint
-      const response = await apiClient.get('/colleges');
-      setColleges(response.data.data);
-    } catch (error) {
-      console.error('Failed to fetch colleges:', error);
-      toast.error('Could not load colleges');
-    } finally {
-      setLoading(false);
-    }
-  };
+  /* ======================
+     Helpers
+  ====================== */
 
-  // Logic to filter data locally based on the Tabs
-  const filteredColleges = colleges.filter((c) =>
-    filter === 'all' ? true : c.type.toLowerCase() === filter
+  const getInitials = useMemo(
+    () => (name: string) =>
+      name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase(),
+    []
   );
 
-  const getInitials = (name: string) =>
-    name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
+  /* ======================
+     Render
+  ====================== */
 
   return (
     <div className='p-6 space-y-6 animate-in fade-in duration-500'>
-      <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
-        <Tabs
-          defaultValue='all'
-          onValueChange={setFilter}
-          className='w-full sm:w-auto'
+      {/* Header */}
+      <div className='flex justify-between items-center'>
+        <h2 className='text-lg font-bold text-slate-900'>Colleges</h2>
+        <Button
+          className='gap-2 bg-blue-600 hover:bg-blue-700'
+          disabled={loading}
+          onClick={() => {
+            setEditingCollege(null);
+            setFormOpen(true);
+          }}
         >
-          <TabsList className='bg-slate-100/50 p-1'>
-            <TabsTrigger value='all' className='px-6'>
-              All Types
-            </TabsTrigger>
-            <TabsTrigger value='barabari' className='px-6'>
-              Barabari
-            </TabsTrigger>
-            <TabsTrigger value='normal' className='px-6'>
-              Normal
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <Button className='bg-[#2563eb] hover:bg-blue-700 font-bold gap-2'>
           <Plus className='w-4 h-4' /> Add College
         </Button>
       </div>
 
+      {/* Table */}
       <Card className='border-none shadow-sm overflow-hidden'>
         <CardContent className='p-0'>
           <Table>
             <TableHeader className='bg-slate-50/50'>
-              <TableRow className='hover:bg-transparent'>
-                <TableHead className='py-4 font-bold text-[11px] uppercase tracking-wider text-slate-500 pl-6'>
-                  College Name
-                </TableHead>
-                <TableHead className='py-4 font-bold text-[11px] uppercase tracking-wider text-slate-500'>
-                  Code
-                </TableHead>
-                <TableHead className='py-4 font-bold text-[11px] uppercase tracking-wider text-slate-500'>
-                  Type
-                </TableHead>
-                <TableHead className='py-4 font-bold text-[11px] uppercase tracking-wider text-slate-500'>
-                  Location
-                </TableHead>
-                <TableHead className='py-4 font-bold text-[11px] uppercase tracking-wider text-slate-500'>
-                  Stats
-                </TableHead>
-                <TableHead className='py-4 font-bold text-[11px] uppercase tracking-wider text-slate-500'>
-                  Status
-                </TableHead>
-                <TableHead className='py-4 w-12.5'></TableHead>
+              <TableRow>
+                <TableHead className='pl-6'>College</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className='w-12' />
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className='h-64 text-center'>
-                    <div className='flex flex-col items-center gap-2 text-slate-400'>
-                      <Loader2 className='w-8 h-8 animate-spin text-blue-600' />
-                      <p className='text-sm font-medium'>
-                        Fetching colleges...
-                      </p>
-                    </div>
+                  <TableCell colSpan={5} className='h-64 text-center'>
+                    <Loader2 className='w-8 h-8 animate-spin text-blue-600 mx-auto' />
                   </TableCell>
                 </TableRow>
-              ) : filteredColleges.length === 0 ? (
+              ) : colleges.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={5}
                     className='h-64 text-center text-slate-500'
                   >
                     No colleges found.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredColleges.map((college) => (
+                colleges.length > 0 &&
+                colleges.map((college) => (
                   <TableRow
                     key={college.id}
-                    className='group hover:bg-slate-50/50'
+                    className='hover:bg-slate-50/50 cursor-default'
                   >
-                    <TableCell className='py-4 pl-6'>
+                    <TableCell className='pl-6'>
                       <div className='flex items-center gap-4'>
-                        <div className='w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs bg-blue-50 text-blue-600 border border-blue-100'>
+                        <div className='w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs'>
                           {getInitials(college.name)}
                         </div>
                         <span className='font-bold text-slate-700 text-sm'>
@@ -164,65 +163,56 @@ export default function AdminColleges() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className='text-slate-500 font-medium text-sm'>
+
+                    <TableCell className='text-slate-500'>
                       {college.short_code}
                     </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant='outline'
-                        className={
-                          college.type === 'Barabari'
-                            ? 'bg-orange-50 text-orange-600 border-orange-100'
-                            : 'bg-blue-50 text-blue-600 border-blue-100'
-                        }
-                      >
-                        {college.type}
-                      </Badge>
-                    </TableCell>
+
                     <TableCell>
                       <div className='flex items-center gap-1.5 text-slate-500 text-sm'>
-                        <MapPin className='w-3.5 h-3.5' /> {college.location}
+                        <MapPin className='w-3.5 h-3.5' />
+                        {college.city}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className='flex items-center gap-4 text-slate-500'>
-                        <div className='flex items-center gap-1.5'>
-                          <Users className='w-3.5 h-3.5' />
-                          <span className='text-sm font-medium'>
-                            {college.student_count || 0}
-                          </span>
-                        </div>
-                        <div className='flex items-center gap-1.5'>
-                          <BookOpen className='w-3.5 h-3.5' />
-                          <span className='text-sm font-medium'>
-                            {college.course_count || 0}
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
+
                     <TableCell>
                       <Badge
                         className={
-                          college.status === 'active'
+                          college.is_verified
                             ? 'bg-emerald-50 text-emerald-600'
-                            : 'bg-slate-100 text-slate-500'
+                            : 'bg-orange-50 text-orange-600'
                         }
                       >
-                        {college.status}
+                        {college.is_verified ? 'Verified' : 'Pending'}
                       </Badge>
                     </TableCell>
+
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant='ghost' size='icon'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            aria-label='College actions'
+                          >
                             <MoreHorizontal className='w-4 h-4' />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align='end'>
-                          <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                          <DropdownMenuItem>Manage Courses</DropdownMenuItem>
-                          <DropdownMenuItem className='text-red-600'>
-                            Deactivate
+                          // TODO: Show Details
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEditingCollege(college);
+                              setFormOpen(true);
+                            }}
+                          >
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className='text-red-600'
+                            onClick={() => setDeleteId(college.id)}
+                          >
+                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -234,6 +224,27 @@ export default function AdminColleges() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Add / Edit Dialog */}
+      <CollegeFormDialog
+        open={formOpen}
+        college={editingCollege}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingCollege(null);
+        }}
+        onSuccess={fetchColleges}
+      />
+
+      {/* Delete Dialog */}
+      {deleteId && (
+        <DeleteCollegeDialog
+          open={!!deleteId}
+          collegeId={deleteId}
+          onClose={() => setDeleteId(null)}
+          onSuccess={fetchColleges}
+        />
+      )}
     </div>
   );
 }

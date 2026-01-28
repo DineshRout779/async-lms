@@ -3,7 +3,7 @@ const pool = require('../config/pg');
 // @desc    Get subjects for a specific student
 exports.getUserSubjects = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id; // Now a UUID
     const query = `
         SELECT s.id, s.name, s.slug, s.description, 
                true as "isEnrolled", us.started_at, us.completed_at
@@ -15,22 +15,25 @@ exports.getUserSubjects = async (req, res) => {
     const result = await pool.query(query, [userId]);
     res.json(result.rows);
   } catch (err) {
-    console.error(err.message);
+    console.error('Fetch Subjects Error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Get all users (Admin only)
+// @desc    Get all users (Admin only) - Enhanced with College Name
 exports.getAllUsers = async (req, res) => {
   try {
     const query = `
-      SELECT id, full_name, email, role, degree, college_id, year, created_at 
-      FROM public.users 
-      ORDER BY created_at DESC
+      SELECT u.id, u.full_name, u.email, u.role, u.degree, u.year, u.created_at,
+             c.name as college_name
+      FROM public.users u
+      LEFT JOIN public.colleges c ON u.college_id = c.id
+      ORDER BY u.created_at DESC
     `;
     const result = await pool.query(query);
     res.json(result.rows);
   } catch (err) {
+    console.error('Get All Users Error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -38,16 +41,24 @@ exports.getAllUsers = async (req, res) => {
 // @desc    Get single user by ID (Admin only)
 exports.getUserById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // Must be a valid UUID string
     const result = await pool.query(
-      'SELECT * FROM public.users WHERE id = $1',
+      `SELECT u.*, c.name as college_name 
+       FROM public.users u 
+       LEFT JOIN public.colleges c ON u.college_id = c.id 
+       WHERE u.id = $1`,
       [id]
     );
+
     if (result.rows.length === 0)
       return res.status(404).json({ message: 'User not found' });
+
     res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    console.error('Get User Error:', err.message);
+    res
+      .status(500)
+      .json({ message: 'Server error (check if ID is valid UUID)' });
   }
 };
 
@@ -56,20 +67,34 @@ exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const { full_name, degree, year, college_id } = req.body;
+
+    // Explicitly update updated_at
     const query = `
       UPDATE public.users 
-      SET full_name = $1, degree = $2, year = $3, college_id = $4 
-      WHERE id = $5 RETURNING *
+      SET full_name = $1, 
+          degree = $2, 
+          year = $3, 
+          college_id = $4,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5 
+      RETURNING id, full_name, email, role, updated_at
     `;
+
     const result = await pool.query(query, [
       full_name,
       degree,
       year,
-      college_id,
+      college_id, // Ensure frontend sends null or a UUID string
       id,
     ]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     res.json(result.rows[0]);
   } catch (err) {
+    console.error('Update User Error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -79,12 +104,22 @@ exports.changeUserRole = async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
+
     const result = await pool.query(
-      'UPDATE public.users SET role = $1 WHERE id = $2 RETURNING id, role',
+      `UPDATE public.users 
+       SET role = $1, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $2 
+       RETURNING id, role, updated_at`,
       [role, id]
     );
-    res.json({ message: 'Role updated', user: result.rows[0] });
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ message: 'Role updated successfully', user: result.rows[0] });
   } catch (err) {
+    console.error('Change Role Error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 };

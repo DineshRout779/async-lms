@@ -1,0 +1,101 @@
+const pool = require('../config/pg');
+
+// 1. College Selection Step
+exports.selectCollege = async (req, res) => {
+  const userId = req.user.id;
+  const { college_id } = req.body;
+
+  if (!college_id) {
+    return res.status(400).json({ message: 'college_id is required' });
+  }
+
+  try {
+    const college = await pool.query('SELECT id FROM colleges WHERE id = $1', [
+      college_id,
+    ]);
+
+    if (!college.rowCount) {
+      return res.status(400).json({ message: 'Invalid college' });
+    }
+
+    await pool.query(
+      `UPDATE users 
+             SET college_id = $1, onboarding_step = 'batch', updated_at = CURRENT_TIMESTAMP 
+             WHERE id = $2`,
+      [college_id, userId]
+    );
+
+    res.json({ message: 'College added successfully', next_step: 'batch' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// 2. Batch Details Step
+exports.updateBatchDetails = async (req, res) => {
+  const userId = req.user.id;
+  const { degree, year } = req.body;
+
+  if (!degree || !year) {
+    return res.status(400).json({ message: 'degree and year are required' });
+  }
+
+  try {
+    await pool.query(
+      `UPDATE users 
+             SET degree = $1, year = $2, onboarding_step = 'subject', updated_at = CURRENT_TIMESTAMP 
+             WHERE id = $3`,
+      [degree, year, userId]
+    );
+
+    res.json({ message: 'Batch details added', next_step: 'subject' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// 3. Subject Selection Step
+exports.selectSubjects = async (req, res) => {
+  const userId = req.user.id;
+  const { subjectIds } = req.body;
+
+  if (!Array.isArray(subjectIds) || subjectIds.length === 0) {
+    return res
+      .status(400)
+      .json({ message: 'Please select at least one subject' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const insertQuery = `
+            INSERT INTO user_subjects (user_id, subject_id, started_at)
+            SELECT $1, unnest($2::uuid[]), CURRENT_TIMESTAMP
+            ON CONFLICT (user_id, subject_id) DO NOTHING
+        `;
+    await client.query(insertQuery, [userId, subjectIds]);
+
+    await client.query(
+      "UPDATE users SET onboarding_step = 'done', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+      [userId]
+    );
+
+    await client.query('COMMIT');
+    res.json({
+      success: true,
+      message: 'Learning path created!',
+      next_step: 'dashboard',
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Transaction Error:', err);
+    res
+      .status(500)
+      .json({ message: 'Failed to save subjects', error: err.message });
+  } finally {
+    client.release();
+  }
+};

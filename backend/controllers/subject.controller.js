@@ -5,11 +5,27 @@ const fs = require('fs').promises;
 // 1. Get all published subjects
 exports.getAllSubjects = async (req, res) => {
   try {
+    // Note: We use order_index to keep your curated order
     const { rows } = await pool.query(
-      'SELECT id, name, slug, description FROM subjects WHERE is_published = true ORDER BY order_index ASC'
+      'SELECT * FROM subjects ORDER BY order_index ASC'
     );
     res.json({ success: true, data: rows });
   } catch (err) {
+    console.error('Error | getAllSubjects:', err);
+    res.status(500).json({ message: 'Error fetching subjects' });
+  }
+};
+
+// 2. Get all published subjects
+exports.getAllPublishedSubjects = async (req, res) => {
+  try {
+    // Note: We use order_index to keep your curated order
+    const { rows } = await pool.query(
+      'SELECT id, name, slug, description FROM subjects WHERE published = true ORDER BY order_index ASC'
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('Error | getAllSubjects:', err);
     res.status(500).json({ message: 'Error fetching subjects' });
   }
 };
@@ -32,6 +48,7 @@ exports.getCourseStructure = async (req, res) => {
     const subject = subjectResult.rows[0];
 
     // Fetch the structure (Topics -> Subtopics)
+    // No changes needed here, PG handles UUID equality automatically
     const query = `
       SELECT 
         t.id AS topic_id,
@@ -51,7 +68,7 @@ exports.getCourseStructure = async (req, res) => {
       let topic = acc.find((t) => t.id === row.topic_id);
       if (!topic) {
         topic = {
-          id: row.topic_id,
+          id: row.topic_id, // This is now a UUID string
           title: row.topic_title,
           subtopics: [],
         };
@@ -59,7 +76,7 @@ exports.getCourseStructure = async (req, res) => {
       }
       if (row.subtopic_id) {
         topic.subtopics.push({
-          id: row.subtopic_id,
+          id: row.subtopic_id, // This is now a UUID string
           title: row.subtopic_title,
           slug: row.subtopic_slug,
         });
@@ -79,11 +96,12 @@ exports.getCourseStructure = async (req, res) => {
   }
 };
 
-// 3. Get content for a specific subtopic (Joins lesson_content)
+// 3. Get content for a specific subtopic
 exports.getSubtopicContent = async (req, res) => {
   try {
     const { subtopicSlug } = req.params;
 
+    // We join with lesson_content and order by version to get the latest
     const query = `
       SELECT 
         s.title, 
@@ -107,36 +125,120 @@ exports.getSubtopicContent = async (req, res) => {
     const row = rows[0];
     let markdownText = '';
 
-    // Read the file content from the server's data folder
     if (row.markdown_path) {
       try {
-        // Construct absolute path: project_root/data/content/path_from_db
-        const absolutePath = path.join(
+        // Updated path resolution to be more robust
+        const absolutePath = path.resolve(
           __dirname,
-          '..',
-          'data',
+          '../../data/content', // Adjust based on your actual folder structure
           row.markdown_path
         );
+
         markdownText = await fs.readFile(absolutePath, 'utf8');
       } catch (fileErr) {
-        console.error(`File Read Error for ${row.markdown_path}:`, fileErr);
+        console.error(`File Read Error: ${row.markdown_path}`, fileErr);
         markdownText = '# Error\nContent file could not be loaded.';
       }
     }
 
-    console.log('text: ', markdownText);
-
-    const lessonData = {
-      title: row.title,
-      description: row.subtopic_description,
-      markdown_content: markdownText, // The actual text, not the path
-      content_type: row.content_type,
-      read_time: row.estimated_read_time,
-    };
-
-    res.json({ success: true, data: lessonData });
+    res.json({
+      success: true,
+      data: {
+        title: row.title,
+        description: row.subtopic_description,
+        markdown_content: markdownText,
+        content_type: row.content_type,
+        read_time: row.estimated_read_time,
+      },
+    });
   } catch (err) {
     console.error('Error | getSubtopicContent:', err);
     res.status(500).json({ message: 'Error fetching content' });
+  }
+};
+
+// 4. Create a new subject
+exports.createSubject = async (req, res) => {
+  const { name, slug, description } = req.body;
+
+  // Basic validation
+  if (!name || !slug) {
+    return res.status(400).json({
+      success: false,
+      message: 'Name and Slug are required.',
+    });
+  }
+
+  try {
+    const query = `
+      INSERT INTO public.subjects (name, slug, description, is_published, order_index)
+      VALUES ($1, $2, $3, true, (SELECT COALESCE(MAX(order_index), 0) + 1 FROM subjects))
+      RETURNING id, name, slug, description, created_at;
+    `;
+
+    const values = [name, slug, description];
+    const { rows } = await pool.query(query, values);
+
+    res.status(201).json({
+      success: true,
+      message: 'Subject created successfully',
+      data: rows[0],
+    });
+  } catch (err) {
+    console.error('Error | createSubject:', err);
+
+    // Handle unique constraint violation for the slug
+    if (err.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'A subject with this slug already exists.',
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Error creating subject',
+      error: err.message,
+    });
+  }
+};
+
+// Update existing subject (Edit & Publish)
+exports.updateSubject = async (req, res) => {
+  const { id } = req.params;
+  const { name, slug, description, is_published } = req.body;
+  try {
+    const query = `
+      UPDATE public.subjects 
+      SET name = $1, slug = $2, description = $3, is_published = $4, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5 
+      RETURNING *`;
+    const values = [name, slug, description, is_published, id];
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0)
+      return res.status(404).json({ message: 'Subject not found' });
+    res.status(200).json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Delete subject
+exports.deleteSubject = async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Note: Due to ON DELETE CASCADE in schema, this will also remove associated topics/subtopics
+    const result = await pool.query(
+      'DELETE FROM public.subjects WHERE id = $1',
+      [id]
+    );
+    if (result.rowCount === 0)
+      return res.status(404).json({ message: 'Subject not found' });
+    res
+      .status(200)
+      .json({ success: true, message: 'Subject deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };

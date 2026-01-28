@@ -3,16 +3,33 @@ const {
   getAllSubjects,
   getCourseStructure,
   getSubtopicContent,
+  createSubject,
+  getAllPublishedSubjects,
+  updateSubject,
+  deleteSubject,
 } = require('../controllers/subject.controller');
+const isAdmin = require('../middlewares/isAdmin');
 const verifyToken = require('../middlewares/verfiyToken');
 
 // GET specific content when clicking a subtopic
 router.get('/content/:subtopicSlug', verifyToken, getSubtopicContent);
 
 // Fetch all published subjects
-router.get('/', verifyToken, getAllSubjects);
+router.get('/published', verifyToken, getAllPublishedSubjects);
+
+// Fetch all subjects
+router.get('/', verifyToken, isAdmin, getAllSubjects);
+
+// Create a new subject
+router.post('/', verifyToken, isAdmin, createSubject);
 
 // GET a course and its hierarchy (topics/subtopics)
 router.get('/:slug', verifyToken, getCourseStructure);
+
+// UPDATE: subject
+router.put('/:id', verifyToken, isAdmin, updateSubject);
+
+// DELETE: Subject
+router.delete('/:id', verifyToken, isAdmin, deleteSubject);
 
 module.exports = router;

@@ -17,11 +17,15 @@ export default function SubjectStep() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
 
   useEffect(() => {
-    apiClient.get('/subjects').then((res) => setSubjects(res.data.data));
+    apiClient
+      .get('/subjects/published')
+      .then((res) => setSubjects(res.data.data))
+      .catch(console.error);
   }, []);
 
   const toggleSubject = (id: number) => {
@@ -32,10 +36,13 @@ export default function SubjectStep() {
 
   const handleContinue = async () => {
     if (selected.length === 0) return;
+
     try {
       setLoading(true);
-      await apiClient.post('/onboarding/subjects', { subjectIds: selected });
-      navigate(`/dashboard/${user?.role}`); // Onboarding complete!
+      await apiClient.post('/onboarding/subjects', {
+        subjectIds: selected,
+      });
+      navigate(`/dashboard/${user?.role}`);
     } catch (err) {
       console.error(err);
     } finally {
@@ -47,6 +54,7 @@ export default function SubjectStep() {
     <div className='max-w-md mx-auto h-screen flex justify-center items-center px-6'>
       <div className='w-full space-y-6'>
         <Stepper current='subject' />
+
         <div className='text-center'>
           <h2 className='text-xl font-semibold'>What do you want to learn?</h2>
           <p className='text-sm text-muted-foreground'>
@@ -57,6 +65,7 @@ export default function SubjectStep() {
         <div className='grid grid-cols-1 gap-3'>
           {subjects.map((subject) => {
             const isSelected = selected.includes(subject.id);
+
             return (
               <button
                 key={subject.id}

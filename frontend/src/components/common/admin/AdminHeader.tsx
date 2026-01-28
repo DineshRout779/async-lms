@@ -1,5 +1,5 @@
 import { Search, Bell, Menu, LogOut, UserCircle, Settings } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+// import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAppDispatch } from '@/app/hooks';
 import { logout } from '@/features/auth/authSlice';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 
 export default function AdminHeader({
@@ -20,6 +20,11 @@ export default function AdminHeader({
 }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const title =
+    pathname === '/dashboard/admin' ? 'Home' : pathname.split('/').at(-1);
+
+  console.log('title:', title);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -37,7 +42,7 @@ export default function AdminHeader({
           <Menu size={20} />
         </button>
         {/* Title matches image */}
-        <h2 className='text-xl font-bold text-[#1e2653]'>Evaluations</h2>
+        <h2 className='text-xl font-bold text-[#1e2653] capitalize'>{title}</h2>
       </div>
 
       <div className='flex items-center gap-4'>
@@ -52,13 +57,13 @@ export default function AdminHeader({
         </div>
 
         {/* Filter Pill */}
-        <Button
+        {/* <Button
           variant='outline'
           size='sm'
           className='hidden sm:flex rounded-full border-blue-100 text-blue-600 bg-blue-50 hover:bg-blue-100 font-bold px-4'
         >
           All Colleges
-        </Button>
+        </Button> */}
 
         {/* Notifications and Profile Dropdown */}
         <div className='flex items-center gap-2'>

@@ -52,13 +52,27 @@ export default function CollegeStep() {
 
     try {
       setLoading(true);
-      // Send only the ID to the simplified backend route
+      let finalCollegeId = collegeId;
+
+      // Scenario: User is adding a new college
+      if (collegeId === 'OTHER') {
+        const createRes = await apiClient.post('/colleges', {
+          name: customCollegeName,
+          city: customCollegeAddress, // mapping address to city for now
+          short_code: customCollegeName.substring(0, 5).toUpperCase(), // placeholder
+          state: 'Unknown',
+        });
+
+        // The backend returns the new college object including the generated UUID
+        finalCollegeId = createRes.data.id;
+      }
+
+      // Final Step: Update the User's onboarding progress with the college ID [cite: 9]
       const res = await apiClient.post('/onboarding/college', {
-        college_id: collegeId,
+        college_id: finalCollegeId,
       });
 
-      // Move to the next step in the flow
-      if (res.status === 200) {
+      if (res.status === 200 || res.status === 201) {
         navigate(`/onboarding/${res.data.next_step}`);
       }
     } catch (error: any) {

@@ -31,6 +31,12 @@ import Assistant from '@/pages/dashboard/student/Assistant';
 import Leaderboard from '@/pages/dashboard/student/Leaderboard';
 import StudentProfile from '@/pages/dashboard/student/StudentProfile';
 import StudentSettings from '@/pages/dashboard/student/StudentSettings';
+import LearningFlow from '@/pages/dashboard/admin/LearningFlow';
+import Students from '@/pages/dashboard/admin/Students';
+import LockControl from '@/pages/dashboard/admin/LockControl';
+import Analytics from '@/pages/dashboard/admin/Analytics';
+import AdminSettings from '@/pages/dashboard/admin/AdminSettings';
+import Evaluations from '@/pages/dashboard/admin/Evaluations';
 
 const router = createBrowserRouter([
   {
@@ -134,6 +140,12 @@ const router = createBrowserRouter([
               // Future dashboard sub-pages go here:
               { path: 'colleges', element: <AdminColleges /> },
               { path: 'courses', element: <AdminCourses /> },
+              { path: 'learning-flow', element: <LearningFlow /> },
+              { path: 'lock-control', element: <LockControl /> },
+              { path: 'students', element: <Students /> },
+              { path: 'analytics', element: <Analytics /> },
+              { path: 'settings', element: <AdminSettings /> },
+              { path: 'evaluations', element: <Evaluations /> },
             ],
           },
         ],

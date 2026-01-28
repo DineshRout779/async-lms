@@ -10,22 +10,26 @@ import {
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLocation, Link } from 'react-router';
+import { NavLink } from 'react-router'; // Switched to NavLink
 
 const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/admin' },
   { name: 'Colleges', icon: School, path: '/dashboard/admin/colleges' },
   { name: 'Courses', icon: BookOpen, path: '/dashboard/admin/courses' },
-  { name: 'Learning Flow', icon: GitBranch, path: '/dashboard/admin/flow' },
-  { name: 'Lock Control', icon: Lock, path: '/dashboard/admin/locks' },
+  {
+    name: 'Learning Flow',
+    icon: GitBranch,
+    path: '/dashboard/admin/learning-flow',
+  },
+  { name: 'Lock Control', icon: Lock, path: '/dashboard/admin/lock-control' },
   { name: 'Students', icon: Users, path: '/dashboard/admin/students' },
   {
     name: 'Evaluations',
     icon: ClipboardCheck,
-    path: '/admin/dashboard/evaluations',
+    path: '/dashboard/admin/evaluations',
   },
-  { name: 'Analytics', icon: BarChart3, path: '/admin/dashboard/analytics' },
-  { name: 'Settings', icon: Settings, path: '/admin/dashboard/settings' },
+  { name: 'Analytics', icon: BarChart3, path: '/dashboard/admin/analytics' },
+  { name: 'Settings', icon: Settings, path: '/dashboard/admin/settings' },
 ];
 
 export default function AdminSidebar({
@@ -34,8 +38,6 @@ export default function AdminSidebar({
   isOpen: boolean;
   toggle: () => void;
 }) {
-  const { pathname } = useLocation();
-
   return (
     <aside
       className={cn(
@@ -57,36 +59,41 @@ export default function AdminSidebar({
 
       {/* Nav Items */}
       <nav className='flex-1 py-4 px-3 space-y-1 overflow-y-auto'>
-        {menuItems.map((item) => {
-          const isActive = pathname.startsWith(item.path);
-          return (
-            <Link
-              key={item.name}
-              to={item.path}
-              className={cn(
+        {menuItems.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.path}
+            // Use 'end' for the Dashboard to prevent it from being active on sub-routes
+            end={item.path === '/dashboard/admin'}
+            className={({ isActive }) =>
+              cn(
                 'flex items-center gap-3 px-3 py-3 rounded-lg transition-all group',
                 isActive
                   ? 'bg-[#333d7c] text-white shadow-sm'
                   : 'hover:bg-[#2a3469] hover:text-white'
-              )}
-            >
-              <item.icon
-                size={20}
-                className={cn(
-                  isActive
-                    ? 'text-white'
-                    : 'text-slate-400 group-hover:text-slate-300'
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <item.icon
+                  size={20}
+                  className={cn(
+                    isActive
+                      ? 'text-white'
+                      : 'text-slate-400 group-hover:text-slate-300'
+                  )}
+                />
+                {isOpen && (
+                  <span className='font-medium text-[14px]'>{item.name}</span>
                 )}
-              />
-              {isOpen && (
-                <span className='font-medium text-[14px]'>{item.name}</span>
-              )}
-              {isActive && isOpen && (
-                <div className='ml-auto w-1.5 h-1.5 rounded-full bg-yellow-400' />
-              )}
-            </Link>
-          );
-        })}
+                {isActive && isOpen && (
+                  <div className='ml-auto w-1.5 h-1.5 rounded-full bg-yellow-400' />
+                )}
+              </>
+            )}
+          </NavLink>
+        ))}
       </nav>
 
       {/* User Profile Section - Bottom */}
