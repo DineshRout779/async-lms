@@ -21,7 +21,7 @@ exports.getAllPublishedSubjects = async (req, res) => {
   try {
     // Note: We use order_index to keep your curated order
     const { rows } = await pool.query(
-      'SELECT id, name, slug, description FROM subjects WHERE published = true ORDER BY order_index ASC'
+      'SELECT id, name, slug, description FROM subjects WHERE is_published = true ORDER BY order_index ASC'
     );
     res.json({ success: true, data: rows });
   } catch (err) {
