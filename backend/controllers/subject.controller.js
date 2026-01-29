@@ -101,6 +101,8 @@ exports.getSubtopicContent = async (req, res) => {
   try {
     const { subtopicSlug } = req.params;
 
+    console.log('serching for subtopic content: ', subtopicSlug);
+
     // We join with lesson_content and order by version to get the latest
     const query = `
       SELECT 
