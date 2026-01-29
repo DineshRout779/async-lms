@@ -1,23 +1,23 @@
 import { useEffect, useState } from 'react';
 import apiClient from '@/services/api';
-import { BookOpen, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Loader2, Code2, Layout, Boxes, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router';
 
-interface Subject {
-  id: number;
-  name: string;
-  description: string;
-  isEnrolled: boolean;
-  completed_at: string | null;
-  slug: string | null;
-}
+// Maps subjects to specific header styles and icons based on slug/name
+const getCourseTheme = (slug: string) => {
+  if (slug.includes('frontend') || slug.includes('react'))
+    return { icon: Code2, color: 'bg-[#2e5cd5]' };
+  if (slug.includes('backend') || slug.includes('node'))
+    return { icon: Boxes, color: 'bg-[#0a3a3a]' };
+  if (slug.includes('devops') || slug.includes('kubernetes'))
+    return { icon: Zap, color: 'bg-[#4c1d95]' };
+  return { icon: Layout, color: 'bg-slate-800' };
+};
 
 const MyCourses = () => {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -25,10 +25,7 @@ const MyCourses = () => {
     const fetchMyCourses = async () => {
       try {
         const { data } = await apiClient.get('/users/subjects');
-        setSubjects(data);
-      } catch (err) {
-        console.log('error', err);
-        toast.error('Failed to load courses');
+        if (data.success) setSubjects(data.data);
       } finally {
         setLoading(false);
       }
@@ -36,86 +33,80 @@ const MyCourses = () => {
     fetchMyCourses();
   }, []);
 
-  const gotoCourse = ({ slug }: { slug: string | null }) => {
-    navigate(`/dashboard/student/courses/${slug}`);
-  };
-
-  if (loading) {
+  if (loading)
     return (
       <div className='flex h-[60vh] items-center justify-center'>
         <Loader2 className='w-8 h-8 animate-spin text-blue-600' />
       </div>
     );
-  }
 
   return (
-    <div className='space-y-8'>
+    <div className='p-8 max-w-7xl mx-auto space-y-10'>
       <div>
-        <h1 className='text-3xl font-bold text-slate-900'>My Learning Path</h1>
-        <p className='text-slate-500 mt-2'>
-          Explore subjects and track your progress.
-        </p>
+        <h1 className='text-3xl font-bold text-[#1e293b]'>My Courses</h1>
+        <p className='text-slate-500 mt-1'>Continue where you left off</p>
       </div>
 
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-        {subjects.map((subject) => (
-          <div
-            key={subject.id}
-            className={cn(
-              'group relative bg-white border rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-1',
-              subject.isEnrolled
-                ? 'border-blue-100 ring-1 ring-blue-50'
-                : 'border-slate-200'
-            )}
-          >
-            <div className='flex justify-between items-start mb-4'>
+      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
+        {subjects.map((course) => {
+          const { icon: Icon, color } = getCourseTheme(course.slug || '');
+          const progress = Math.round(course.progress_percent || 0);
+
+          return (
+            <div
+              key={course.id}
+              onClick={() =>
+                navigate(`/dashboard/student/courses/${course.slug}`)
+              }
+              className='bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden group'
+            >
+              {/* Header Visual */}
               <div
-                className={cn(
-                  'p-3 rounded-xl',
-                  subject.isEnrolled
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'bg-slate-50 text-slate-400'
-                )}
+                className={`${color} h-44 flex items-center justify-center transition-transform duration-300`}
               >
-                <BookOpen className='w-6 h-6' />
+                <Icon className='w-16 h-16 text-white/90 group-hover:scale-110 transition-transform' />
               </div>
-              {subject.isEnrolled && (
-                <Badge
-                  variant='secondary'
-                  className='bg-green-50 text-green-700 border-green-100 gap-1'
-                >
-                  <CheckCircle2 className='w-3 h-3' /> Enrolled
-                </Badge>
-              )}
-            </div>
 
-            <h3 className='text-xl font-bold text-slate-800 mb-2'>
-              {subject.name}
-            </h3>
-            <p className='text-slate-500 text-sm line-clamp-2 mb-6'>
-              {subject.description ||
-                'Dive deep into the fundamentals and advanced concepts of this subject.'}
-            </p>
+              {/* Content Section */}
+              <div className='p-8 space-y-6'>
+                <div className='flex gap-2'>
+                  <Badge
+                    variant='secondary'
+                    className='bg-slate-50 text-slate-500 border-none px-3 py-0.5 text-[10px] font-bold uppercase'
+                  >
+                    {course.level || 'General'}
+                  </Badge>
+                  {progress > 0 && progress < 100 && (
+                    <Badge className='bg-blue-50 text-blue-600 border-none px-3 py-0.5 text-[10px] font-bold uppercase'>
+                      In Progress
+                    </Badge>
+                  )}
+                </div>
 
-            <div className='flex items-center justify-between mt-auto'>
-              {subject.isEnrolled ? (
-                <Button
-                  onClick={() => gotoCourse({ slug: subject.slug })}
-                  className='w-full bg-blue-600 hover:bg-blue-700 group-hover:gap-3 transition-all'
-                >
-                  Continue Learning <ArrowRight className='w-4 h-4 ml-2' />
-                </Button>
-              ) : (
-                <Button
-                  variant='outline'
-                  className='w-full border-slate-200 text-slate-600 hover:bg-slate-50'
-                >
-                  Enrol Now
-                </Button>
-              )}
+                <div>
+                  <h3 className='text-2xl font-bold text-[#1e293b] leading-tight'>
+                    {course.name}
+                  </h3>
+                  <p className='text-slate-400 text-sm mt-2'>
+                    {course.level || 'Beginner'} • {course.total_lessons}{' '}
+                    Lessons
+                  </p>
+                </div>
+
+                <div className='space-y-3 pt-2'>
+                  <div className='flex justify-between text-sm font-bold text-[#1e293b]'>
+                    <span>Progress</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <Progress
+                    value={progress}
+                    className='h-2 bg-slate-100 rounded-full'
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -128,11 +128,15 @@ exports.getSubtopicContent = async (req, res) => {
     if (row.markdown_path) {
       try {
         // Updated path resolution to be more robust
-        const absolutePath = path.resolve(
-          __dirname,
-          '../../data/content', // Adjust based on your actual folder structure
-          row.markdown_path
-        );
+        const relativePath = row.markdown_path.replace(/^\/content\//, '');
+        const baseDir = path.resolve(__dirname, '../data/content');
+
+        const absolutePath = path.join(baseDir, relativePath);
+        console.log('markdown path: ', row.markdown_path);
+        console.log('Searching for file in path:', absolutePath);
+
+        console.log('DB path:', row.markdown_path);
+        console.log('Resolved FS path:', absolutePath);
 
         markdownText = await fs.readFile(absolutePath, 'utf8');
       } catch (fileErr) {

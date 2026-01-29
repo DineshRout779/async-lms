@@ -3,20 +3,47 @@ const pool = require('../config/pg');
 // @desc    Get subjects for a specific student
 exports.getUserSubjects = async (req, res) => {
   try {
-    const userId = req.user.id; // Now a UUID
+    const userId = req.user.id;
+
     const query = `
-        SELECT s.id, s.name, s.slug, s.description, 
-               true as "isEnrolled", us.started_at, us.completed_at
-        FROM public.subjects s
-        INNER JOIN public.user_subjects us ON s.id = us.subject_id
-        WHERE us.user_id = $1 AND s.is_published = true
-        ORDER BY us.started_at DESC;
-      `;
-    const result = await pool.query(query, [userId]);
-    res.json(result.rows);
+      SELECT 
+        s.id, 
+        s.name, 
+        s.slug, 
+        s.description, 
+        s.level, -- Requires the ALTER TABLE above
+        -- Count total subtopics for this subject
+        (SELECT COUNT(st.id) 
+         FROM public.subtopics st 
+         JOIN public.topics t ON st.topic_id = t.id 
+         WHERE t.subject_id = s.id) as total_lessons,
+        -- Calculate progress using user_subtopic_progress table 
+        COALESCE(
+          (SELECT (COUNT(usp.id)::float / NULLIF((
+            SELECT COUNT(st2.id) 
+            FROM public.subtopics st2 
+            JOIN public.topics t2 ON st2.topic_id = t2.id 
+            WHERE t2.subject_id = s.id
+          ), 0) * 100)
+           FROM public.user_subtopic_progress usp
+           JOIN public.subtopics st3 ON usp.subtopic_id = st3.id
+           JOIN public.topics t3 ON st3.topic_id = t3.id
+           WHERE usp.user_id = $1 
+             AND t3.subject_id = s.id 
+             AND usp.is_completed = true -- Using the boolean from your schema 
+          ), 0
+        ) as progress_percent
+      FROM public.subjects s
+      INNER JOIN public.user_subjects us ON s.id = us.subject_id 
+      WHERE us.user_id = $1 AND s.is_published = true 
+      ORDER BY us.started_at DESC;
+    `;
+
+    const { rows } = await pool.query(query, [userId]);
+    res.json({ success: true, data: rows });
   } catch (err) {
-    console.error('Fetch Subjects Error:', err.message);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error fetching student subjects:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
