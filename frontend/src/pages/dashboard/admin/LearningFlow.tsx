@@ -24,6 +24,30 @@ import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
 
 // --- Types & Interfaces ---
+interface LessonContent {
+  id: string;
+  subtopic_id: string;
+  content_type: 'markdown' | 'video' | 'external';
+  markdown_path: string;
+  estimated_read_time?: number;
+  version: number;
+  is_published: boolean;
+}
+
+interface Quiz {
+  id: string;
+  subtopic_id: string;
+  passing_score: number;
+  max_score: number;
+}
+
+interface Exercise {
+  id: string;
+  subtopic_id: string;
+  title: string;
+  instructions?: string;
+  max_score: number;
+}
 
 interface Subtopic {
   id: string;
@@ -31,6 +55,9 @@ interface Subtopic {
   slug: string;
   description?: string;
   order_index: number;
+  lesson_content?: LessonContent[];
+  quizzes?: Quiz[];
+  exercises?: Exercise[];
 }
 
 interface Topic {
@@ -59,16 +86,6 @@ interface SubjectListResponse {
   success: boolean;
   data: Subject[];
 }
-
-// interface LessonContent {
-//   id: string;
-//   subtopic_id: string;
-//   content_type: 'markdown' | 'video' | 'external';
-//   markdown_path: string;
-//   estimated_read_time?: number;
-//   version: number;
-//   is_published: boolean;
-// }
 
 // Modal Components
 interface TopicModalProps {
@@ -449,6 +466,263 @@ const ContentModal: React.FC<ContentModalProps> = ({
   );
 };
 
+interface QuizModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: { passing_score: number; max_score: number }) => void;
+  editData?: { passing_score: number; max_score: number };
+  subtopicTitle: string;
+}
+
+const QuizModal: React.FC<QuizModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  editData,
+  subtopicTitle,
+}) => {
+  const [passingScore, setPassingScore] = useState(
+    editData?.passing_score ?? 70
+  );
+  const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
+
+  const handleSave = () => {
+    if (passingScore <= 0 || maxScore <= 0) {
+      toast.error('Scores must be greater than 0');
+      return;
+    }
+    if (passingScore > maxScore) {
+      toast.error('Passing score cannot exceed max score');
+      return;
+    }
+    onSave({
+      passing_score: passingScore,
+      max_score: maxScore,
+    });
+    setPassingScore(70);
+    setMaxScore(100);
+  };
+
+  useEffect(() => {
+    if (editData) {
+      setPassingScore(editData.passing_score);
+      setMaxScore(editData.max_score);
+    }
+  }, [editData]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
+      <div className='w-full max-w-lg rounded-xl bg-white p-6 shadow-xl'>
+        <div className='mb-4 flex items-center justify-between'>
+          <div>
+            <h3 className='text-lg font-bold text-slate-900'>
+              {editData ? 'Update' : 'Create'} Quiz
+            </h3>
+            <p className='text-sm text-slate-500'>Subtopic: {subtopicTitle}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className='text-slate-400 hover:text-slate-600'
+          >
+            <X className='h-5 w-5' />
+          </button>
+        </div>
+
+        <div className='space-y-4'>
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Maximum Score
+            </label>
+            <input
+              type='number'
+              value={maxScore}
+              onChange={(e) => setMaxScore(parseInt(e.target.value) || 0)}
+              placeholder='100'
+              min='1'
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Passing Score
+            </label>
+            <input
+              type='number'
+              value={passingScore}
+              onChange={(e) => setPassingScore(parseInt(e.target.value) || 0)}
+              placeholder='70'
+              min='1'
+              max={maxScore}
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+            <p className='mt-1 text-xs text-slate-500'>
+              Students must score at least {passingScore} out of {maxScore} to
+              pass
+            </p>
+          </div>
+        </div>
+
+        <div className='mt-6 flex gap-3'>
+          <Button
+            onClick={onClose}
+            className='flex-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
+          >
+            <Save className='mr-2 h-4 w-4' />
+            {editData ? 'Update' : 'Create'} Quiz
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface ExerciseModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: {
+    title: string;
+    instructions: string;
+    max_score: number;
+  }) => void;
+  editData?: {
+    title: string;
+    instructions: string;
+    max_score: number;
+  };
+  subtopicTitle: string;
+}
+
+const ExerciseModal: React.FC<ExerciseModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  editData,
+  subtopicTitle,
+}) => {
+  const [title, setTitle] = useState(editData?.title ?? '');
+  const [instructions, setInstructions] = useState(
+    editData?.instructions ?? ''
+  );
+  const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
+
+  const handleSave = () => {
+    if (!title.trim()) {
+      toast.error('Exercise title is required');
+      return;
+    }
+    if (maxScore <= 0) {
+      toast.error('Max score must be greater than 0');
+      return;
+    }
+    onSave({
+      title: title.trim(),
+      instructions: instructions.trim(),
+      max_score: maxScore,
+    });
+    setTitle('');
+    setInstructions('');
+    setMaxScore(100);
+  };
+
+  useEffect(() => {
+    if (editData) {
+      setTitle(editData.title);
+      setInstructions(editData.instructions || '');
+      setMaxScore(editData.max_score);
+    }
+  }, [editData]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
+      <div className='w-full max-w-lg rounded-xl bg-white p-6 shadow-xl'>
+        <div className='mb-4 flex items-center justify-between'>
+          <div>
+            <h3 className='text-lg font-bold text-slate-900'>
+              {editData ? 'Edit Exercise' : 'Create Exercise'}
+            </h3>
+            <p className='text-sm text-slate-500'>Subtopic: {subtopicTitle}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className='text-slate-400 hover:text-slate-600'
+          >
+            <X className='h-5 w-5' />
+          </button>
+        </div>
+
+        <div className='space-y-4'>
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Exercise Title
+            </label>
+            <input
+              type='text'
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder='e.g., Implement Binary Search'
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Instructions
+            </label>
+            <textarea
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder='Detailed instructions for the exercise...'
+              rows={4}
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Maximum Score
+            </label>
+            <input
+              type='number'
+              value={maxScore}
+              onChange={(e) => setMaxScore(parseInt(e.target.value) || 0)}
+              placeholder='100'
+              min='1'
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+        </div>
+
+        <div className='mt-6 flex gap-3'>
+          <Button
+            onClick={onClose}
+            className='flex-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
+          >
+            <Save className='mr-2 h-4 w-4' />
+            {editData ? 'Update' : 'Create'} Exercise
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const LearningFlow: React.FC = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<{
@@ -460,13 +734,19 @@ const LearningFlow: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [fetchingStructure, setFetchingStructure] = useState<boolean>(false);
 
-  // Expanded topics tracking
+  // Expanded topics and subtopics tracking
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
+  const [expandedSubtopics, setExpandedSubtopics] = useState<Set<string>>(
+    new Set()
+  );
 
   // Modal states
   const [topicModalOpen, setTopicModalOpen] = useState(false);
   const [subtopicModalOpen, setSubtopicModalOpen] = useState(false);
   const [contentModalOpen, setContentModalOpen] = useState(false);
+  const [quizModalOpen, setQuizModalOpen] = useState(false);
+  const [exerciseModalOpen, setExerciseModalOpen] = useState(false);
+
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [editingSubtopic, setEditingSubtopic] = useState<{
     subtopic: Subtopic;
@@ -476,6 +756,12 @@ const LearningFlow: React.FC = () => {
     useState<Topic | null>(null);
   const [selectedSubtopicForContent, setSelectedSubtopicForContent] =
     useState<Subtopic | null>(null);
+  const [selectedSubtopicForQuiz, setSelectedSubtopicForQuiz] =
+    useState<Subtopic | null>(null);
+  const [selectedSubtopicForExercise, setSelectedSubtopicForExercise] =
+    useState<Subtopic | null>(null);
+  const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
+  const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
 
   // 1. Initial Load: Get all subjects
   useEffect(() => {
@@ -535,6 +821,19 @@ const LearningFlow: React.FC = () => {
         newSet.delete(topicId);
       } else {
         newSet.add(topicId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle subtopic expansion
+  const toggleSubtopic = (subtopicId: string) => {
+    setExpandedSubtopics((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(subtopicId)) {
+        newSet.delete(subtopicId);
+      } else {
+        newSet.add(subtopicId);
       }
       return newSet;
     });
@@ -707,12 +1006,126 @@ const LearningFlow: React.FC = () => {
 
       if (response.data.success) {
         toast.success('Lesson content created successfully');
+        await handleSubjectChange(selectedSubject!.slug, selectedSubject!.id); // ✅
         setContentModalOpen(false);
         setSelectedSubtopicForContent(null);
       }
     } catch (error) {
       console.error('Failed to create content', error);
       toast.error('Failed to create lesson content');
+    }
+  };
+
+  // Create Quiz
+  const handleCreateQuiz = async (data: {
+    passing_score: number;
+    max_score: number;
+  }) => {
+    if (!selectedSubtopicForQuiz) return;
+
+    try {
+      const response = await apiClient.post('/admin/quizzes', {
+        subtopic_id: selectedSubtopicForQuiz.id,
+        passing_score: data.passing_score,
+        max_score: data.max_score,
+      });
+
+      if (response.data.success) {
+        toast.success('Quiz created successfully');
+        await handleSubjectChange(selectedSubject!.slug, selectedSubject!.id); // ✅
+        setQuizModalOpen(false);
+        setSelectedSubtopicForQuiz(null);
+      }
+    } catch (error) {
+      console.error('Failed to create quiz', error);
+      toast.error('Failed to create quiz');
+    }
+  };
+
+  // Create Exercise
+  const handleCreateExercise = async (data: {
+    title: string;
+    instructions: string;
+    max_score: number;
+  }) => {
+    if (!selectedSubtopicForExercise) return;
+
+    try {
+      const response = await apiClient.post('/admin/exercises', {
+        subtopic_id: selectedSubtopicForExercise.id,
+        title: data.title,
+        instructions: data.instructions,
+        max_score: data.max_score,
+      });
+
+      if (response.data.success) {
+        toast.success('Exercise created successfully');
+        await handleSubjectChange(selectedSubject!.slug, selectedSubject!.id); // ✅
+        setExerciseModalOpen(false);
+        setSelectedSubtopicForExercise(null);
+      }
+    } catch (error) {
+      console.error('Failed to create exercise', error);
+      toast.error('Failed to create exercise');
+    }
+  };
+
+  const handleUpdateQuiz = async (data: {
+    passing_score: number;
+    max_score: number;
+  }) => {
+    if (!editingQuiz) return;
+
+    try {
+      await apiClient.put(`/admin/quizzes/${editingQuiz.id}`, data);
+      toast.success('Quiz updated');
+      handleSubjectChange(selectedSubject!.slug, selectedSubject!.id);
+      setEditingQuiz(null);
+      setQuizModalOpen(false);
+    } catch {
+      toast.error('Failed to update quiz');
+    }
+  };
+
+  const handleDeleteQuiz = async (id: string) => {
+    if (!confirm('Delete this quiz?')) return;
+
+    try {
+      await apiClient.delete(`/admin/quizzes/${id}`);
+      toast.success('Quiz deleted');
+      handleSubjectChange(selectedSubject!.slug, selectedSubject!.id);
+    } catch {
+      toast.error('Failed to delete quiz');
+    }
+  };
+
+  const handleUpdateExercise = async (data: {
+    title: string;
+    instructions: string;
+    max_score: number;
+  }) => {
+    if (!editingExercise) return;
+
+    try {
+      await apiClient.put(`/admin/exercises/${editingExercise.id}`, data);
+      toast.success('Exercise updated');
+      handleSubjectChange(selectedSubject!.slug, selectedSubject!.id);
+      setEditingExercise(null);
+      setExerciseModalOpen(false);
+    } catch {
+      toast.error('Failed to update exercise');
+    }
+  };
+
+  const handleDeleteExercise = async (id: string) => {
+    if (!confirm('Delete this exercise?')) return;
+
+    try {
+      await apiClient.delete(`/admin/exercises/${id}`);
+      toast.success('Exercise deleted');
+      handleSubjectChange(selectedSubject!.slug, selectedSubject!.id);
+    } catch {
+      toast.error('Failed to delete exercise');
     }
   };
 
@@ -770,6 +1183,18 @@ const LearningFlow: React.FC = () => {
       toast.error('Failed to update order');
     }
   };
+
+  // Helper function to get content type icon
+  // const getContentIcon = (type: string) => {
+  //   switch (type) {
+  //     case 'video':
+  //       return <Video className='h-4 w-4' />;
+  //     case 'external':
+  //       return <LinkIcon className='h-4 w-4' />;
+  //     default:
+  //       return <FileText className='h-4 w-4' />;
+  //   }
+  // };
 
   if (loading) {
     return (
@@ -904,64 +1329,278 @@ const LearningFlow: React.FC = () => {
                               </div>
                             ) : (
                               topic.subtopics.map((sub: Subtopic) => (
-                                <div
-                                  key={sub.id}
-                                  className='group flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-indigo-200'
-                                >
-                                  <div className='flex items-center gap-4'>
-                                    <div className='rounded-lg bg-slate-50 p-2'>
-                                      <FileText className='h-5 w-5 text-slate-400' />
-                                    </div>
-                                    <div>
-                                      <p className='text-sm font-bold text-slate-700'>
-                                        {sub.title}
-                                      </p>
-                                      <div className='mt-0.5 flex items-center gap-2'>
-                                        <span className='font-mono text-[10px] text-slate-400'>
-                                          {sub.slug}
-                                        </span>
-                                        {sub.description && (
-                                          <span className='text-xs text-slate-500'>
-                                            • {sub.description}
-                                          </span>
+                                <div key={sub.id} className='space-y-2'>
+                                  <div className='group flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-indigo-200'>
+                                    <div className='flex flex-1 items-center gap-4'>
+                                      <button
+                                        onClick={() => toggleSubtopic(sub.id)}
+                                        className='text-slate-400 hover:text-slate-600'
+                                      >
+                                        {expandedSubtopics.has(sub.id) ? (
+                                          <ChevronDown className='h-4 w-4' />
+                                        ) : (
+                                          <ChevronRight className='h-4 w-4' />
                                         )}
+                                      </button>
+                                      <div className='rounded-lg bg-slate-50 p-2'>
+                                        <FileText className='h-5 w-5 text-slate-400' />
+                                      </div>
+                                      <div className='flex-1'>
+                                        <p className='text-sm font-bold text-slate-700'>
+                                          {sub.title}
+                                        </p>
+                                        <div className='mt-0.5 flex items-center gap-2'>
+                                          <span className='font-mono text-[10px] text-slate-400'>
+                                            {sub.slug}
+                                          </span>
+                                          {sub.description && (
+                                            <span className='text-xs text-slate-500'>
+                                              • {sub.description}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
+                                    <div className='flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100'>
+                                      <button
+                                        onClick={() => {
+                                          setSelectedSubtopicForContent(sub);
+                                          setContentModalOpen(true);
+                                        }}
+                                        className='rounded-lg border border-slate-200 bg-white p-2 hover:border-indigo-300 hover:bg-indigo-50'
+                                        title='Add lesson content'
+                                      >
+                                        <Plus className='h-3 w-3 text-slate-600' />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setEditingSubtopic({
+                                            subtopic: sub,
+                                            topicId: topic.id,
+                                          });
+                                          setSubtopicModalOpen(true);
+                                        }}
+                                        className='rounded-lg border border-slate-200 bg-white p-2 hover:border-indigo-300 hover:bg-indigo-50'
+                                        title='Edit subtopic'
+                                      >
+                                        <Edit2 className='h-3 w-3 text-slate-600' />
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          handleDeleteSubtopic(sub.id)
+                                        }
+                                        className='rounded-lg border border-slate-200 bg-white p-2 hover:border-red-300 hover:bg-red-50'
+                                        title='Delete subtopic'
+                                      >
+                                        <Trash2 className='h-3 w-3 text-slate-600' />
+                                      </button>
+                                    </div>
                                   </div>
-                                  <div className='flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100'>
-                                    <button
-                                      onClick={() => {
-                                        setSelectedSubtopicForContent(sub);
-                                        setContentModalOpen(true);
-                                      }}
-                                      className='rounded-lg border border-slate-200 bg-white p-2 hover:border-indigo-300 hover:bg-indigo-50'
-                                      title='Add lesson content'
-                                    >
-                                      <Plus className='h-3 w-3 text-slate-600' />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setEditingSubtopic({
-                                          subtopic: sub,
-                                          topicId: topic.id,
-                                        });
-                                        setSubtopicModalOpen(true);
-                                      }}
-                                      className='rounded-lg border border-slate-200 bg-white p-2 hover:border-indigo-300 hover:bg-indigo-50'
-                                      title='Edit subtopic'
-                                    >
-                                      <Edit2 className='h-3 w-3 text-slate-600' />
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        handleDeleteSubtopic(sub.id)
-                                      }
-                                      className='rounded-lg border border-slate-200 bg-white p-2 hover:border-red-300 hover:bg-red-50'
-                                      title='Delete subtopic'
-                                    >
-                                      <Trash2 className='h-3 w-3 text-slate-600' />
-                                    </button>
-                                  </div>
+
+                                  {/* Subtopic Content - Show when expanded */}
+                                  {expandedSubtopics.has(sub.id) && (
+                                    <div className='space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-4'>
+                                      <div className='mb-3 flex items-center justify-between'>
+                                        <span className='text-xs font-bold uppercase tracking-wider text-slate-500'>
+                                          Contents
+                                        </span>
+                                        <div className='flex gap-2'>
+                                          <button
+                                            onClick={() => {
+                                              setSelectedSubtopicForQuiz(sub);
+                                              setQuizModalOpen(true);
+                                            }}
+                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
+                                          >
+                                            <ListChecks className='h-3 w-3' />
+                                            Quiz
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setSelectedSubtopicForExercise(
+                                                sub
+                                              );
+                                              setExerciseModalOpen(true);
+                                            }}
+                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
+                                          >
+                                            <Code className='h-3 w-3' />
+                                            Exercise
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className='space-y-4 rounded-lg border border-slate-100 bg-slate-50 p-2'>
+                                        {/* LESSON CONTENT */}
+                                        <div>
+                                          <p className='mb-2 text-xs font-bold uppercase text-slate-500'>
+                                            Lesson Content
+                                          </p>
+
+                                          {sub.lesson_content &&
+                                          sub.lesson_content.length > 0 ? (
+                                            <div className='space-y-2'>
+                                              {sub.lesson_content.map(
+                                                (content) => (
+                                                  <div
+                                                    key={content.id}
+                                                    className='flex items-center justify-between rounded-md border bg-white p-2 text-xs'
+                                                  >
+                                                    <div className='flex flex-col'>
+                                                      <span className='font-mono text-slate-700'>
+                                                        {content.markdown_path}
+                                                      </span>
+                                                      <span className='text-slate-400'>
+                                                        Type:{' '}
+                                                        {content.content_type} •
+                                                        Version{' '}
+                                                        {content.version}
+                                                      </span>
+                                                    </div>
+
+                                                    <span
+                                                      className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                                                        content.is_published
+                                                          ? 'bg-green-100 text-green-700'
+                                                          : 'bg-yellow-100 text-yellow-700'
+                                                      }`}
+                                                    >
+                                                      {content.is_published
+                                                        ? 'Published'
+                                                        : 'Draft'}
+                                                    </span>
+                                                  </div>
+                                                )
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <p className='text-xs italic text-slate-400'>
+                                              No lesson content added yet.
+                                            </p>
+                                          )}
+                                        </div>
+
+                                        {/* QUIZZES */}
+                                        <div>
+                                          <p className='mb-2 text-xs font-bold uppercase text-slate-500'>
+                                            Quizzes
+                                          </p>
+
+                                          {sub.quizzes &&
+                                          sub.quizzes.length > 0 ? (
+                                            <div className='space-y-2'>
+                                              {sub.quizzes.map((quiz, idx) => (
+                                                <div
+                                                  key={quiz.id}
+                                                  className='rounded-md border bg-white p-2 text-xs'
+                                                >
+                                                  <div className='flex justify-between items-center'>
+                                                    <div>
+                                                      <p className='font-semibold'>
+                                                        Quiz {idx + 1}
+                                                      </p>
+                                                      <p className='text-xs text-slate-500'>
+                                                        Passing{' '}
+                                                        {quiz.passing_score}/
+                                                        {quiz.max_score}
+                                                      </p>
+                                                    </div>
+
+                                                    <div className='flex gap-2'>
+                                                      <Edit2
+                                                        className='h-3 w-3 cursor-pointer'
+                                                        onClick={() => {
+                                                          setEditingQuiz(quiz);
+                                                          setSelectedSubtopicForQuiz(
+                                                            sub
+                                                          );
+                                                          setQuizModalOpen(
+                                                            true
+                                                          );
+                                                        }}
+                                                      />
+                                                      <Trash2
+                                                        className='h-3 w-3 cursor-pointer text-red-500'
+                                                        onClick={() =>
+                                                          handleDeleteQuiz(
+                                                            quiz.id
+                                                          )
+                                                        }
+                                                      />
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className='text-xs italic text-slate-400'>
+                                              No quizzes created yet.
+                                            </p>
+                                          )}
+                                        </div>
+
+                                        {/* EXERCISES */}
+                                        <div>
+                                          <p className='mb-2 text-xs font-bold uppercase text-slate-500'>
+                                            Exercises
+                                          </p>
+
+                                          {sub.exercises &&
+                                          sub.exercises.length > 0 ? (
+                                            <div className='space-y-2'>
+                                              {sub.exercises.map((ex) => (
+                                                <div
+                                                  key={ex.id}
+                                                  className='rounded-md border bg-white p-2 text-xs'
+                                                >
+                                                  <div className='flex justify-between items-center'>
+                                                    <div>
+                                                      <p className='font-semibold'>
+                                                        {ex.title}
+                                                      </p>
+                                                      <p className='text-xs text-slate-500'>
+                                                        Max Score:{' '}
+                                                        {ex.max_score}
+                                                      </p>
+                                                    </div>
+
+                                                    <div className='flex gap-2'>
+                                                      <Edit2
+                                                        className='h-3 w-3 cursor-pointer'
+                                                        onClick={() => {
+                                                          setEditingExercise(
+                                                            ex
+                                                          );
+                                                          setSelectedSubtopicForExercise(
+                                                            sub
+                                                          );
+                                                          setExerciseModalOpen(
+                                                            true
+                                                          );
+                                                        }}
+                                                      />
+                                                      <Trash2
+                                                        className='h-3 w-3 cursor-pointer text-red-500'
+                                                        onClick={() =>
+                                                          handleDeleteExercise(
+                                                            ex.id
+                                                          )
+                                                        }
+                                                      />
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className='text-xs italic text-slate-400'>
+                                              No exercises added yet.
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ))
                             )}
@@ -1036,23 +1675,17 @@ const LearningFlow: React.FC = () => {
                 </div>
               )}
 
-              {/* Quick Actions */}
-              <div className='space-y-2'>
-                <p className='text-[10px] font-bold uppercase tracking-widest text-slate-400'>
-                  Quick Actions
+              {/* Quick Info */}
+              <div className='rounded-lg border border-slate-200 bg-white p-4'>
+                <p className='text-xs font-bold uppercase tracking-widest text-slate-400'>
+                  Quick Guide
                 </p>
-                <button className='flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-left text-sm hover:bg-slate-50'>
-                  <BookOpen className='h-4 w-4 text-slate-400' />
-                  <span>Manage Lessons</span>
-                </button>
-                <button className='flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-left text-sm hover:bg-slate-50'>
-                  <ListChecks className='h-4 w-4 text-slate-400' />
-                  <span>Create Quizzes</span>
-                </button>
-                <button className='flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-left text-sm hover:bg-slate-50'>
-                  <Code className='h-4 w-4 text-slate-400' />
-                  <span>Add Exercises</span>
-                </button>
+                <ul className='mt-3 space-y-2 text-xs text-slate-600'>
+                  <li>• Click chevron to expand/collapse</li>
+                  <li>• Hover over items to see actions</li>
+                  <li>• Add quizzes & exercises to subtopics</li>
+                  <li>• Reorder topics with arrows</li>
+                </ul>
               </div>
             </div>
           </Card>
@@ -1109,6 +1742,38 @@ const LearningFlow: React.FC = () => {
         }}
         onSave={handleCreateContent}
         subtopicTitle={selectedSubtopicForContent?.title || ''}
+      />
+
+      <QuizModal
+        isOpen={quizModalOpen}
+        onClose={() => {
+          setQuizModalOpen(false);
+          setEditingQuiz(null);
+          setSelectedSubtopicForQuiz(null);
+        }}
+        onSave={editingQuiz ? handleUpdateQuiz : handleCreateQuiz}
+        editData={editingQuiz || undefined}
+        subtopicTitle={selectedSubtopicForQuiz?.title || ''}
+      />
+
+      <ExerciseModal
+        isOpen={exerciseModalOpen}
+        onClose={() => {
+          setExerciseModalOpen(false);
+          setEditingExercise(null);
+          setSelectedSubtopicForExercise(null);
+        }}
+        onSave={editingExercise ? handleUpdateExercise : handleCreateExercise}
+        editData={
+          editingExercise
+            ? {
+                title: editingExercise.title,
+                instructions: editingExercise.instructions || '',
+                max_score: editingExercise.max_score,
+              }
+            : undefined
+        }
+        subtopicTitle={selectedSubtopicForExercise?.title || ''}
       />
     </>
   );

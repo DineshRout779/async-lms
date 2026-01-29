@@ -1,7 +1,7 @@
 const pool = require('../config/pg');
 
 // ============================================
-// EXISTING ADMIN FEATURES
+// EXISTING ADMIN FEATURES (Keep these!)
 // ============================================
 
 exports.getAdminStats = async (req, res) => {

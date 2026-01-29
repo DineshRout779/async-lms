@@ -30,14 +30,16 @@ exports.getAllPublishedSubjects = async (req, res) => {
   }
 };
 
-// 2. Get a course with its nested topics and subtopics
+// 2. Get a course with its nested topics, subtopics, and all related content
 exports.getCourseStructure = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    // Fetch subject info
+    // 1. Fetch subject
     const subjectResult = await pool.query(
-      'SELECT id, name, description FROM subjects WHERE slug = $1 AND is_published = true',
+      `SELECT id, name, description 
+       FROM subjects 
+       WHERE slug = $1 AND is_published = true`,
       [slug]
     );
 
@@ -47,42 +49,189 @@ exports.getCourseStructure = async (req, res) => {
 
     const subject = subjectResult.rows[0];
 
-    // Fetch the structure (Topics -> Subtopics)
-    // No changes needed here, PG handles UUID equality automatically
+    // 2. Fetch full structure
     const query = `
       SELECT 
+        -- Topic
         t.id AS topic_id,
         t.title AS topic_title,
+        t.description AS topic_description,
+        t.order_index AS topic_order,
+
+        -- Subtopic
         st.id AS subtopic_id,
         st.title AS subtopic_title,
-        st.slug AS subtopic_slug
+        st.slug AS subtopic_slug,
+        st.description AS subtopic_description,
+        st.order_index AS subtopic_order,
+
+        -- Lesson Content (published only)
+        lc.id AS lesson_id,
+        lc.content_type AS lesson_type,
+        lc.markdown_path AS lesson_path,
+        lc.estimated_read_time AS lesson_read_time,
+        lc.version AS lesson_version,
+
+        -- Quiz
+        q.id AS quiz_id,
+        q.passing_score AS quiz_passing_score,
+        q.max_score AS quiz_max_score,
+
+        -- Quiz Question
+        qq.id AS question_id,
+        qq.question_text,
+        qq.question_type,
+        qq.points,
+        qq.order_index AS question_order,
+        qq.explanation,
+
+        -- Quiz Options
+        qo.id AS option_id,
+        qo.option_text,
+        qo.is_correct,
+        qo.order_index AS option_order,
+
+        -- Exercise
+        e.id AS exercise_id,
+        e.title AS exercise_title,
+        e.instructions AS exercise_instructions,
+        e.max_score AS exercise_max_score
+
       FROM topics t
       LEFT JOIN subtopics st ON t.id = st.topic_id
+      LEFT JOIN lesson_content lc 
+        ON st.id = lc.subtopic_id AND lc.is_published = true
+      LEFT JOIN quizzes q ON st.id = q.subtopic_id
+      LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
+      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
+      LEFT JOIN exercises e ON st.id = e.subtopic_id
+
       WHERE t.subject_id = $1
-      ORDER BY t.order_index ASC, st.order_index ASC;
+      ORDER BY 
+        t.order_index,
+        st.order_index,
+        qq.order_index,
+        qo.order_index;
     `;
 
     const { rows } = await pool.query(query, [subject.id]);
 
-    const structure = rows.reduce((acc, row) => {
-      let topic = acc.find((t) => t.id === row.topic_id);
-      if (!topic) {
-        topic = {
-          id: row.topic_id, // This is now a UUID string
+    // 3. Build hierarchy safely
+    const topicsMap = new Map();
+
+    rows.forEach((row) => {
+      // Topic
+      if (!topicsMap.has(row.topic_id)) {
+        topicsMap.set(row.topic_id, {
+          id: row.topic_id,
           title: row.topic_title,
-          subtopics: [],
-        };
-        acc.push(topic);
-      }
-      if (row.subtopic_id) {
-        topic.subtopics.push({
-          id: row.subtopic_id, // This is now a UUID string
-          title: row.subtopic_title,
-          slug: row.subtopic_slug,
+          description: row.topic_description,
+          order_index: row.topic_order,
+          subtopics: new Map(),
         });
       }
-      return acc;
-    }, []);
+
+      const topic = topicsMap.get(row.topic_id);
+
+      // Subtopic
+      if (row.subtopic_id && !topic.subtopics.has(row.subtopic_id)) {
+        topic.subtopics.set(row.subtopic_id, {
+          id: row.subtopic_id,
+          title: row.subtopic_title,
+          slug: row.subtopic_slug,
+          description: row.subtopic_description,
+          order_index: row.subtopic_order,
+          lesson_content: [],
+          quizzes: new Map(),
+          exercises: [],
+        });
+      }
+
+      const subtopic = topic.subtopics.get(row.subtopic_id);
+
+      // Lesson Content
+      if (row.lesson_id && subtopic) {
+        if (!subtopic.lesson_content.some((l) => l.id === row.lesson_id)) {
+          subtopic.lesson_content.push({
+            id: row.lesson_id,
+            content_type: row.lesson_type,
+            markdown_path: row.lesson_path,
+            estimated_read_time: row.lesson_read_time,
+            version: row.lesson_version,
+          });
+        }
+      }
+
+      // Quiz
+      if (row.quiz_id && subtopic) {
+        if (!subtopic.quizzes.has(row.quiz_id)) {
+          subtopic.quizzes.set(row.quiz_id, {
+            id: row.quiz_id,
+            passing_score: row.quiz_passing_score,
+            max_score: row.quiz_max_score,
+            questions: new Map(),
+          });
+        }
+
+        const quiz = subtopic.quizzes.get(row.quiz_id);
+
+        // Question
+        if (row.question_id && quiz) {
+          if (!quiz.questions.has(row.question_id)) {
+            quiz.questions.set(row.question_id, {
+              id: row.question_id,
+              question_text: row.question_text,
+              question_type: row.question_type,
+              points: row.points,
+              order_index: row.question_order,
+              explanation: row.explanation,
+              options: [],
+            });
+          }
+
+          const question = quiz.questions.get(row.question_id);
+
+          // Options
+          if (row.option_id && question) {
+            if (!question.options.some((o) => o.id === row.option_id)) {
+              question.options.push({
+                id: row.option_id,
+                option_text: row.option_text,
+                is_correct: row.is_correct,
+                order_index: row.option_order,
+              });
+            }
+          }
+        }
+      }
+
+      // Exercise
+      if (row.exercise_id && subtopic) {
+        if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
+          subtopic.exercises.push({
+            id: row.exercise_id,
+            title: row.exercise_title,
+            instructions: row.exercise_instructions,
+            max_score: row.exercise_max_score,
+          });
+        }
+      }
+    });
+
+    // 4. Convert Maps → Arrays
+    const structure = Array.from(topicsMap.values()).map((topic) => ({
+      id: topic.id,
+      title: topic.title,
+      description: topic.description,
+      order_index: topic.order_index,
+      subtopics: Array.from(topic.subtopics.values()).map((sub) => ({
+        ...sub,
+        quizzes: Array.from(sub.quizzes.values()).map((q) => ({
+          ...q,
+          questions: Array.from(q.questions.values()),
+        })),
+      })),
+    }));
 
     res.json({
       success: true,
@@ -101,65 +250,137 @@ exports.getSubtopicContent = async (req, res) => {
   try {
     const { subtopicSlug } = req.params;
 
-    console.log('serching for subtopic content: ', subtopicSlug);
-
-    // We join with lesson_content and order by version to get the latest
     const query = `
-      SELECT 
-        s.title, 
-        s.description as subtopic_description,
+      SELECT
+        st.id AS subtopic_id,
+        st.title AS subtopic_title,
+        st.description AS subtopic_description,
+
         lc.markdown_path,
-        lc.content_type,
-        lc.estimated_read_time
-      FROM public.subtopics s
-      LEFT JOIN public.lesson_content lc ON s.id = lc.subtopic_id
-      WHERE s.slug = $1 AND (lc.is_published = true OR lc.is_published IS NULL)
-      ORDER BY lc.version DESC
-      LIMIT 1;
+        lc.estimated_read_time,
+
+        q.id AS quiz_id,
+        q.passing_score,
+        q.max_score,
+
+        qq.id AS question_id,
+        qq.question_text,
+        qq.question_type,
+        qq.points,
+        qq.order_index AS question_order,
+
+        qo.id AS option_id,
+        qo.option_text,
+        qo.is_correct,
+        qo.order_index AS option_order,
+
+        e.id AS exercise_id,
+        e.title AS exercise_title,
+        e.instructions,
+        e.max_score AS exercise_max_score
+
+      FROM subtopics st
+      LEFT JOIN lesson_content lc
+        ON lc.subtopic_id = st.id AND lc.is_published = true
+      LEFT JOIN quizzes q ON q.subtopic_id = st.id
+      LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
+      LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id
+      LEFT JOIN exercises e ON e.subtopic_id = st.id
+
+      WHERE st.slug = $1
+      ORDER BY qq.order_index, qo.order_index
     `;
 
     const { rows } = await pool.query(query, [subtopicSlug]);
 
     if (rows.length === 0) {
-      return res.status(404).json({ message: 'Content not found' });
+      return res.status(404).json({ message: 'Lesson not found' });
     }
 
-    const row = rows[0];
-    let markdownText = '';
+    // ---- Build response ----
+    const base = rows[0];
 
-    if (row.markdown_path) {
-      try {
-        // Updated path resolution to be more robust
-        const relativePath = row.markdown_path.replace(/^\/content\//, '');
-        const baseDir = path.resolve(__dirname, '../data/content');
+    // Read markdown
+    let markdownContent = '';
+    const relativePath = base.markdown_path.replace(/^\/+/, '');
 
-        const absolutePath = path.join(baseDir, relativePath);
-        console.log('markdown path: ', row.markdown_path);
-        console.log('Searching for file in path:', absolutePath);
+    const filePath = path.join(__dirname, '..', 'data', relativePath);
 
-        console.log('DB path:', row.markdown_path);
-        console.log('Resolved FS path:', absolutePath);
+    markdownContent = await fs.readFile(filePath, 'utf8');
+    const quizzesMap = new Map();
+    const exercisesMap = new Map();
 
-        markdownText = await fs.readFile(absolutePath, 'utf8');
-      } catch (fileErr) {
-        console.error(`File Read Error: ${row.markdown_path}`, fileErr);
-        markdownText = '# Error\nContent file could not be loaded.';
+    rows.forEach((row) => {
+      // Quiz
+      if (row.quiz_id) {
+        if (!quizzesMap.has(row.quiz_id)) {
+          quizzesMap.set(row.quiz_id, {
+            id: row.quiz_id,
+            passing_score: row.passing_score,
+            max_score: row.max_score,
+            questions: new Map(),
+          });
+        }
+
+        const quiz = quizzesMap.get(row.quiz_id);
+
+        // Question
+        if (row.question_id) {
+          if (!quiz.questions.has(row.question_id)) {
+            quiz.questions.set(row.question_id, {
+              id: row.question_id,
+              text: row.question_text,
+              type: row.question_type,
+              points: row.points,
+              options: [],
+            });
+          }
+
+          const question = quiz.questions.get(row.question_id);
+
+          if (row.option_id) {
+            question.options.push({
+              id: row.option_id,
+              text: row.option_text,
+              is_correct: row.is_correct,
+            });
+          }
+        }
       }
-    }
+
+      // Exercise
+      if (row.exercise_id && !exercisesMap.has(row.exercise_id)) {
+        exercisesMap.set(row.exercise_id, {
+          id: row.exercise_id,
+          title: row.exercise_title,
+          instructions: row.instructions,
+          max_score: row.exercise_max_score,
+        });
+      }
+    });
 
     res.json({
       success: true,
       data: {
-        title: row.title,
-        description: row.subtopic_description,
-        markdown_content: markdownText,
-        content_type: row.content_type,
-        read_time: row.estimated_read_time,
+        subtopic: {
+          id: base.subtopic_id,
+          title: base.subtopic_title,
+          description: base.subtopic_description,
+        },
+        lesson: {
+          markdown_content: markdownContent,
+          read_time: base.estimated_read_time,
+        },
+        quizzes: Array.from(quizzesMap.values()).map((q) => ({
+          ...q,
+          questions: Array.from(q.questions.values()),
+        })),
+        exercises: Array.from(exercisesMap.values()),
       },
     });
   } catch (err) {
-    console.error('Error | getSubtopicContent:', err);
-    res.status(500).json({ message: 'Error fetching content' });
+    console.error('Error | getLessonContent:', err);
+    res.status(500).json({ message: 'Failed to load lesson' });
   }
 };
 
