@@ -22,6 +22,7 @@ app.use((req, res, next) => {
 
 app.use('/api/v1/auth', require('./routes/auth.routes'));
 app.use('/api/v1/users', require('./routes/user.routes'));
+app.use('/api/v1/students', require('./routes/student.routes'));
 app.use('/api/v1/editor', require('./routes/editor.routes'));
 app.use('/api/v1/workspace', require('./routes/workspace.route'));
 app.use('/api/v1/preview', require('./routes/preview.routes'));

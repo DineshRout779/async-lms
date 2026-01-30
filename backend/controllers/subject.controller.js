@@ -256,6 +256,7 @@ exports.getSubtopicContent = async (req, res) => {
         st.title AS subtopic_title,
         st.description AS subtopic_description,
 
+        lc.id AS lesson_id,
         lc.markdown_path,
         lc.estimated_read_time,
 
@@ -268,6 +269,7 @@ exports.getSubtopicContent = async (req, res) => {
         qq.question_type,
         qq.points,
         qq.order_index AS question_order,
+        qq.explanation,
 
         qo.id AS option_id,
         qo.option_text,
@@ -302,11 +304,18 @@ exports.getSubtopicContent = async (req, res) => {
 
     // Read markdown
     let markdownContent = '';
-    const relativePath = base.markdown_path.replace(/^\/+/, '');
+    if (base.markdown_path) {
+      const relativePath = base.markdown_path.replace(/^\/+/, '');
+      const filePath = path.join(__dirname, '..', 'data', relativePath);
 
-    const filePath = path.join(__dirname, '..', 'data', relativePath);
+      try {
+        markdownContent = await fs.readFile(filePath, 'utf8');
+      } catch (err) {
+        console.error('Error reading markdown file:', err);
+        markdownContent = ''; // Return empty if file not found
+      }
+    }
 
-    markdownContent = await fs.readFile(filePath, 'utf8');
     const quizzesMap = new Map();
     const exercisesMap = new Map();
 
@@ -329,9 +338,10 @@ exports.getSubtopicContent = async (req, res) => {
           if (!quiz.questions.has(row.question_id)) {
             quiz.questions.set(row.question_id, {
               id: row.question_id,
-              text: row.question_text,
-              type: row.question_type,
+              question_text: row.question_text,
+              question_type: row.question_type,
               points: row.points,
+              explanation: row.explanation,
               options: [],
             });
           }
@@ -341,7 +351,7 @@ exports.getSubtopicContent = async (req, res) => {
           if (row.option_id) {
             question.options.push({
               id: row.option_id,
-              text: row.option_text,
+              option_text: row.option_text,
               is_correct: row.is_correct,
             });
           }
@@ -368,6 +378,7 @@ exports.getSubtopicContent = async (req, res) => {
           description: base.subtopic_description,
         },
         lesson: {
+          id: base.lesson_id, // IMPORTANT: Now includes lesson ID
           markdown_content: markdownContent,
           read_time: base.estimated_read_time,
         },

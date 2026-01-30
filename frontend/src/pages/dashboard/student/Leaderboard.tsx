@@ -1,118 +1,346 @@
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useState } from 'react';
+import apiClient from '@/services/api';
 import { Card } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Trophy, TrendingUp, Users, Award, Medal, Crown } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-export default function Leaderboard() {
-  const topThree = [
-    { name: 'Elena Rodriguez', rank: 2, xp: 4890, img: '/elena.png' },
-    {
-      name: 'Arjun Mehta',
-      rank: 1,
-      xp: 5240,
-      img: '/arjun.png',
-      champion: true,
-    },
-    { name: 'David Chen', rank: 3, xp: 4620, img: '/david.png' },
-  ];
+interface LeaderboardEntry {
+  user_id: string;
+  full_name: string;
+  email?: string;
+  college_name?: string;
+  total_points: number;
+  rank: number;
+}
+
+interface MyRank {
+  rank: number;
+  total_points: number;
+}
+
+const Leaderboard = () => {
+  const [activeTab, setActiveTab] = useState<'overall' | 'weekly' | 'college'>(
+    'overall'
+  );
+  const [overallData, setOverallData] = useState<LeaderboardEntry[]>([]);
+  const [weeklyData, setWeeklyData] = useState<LeaderboardEntry[]>([]);
+  const [collegeData, setCollegeData] = useState<LeaderboardEntry[]>([]);
+
+  const [myOverallRank, setMyOverallRank] = useState<MyRank | null>(null);
+  const [myWeeklyRank, setMyWeeklyRank] = useState<MyRank | null>(null);
+  const [myCollegeRank, setMyCollegeRank] = useState<MyRank | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLeaderboards();
+  }, []);
+
+  const fetchLeaderboards = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch all leaderboards in parallel
+      const [overallRes, weeklyRes, collegeRes] = await Promise.all([
+        apiClient.get('/students/leaderboard/overall'),
+        apiClient.get('/students/leaderboard/weekly'),
+        apiClient.get('/students/leaderboard/college').catch(() => ({
+          data: { data: { leaderboard: [], my_rank: null } },
+        })),
+      ]);
+
+      if (overallRes.data.success) {
+        setOverallData(overallRes.data.data.leaderboard);
+        setMyOverallRank(overallRes.data.data.my_rank);
+      }
+
+      if (weeklyRes.data.success) {
+        setWeeklyData(weeklyRes.data.data.leaderboard);
+        setMyWeeklyRank(weeklyRes.data.data.my_rank);
+      }
+
+      if (collegeRes.data.success) {
+        setCollegeData(collegeRes.data.data.leaderboard);
+        setMyCollegeRank(collegeRes.data.data.my_rank);
+      }
+    } catch (error) {
+      console.error('Error fetching leaderboards:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRankIcon = (rank: number) => {
+    if (rank === 1) return <Crown className='h-5 w-5 text-yellow-500' />;
+    if (rank === 2) return <Medal className='h-5 w-5 text-slate-400' />;
+    if (rank === 3) return <Medal className='h-5 w-5 text-amber-600' />;
+    return <span className='text-sm font-bold text-slate-500'>#{rank}</span>;
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const renderLeaderboardTable = (
+    data: LeaderboardEntry[],
+    myRank: MyRank | null
+  ) => {
+    if (loading) {
+      return (
+        <div className='flex items-center justify-center py-20'>
+          <div className='text-center'>
+            <div className='mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600'></div>
+            <p className='text-slate-500'>Loading leaderboard...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (data.length === 0) {
+      return (
+        <div className='flex items-center justify-center py-20'>
+          <div className='text-center'>
+            <Trophy className='mx-auto mb-4 h-16 w-16 text-slate-300' />
+            <p className='text-slate-500'>No data available yet</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className='space-y-4'>
+        {/* My Rank Card */}
+        {myRank && (
+          <Card className='border-2 border-indigo-500 bg-linear-to-r from-indigo-50 to-purple-50 p-4'>
+            <div className='flex items-center justify-between'>
+              <div className='flex items-center gap-4'>
+                <div className='flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white'>
+                  {getRankIcon(myRank.rank)}
+                </div>
+                <div>
+                  <p className='text-sm font-medium text-slate-700'>
+                    Your Rank
+                  </p>
+                  <p className='text-2xl font-bold text-indigo-600'>
+                    #{myRank.rank}
+                  </p>
+                </div>
+              </div>
+              <div className='text-right'>
+                <p className='text-sm font-medium text-slate-700'>
+                  Total Points
+                </p>
+                <p className='text-2xl font-bold text-slate-900'>
+                  {myRank.total_points}
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Top 3 Spotlight */}
+        <div className='grid gap-4 md:grid-cols-3'>
+          {data.slice(0, 3).map((entry, index) => (
+            <Card
+              key={entry.user_id}
+              className={`p-6 text-center ${
+                index === 0
+                  ? 'border-2 border-yellow-400 bg-linear-to-b from-yellow-50 to-white'
+                  : index === 1
+                  ? 'border-2 border-slate-400 bg-linear-to-b from-slate-50 to-white'
+                  : 'border-2 border-amber-400 bg-linear-to-b from-amber-50 to-white'
+              }`}
+            >
+              <div className='mb-4 flex justify-center'>
+                {getRankIcon(entry.rank)}
+              </div>
+              <Avatar className='mx-auto mb-3 h-16 w-16'>
+                <AvatarFallback className='bg-indigo-100 text-indigo-700'>
+                  {getInitials(entry.full_name)}
+                </AvatarFallback>
+              </Avatar>
+              <h3 className='mb-1 font-bold text-slate-900'>
+                {entry.full_name}
+              </h3>
+              {entry.college_name && (
+                <p className='mb-2 text-xs text-slate-500'>
+                  {entry.college_name}
+                </p>
+              )}
+              <p className='text-2xl font-bold text-indigo-600'>
+                {entry.total_points}
+                <span className='ml-1 text-sm text-slate-500'>pts</span>
+              </p>
+            </Card>
+          ))}
+        </div>
+
+        {/* Rest of Leaderboard */}
+        {data.length > 3 && (
+          <Card className='overflow-hidden'>
+            <div className='overflow-x-auto'>
+              <table className='w-full'>
+                <thead className='bg-slate-50'>
+                  <tr>
+                    <th className='px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600'>
+                      Rank
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600'>
+                      Student
+                    </th>
+                    {data[0]?.college_name && (
+                      <th className='px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600'>
+                        College
+                      </th>
+                    )}
+                    <th className='px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-600'>
+                      Points
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-slate-200 bg-white'>
+                  {data.slice(3).map((entry) => (
+                    <tr
+                      key={entry.user_id}
+                      className='transition-colors hover:bg-slate-50'
+                    >
+                      <td className='whitespace-nowrap px-6 py-4'>
+                        <span className='text-sm font-medium text-slate-700'>
+                          #{entry.rank}
+                        </span>
+                      </td>
+                      <td className='whitespace-nowrap px-6 py-4'>
+                        <div className='flex items-center gap-3'>
+                          <Avatar className='h-10 w-10'>
+                            <AvatarFallback className='bg-indigo-100 text-indigo-700'>
+                              {getInitials(entry.full_name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className='font-medium text-slate-900'>
+                              {entry.full_name}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      {entry.college_name && (
+                        <td className='whitespace-nowrap px-6 py-4 text-sm text-slate-600'>
+                          {entry.college_name}
+                        </td>
+                      )}
+                      <td className='whitespace-nowrap px-6 py-4 text-right'>
+                        <span className='font-semibold text-indigo-600'>
+                          {entry.total_points}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className='p-8 space-y-8 bg-slate-50 min-h-screen'>
-      <div className='flex justify-between items-center'>
-        <div>
-          <h1 className='text-3xl font-bold'>Global Leaderboard</h1>
-          <p className='text-muted-foreground'>
-            Top performers across all colleges this semester
+    <div className='min-h-screen bg-slate-50 p-6'>
+      <div className='mx-auto max-w-7xl'>
+        {/* Header */}
+        <div className='mb-8'>
+          <div className='flex items-center gap-3 mb-2'>
+            <Trophy className='h-8 w-8 text-indigo-600' />
+            <h1 className='text-3xl font-bold text-slate-900'>Leaderboard</h1>
+          </div>
+          <p className='text-slate-600'>
+            Compete with fellow students and climb to the top!
           </p>
         </div>
-        <div className='flex gap-4'>
-          <Card className='p-4 text-center'>
-            <p className='text-xs'>TOTAL XP</p>
-            <p className='font-bold'>1,250</p>
+
+        {/* Stats Cards */}
+        <div className='mb-8 grid gap-4 md:grid-cols-3'>
+          <Card className='p-6'>
+            <div className='flex items-center gap-4'>
+              <div className='rounded-full bg-indigo-100 p-3'>
+                <TrendingUp className='h-6 w-6 text-indigo-600' />
+              </div>
+              <div>
+                <p className='text-sm text-slate-600'>Overall Rank</p>
+                <p className='text-2xl font-bold text-slate-900'>
+                  {myOverallRank ? `#${myOverallRank.rank}` : '-'}
+                </p>
+              </div>
+            </div>
           </Card>
-          <Card className='p-4 text-center'>
-            <p className='text-xs'>STREAK</p>
-            <p className='font-bold'>🔥 12</p>
+
+          <Card className='p-6'>
+            <div className='flex items-center gap-4'>
+              <div className='rounded-full bg-green-100 p-3'>
+                <Award className='h-6 w-6 text-green-600' />
+              </div>
+              <div>
+                <p className='text-sm text-slate-600'>This Week</p>
+                <p className='text-2xl font-bold text-slate-900'>
+                  {myWeeklyRank ? `#${myWeeklyRank.rank}` : '-'}
+                </p>
+              </div>
+            </div>
           </Card>
-          <Card className='p-4 text-center'>
-            <p className='text-xs'>RANK</p>
-            <p className='font-bold'>#42</p>
+
+          <Card className='p-6'>
+            <div className='flex items-center gap-4'>
+              <div className='rounded-full bg-purple-100 p-3'>
+                <Users className='h-6 w-6 text-purple-600' />
+              </div>
+              <div>
+                <p className='text-sm text-slate-600'>College Rank</p>
+                <p className='text-2xl font-bold text-slate-900'>
+                  {myCollegeRank ? `#${myCollegeRank.rank}` : '-'}
+                </p>
+              </div>
+            </div>
           </Card>
         </div>
-      </div>
 
-      {/* Podium Section */}
-      <div className='bg-[#1e293b] rounded-3xl p-12 flex justify-center items-end gap-12 text-white'>
-        {topThree.map((user) => (
-          <div key={user.rank} className='flex flex-col items-center space-y-4'>
-            <div
-              className={`relative ${user.rank === 1 ? 'scale-125 mb-8' : ''}`}
-            >
-              {user.rank === 1 && (
-                <span className='absolute -top-6 left-1/2 -translate-x-1/2 text-2xl'>
-                  👑
-                </span>
-              )}
-              <Avatar className='h-20 w-20 border-4 border-yellow-500'>
-                <AvatarImage src={user.img} />
-                <AvatarFallback>{user.name[0]}</AvatarFallback>
-              </Avatar>
-              <Badge className='absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-800'>
-                {user.rank}
-              </Badge>
-            </div>
-            <div className='text-center'>
-              <p className='font-bold'>{user.name}</p>
-              <Badge
-                variant='secondary'
-                className='bg-yellow-500/20 text-yellow-500'
-              >
-                {user.xp} XP
-              </Badge>
-            </div>
-          </div>
-        ))}
-      </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
+          <TabsList className='mb-6 grid w-full grid-cols-3'>
+            <TabsTrigger value='overall'>
+              <Trophy className='mr-2 h-4 w-4' />
+              Overall
+            </TabsTrigger>
+            <TabsTrigger value='weekly'>
+              <TrendingUp className='mr-2 h-4 w-4' />
+              This Week
+            </TabsTrigger>
+            <TabsTrigger value='college'>
+              <Users className='mr-2 h-4 w-4' />
+              My College
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Table Section */}
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>RANK</TableHead>
-              <TableHead>STUDENT NAME</TableHead>
-              <TableHead>COURSE</TableHead>
-              <TableHead>XP</TableHead>
-              <TableHead>PROGRESS</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {/* Map your data here */}
-            <TableRow className='bg-blue-50/50 border-l-4 border-blue-600'>
-              <TableCell className='font-bold'>#42</TableCell>
-              <TableCell className='flex items-center gap-2'>
-                <Avatar className='h-8 w-8'>
-                  <AvatarImage src='/me.png' />
-                </Avatar>
-                You{' '}
-                <Badge variant='outline' className='text-green-600 bg-green-50'>
-                  TOP 2%
-                </Badge>
-              </TableCell>
-              <TableCell>Computer Science</TableCell>
-              <TableCell className='font-bold'>1,250</TableCell>
-              <TableCell>45%</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </Card>
+          <TabsContent value='overall'>
+            {renderLeaderboardTable(overallData, myOverallRank)}
+          </TabsContent>
+
+          <TabsContent value='weekly'>
+            {renderLeaderboardTable(weeklyData, myWeeklyRank)}
+          </TabsContent>
+
+          <TabsContent value='college'>
+            {renderLeaderboardTable(collegeData, myCollegeRank)}
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
-}
+};
+
+export default Leaderboard;
