@@ -1,14 +1,41 @@
 const pool = require('../config/pg');
 const path = require('path');
 const fs = require('fs').promises;
+const https = require('https');
+const http = require('http');
+
+const fetchTextFromUrl = (url) =>
+  new Promise((resolve, reject) => {
+    const client = url.startsWith('https') ? https : http;
+    client
+      .get(url, (res) => {
+        if (res.statusCode && res.statusCode >= 400) {
+          reject(new Error(`Failed to fetch markdown: ${res.statusCode}`));
+          return;
+        }
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk.toString('utf8');
+        });
+        res.on('end', () => resolve(data));
+      })
+      .on('error', reject);
+  });
 
 // 1. Get all published subjects
 exports.getAllSubjects = async (req, res) => {
   try {
     // Note: We use order_index to keep your curated order
-    const { rows } = await pool.query(
-      'SELECT * FROM subjects ORDER BY order_index ASC'
-    );
+    const { rows } = await pool.query(`
+      SELECT s.*, 
+             COUNT(DISTINCT t.id)::int as units_count, 
+             COUNT(DISTINCT st.id)::int as topics_count
+      FROM subjects s
+      LEFT JOIN topics t ON s.id = t.subject_id
+      LEFT JOIN subtopics st ON t.id = st.topic_id
+      GROUP BY s.id
+      ORDER BY s.order_index ASC
+    `);
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('Error | getAllSubjects:', err);
@@ -71,6 +98,7 @@ exports.getCourseStructure = async (req, res) => {
         lc.markdown_path AS lesson_path,
         lc.estimated_read_time AS lesson_read_time,
         lc.version AS lesson_version,
+        lc.video_url AS lesson_video_url,
 
         -- Quiz
         q.id AS quiz_id,
@@ -158,6 +186,7 @@ exports.getCourseStructure = async (req, res) => {
             markdown_path: row.lesson_path,
             estimated_read_time: row.lesson_read_time,
             version: row.lesson_version,
+            video_url: row.lesson_video_url,
           });
         }
       }
@@ -249,6 +278,57 @@ exports.getCourseStructure = async (req, res) => {
 exports.getSubtopicContent = async (req, res) => {
   try {
     const { subtopicSlug } = req.params;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    let lessonCompleted = false;
+
+    const subtopicResult = await pool.query(
+      `SELECT id FROM subtopics WHERE slug = $1 LIMIT 1`,
+      [subtopicSlug]
+    );
+
+    if (subtopicResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
+
+    const subtopicId = subtopicResult.rows[0].id;
+
+    if (userRole === 'student') {
+      const lockCheck = await pool.query(
+        `
+          SELECT is_unlocked
+          FROM user_subtopic_progress
+          WHERE user_id = $1 AND subtopic_id = $2
+          LIMIT 1;
+        `,
+        [userId, subtopicId]
+      );
+
+      if (!lockCheck.rows[0] || lockCheck.rows[0].is_unlocked !== true) {
+        return res.status(403).json({
+          success: false,
+          message: 'This subtopic is locked by your admin.',
+        });
+      }
+    }
+
+    if (userRole === 'student') {
+      const completionResult = await pool.query(
+        `
+          SELECT EXISTS (
+            SELECT 1
+            FROM user_lesson_progress ulp
+            INNER JOIN lesson_content lc ON lc.id = ulp.lesson_content_id
+            WHERE ulp.user_id = $1
+              AND lc.subtopic_id = $2
+              AND ulp.is_completed = true
+              AND lc.is_published = true
+          ) AS lesson_completed
+        `,
+        [userId, subtopicId]
+      );
+      lessonCompleted = completionResult.rows[0]?.lesson_completed || false;
+    }
 
     const query = `
       SELECT
@@ -257,8 +337,11 @@ exports.getSubtopicContent = async (req, res) => {
         st.description AS subtopic_description,
 
         lc.id AS lesson_id,
+        lc.content_type,
         lc.markdown_path,
         lc.estimated_read_time,
+        lc.version AS lesson_version,
+        lc.video_url,
 
         q.id AS quiz_id,
         q.passing_score,
@@ -301,18 +384,28 @@ exports.getSubtopicContent = async (req, res) => {
 
     // ---- Build response ----
     const base = rows[0];
+    const lessonRows = rows.filter((r) => r.lesson_id);
+    const markdownRow = lessonRows
+      .filter((r) => r.content_type === 'markdown')
+      .sort((a, b) => (b.lesson_version || 0) - (a.lesson_version || 0))[0];
+    const videoRow =
+      lessonRows.find((r) => r.video_url) ||
+      lessonRows.find((r) => r.content_type === 'video');
 
     // Read markdown
     let markdownContent = '';
-    if (base.markdown_path) {
-      const relativePath = base.markdown_path.replace(/^\/+/, '');
-      const filePath = path.join(__dirname, '..', 'data', relativePath);
-
+    if (markdownRow?.markdown_path) {
       try {
-        markdownContent = await fs.readFile(filePath, 'utf8');
+        if (markdownRow.markdown_path.startsWith('http')) {
+          markdownContent = await fetchTextFromUrl(markdownRow.markdown_path);
+        } else {
+          const relativePath = markdownRow.markdown_path.replace(/^\/+/, '');
+          const filePath = path.join(__dirname, '..', 'data', relativePath);
+          markdownContent = await fs.readFile(filePath, 'utf8');
+        }
       } catch (err) {
         console.error('Error reading markdown file:', err);
-        markdownContent = ''; // Return empty if file not found
+        markdownContent = '';
       }
     }
 
@@ -378,10 +471,16 @@ exports.getSubtopicContent = async (req, res) => {
           description: base.subtopic_description,
         },
         lesson: {
-          id: base.lesson_id, // IMPORTANT: Now includes lesson ID
+          id: markdownRow?.lesson_id || videoRow?.lesson_id || null,
+          content_type: base.content_type,
           markdown_content: markdownContent,
-          read_time: base.estimated_read_time,
+          read_time:
+            markdownRow?.estimated_read_time ??
+            videoRow?.estimated_read_time ??
+            null,
+          video_url: videoRow?.video_url || null,
         },
+        lesson_completed: lessonCompleted,
         quizzes: Array.from(quizzesMap.values()).map((q) => ({
           ...q,
           questions: Array.from(q.questions.values()),

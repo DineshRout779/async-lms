@@ -1,0 +1,129 @@
+import { Button } from '@/components/ui/button';
+import type { SubtopicModalProps } from '@/utils/types';
+import { Save, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+
+const SubtopicModal: React.FC<SubtopicModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  topicTitle,
+  editData,
+}) => {
+  const [title, setTitle] = useState(editData?.title || '');
+  const [description, setDescription] = useState(editData?.description || '');
+  const [slug, setSlug] = useState(editData?.slug || '');
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(editData?.title || '');
+      setDescription(editData?.description || '');
+      setSlug(editData?.slug || '');
+    }
+  }, [isOpen, editData]);
+
+  const handleSave = () => {
+    if (!title.trim()) {
+      toast.error('Subtopic title is required');
+      return;
+    }
+    if (!slug.trim()) {
+      toast.error('Slug is required');
+      return;
+    }
+    onSave({
+      title: title.trim(),
+      description: description.trim(),
+      slug: slug.trim(),
+    });
+    setTitle('');
+    setDescription('');
+    setSlug('');
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
+      <div className='w-full max-w-lg rounded-xl bg-white p-6 shadow-xl'>
+        <div className='mb-4 flex items-center justify-between'>
+          <div>
+            <h3 className='text-lg font-bold text-slate-900'>
+              {editData ? 'Edit Subtopic' : 'Add Content Step'}
+            </h3>
+            <p className='text-sm text-slate-500'>Topic: {topicTitle}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className='text-slate-400 hover:text-slate-600'
+          >
+            <X className='h-5 w-5' />
+          </button>
+        </div>
+
+        <div className='space-y-4'>
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Subtopic Title
+            </label>
+            <input
+              type='text'
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder='e.g., What are Arrays?'
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              URL Slug
+            </label>
+            <input
+              type='text'
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder='what-are-arrays'
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+            <p className='mt-1 text-xs text-slate-500'>
+              URL: /course/topic/{slug}
+            </p>
+          </div>
+
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Description (Optional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder='Brief description...'
+              rows={3}
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+        </div>
+
+        <div className='mt-6 flex gap-3'>
+          <Button
+            onClick={onClose}
+            className='flex-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
+          >
+            <Save className='mr-2 h-4 w-4' />
+            {editData ? 'Update' : 'Create'} Subtopic
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SubtopicModal;

@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const multer = require('multer');
 const isAdmin = require('../middlewares/isAdmin');
 const verifyToken = require('../middlewares/verfiyToken');
 
@@ -7,6 +8,7 @@ const {
   getAdminStats,
   getAllStudents,
   getProjectSubmissions,
+  uploadLessonMarkdown,
   createTopic,
   updateTopic,
   deleteTopic,
@@ -34,6 +36,7 @@ const {
   updateQuizQuestion,
   deleteQuizQuestion,
   getQuizQuestions,
+  getQuizQuestionOptions,
   createQuizQuestionOption,
   updateQuizQuestionOption,
   deleteQuizQuestionOption,
@@ -44,12 +47,58 @@ const {
   getTopicLeaderboard,
   getCollegeLeaderboard,
   updateLeaderboards,
+  getAdminSubjectStructure,
+  getLockControlBatches,
+  getLockControlOverview,
+  setLockControlTopic,
+  setLockControlSubtopic,
 } = require('../controllers/admin.controller');
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ===== EXISTING ROUTES =====
 router.get('/stats', verifyToken, isAdmin, getAdminStats);
 router.get('/all-students', verifyToken, isAdmin, getAllStudents);
 router.get('/project-submissions', verifyToken, isAdmin, getProjectSubmissions);
+router.post(
+  '/lesson-content/upload',
+  verifyToken,
+  isAdmin,
+  upload.single('file'),
+  uploadLessonMarkdown
+);
+router.get(
+  '/subjects/:slug/structure',
+  verifyToken,
+  isAdmin,
+  getAdminSubjectStructure
+);
+
+// ===== LOCK CONTROL =====
+router.get(
+  '/lock-control/batches',
+  verifyToken,
+  isAdmin,
+  getLockControlBatches
+);
+router.get(
+  '/lock-control/overview',
+  verifyToken,
+  isAdmin,
+  getLockControlOverview
+);
+router.post(
+  '/lock-control/topics/:topicId/:action',
+  verifyToken,
+  isAdmin,
+  setLockControlTopic
+);
+router.post(
+  '/lock-control/subtopics/:subtopicId/:action',
+  verifyToken,
+  isAdmin,
+  setLockControlSubtopic
+);
 
 // ===== TOPIC MANAGEMENT =====
 router.post('/topics', verifyToken, isAdmin, createTopic);
@@ -86,6 +135,12 @@ router.get(
   verifyToken,
   isAdmin,
   getQuizQuestions
+);
+router.get(
+  '/quiz-questions/:questionId/options',
+  verifyToken,
+  isAdmin,
+  getQuizQuestionOptions
 );
 
 // ===== QUIZ QUESTION OPTIONS MANAGEMENT (NEW) =====

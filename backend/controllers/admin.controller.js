@@ -1,4 +1,6 @@
 const pool = require('../config/pg');
+const path = require('path');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 // ============================================
 // EXISTING ADMIN FEATURES (Keep these!)
@@ -12,7 +14,7 @@ exports.getAdminStats = async (req, res) => {
       pool.query('SELECT COUNT(*) FROM subjects'),
       pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['facilitator']),
       pool.query(
-        'SELECT full_name, email, created_at FROM users ORDER BY created_at DESC LIMIT 5'
+        'SELECT full_name, email, created_at FROM users ORDER BY created_at DESC LIMIT 5',
       ),
     ];
 
@@ -88,6 +90,219 @@ exports.getProjectSubmissions = async (req, res) => {
   } catch (error) {
     console.error('Error fetching submissions:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// ============================================
+// ADMIN SUBJECT STRUCTURE (INCLUDES DRAFTS)
+// ============================================
+
+exports.getAdminSubjectStructure = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const subjectResult = await pool.query(
+      `SELECT id, name, description, is_published 
+       FROM subjects 
+       WHERE slug = $1`,
+      [slug],
+    );
+
+    if (subjectResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Subject not found' });
+    }
+
+    const subject = subjectResult.rows[0];
+
+    const query = `
+      SELECT 
+        -- Topic
+        t.id AS topic_id,
+        t.title AS topic_title,
+        t.description AS topic_description,
+        t.order_index AS topic_order,
+
+        -- Subtopic
+        st.id AS subtopic_id,
+        st.title AS subtopic_title,
+        st.slug AS subtopic_slug,
+        st.description AS subtopic_description,
+        st.order_index AS subtopic_order,
+
+        -- Lesson Content (all versions, draft + published)
+        lc.id AS lesson_id,
+        lc.content_type AS lesson_type,
+        lc.markdown_path AS lesson_path,
+        lc.estimated_read_time AS lesson_read_time,
+        lc.version AS lesson_version,
+        lc.is_published AS lesson_is_published,
+        lc.video_url AS lesson_video_url,
+
+        -- Quiz
+        q.id AS quiz_id,
+        q.passing_score AS quiz_passing_score,
+        q.max_score AS quiz_max_score,
+
+        -- Quiz Question
+        qq.id AS question_id,
+        qq.question_text,
+        qq.question_type,
+        qq.points,
+        qq.order_index AS question_order,
+        qq.explanation,
+
+        -- Quiz Options
+        qo.id AS option_id,
+        qo.option_text,
+        qo.is_correct,
+        qo.order_index AS option_order,
+
+        -- Exercise
+        e.id AS exercise_id,
+        e.title AS exercise_title,
+        e.instructions AS exercise_instructions,
+        e.max_score AS exercise_max_score
+
+      FROM topics t
+      LEFT JOIN subtopics st ON t.id = st.topic_id
+      LEFT JOIN lesson_content lc 
+        ON st.id = lc.subtopic_id
+      LEFT JOIN quizzes q ON st.id = q.subtopic_id
+      LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
+      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
+      LEFT JOIN exercises e ON st.id = e.subtopic_id
+
+      WHERE t.subject_id = $1
+      ORDER BY 
+        t.order_index,
+        st.order_index,
+        lc.version,
+        qq.order_index,
+        qo.order_index;
+    `;
+
+    const { rows } = await pool.query(query, [subject.id]);
+
+    const topicsMap = new Map();
+
+    rows.forEach((row) => {
+      if (!topicsMap.has(row.topic_id)) {
+        topicsMap.set(row.topic_id, {
+          id: row.topic_id,
+          title: row.topic_title,
+          description: row.topic_description,
+          order_index: row.topic_order,
+          subtopics: new Map(),
+        });
+      }
+
+      const topic = topicsMap.get(row.topic_id);
+
+      if (row.subtopic_id && !topic.subtopics.has(row.subtopic_id)) {
+        topic.subtopics.set(row.subtopic_id, {
+          id: row.subtopic_id,
+          title: row.subtopic_title,
+          slug: row.subtopic_slug,
+          description: row.subtopic_description,
+          order_index: row.subtopic_order,
+          lesson_content: [],
+          quizzes: new Map(),
+          exercises: [],
+        });
+      }
+
+      const subtopic = topic.subtopics.get(row.subtopic_id);
+
+      if (row.lesson_id && subtopic) {
+        if (!subtopic.lesson_content.some((l) => l.id === row.lesson_id)) {
+          subtopic.lesson_content.push({
+            id: row.lesson_id,
+            content_type: row.lesson_type,
+            markdown_path: row.lesson_path,
+            estimated_read_time: row.lesson_read_time,
+            version: row.lesson_version,
+            is_published: row.lesson_is_published,
+            video_url: row.lesson_video_url,
+          });
+        }
+      }
+
+      if (row.quiz_id && subtopic) {
+        if (!subtopic.quizzes.has(row.quiz_id)) {
+          subtopic.quizzes.set(row.quiz_id, {
+            id: row.quiz_id,
+            passing_score: row.quiz_passing_score,
+            max_score: row.quiz_max_score,
+            questions: new Map(),
+          });
+        }
+
+        const quiz = subtopic.quizzes.get(row.quiz_id);
+
+        if (row.question_id && quiz) {
+          if (!quiz.questions.has(row.question_id)) {
+            quiz.questions.set(row.question_id, {
+              id: row.question_id,
+              question_text: row.question_text,
+              question_type: row.question_type,
+              points: row.points,
+              order_index: row.question_order,
+              explanation: row.explanation,
+              options: [],
+            });
+          }
+
+          const question = quiz.questions.get(row.question_id);
+
+          if (row.option_id && question) {
+            if (!question.options.some((o) => o.id === row.option_id)) {
+              question.options.push({
+                id: row.option_id,
+                option_text: row.option_text,
+                is_correct: row.is_correct,
+                order_index: row.option_order,
+              });
+            }
+          }
+        }
+      }
+
+      if (row.exercise_id && subtopic) {
+        if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
+          subtopic.exercises.push({
+            id: row.exercise_id,
+            title: row.exercise_title,
+            instructions: row.exercise_instructions,
+            max_score: row.exercise_max_score,
+          });
+        }
+      }
+    });
+
+    const structure = Array.from(topicsMap.values()).map((topic) => ({
+      id: topic.id,
+      title: topic.title,
+      description: topic.description,
+      order_index: topic.order_index,
+      subtopics: Array.from(topic.subtopics.values()).map((sub) => ({
+        ...sub,
+        quizzes: Array.from(sub.quizzes.values()).map((q) => ({
+          ...q,
+          questions: Array.from(q.questions.values()),
+        })),
+      })),
+    }));
+
+    res.json({
+      success: true,
+      name: subject.name,
+      description: subject.description,
+      is_published: subject.is_published,
+      data: structure,
+    });
+  } catch (error) {
+    console.error('Error | getAdminSubjectStructure:', error);
+    res.status(500).json({ message: 'Error fetching course structure' });
   }
 };
 
@@ -406,13 +621,14 @@ exports.createLessonContent = async (req, res) => {
       markdown_path,
       estimated_read_time,
       is_published,
+      video_url,
     } = req.body;
 
     // Validation
-    if (!subtopic_id || !content_type || !markdown_path) {
+    if (!subtopic_id || !content_type) {
       return res.status(400).json({
         success: false,
-        message: 'Subtopic ID, content type, and path are required',
+        message: 'Subtopic ID and content type are required',
       });
     }
 
@@ -425,19 +641,54 @@ exports.createLessonContent = async (req, res) => {
       });
     }
 
+    if (content_type === 'markdown' && !markdown_path) {
+      return res.status(400).json({
+        success: false,
+        message: 'Markdown path is required for markdown content',
+      });
+    }
+
+    if (content_type !== 'markdown' && !video_url) {
+      return res.status(400).json({
+        success: false,
+        message: 'Video URL is required for video/external content',
+      });
+    }
+
     const query = `
       INSERT INTO lesson_content 
-      (subtopic_id, content_type, markdown_path, estimated_read_time, is_published)
-      VALUES ($1, $2, $3, $4, $5)
+        (subtopic_id, content_type, markdown_path, estimated_read_time, is_published, video_url, version)
+      VALUES ($1, $2, $3, $4, $5, $6, 1)
+      ON CONFLICT (subtopic_id, version)
+      DO UPDATE SET
+        markdown_path = CASE
+          WHEN EXCLUDED.content_type = 'markdown' AND EXCLUDED.markdown_path <> ''
+            THEN EXCLUDED.markdown_path
+          ELSE lesson_content.markdown_path
+        END,
+        video_url = CASE
+          WHEN EXCLUDED.video_url IS NOT NULL AND EXCLUDED.video_url <> ''
+            THEN EXCLUDED.video_url
+          ELSE lesson_content.video_url
+        END,
+        estimated_read_time = COALESCE(EXCLUDED.estimated_read_time, lesson_content.estimated_read_time),
+        is_published = COALESCE(EXCLUDED.is_published, lesson_content.is_published),
+        content_type = CASE
+          WHEN lesson_content.markdown_path <> '' THEN 'markdown'
+          WHEN EXCLUDED.content_type = 'markdown' THEN 'markdown'
+          ELSE EXCLUDED.content_type
+        END,
+        updated_at = CURRENT_TIMESTAMP
       RETURNING *;
     `;
 
     const values = [
       subtopic_id,
       content_type,
-      markdown_path,
+      markdown_path || '',
       estimated_read_time || null,
       is_published || false,
+      video_url || null,
     ];
 
     const result = await pool.query(query, values);
@@ -467,6 +718,7 @@ exports.updateLessonContent = async (req, res) => {
       estimated_read_time,
       is_published,
       version,
+      video_url,
     } = req.body;
 
     const updates = [];
@@ -492,6 +744,10 @@ exports.updateLessonContent = async (req, res) => {
     if (version !== undefined) {
       updates.push(`version = $${paramCount++}`);
       values.push(version);
+    }
+    if (video_url !== undefined) {
+      updates.push(`video_url = $${paramCount++}`);
+      values.push(video_url);
     }
 
     if (updates.length === 0) {
@@ -1335,6 +1591,93 @@ exports.deleteQuizQuestionOption = async (req, res) => {
 };
 
 // ============================================
+// LESSON CONTENT UPLOAD (MARKDOWN)
+// ============================================
+
+exports.uploadLessonMarkdown = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded',
+      });
+    }
+
+    const bucket = process.env.AWS_S3_BUCKET;
+    const region = process.env.AWS_REGION;
+    const prefix = process.env.AWS_S3_PREFIX || 'lesson-content/';
+
+    if (!bucket || !region) {
+      return res.status(500).json({
+        success: false,
+        message: 'S3 is not configured (AWS_S3_BUCKET/AWS_REGION)',
+      });
+    }
+
+    const originalExt = path.extname(req.file.originalname) || '.md';
+    const safeExt = originalExt.toLowerCase() === '.md' ? '.md' : '.md';
+    const key = `${prefix}${Date.now()}-${req.file.originalname
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9._-]/g, '')}${safeExt}`;
+
+    const s3 = new S3Client({ region });
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: 'text/markdown; charset=utf-8',
+      }),
+    );
+
+    const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+
+    res.json({
+      success: true,
+      url,
+    });
+  } catch (error) {
+    console.error('Error uploading markdown:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload markdown',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get all options for a quiz question
+ * GET /api/admin/quiz-questions/:questionId/options
+ */
+exports.getQuizQuestionOptions = async (req, res) => {
+  try {
+    const { questionId } = req.params;
+
+    const query = `
+      SELECT id, option_text, is_correct, order_index
+      FROM quiz_question_options
+      WHERE question_id = $1
+      ORDER BY order_index;
+    `;
+
+    const result = await pool.query(query, [questionId]);
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching quiz options:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch quiz options',
+      error: error.message,
+    });
+  }
+};
+
+// ============================================
 // STUDENT PROGRESS TRACKING
 // ============================================
 
@@ -1498,6 +1841,293 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch students progress summary',
+      error: error.message,
+    });
+  }
+};
+
+// ============================================
+// LOCK CONTROL (ADMIN)
+// ============================================
+
+/**
+ * Get available batches (years) for lock control
+ * GET /api/admin/lock-control/batches?collegeId=1
+ */
+exports.getLockControlBatches = async (req, res) => {
+  try {
+    const { collegeId } = req.query;
+    const params = [];
+
+    let query = `
+      SELECT DISTINCT year
+      FROM users
+      WHERE role = 'student'
+    `;
+
+    if (collegeId) {
+      query += ` AND college_id = $1`;
+      params.push(collegeId);
+    }
+
+    query += ` ORDER BY year ASC;`;
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      success: true,
+      data: result.rows.map((row) => row.year).filter((year) => year !== null),
+    });
+  } catch (error) {
+    console.error('Error fetching lock control batches:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch batches',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get lock control overview
+ * GET /api/admin/lock-control/overview?subjectId=1&collegeId=2&batch=2024
+ */
+exports.getLockControlOverview = async (req, res) => {
+  try {
+    const { subjectId, collegeId, batch } = req.query;
+
+    if (!subjectId) {
+      return res.status(400).json({
+        success: false,
+        message: 'subjectId is required',
+      });
+    }
+
+    const collegeParam = collegeId || null;
+    const batchParam = batch ? parseInt(batch, 10) : null;
+
+    const query = `
+      WITH cohort AS (
+        SELECT id
+        FROM users
+        WHERE role = 'student'
+          AND ($1::uuid IS NULL OR college_id = $1)
+          AND ($2::int IS NULL OR year = $2)
+      ),
+      cohort_count AS (
+        SELECT COUNT(*)::int AS total
+        FROM cohort
+      ),
+      subtopic_rows AS (
+        SELECT 
+          t.id AS topic_id,
+          t.title AS topic_title,
+          t.order_index AS topic_order,
+          st.id AS subtopic_id,
+          st.title AS subtopic_title,
+          st.slug AS subtopic_slug,
+          st.order_index AS subtopic_order,
+          MIN(lc.content_type) AS content_type
+        FROM topics t
+        INNER JOIN subtopics st ON st.topic_id = t.id
+        LEFT JOIN lesson_content lc 
+          ON lc.subtopic_id = st.id AND lc.is_published = true
+        WHERE t.subject_id = $3::uuid
+        GROUP BY 
+          t.id, t.title, t.order_index,
+          st.id, st.title, st.slug, st.order_index
+      )
+      SELECT
+        sr.*,
+        cc.total AS cohort_size,
+        COALESCE(
+          COUNT(usp.user_id) FILTER (WHERE usp.is_unlocked = true),
+          0
+        )::int AS unlocked_count,
+        COALESCE(
+          COUNT(usp.user_id) FILTER (WHERE usp.is_completed = true),
+          0
+        )::int AS completed_count
+      FROM subtopic_rows sr
+      CROSS JOIN cohort_count cc
+      LEFT JOIN cohort c ON true
+      LEFT JOIN user_subtopic_progress usp
+        ON usp.user_id = c.id AND usp.subtopic_id = sr.subtopic_id
+      GROUP BY 
+        sr.topic_id, sr.topic_title, sr.topic_order,
+        sr.subtopic_id, sr.subtopic_title, sr.subtopic_slug, sr.subtopic_order,
+        sr.content_type, cc.total
+      ORDER BY sr.topic_order, sr.subtopic_order;
+    `;
+
+    const result = await pool.query(query, [
+      collegeParam,
+      batchParam,
+      subjectId,
+    ]);
+
+    const topicsMap = new Map();
+    let cohortSize = 0;
+    let totalCompleted = 0;
+
+    result.rows.forEach((row) => {
+      cohortSize = row.cohort_size;
+      totalCompleted += row.completed_count;
+
+      if (!topicsMap.has(row.topic_id)) {
+        topicsMap.set(row.topic_id, {
+          id: row.topic_id,
+          title: row.topic_title,
+          order_index: row.topic_order,
+          subtopics: [],
+        });
+      }
+
+      const isUnlocked =
+        row.cohort_size > 0 && row.unlocked_count === row.cohort_size;
+
+      topicsMap.get(row.topic_id).subtopics.push({
+        id: row.subtopic_id,
+        title: row.subtopic_title,
+        slug: row.subtopic_slug,
+        order_index: row.subtopic_order,
+        content_type: row.content_type,
+        unlocked_count: row.unlocked_count,
+        completed_count: row.completed_count,
+        is_unlocked: isUnlocked,
+      });
+    });
+
+    const topics = Array.from(topicsMap.values());
+    const totalSubtopics = result.rows.length;
+    const completionRate =
+      cohortSize > 0 && totalSubtopics > 0
+        ? Math.round((totalCompleted / (cohortSize * totalSubtopics)) * 100)
+        : 0;
+
+    res.json({
+      success: true,
+      data: {
+        cohort_size: cohortSize,
+        completion_rate: completionRate,
+        total_subtopics: totalSubtopics,
+        completed_subtopics: totalCompleted,
+        topics,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching lock control overview:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch lock control overview',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Update lock status for a topic
+ * POST /api/admin/lock-control/topics/:topicId/:action
+ */
+exports.setLockControlTopic = async (req, res) => {
+  try {
+    const { topicId, action } = req.params;
+    const { collegeId, batch } = req.query;
+
+    if (!['lock', 'unlock'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid action',
+      });
+    }
+
+    const collegeParam = collegeId || null;
+    const batchParam = batch ? parseInt(batch, 10) : null;
+    const isUnlocked = action === 'unlock';
+
+    const query = `
+      WITH cohort AS (
+        SELECT id
+        FROM users
+        WHERE role = 'student'
+          AND ($1::uuid IS NULL OR college_id = $1)
+          AND ($2::int IS NULL OR year = $2)
+      ),
+      topic_subtopics AS (
+        SELECT id
+        FROM subtopics
+        WHERE topic_id = $3
+      )
+      INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
+      SELECT c.id, ts.id, $4
+      FROM cohort c
+      CROSS JOIN topic_subtopics ts
+      ON CONFLICT (user_id, subtopic_id)
+      DO UPDATE SET is_unlocked = EXCLUDED.is_unlocked;
+    `;
+
+    await pool.query(query, [collegeParam, batchParam, topicId, isUnlocked]);
+
+    res.json({
+      success: true,
+      message: `Topic ${action}ed successfully`,
+    });
+  } catch (error) {
+    console.error('Error updating topic lock:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update topic lock',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Update lock status for a subtopic
+ * POST /api/admin/lock-control/subtopics/:subtopicId/:action
+ */
+exports.setLockControlSubtopic = async (req, res) => {
+  try {
+    const { subtopicId, action } = req.params;
+    const { collegeId, batch } = req.query;
+
+    if (!['lock', 'unlock'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid action',
+      });
+    }
+
+    const collegeParam = collegeId || null;
+    const batchParam = batch ? parseInt(batch, 10) : null;
+    const isUnlocked = action === 'unlock';
+
+    const query = `
+      WITH cohort AS (
+        SELECT id
+        FROM users
+        WHERE role = 'student'
+          AND ($1::uuid IS NULL OR college_id = $1)
+          AND ($2::int IS NULL OR year = $2)
+      )
+      INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
+      SELECT c.id, $3, $4
+      FROM cohort c
+      ON CONFLICT (user_id, subtopic_id)
+      DO UPDATE SET is_unlocked = EXCLUDED.is_unlocked;
+    `;
+
+    await pool.query(query, [collegeParam, batchParam, subtopicId, isUnlocked]);
+
+    res.json({
+      success: true,
+      message: `Subtopic ${action}ed successfully`,
+    });
+  } catch (error) {
+    console.error('Error updating subtopic lock:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update subtopic lock',
       error: error.message,
     });
   }

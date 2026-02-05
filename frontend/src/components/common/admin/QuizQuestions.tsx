@@ -1,10 +1,32 @@
 // Add these modal components to LearningFlow.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Save, Plus, Trash2, Edit2 } from 'lucide-react';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
+
+// ============================================
+// TYPES
+// ============================================
+
+type QuizQuestionType = 'multiple_choice' | 'true_false' | 'short_answer';
+
+interface QuizQuestionOption {
+  id?: string;
+  option_text: string;
+  is_correct: boolean;
+  order_index: number;
+}
+
+interface QuizQuestion {
+  id: string;
+  question_text: string;
+  question_type: QuizQuestionType;
+  points: number;
+  explanation?: string;
+  options?: QuizQuestionOption[];
+}
 
 // ============================================
 // QUIZ QUESTION MODAL
@@ -18,7 +40,7 @@ interface QuizQuestionModalProps {
   editData?: {
     id: string;
     question_text: string;
-    question_type: 'multiple_choice' | 'true_false' | 'short_answer';
+    question_type: QuizQuestionType;
     points: number;
     explanation?: string;
   };
@@ -34,19 +56,15 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
   const [questionText, setQuestionText] = useState(
     editData?.question_text || ''
   );
-  const [questionType, setQuestionType] = useState<
-    'multiple_choice' | 'true_false' | 'short_answer'
-  >(editData?.question_type || 'multiple_choice');
+  const [questionType, setQuestionType] = useState<QuizQuestionType>(
+    editData?.question_type || 'multiple_choice'
+  );
   const [points, setPoints] = useState(editData?.points || 1);
   const [explanation, setExplanation] = useState(editData?.explanation || '');
-  const [options, setOptions] = useState<
-    Array<{
-      id?: string;
-      option_text: string;
-      is_correct: boolean;
-      order_index: number;
-    }>
-  >([]);
+  const [options, setOptions] = useState<QuizQuestionOption[]>([]);
+  const [trueFalseAnswer, setTrueFalseAnswer] = useState<'True' | 'False'>(
+    'True'
+  );
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -65,17 +83,34 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
           { option_text: '', is_correct: false, order_index: 0 },
           { option_text: '', is_correct: false, order_index: 1 },
         ]);
+      } else if (questionType === 'true_false') {
+        setOptions([
+          { option_text: 'True', is_correct: true, order_index: 0 },
+          { option_text: 'False', is_correct: false, order_index: 1 },
+        ]);
+        setTrueFalseAnswer('True');
       }
     }
-  }, [editData]);
+  }, [editData, questionType]);
 
   const fetchOptions = async (questionId: string) => {
     try {
-      const res = await apiClient.get(
+      const res = await apiClient.get<{
+        success: boolean;
+        data: QuizQuestionOption[];
+      }>(
         `/admin/quiz-questions/${questionId}/options`
       );
       if (res.data.success) {
         setOptions(res.data.data);
+        const correct = res.data.data.find(
+          (opt) => opt.is_correct
+        );
+        if (correct?.option_text === 'False') {
+          setTrueFalseAnswer('False');
+        } else {
+          setTrueFalseAnswer('True');
+        }
       }
     } catch (error) {
       console.error('Error fetching options:', error);
@@ -97,7 +132,11 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
     setOptions(options.filter((_, i) => i !== index));
   };
 
-  const handleOptionChange = (index: number, field: string, value: any) => {
+  const handleOptionChange = (
+    index: number,
+    field: keyof QuizQuestionOption,
+    value: string | boolean | number
+  ) => {
     const newOptions = [...options];
     newOptions[index] = { ...newOptions[index], [field]: value };
     setOptions(newOptions);
@@ -136,19 +175,21 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
 
       let questionId: string;
       if (editData) {
-        const res = await apiClient.put(
+        const res = await apiClient.put<{ data: { id: string } }>(
           `/admin/quiz-questions/${editData.id}`,
           questionData
         );
         questionId = res.data.data.id;
       } else {
-        const res = await apiClient.post('/admin/quiz-questions', questionData);
+        const res = await apiClient.post<{ data: { id: string } }>(
+          '/admin/quiz-questions',
+          questionData
+        );
         questionId = res.data.data.id;
       }
 
-      // Create or update options (for multiple choice)
-      if (questionType === 'multiple_choice') {
-        // Delete old options if editing
+      // Create or update options (for multiple choice / true-false)
+      if (questionType === 'multiple_choice' || questionType === 'true_false') {
         if (editData) {
           await Promise.all(
             options
@@ -159,14 +200,33 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
           );
         }
 
-        // Create new options
+        const finalOptions =
+          questionType === 'true_false'
+            ? [
+                {
+                  option_text: 'True',
+                  is_correct: trueFalseAnswer === 'True',
+                  order_index: 0,
+                },
+                {
+                  option_text: 'False',
+                  is_correct: trueFalseAnswer === 'False',
+                  order_index: 1,
+                },
+              ]
+            : options.map((option, index) => ({
+                option_text: option.option_text,
+                is_correct: option.is_correct,
+                order_index: index,
+              }));
+
         await Promise.all(
-          options.map((option, index) =>
+          finalOptions.map((option) =>
             apiClient.post('/admin/quiz-question-options', {
               question_id: questionId,
               option_text: option.option_text,
               is_correct: option.is_correct,
-              order_index: index,
+              order_index: option.order_index,
             })
           )
         );
@@ -175,9 +235,10 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
       toast.success(editData ? 'Question updated!' : 'Question created!');
       onSave();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving question:', error);
-      toast.error(error.response?.data?.message || 'Failed to save question');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to save question');
     } finally {
       setLoading(false);
     }
@@ -208,7 +269,9 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
             </label>
             <select
               value={questionType}
-              onChange={(e) => setQuestionType(e.target.value as any)}
+              onChange={(e) =>
+                setQuestionType(e.target.value as QuizQuestionType)
+              }
               className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
               disabled={!!editData}
             >
@@ -240,7 +303,10 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
             <input
               type='number'
               value={points}
-              onChange={(e) => setPoints(parseInt(e.target.value))}
+              onChange={(e) => {
+                const next = parseInt(e.target.value, 10);
+                setPoints(Number.isNaN(next) ? 1 : next);
+              }}
               min={1}
               className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
             />
@@ -305,6 +371,31 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
             </div>
           )}
 
+          {/* True/False Correct Answer */}
+          {questionType === 'true_false' && (
+            <div>
+              <label className='mb-2 block text-sm font-medium text-slate-700'>
+                Correct Answer
+              </label>
+              <div className='flex gap-4'>
+                {(['True', 'False'] as const).map((value) => (
+                  <label
+                    key={value}
+                    className='flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm'
+                  >
+                    <input
+                      type='radio'
+                      name='true-false-answer'
+                      checked={trueFalseAnswer === value}
+                      onChange={() => setTrueFalseAnswer(value)}
+                    />
+                    {value}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Explanation */}
           <div>
             <label className='mb-2 block text-sm font-medium text-slate-700'>
@@ -355,19 +446,20 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
   quizId,
   subtopicTitle,
 }) => {
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<any>(null);
+  const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | null>(
+    null
+  );
 
-  useEffect(() => {
-    fetchQuestions();
-  }, [quizId]);
-
-  const fetchQuestions = async () => {
+  const fetchQuestions = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get(`/admin/quizzes/${quizId}/questions`);
+      const res = await apiClient.get<{
+        success: boolean;
+        data: QuizQuestion[];
+      }>(`/admin/quizzes/${quizId}/questions`);
       if (res.data.success) {
         setQuestions(res.data.data);
       }
@@ -377,7 +469,11 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [quizId]);
+
+  useEffect(() => {
+    fetchQuestions();
+  }, [fetchQuestions]);
 
   const handleDeleteQuestion = async (questionId: string) => {
     if (!confirm('Are you sure you want to delete this question?')) return;
@@ -444,7 +540,7 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
                   {/* Show options for multiple choice */}
                   {q.question_type === 'multiple_choice' && q.options && (
                     <div className='mt-2 space-y-1'>
-                      {q.options.map((opt: any) => (
+                      {q.options.map((opt) => (
                         <div
                           key={opt.id}
                           className={`text-xs ${
@@ -498,7 +594,7 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
         }}
         quizId={quizId}
         onSave={fetchQuestions}
-        editData={editingQuestion}
+        editData={editingQuestion ?? undefined}
       />
     </div>
   );

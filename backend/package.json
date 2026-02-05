@@ -17,6 +17,8 @@
     "express": "^5.2.1",
     "express-validator": "^7.3.1",
     "jsonwebtoken": "^9.0.3",
+    "@aws-sdk/client-s3": "^3.882.0",
+    "multer": "^1.4.5-lts.1",
     "node-pty": "^1.1.0",
     "pg": "^8.16.3",
     "socket.io": "^4.8.3",

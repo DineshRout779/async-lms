@@ -1,9 +1,13 @@
 import { Outlet, Link, useParams } from 'react-router';
 import { ChevronLeft, GraduationCap } from 'lucide-react';
 import { SubjectSidebar } from '@/components/common/subject/SubjectSidebar';
+import { useAppSelector } from '@/app/hooks';
+import { selectLessonData } from '@/features/lesson/lessonSlice';
 
 const CourseViewLayout = () => {
   const { slug } = useParams();
+  const lessonData = useAppSelector(selectLessonData);
+  const subtopic = lessonData?.subtopic;
 
   return (
     <div className='flex h-screen bg-white overflow-hidden'>
@@ -25,7 +29,7 @@ const CourseViewLayout = () => {
                 <GraduationCap className='w-4 h-4 text-white' />
               </div>
               <span className='font-bold text-slate-800 uppercase tracking-tight'>
-                Learning Mode
+                {subtopic?.title || 'Loading...'}
               </span>
             </div>
           </div>

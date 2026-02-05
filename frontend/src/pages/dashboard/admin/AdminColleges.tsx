@@ -199,7 +199,7 @@ export default function AdminColleges() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align='end'>
-                          // TODO: Show Details
+                          {/* TODO: Show Details */}
                           <DropdownMenuItem
                             onClick={() => {
                               setEditingCollege(college);

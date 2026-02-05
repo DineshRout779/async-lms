@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
-import apiClient from '@/services/api';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate } from 'react-router';
 import {
   Loader2,
   CheckCircle2,
@@ -12,133 +11,115 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import toast from 'react-hot-toast';
 
-/* =======================
-   Types
-======================= */
-
-interface QuizOption {
-  id: string;
-  option_text: string;
-  is_correct: boolean;
-}
-
-interface QuizQuestion {
-  id: string;
-  question_text: string;
-  question_type: 'multiple_choice' | 'true_false' | 'short_answer';
-  points: number;
-  options: QuizOption[];
-  explanation?: string;
-}
-
-interface Quiz {
-  id: string;
-  passing_score: number;
-  max_score: number;
-  questions: QuizQuestion[];
-}
-
-interface Exercise {
-  id: string;
-  title: string;
-  instructions: string;
-  max_score: number;
-}
-
-interface LessonResponse {
-  subtopic: {
-    id: string;
-    title: string;
-    description: string | null;
-  };
-  lesson: {
-    id?: string; // Optional - may not be returned by API
-    markdown_content: string;
-    read_time: number | null;
-  };
-  quizzes: Quiz[];
-  exercises: Exercise[];
-}
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import {
+  fetchLesson,
+  submitQuiz,
+  submitExercise,
+  completeLesson,
+  setQuizAnswer,
+  resetQuiz,
+  setExerciseCode,
+  resetLessonState,
+} from '@/features/lesson/lessonSlice';
+import type {
+  Quiz,
+  Exercise,
+  Topic,
+  Subtopic,
+  SubjectDetailResponse,
+} from '@/utils/types';
+import apiClient from '@/services/api';
 
 /* =======================
    Component
 ======================= */
 
 const Lesson = () => {
-  const { subtopicSlug } = useParams<{ subtopicSlug: string }>();
+  const { subtopicSlug, slug } = useParams<{
+    subtopicSlug?: string;
+    slug?: string;
+  }>();
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
 
-  const [data, setData] = useState<LessonResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [lessonCompleted, setLessonCompleted] = useState(false);
+  const [courseStructure, setCourseStructure] = useState<Topic[]>([]);
+  const {
+    data,
+    status,
+    quizAnswers,
+    quizSubmitted,
+    quizResults,
+    submittingQuiz,
+    exerciseCode,
+    submittingExercise,
+    lessonCompleted,
+  } = useAppSelector((state) => state.lesson);
 
-  // Quiz state
-  const [quizAnswers, setQuizAnswers] = useState<Record<string, any>>({});
-  const [quizSubmitted, setQuizSubmitted] = useState(false);
-  const [quizResults, setQuizResults] = useState<any>(null);
-  const [submittingQuiz, setSubmittingQuiz] = useState(false);
-
-  // Exercise state
-  const [exerciseCode, setExerciseCode] = useState<Record<string, string>>({});
-  const [submittingExercise, setSubmittingExercise] = useState<
-    Record<string, boolean>
-  >({});
+  const loading = status === 'loading';
 
   useEffect(() => {
-    const fetchLesson = async () => {
-      try {
-        setLoading(true);
-        const res = await apiClient.get(`/subjects/content/${subtopicSlug}`);
-        console.log('Lesson data:', res.data);
-        setData(res.data.data);
+    if (subtopicSlug) {
+      dispatch(fetchLesson(subtopicSlug));
+    }
+    return () => {
+      dispatch(resetLessonState());
+    };
+  }, [subtopicSlug, dispatch]);
 
-        // Mark subtopic as started
-        if (res.data.data?.subtopic?.id) {
-          try {
-            await apiClient.post(
-              `/students/progress/subtopic/${res.data.data.subtopic.id}/start`
-            );
-          } catch (err) {
-            console.log('Note: Could not mark subtopic as started:', err);
-            // Continue anyway - this is not critical
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load lesson:', err);
-        setData(null);
-      } finally {
-        setLoading(false);
+  useEffect(() => {
+    const fetchStructure = async () => {
+      if (!slug) return;
+      try {
+        const response = await apiClient.get<SubjectDetailResponse>(
+          `/subjects/${slug}`,
+        );
+        setCourseStructure(response.data?.data || []);
+      } catch (error) {
+        console.error('Failed to load course structure:', error);
       }
     };
 
-    if (subtopicSlug) fetchLesson();
-  }, [subtopicSlug]);
+    fetchStructure();
+  }, [slug]);
+
+  const getEmbedUrl = (url: string) => {
+    try {
+      const u = new URL(url);
+      if (u.hostname.includes('youtube.com')) {
+        const v = u.searchParams.get('v');
+        if (v) return `https://www.youtube.com/embed/${v}`;
+      }
+      if (u.hostname === 'youtu.be') {
+        const id = u.pathname.replace('/', '');
+        if (id) return `https://www.youtube.com/embed/${id}`;
+      }
+    } catch {
+      console.log('Error embedding video');
+    }
+    return url;
+  };
 
   /* =======================
      Lesson Completion
   ======================= */
 
   const handleCompleteLesson = async () => {
-    // Use lesson ID if available, otherwise just mark locally
     const lessonId = data?.lesson?.id;
-
     if (!lessonId) {
-      // If no lesson ID from API, mark as complete locally
-      setLessonCompleted(true);
       toast.success('Lesson completed! 🎉');
       return;
     }
 
     try {
-      await apiClient.post(`/students/progress/lesson/${lessonId}/complete`);
-      setLessonCompleted(true);
+      await dispatch(completeLesson(lessonId)).unwrap();
       toast.success('Lesson completed! +10 points 🎉');
     } catch (error) {
       console.error('Error completing lesson:', error);
-      // Still mark as complete locally even if API call fails
-      setLessonCompleted(true);
-      toast.success('Lesson marked as complete');
+      toast.error('Failed to mark lesson complete');
     }
   };
 
@@ -146,19 +127,14 @@ const Lesson = () => {
      Quiz Submission
   ======================= */
 
-  const handleQuizAnswerChange = (questionId: string, value: any) => {
-    setQuizAnswers((prev) => ({
-      ...prev,
-      [questionId]: value,
-    }));
+  const handleQuizAnswerChange = (questionId: string, value: string) => {
+    dispatch(setQuizAnswer({ questionId, value }));
   };
 
   const calculateQuizScore = (quiz: Quiz): number => {
     let score = 0;
-
     quiz.questions.forEach((question) => {
       const userAnswer = quizAnswers[question.id];
-
       if (question.question_type === 'multiple_choice') {
         const correctOption = question.options.find((o) => o.is_correct);
         if (correctOption && userAnswer === correctOption.id) {
@@ -170,53 +146,38 @@ const Lesson = () => {
           score += question.points;
         }
       }
-      // Short answer requires manual grading
     });
-
     return score;
   };
 
   const handleSubmitQuiz = async (quiz: Quiz) => {
-    // Validate all questions answered
     const unanswered = quiz.questions.filter((q) => !quizAnswers[q.id]);
     if (unanswered.length > 0) {
       toast.error(
-        `Please answer all questions. ${unanswered.length} remaining.`
+        `Please answer all questions. ${unanswered.length} remaining.`,
       );
       return;
     }
 
-    setSubmittingQuiz(true);
-
+    const score = calculateQuizScore(quiz);
     try {
-      const score = calculateQuizScore(quiz);
-      const res = await apiClient.post(`/students/quiz/${quiz.id}/submit`, {
-        score,
-      });
-
-      setQuizResults(res.data.data);
-      setQuizSubmitted(true);
-
+      await dispatch(submitQuiz({ quizId: quiz.id, score })).unwrap();
       const isPassed = score >= quiz.passing_score;
       if (isPassed) {
         toast.success(`Quiz passed! Score: ${score}/${quiz.max_score} 🎉`);
       } else {
         toast.error(
-          `Quiz failed. Score: ${score}/${quiz.max_score}. Try again!`
+          `Quiz failed. Score: ${score}/${quiz.max_score}. Try again!`,
         );
       }
     } catch (error) {
       console.error('Error submitting quiz:', error);
       toast.error('Failed to submit quiz');
-    } finally {
-      setSubmittingQuiz(false);
     }
   };
 
   const handleRetakeQuiz = () => {
-    setQuizAnswers({});
-    setQuizSubmitted(false);
-    setQuizResults(null);
+    dispatch(resetQuiz());
   };
 
   /* =======================
@@ -224,10 +185,7 @@ const Lesson = () => {
   ======================= */
 
   const handleExerciseCodeChange = (exerciseId: string, code: string) => {
-    setExerciseCode((prev) => ({
-      ...prev,
-      [exerciseId]: code,
-    }));
+    dispatch(setExerciseCode({ exerciseId, code }));
   };
 
   const handleSubmitExercise = async (exercise: Exercise) => {
@@ -236,33 +194,47 @@ const Lesson = () => {
       return;
     }
 
-    setSubmittingExercise((prev) => ({ ...prev, [exercise.id]: true }));
-
     try {
-      // In a real implementation, you'd evaluate the code
-      // For now, we'll give a mock score
       const mockScore = Math.floor(
-        Math.random() * (exercise.max_score - 50) + 50
+        Math.random() * (exercise.max_score - 50) + 50,
       );
 
-      await apiClient.post(`/students/exercise/${exercise.id}/submit`, {
-        score: mockScore,
-      });
+      await dispatch(
+        submitExercise({ exerciseId: exercise.id, score: mockScore }),
+      ).unwrap();
 
       toast.success(
-        `Exercise submitted! Score: ${mockScore}/${exercise.max_score} 🎉`
+        `Exercise submitted! Score: ${mockScore}/${exercise.max_score} 🎉`,
       );
     } catch (error) {
       console.error('Error submitting exercise:', error);
       toast.error('Failed to submit exercise');
-    } finally {
-      setSubmittingExercise((prev) => ({ ...prev, [exercise.id]: false }));
     }
   };
 
   /* =======================
      Rendering
   ======================= */
+
+  const { lessonIndex, totalLessons, nextLesson } = useMemo<{
+    lessonIndex: number | null;
+    totalLessons: number | null;
+    nextLesson: Subtopic | null;
+  }>(() => {
+    const flattened = courseStructure.flatMap((topic) =>
+      Array.isArray(topic.subtopics) ? topic.subtopics : [],
+    );
+    const total = flattened.length;
+    const currentIndex = flattened.findIndex(
+      (item) => item.slug === data?.subtopic?.slug,
+    );
+    const next = currentIndex >= 0 ? flattened[currentIndex + 1] : null;
+    return {
+      lessonIndex: currentIndex >= 0 ? currentIndex + 1 : null,
+      totalLessons: total || null,
+      nextLesson: next || null,
+    };
+  }, [courseStructure, data?.subtopic?.slug]);
 
   if (loading) {
     return (
@@ -279,58 +251,118 @@ const Lesson = () => {
   }
 
   const { subtopic, lesson, quizzes, exercises } = data;
+  const hasMarkdown = Boolean(lesson.markdown_content);
 
   return (
     <div className='mx-auto max-w-4xl space-y-10 p-6 md:p-10'>
       {/* Header */}
-      <header className='space-y-2'>
-        <h1 className='text-4xl font-extrabold tracking-tight text-slate-900'>
-          {subtopic.title}
-        </h1>
-        <div className='flex flex-wrap items-center gap-3 text-sm text-slate-500'>
-          {subtopic.description && <p>{subtopic.description}</p>}
+      <header className='space-y-4'>
+        <div className='flex flex-wrap items-center gap-3'>
+          <h1 className='text-4xl font-extrabold tracking-tight text-slate-900'>
+            {subtopic.title}
+          </h1>
+          {lessonCompleted && (
+            <Badge className='bg-emerald-50 text-emerald-700 border border-emerald-200'>
+              Completed
+            </Badge>
+          )}
+        </div>
+
+        {subtopic.description && (
+          <p className='text-base text-slate-600'>{subtopic.description}</p>
+        )}
+
+        <div className='flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-400'>
+          {lessonIndex && totalLessons && (
+            <Badge className='bg-blue-50 text-blue-700 border border-blue-200'>
+              Lesson {lessonIndex} of {totalLessons}
+            </Badge>
+          )}
+          <Badge className='bg-slate-100 text-slate-600 border border-slate-200'>
+            {lesson.content_type || 'Lesson'}
+          </Badge>
           {lesson.read_time && (
-            <>
-              <span>•</span>
-              <p>{lesson.read_time} min read</p>
-            </>
+            <span className='text-slate-500 normal-case font-medium'>
+              {lesson.read_time} min read
+            </span>
+          )}
+          {lesson.video_url && (
+            <span className='text-slate-500 normal-case font-medium'>
+              Video included
+            </span>
           )}
         </div>
       </header>
 
       {/* Lesson Content */}
-      <Card className='prose prose-slate max-w-none rounded-3xl p-8 lg:prose-lg'>
-        {lesson.markdown_content ? (
-          <>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {lesson.markdown_content}
-            </ReactMarkdown>
+      <Card className='overflow-hidden rounded-3xl border border-slate-200 shadow-sm'>
+        <div className='flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-6 py-4'>
+          <div>
+            <p className='text-xs font-semibold uppercase tracking-widest text-slate-400'>
+              Lesson Content
+            </p>
+            <p className='text-sm text-slate-600'>
+              Follow the material, then complete to unlock the next lesson
+            </p>
+          </div>
+          {!lessonCompleted && (
+            <Button
+              onClick={handleCompleteLesson}
+              className='bg-emerald-600 hover:bg-emerald-700'
+            >
+              <CheckCircle2 className='mr-2 h-4 w-4' />
+              Mark as Complete
+            </Button>
+          )}
+        </div>
 
-            {!lessonCompleted && (
-              <div className='not-prose mt-8 flex justify-center'>
+        <div className='bg-white px-6 py-8'>
+          {lesson.video_url && (
+            <div className='not-prose mb-6'>
+              <div className='aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-black'>
+                <iframe
+                  className='h-full w-full'
+                  src={getEmbedUrl(lesson.video_url)}
+                  title='Lesson video'
+                  allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          )}
+
+          <div className='prose prose-slate max-w-none lg:prose-lg'>
+            {hasMarkdown ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {lesson.markdown_content}
+              </ReactMarkdown>
+            ) : !lesson.video_url ? (
+              <p className='italic text-slate-400'>Lesson content is empty.</p>
+            ) : null}
+          </div>
+
+          {lessonCompleted && (
+            <div className='not-prose mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center'>
+              <CheckCircle2 className='mx-auto mb-2 h-7 w-7 text-emerald-600' />
+              <p className='font-semibold text-emerald-800'>
+                Lesson Completed!
+              </p>
+              {nextLesson?.slug && slug && (
                 <Button
-                  onClick={handleCompleteLesson}
-                  className='bg-green-600 hover:bg-green-700'
-                  size='lg'
+                  variant='outline'
+                  className='mt-4 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                  onClick={() =>
+                    navigate(
+                      `/dashboard/student/courses/${slug}/lesson/${nextLesson.slug}`,
+                    )
+                  }
                 >
-                  <CheckCircle2 className='mr-2 h-5 w-5' />
-                  Mark as Complete
+                  Next Lesson
                 </Button>
-              </div>
-            )}
-
-            {lessonCompleted && (
-              <div className='not-prose mt-8 rounded-lg bg-green-50 border border-green-200 p-4 text-center'>
-                <CheckCircle2 className='mx-auto mb-2 h-8 w-8 text-green-600' />
-                <p className='font-semibold text-green-800'>
-                  Lesson Completed!
-                </p>
-              </div>
-            )}
-          </>
-        ) : (
-          <p className='italic text-slate-400'>Lesson content is empty.</p>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </Card>
 
       {/* Quizzes */}
@@ -395,10 +427,10 @@ const Lesson = () => {
                                     ? 'border-indigo-500 bg-indigo-50'
                                     : 'border-slate-200 hover:bg-slate-50'
                                   : isCorrect
-                                  ? 'border-green-500 bg-green-50'
-                                  : isSelected && !isCorrect
-                                  ? 'border-red-500 bg-red-50'
-                                  : 'border-slate-200'
+                                    ? 'border-green-500 bg-green-50'
+                                    : isSelected && !isCorrect
+                                      ? 'border-red-500 bg-red-50'
+                                      : 'border-slate-200'
                               }`}
                             >
                               <input
@@ -433,7 +465,7 @@ const Lesson = () => {
                         {['True', 'False'].map((value) => {
                           const isSelected = quizAnswers[question.id] === value;
                           const isCorrect = question.options.find(
-                            (o) => o.option_text === value
+                            (o) => o.option_text === value,
                           )?.is_correct;
                           const showResult = quizSubmitted;
 
@@ -446,10 +478,10 @@ const Lesson = () => {
                                     ? 'border-indigo-500 bg-indigo-50'
                                     : 'border-slate-200'
                                   : isCorrect
-                                  ? 'border-green-500 bg-green-50'
-                                  : isSelected
-                                  ? 'border-red-500 bg-red-50'
-                                  : 'border-slate-200'
+                                    ? 'border-green-500 bg-green-50'
+                                    : isSelected
+                                      ? 'border-red-500 bg-red-50'
+                                      : 'border-slate-200'
                               }`}
                             >
                               <input

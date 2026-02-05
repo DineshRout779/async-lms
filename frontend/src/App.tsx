@@ -17,8 +17,11 @@ const App = () => {
         console.log('Error while fetching user data');
       }
     };
-    token && fetchUser();
-  }, [token]);
+
+    if (token) {
+      fetchUser();
+    }
+  }, [token, dispatch]);
 
   return (
     <>

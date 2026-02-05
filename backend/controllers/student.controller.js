@@ -4,6 +4,132 @@ const pool = require('../config/pg');
 // STUDENT PROGRESS
 // ============================================
 
+const unlockNextSubtopicIfAvailable = async (userId, subtopicId) => {
+  const nextQuery = `
+    WITH ordered AS (
+      SELECT
+        st.id,
+        t.subject_id,
+        ROW_NUMBER() OVER (
+          PARTITION BY t.subject_id
+          ORDER BY t.order_index, st.order_index
+        ) AS rn
+      FROM subtopics st
+      INNER JOIN topics t ON st.topic_id = t.id
+    ),
+    current AS (
+      SELECT subject_id, rn
+      FROM ordered
+      WHERE id = $1
+    )
+    SELECT o.id AS next_id
+    FROM ordered o
+    INNER JOIN current c ON o.subject_id = c.subject_id
+    WHERE o.rn = c.rn + 1
+    LIMIT 1;
+  `;
+
+  const nextResult = await pool.query(nextQuery, [subtopicId]);
+  const nextId = nextResult.rows[0]?.next_id;
+  if (!nextId) return;
+
+  // Only unlock if no existing row (prevents overriding admin locks).
+  await pool.query(
+    `
+      INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
+      VALUES ($1, $2, true)
+      ON CONFLICT (user_id, subtopic_id) DO NOTHING;
+    `,
+    [userId, nextId]
+  );
+};
+
+const checkAndCompleteSubtopic = async (userId, subtopicId) => {
+  const requirementsQuery = `
+    SELECT
+      EXISTS (
+        SELECT 1
+        FROM lesson_content
+        WHERE subtopic_id = $1 AND is_published = true
+      ) AS has_lesson,
+      EXISTS (
+        SELECT 1
+        FROM quizzes
+        WHERE subtopic_id = $1
+      ) AS has_quiz,
+      EXISTS (
+        SELECT 1
+        FROM exercises
+        WHERE subtopic_id = $1
+      ) AS has_exercise
+  `;
+
+  const requirements = await pool.query(requirementsQuery, [subtopicId]);
+  const { has_lesson, has_quiz, has_exercise } = requirements.rows[0];
+
+  const lessonDoneQuery = `
+    SELECT EXISTS (
+      SELECT 1
+      FROM user_lesson_progress ulp
+      INNER JOIN lesson_content lc ON lc.id = ulp.lesson_content_id
+      WHERE ulp.user_id = $1
+        AND lc.subtopic_id = $2
+        AND ulp.is_completed = true
+        AND lc.is_published = true
+    ) AS lesson_done
+  `;
+
+  const quizDoneQuery = `
+    SELECT EXISTS (
+      SELECT 1
+      FROM quiz_attempts qa
+      INNER JOIN quizzes q ON q.id = qa.quiz_id
+      WHERE qa.user_id = $1
+        AND q.subtopic_id = $2
+        AND qa.is_passed = true
+    ) AS quiz_done
+  `;
+
+  const exerciseDoneQuery = `
+    SELECT EXISTS (
+      SELECT 1
+      FROM exercise_submissions es
+      INNER JOIN exercises e ON e.id = es.exercise_id
+      WHERE es.user_id = $1
+        AND e.subtopic_id = $2
+        AND es.is_passed = true
+    ) AS exercise_done
+  `;
+
+  const [lessonDone, quizDone, exerciseDone] = await Promise.all([
+    has_lesson ? pool.query(lessonDoneQuery, [userId, subtopicId]) : null,
+    has_quiz ? pool.query(quizDoneQuery, [userId, subtopicId]) : null,
+    has_exercise ? pool.query(exerciseDoneQuery, [userId, subtopicId]) : null,
+  ]);
+
+  const isLessonDone = has_lesson ? lessonDone.rows[0].lesson_done : true;
+  const isQuizDone = has_quiz ? quizDone.rows[0].quiz_done : true;
+  const isExerciseDone = has_exercise
+    ? exerciseDone.rows[0].exercise_done
+    : true;
+
+  if (!isLessonDone || !isQuizDone || !isExerciseDone) return;
+
+  const updateResult = await pool.query(
+    `
+      UPDATE user_subtopic_progress
+      SET is_completed = true, completed_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND subtopic_id = $2 AND is_unlocked = true
+      RETURNING *;
+    `,
+    [userId, subtopicId]
+  );
+
+  if (updateResult.rowCount > 0) {
+    await unlockNextSubtopicIfAvailable(userId, subtopicId);
+  }
+};
+
 /**
  * Get current student's progress for a subject
  * GET /api/students/progress/:subjectId
@@ -144,20 +270,27 @@ exports.startSubtopic = async (req, res) => {
     const userId = req.user.id;
     const { subtopicId } = req.params;
 
-    const query = `
-      INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
-      VALUES ($1, $2, true)
-      ON CONFLICT (user_id, subtopic_id)
-      DO UPDATE SET is_unlocked = true
-      RETURNING *;
-    `;
+    const lockCheck = await pool.query(
+      `
+        SELECT is_unlocked
+        FROM user_subtopic_progress
+        WHERE user_id = $1 AND subtopic_id = $2
+        LIMIT 1;
+      `,
+      [userId, subtopicId],
+    );
 
-    const result = await pool.query(query, [userId, subtopicId]);
+    if (!lockCheck.rows[0] || lockCheck.rows[0].is_unlocked !== true) {
+      return res.status(200).json({
+        success: false,
+        message: 'This subtopic is locked by your admin.',
+      });
+    }
 
     res.json({
       success: true,
       message: 'Subtopic started',
-      data: result.rows[0],
+      data: lockCheck.rows[0],
     });
   } catch (error) {
     console.error('Error starting subtopic:', error);
@@ -191,8 +324,17 @@ exports.completeLesson = async (req, res) => {
     // Award points for lesson completion
     await pool.query(
       'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
-      [userId, 'lesson_completion', 10]
+      [userId, 'lesson_completion', 10],
     );
+
+    const subtopicResult = await pool.query(
+      'SELECT subtopic_id FROM lesson_content WHERE id = $1 LIMIT 1',
+      [lessonId],
+    );
+
+    if (subtopicResult.rows[0]?.subtopic_id) {
+      await checkAndCompleteSubtopic(userId, subtopicResult.rows[0].subtopic_id);
+    }
 
     res.json({
       success: true,
@@ -222,7 +364,7 @@ exports.submitQuizAttempt = async (req, res) => {
     // Get quiz details
     const quizQuery = await pool.query(
       'SELECT passing_score, max_score FROM quizzes WHERE id = $1',
-      [quizId]
+      [quizId],
     );
 
     if (quizQuery.rows.length === 0) {
@@ -247,8 +389,16 @@ exports.submitQuizAttempt = async (req, res) => {
     const pointsAwarded = Math.round((score / quiz.max_score) * 50);
     await pool.query(
       'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
-      [userId, 'quiz_completion', pointsAwarded]
+      [userId, 'quiz_completion', pointsAwarded],
     );
+
+    const subtopicResult = await pool.query(
+      'SELECT subtopic_id FROM quizzes WHERE id = $1 LIMIT 1',
+      [quizId],
+    );
+    if (subtopicResult.rows[0]?.subtopic_id) {
+      await checkAndCompleteSubtopic(userId, subtopicResult.rows[0].subtopic_id);
+    }
 
     res.json({
       success: true,
@@ -281,7 +431,7 @@ exports.submitExercise = async (req, res) => {
     // Get exercise details
     const exerciseQuery = await pool.query(
       'SELECT max_score FROM exercises WHERE id = $1',
-      [exerciseId]
+      [exerciseId],
     );
 
     if (exerciseQuery.rows.length === 0) {
@@ -311,8 +461,16 @@ exports.submitExercise = async (req, res) => {
     const pointsAwarded = Math.round((score / exercise.max_score) * 100);
     await pool.query(
       'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
-      [userId, 'exercise_completion', pointsAwarded]
+      [userId, 'exercise_completion', pointsAwarded],
     );
+
+    const subtopicResult = await pool.query(
+      'SELECT subtopic_id FROM exercises WHERE id = $1 LIMIT 1',
+      [exerciseId],
+    );
+    if (subtopicResult.rows[0]?.subtopic_id) {
+      await checkAndCompleteSubtopic(userId, subtopicResult.rows[0].subtopic_id);
+    }
 
     res.json({
       success: true,
@@ -451,7 +609,7 @@ exports.getCollegeLeaderboard = async (req, res) => {
     // Get user's college
     const userQuery = await pool.query(
       'SELECT college_id FROM users WHERE id = $1',
-      [userId]
+      [userId],
     );
 
     if (!userQuery.rows[0] || !userQuery.rows[0].college_id) {

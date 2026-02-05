@@ -78,6 +78,27 @@ exports.selectSubjects = async (req, res) => {
         `;
     await client.query(insertQuery, [userId, subjectIds]);
 
+    // Seed progress: unlock only the first subtopic per subject (if not already present)
+    const seedProgressQuery = `
+      WITH ordered AS (
+        SELECT
+          st.id AS subtopic_id,
+          ROW_NUMBER() OVER (
+            PARTITION BY t.subject_id
+            ORDER BY t.order_index, st.order_index
+          ) AS rn
+        FROM topics t
+        INNER JOIN subtopics st ON st.topic_id = t.id
+        WHERE t.subject_id = ANY($2::uuid[])
+      )
+      INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
+      SELECT $1, subtopic_id, true
+      FROM ordered
+      WHERE rn = 1
+      ON CONFLICT (user_id, subtopic_id) DO NOTHING;
+    `;
+    await client.query(seedProgressQuery, [userId, subjectIds]);
+
     await client.query(
       "UPDATE users SET onboarding_step = 'done', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
       [userId]

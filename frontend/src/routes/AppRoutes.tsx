@@ -1,70 +1,77 @@
+import { Suspense, lazy } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import App from '@/App';
-
-// Layouts & Auth
-import StudentDashboardLayout from '@/layouts/StudentDashboardLayout';
-
-// Public Pages
-import Home from '@/pages/Home';
-import Login from '@/pages/Login';
-import Signup from '@/pages/Signup';
-import CodeEditor from '@/pages/CodeEditor';
-
-// Protected Pages
-import StudentDashboardHome from '@/pages/dashboard/student/StudentDashboardHome';
-import CollegeStep from '@/pages/onboarding/CollegeStep';
-import BatchStep from '@/pages/onboarding/BatchStep';
-import ProgramStep from '@/pages/onboarding/ProgramStep';
 import PrivateRoute from './PrivateRoute';
-import MyCourses from '@/pages/dashboard/student/MyCourses';
-import AdminDashboardLayout from '@/layouts/AdminDashboardLayout';
-import AdminHome from '@/pages/dashboard/admin/AdminHome';
-import AdminColleges from '@/pages/dashboard/admin/AdminColleges';
-import AdminCourses from '@/pages/dashboard/admin/AdminCourses';
-import NotFound from '@/pages/NotFound';
-import CourseViewLayout from '@/layouts/CourseLayout';
-import LessonView from '@/pages/dashboard/student/Lesson';
-import CourseIntro from '@/pages/dashboard/student/CourseIntro';
-import EditorProfile from '@/pages/playground/EditorProfile';
-import Assignments from '@/pages/dashboard/student/Assignments';
-import Assistant from '@/pages/dashboard/student/Assistant';
-import Leaderboard from '@/pages/dashboard/student/Leaderboard';
-import StudentProfile from '@/pages/dashboard/student/StudentProfile';
-import StudentSettings from '@/pages/dashboard/student/StudentSettings';
-import LearningFlow from '@/pages/dashboard/admin/LearningFlow';
-import Students from '@/pages/dashboard/admin/Students';
-import LockControl from '@/pages/dashboard/admin/LockControl';
-import Analytics from '@/pages/dashboard/admin/Analytics';
-import AdminSettings from '@/pages/dashboard/admin/AdminSettings';
-import Evaluations from '@/pages/dashboard/admin/Evaluations';
+
+// ---------- Lazy Imports ----------
+
+// Public
+const Home = lazy(() => import('@/pages/Home'));
+const Login = lazy(() => import('@/pages/Login'));
+const Signup = lazy(() => import('@/pages/Signup'));
+const CodeEditor = lazy(() => import('@/pages/CodeEditor'));
+const NotFound = lazy(() => import('@/pages/NotFound'));
+
+// Onboarding
+const CollegeStep = lazy(() => import('@/pages/onboarding/CollegeStep'));
+const BatchStep = lazy(() => import('@/pages/onboarding/BatchStep'));
+const ProgramStep = lazy(() => import('@/pages/onboarding/ProgramStep'));
+
+// Student Dashboard
+const StudentDashboardLayout = lazy(
+  () => import('@/layouts/StudentDashboardLayout'),
+);
+const StudentDashboardHome = lazy(
+  () => import('@/pages/dashboard/student/StudentDashboardHome'),
+);
+const MyCourses = lazy(() => import('@/pages/dashboard/student/MyCourses'));
+const LessonView = lazy(() => import('@/pages/dashboard/student/Lesson'));
+const CourseIntro = lazy(() => import('@/pages/dashboard/student/CourseIntro'));
+const EditorProfile = lazy(() => import('@/pages/playground/EditorProfile'));
+const Assignments = lazy(() => import('@/pages/dashboard/student/Assignments'));
+const Assistant = lazy(() => import('@/pages/dashboard/student/Assistant'));
+const Leaderboard = lazy(() => import('@/pages/dashboard/student/Leaderboard'));
+const StudentProfile = lazy(
+  () => import('@/pages/dashboard/student/StudentProfile'),
+);
+const StudentSettings = lazy(
+  () => import('@/pages/dashboard/student/StudentSettings'),
+);
+const CourseViewLayout = lazy(() => import('@/layouts/CourseLayout'));
+
+// Admin Dashboard
+const AdminDashboardLayout = lazy(
+  () => import('@/layouts/AdminDashboardLayout'),
+);
+const AdminHome = lazy(() => import('@/pages/dashboard/admin/AdminHome'));
+const AdminColleges = lazy(
+  () => import('@/pages/dashboard/admin/AdminColleges'),
+);
+const AdminCourses = lazy(() => import('@/pages/dashboard/admin/AdminCourses'));
+const LearningFlow = lazy(() => import('@/pages/dashboard/admin/LearningFlow'));
+const LockControl = lazy(() => import('@/pages/dashboard/admin/LockControl'));
+const Students = lazy(() => import('@/pages/dashboard/admin/Students'));
+const Analytics = lazy(() => import('@/pages/dashboard/admin/Analytics'));
+const AdminSettings = lazy(
+  () => import('@/pages/dashboard/admin/AdminSettings'),
+);
+const Evaluations = lazy(() => import('@/pages/dashboard/admin/Evaluations'));
+
+// ---------- Router ----------
 
 const router = createBrowserRouter([
   {
     path: '/',
     element: <App />,
     children: [
-      {
-        index: true,
-        element: <Home />,
-      },
-      {
-        path: 'login',
-        element: <Login />,
-      },
-      {
-        path: 'signup',
-        element: <Signup />,
-      },
-      // editor
-      {
-        path: 'code-editor',
-        element: <CodeEditor />,
-      },
-      // --- PROTECTED ROUTES (Requires Login) ---
+      { index: true, element: <Home /> },
+      { path: 'login', element: <Login /> },
+      { path: 'signup', element: <Signup /> },
+      { path: 'code-editor', element: <CodeEditor /> },
+
       {
         element: <PrivateRoute />,
         children: [
-          // Onboarding Flow
           {
             path: 'onboarding',
             children: [
@@ -74,70 +81,37 @@ const router = createBrowserRouter([
             ],
           },
 
-          // Student Dashboard
           {
             path: 'dashboard/student',
-            element: <StudentDashboardLayout />, // Wrapper for Sidebar + Header
+            element: <StudentDashboardLayout />,
             children: [
-              {
-                index: true,
-                element: <StudentDashboardHome />,
-              },
-              {
-                path: 'editor-profile',
-                element: <EditorProfile />,
-              },
-              {
-                path: 'assignments',
-                element: <Assignments />,
-              },
-              {
-                path: 'ai-assistant',
-                element: <Assistant />,
-              },
-              {
-                path: 'leaderboard',
-                element: <Leaderboard />,
-              },
-              {
-                path: 'profile',
-                element: <StudentProfile />,
-              },
-              {
-                path: 'settings',
-                element: <StudentSettings />,
-              },
-              // Future dashboard sub-pages go here:
+              { index: true, element: <StudentDashboardHome /> },
+              { path: 'editor-profile', element: <EditorProfile /> },
+              { path: 'assignments', element: <Assignments /> },
+              { path: 'ai-assistant', element: <Assistant /> },
+              { path: 'leaderboard', element: <Leaderboard /> },
+              { path: 'profile', element: <StudentProfile /> },
+              { path: 'settings', element: <StudentSettings /> },
               { path: 'courses', element: <MyCourses /> },
               {
                 path: 'courses/:slug',
                 element: <CourseViewLayout />,
                 children: [
-                  {
-                    index: true,
-                    element: <CourseIntro />, // A "Get Started" page
-                  },
+                  { index: true, element: <CourseIntro /> },
                   {
                     path: 'lesson/:subtopicSlug',
-                    element: <LessonView />, // The actual content player
+                    element: <LessonView />,
                   },
                 ],
               },
             ],
           },
 
-          // Facilitator
-
-          // Admin Routes
           {
             path: 'dashboard/admin',
-            element: <AdminDashboardLayout />, // Wrapper for Sidebar + Header
+            element: <AdminDashboardLayout />,
             children: [
-              {
-                index: true,
-                element: <AdminHome />,
-              },
-              // Future dashboard sub-pages go here:
+              { index: true, element: <AdminHome /> },
               { path: 'colleges', element: <AdminColleges /> },
               { path: 'courses', element: <AdminCourses /> },
               { path: 'learning-flow', element: <LearningFlow /> },
@@ -151,17 +125,25 @@ const router = createBrowserRouter([
         ],
       },
 
-      // --- FALLBACKS ---
-      {
-        path: '*',
-        element: <NotFound />,
-      },
+      { path: '*', element: <NotFound /> },
     ],
   },
 ]);
 
+// ---------- App Routes ----------
+
 const AppRoutes = () => {
-  return <RouterProvider router={router} />;
+  return (
+    <Suspense
+      fallback={
+        <div className='h-screen flex items-center justify-center text-sm text-muted-foreground'>
+          Loading...
+        </div>
+      }
+    >
+      <RouterProvider router={router} />
+    </Suspense>
+  );
 };
 
 export default AppRoutes;

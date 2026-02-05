@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { Subject } from '@/utils/types';
 import {
   Search,
   Plus,
@@ -21,45 +22,40 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import apiClient from '@/services/api';
 import { CreateCourseModal } from '@/components/common/admin/CreateCourseModal';
 import { ManageAccessModal } from '@/components/common/admin/ManageAccessModal';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { fetchSubjects, deleteSubject } from '@/features/subjects/subjectSlice';
 
 export default function AdminCourses() {
-  const [courses, setCourses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useAppDispatch();
+  const { items: courses, status } = useAppSelector((state) => state.subjects);
+  const loading = status === 'loading';
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<any>(null);
+  const [selectedCourse, setSelectedCourse] = useState<Subject | null>(null);
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
-
-  const fetchCourses = async () => {
-    try {
-      const res = await apiClient.get('/subjects');
-      if (res.data.success) setCourses(res.data.data);
-    } catch (err) {
-      console.error('Error loading courses:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    dispatch(fetchSubjects());
+  }, [dispatch]);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this course?')) return;
     try {
-      await apiClient.delete(`/subjects/${id}`);
-      fetchCourses();
+      await dispatch(deleteSubject(id)).unwrap();
     } catch (err) {
       console.error('Delete failed', err);
     }
   };
 
+  const handleRefresh = () => {
+    dispatch(fetchSubjects());
+  };
+
   const filteredCourses = courses.filter((c) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -94,7 +90,7 @@ export default function AdminCourses() {
           {filteredCourses.map((course) => (
             <Card
               key={course.id}
-              className='border border-slate-200 overflow-hidden bg-white rounded-xl shadow-sm'
+              className='border py-0 border-slate-200 overflow-hidden bg-white rounded-xl shadow-sm'
             >
               <div
                 className={`h-1.5 w-full ${
@@ -163,7 +159,7 @@ export default function AdminCourses() {
                     </span>
                     <span className='flex items-center gap-1.5 text-xs font-medium'>
                       <Layers className='w-4 h-4' /> {course.topics_count}{' '}
-                      Topics
+                      Lessons
                     </span>
                   </div>
                   <button
@@ -185,7 +181,7 @@ export default function AdminCourses() {
       <CreateCourseModal
         open={isCreateModalOpen}
         onOpenChange={setIsCreateModalOpen}
-        onSuccess={fetchCourses}
+        onSuccess={handleRefresh}
         editData={selectedCourse}
       />
 
