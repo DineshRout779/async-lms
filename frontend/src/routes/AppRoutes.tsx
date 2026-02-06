@@ -50,7 +50,7 @@ const AdminColleges = lazy(
 const AdminCourses = lazy(() => import('@/pages/dashboard/admin/AdminCourses'));
 const LearningFlow = lazy(() => import('@/pages/dashboard/admin/LearningFlow'));
 const LockControl = lazy(() => import('@/pages/dashboard/admin/LockControl'));
-const Students = lazy(() => import('@/pages/dashboard/admin/Students'));
+const Students = lazy(() => import('@/pages/dashboard/admin/Users'));
 const Analytics = lazy(() => import('@/pages/dashboard/admin/Analytics'));
 const AdminSettings = lazy(
   () => import('@/pages/dashboard/admin/AdminSettings'),
@@ -116,7 +116,7 @@ const router = createBrowserRouter([
               { path: 'courses', element: <AdminCourses /> },
               { path: 'learning-flow', element: <LearningFlow /> },
               { path: 'lock-control', element: <LockControl /> },
-              { path: 'students', element: <Students /> },
+              { path: 'users', element: <Students /> },
               { path: 'analytics', element: <Analytics /> },
               { path: 'settings', element: <AdminSettings /> },
               { path: 'evaluations', element: <Evaluations /> },

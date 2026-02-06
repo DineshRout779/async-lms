@@ -51,10 +51,51 @@ exports.getUserSubjects = async (req, res) => {
 exports.getAllUsers = async (req, res) => {
   try {
     const query = `
-      SELECT u.id, u.full_name, u.email, u.role, u.degree, u.year, u.created_at,
-             c.name as college_name
+      SELECT
+        u.id,
+        u.full_name,
+        u.email,
+        u.role,
+        u.degree,
+        u.year,
+        u.college_id,
+        u.created_at,
+        c.name as college_name,
+        c.short_code as college_short_name,
+        COALESCE(student_meta.enrolled_courses, 0) as enrolled_courses,
+        COALESCE(student_meta.completed_subtopics, 0) as completed_subtopics,
+        COALESCE(student_meta.total_subtopics, 0) as total_subtopics,
+        CASE
+          WHEN COALESCE(student_meta.total_subtopics, 0) = 0 THEN 0
+          ELSE ROUND(
+            (student_meta.completed_subtopics::numeric / student_meta.total_subtopics) * 100
+          )::int
+        END as progress_percent,
+        COALESCE(facilitator_meta.college_ids, '{}'::uuid[]) as facilitator_college_ids,
+        COALESCE(facilitator_meta.college_names, '{}'::text[]) as facilitator_college_names
       FROM public.users u
       LEFT JOIN public.colleges c ON u.college_id = c.id
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(DISTINCT us.subject_id)::int as enrolled_courses,
+          COUNT(DISTINCT st.id) FILTER (WHERE usp.is_completed = true)::int as completed_subtopics,
+          COUNT(DISTINCT st.id)::int as total_subtopics
+        FROM public.user_subjects us
+        LEFT JOIN public.topics t ON t.subject_id = us.subject_id
+        LEFT JOIN public.subtopics st ON st.topic_id = t.id
+        LEFT JOIN public.user_subtopic_progress usp
+          ON usp.user_id = u.id
+          AND usp.subtopic_id = st.id
+        WHERE us.user_id = u.id
+      ) as student_meta ON u.role = 'student'
+      LEFT JOIN LATERAL (
+        SELECT
+          ARRAY_AGG(fc.college_id ORDER BY c2.name) as college_ids,
+          ARRAY_AGG(c2.name ORDER BY c2.name) as college_names
+        FROM public.facilitator_colleges fc
+        INNER JOIN public.colleges c2 ON c2.id = fc.college_id
+        WHERE fc.facilitator_id = u.id
+      ) as facilitator_meta ON u.role = 'facilitator'
       ORDER BY u.created_at DESC
     `;
     const result = await pool.query(query);

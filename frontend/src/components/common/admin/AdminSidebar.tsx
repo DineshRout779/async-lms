@@ -22,7 +22,7 @@ const menuItems = [
     path: '/dashboard/admin/learning-flow',
   },
   { name: 'Lock Control', icon: Lock, path: '/dashboard/admin/lock-control' },
-  { name: 'Students', icon: Users, path: '/dashboard/admin/students' },
+  { name: 'Users', icon: Users, path: '/dashboard/admin/users' },
   {
     name: 'Evaluations',
     icon: ClipboardCheck,
@@ -42,7 +42,7 @@ export default function AdminSidebar({
     <aside
       className={cn(
         'h-full flex flex-col transition-all duration-300 bg-[#1e2653] text-slate-300',
-        isOpen ? 'w-64' : 'w-20'
+        isOpen ? 'w-64' : 'w-20',
       )}
     >
       {/* Brand Header */}
@@ -70,7 +70,7 @@ export default function AdminSidebar({
                 'flex items-center gap-3 px-3 py-3 rounded-lg transition-all group',
                 isActive
                   ? 'bg-[#333d7c] text-white shadow-sm'
-                  : 'hover:bg-[#2a3469] hover:text-white'
+                  : 'hover:bg-[#2a3469] hover:text-white',
               )
             }
           >
@@ -81,7 +81,7 @@ export default function AdminSidebar({
                   className={cn(
                     isActive
                       ? 'text-white'
-                      : 'text-slate-400 group-hover:text-slate-300'
+                      : 'text-slate-400 group-hover:text-slate-300',
                   )}
                 />
                 {isOpen && (
