@@ -1,9 +1,11 @@
 export interface User {
-  id: number;
+  id: string | number;
   full_name: string;
   email: string;
   role: 'student' | 'facilitator' | 'admin';
-  college_id?: number;
+  is_verified: boolean;
+  college_id?: string | number;
+  college_ids?: (string | number)[];
   degree?: string;
   year?: number;
   onboarding_step: string;

@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import App from '@/App';
 import PrivateRoute from './PrivateRoute';
+import FacilitatorSettings from '@/pages/dashboard/facilitator/FacilitatorSettings';
 
 // ---------- Lazy Imports ----------
 
@@ -11,11 +12,15 @@ const Login = lazy(() => import('@/pages/Login'));
 const Signup = lazy(() => import('@/pages/Signup'));
 const CodeEditor = lazy(() => import('@/pages/CodeEditor'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
+const PendingVerification = lazy(() => import('@/pages/PendingVerification'));
 
 // Onboarding
 const CollegeStep = lazy(() => import('@/pages/onboarding/CollegeStep'));
 const BatchStep = lazy(() => import('@/pages/onboarding/BatchStep'));
 const ProgramStep = lazy(() => import('@/pages/onboarding/ProgramStep'));
+const FacilitatorOnboarding = lazy(
+  () => import('@/pages/onboarding/FacilitatorOnboarding'),
+);
 
 // Student Dashboard
 const StudentDashboardLayout = lazy(
@@ -38,6 +43,17 @@ const StudentSettings = lazy(
   () => import('@/pages/dashboard/student/StudentSettings'),
 );
 const CourseViewLayout = lazy(() => import('@/layouts/CourseLayout'));
+
+// Facilitator Dashboard
+const FacilitatorDashboardLayout = lazy(
+  () => import('@/layouts/FacilitatorDashboardLayout'),
+);
+const FacilitatorHome = lazy(
+  () => import('@/pages/dashboard/facilitator/FacilitatorHome'),
+);
+const FacilitatorUsers = lazy(
+  () => import('@/pages/dashboard/facilitator/FacilitatorUsers'),
+);
 
 // Admin Dashboard
 const AdminDashboardLayout = lazy(
@@ -68,6 +84,7 @@ const router = createBrowserRouter([
       { path: 'login', element: <Login /> },
       { path: 'signup', element: <Signup /> },
       { path: 'code-editor', element: <CodeEditor /> },
+      { path: 'pending-verification', element: <PendingVerification /> },
 
       {
         element: <PrivateRoute />,
@@ -78,6 +95,7 @@ const router = createBrowserRouter([
               { path: 'college', element: <CollegeStep /> },
               { path: 'batch', element: <BatchStep /> },
               { path: 'program', element: <ProgramStep /> },
+              { path: 'facilitator', element: <FacilitatorOnboarding /> },
             ],
           },
 
@@ -104,6 +122,16 @@ const router = createBrowserRouter([
                   },
                 ],
               },
+            ],
+          },
+
+          {
+            path: 'dashboard/facilitator',
+            element: <FacilitatorDashboardLayout />,
+            children: [
+              { index: true, element: <FacilitatorHome /> },
+              { path: 'users', element: <FacilitatorUsers /> },
+              { path: 'settings', element: <FacilitatorSettings /> },
             ],
           },
 

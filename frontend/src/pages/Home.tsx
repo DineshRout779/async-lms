@@ -68,12 +68,12 @@ export default function Home() {
           </Card>
 
           <Card
-            onClick={() => gotoLogin('instructer')}
+            onClick={() => gotoLogin('facilitator')}
             className='cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1 bg-indigo-50'
           >
             <CardContent className='flex flex-col items-center justify-center py-10'>
               <UserSquare2 className='h-10 w-10 text-indigo-600 mb-4' />
-              <p className='font-medium text-foreground'>I am an Instructor</p>
+              <p className='font-medium text-foreground'>I am an Facilitator</p>
             </CardContent>
           </Card>
         </div>

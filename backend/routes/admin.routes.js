@@ -3,7 +3,6 @@ const multer = require('multer');
 const isAdmin = require('../middlewares/isAdmin');
 const verifyToken = require('../middlewares/verfiyToken');
 
-// Import existing controllers
 const {
   getAdminStats,
   getAllStudents,
@@ -28,9 +27,9 @@ const {
   createProject,
   updateProject,
   deleteProject,
+  verifyUser,
 } = require('../controllers/admin.controller');
 
-// Import new controllers (add these to admin.controller.js)
 const {
   createQuizQuestion,
   updateQuizQuestion,
@@ -65,13 +64,13 @@ router.post(
   verifyToken,
   isAdmin,
   upload.single('file'),
-  uploadLessonMarkdown
+  uploadLessonMarkdown,
 );
 router.get(
   '/subjects/:slug/structure',
   verifyToken,
   isAdmin,
-  getAdminSubjectStructure
+  getAdminSubjectStructure,
 );
 
 // ===== LOCK CONTROL =====
@@ -79,25 +78,25 @@ router.get(
   '/lock-control/batches',
   verifyToken,
   isAdmin,
-  getLockControlBatches
+  getLockControlBatches,
 );
 router.get(
   '/lock-control/overview',
   verifyToken,
   isAdmin,
-  getLockControlOverview
+  getLockControlOverview,
 );
 router.post(
   '/lock-control/topics/:topicId/:action',
   verifyToken,
   isAdmin,
-  setLockControlTopic
+  setLockControlTopic,
 );
 router.post(
   '/lock-control/subtopics/:subtopicId/:action',
   verifyToken,
   isAdmin,
-  setLockControlSubtopic
+  setLockControlSubtopic,
 );
 
 // ===== TOPIC MANAGEMENT =====
@@ -118,7 +117,7 @@ router.put(
   '/lesson-content/:id/publish',
   verifyToken,
   isAdmin,
-  publishLessonContent
+  publishLessonContent,
 );
 
 // ===== QUIZ MANAGEMENT =====
@@ -134,13 +133,13 @@ router.get(
   '/quizzes/:quizId/questions',
   verifyToken,
   isAdmin,
-  getQuizQuestions
+  getQuizQuestions,
 );
 router.get(
   '/quiz-questions/:questionId/options',
   verifyToken,
   isAdmin,
-  getQuizQuestionOptions
+  getQuizQuestionOptions,
 );
 
 // ===== QUIZ QUESTION OPTIONS MANAGEMENT (NEW) =====
@@ -148,19 +147,19 @@ router.post(
   '/quiz-question-options',
   verifyToken,
   isAdmin,
-  createQuizQuestionOption
+  createQuizQuestionOption,
 );
 router.put(
   '/quiz-question-options/:id',
   verifyToken,
   isAdmin,
-  updateQuizQuestionOption
+  updateQuizQuestionOption,
 );
 router.delete(
   '/quiz-question-options/:id',
   verifyToken,
   isAdmin,
-  deleteQuizQuestionOption
+  deleteQuizQuestionOption,
 );
 
 // ===== EXERCISE MANAGEMENT =====
@@ -178,13 +177,13 @@ router.get(
   '/students/:userId/progress/:subjectId',
   verifyToken,
   isAdmin,
-  getStudentProgress
+  getStudentProgress,
 );
 router.get(
   '/students/progress-summary',
   verifyToken,
   isAdmin,
-  getAllStudentsProgressSummary
+  getAllStudentsProgressSummary,
 );
 
 // ===== LEADERBOARD MANAGEMENT (NEW) =====
@@ -194,14 +193,17 @@ router.get(
   '/leaderboard/topic/:topicId',
   verifyToken,
   isAdmin,
-  getTopicLeaderboard
+  getTopicLeaderboard,
 );
 router.get(
   '/leaderboard/college/:collegeId',
   verifyToken,
   isAdmin,
-  getCollegeLeaderboard
+  getCollegeLeaderboard,
 );
 router.post('/leaderboard/update', verifyToken, isAdmin, updateLeaderboards);
+
+// ===== USER MANAGEMENT =====
+router.patch('/users/:id/verify', verifyToken, isAdmin, verifyUser);
 
 module.exports = router;

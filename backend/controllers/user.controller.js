@@ -56,9 +56,10 @@ exports.getAllUsers = async (req, res) => {
         u.full_name,
         u.email,
         u.role,
-        u.degree,
-        u.year,
-        u.college_id,
+        u.is_verified,
+        sp.degree,
+        sp.year,
+        sp.college_id,
         u.created_at,
         c.name as college_name,
         c.short_code as college_short_name,
@@ -74,7 +75,8 @@ exports.getAllUsers = async (req, res) => {
         COALESCE(facilitator_meta.college_ids, '{}'::uuid[]) as facilitator_college_ids,
         COALESCE(facilitator_meta.college_names, '{}'::text[]) as facilitator_college_names
       FROM public.users u
-      LEFT JOIN public.colleges c ON u.college_id = c.id
+      LEFT JOIN public.student_profiles sp ON u.id = sp.user_id
+      LEFT JOIN public.colleges c ON sp.college_id = c.id
       LEFT JOIN LATERAL (
         SELECT
           COUNT(DISTINCT us.subject_id)::int as enrolled_courses,
@@ -111,11 +113,14 @@ exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params; // Must be a valid UUID string
     const result = await pool.query(
-      `SELECT u.*, c.name as college_name 
+      `SELECT u.id, u.full_name, u.email, u.role, u.is_verified, u.onboarding_step, u.created_at,
+              sp.college_id, sp.degree, sp.year,
+              c.name as college_name 
        FROM public.users u 
-       LEFT JOIN public.colleges c ON u.college_id = c.id 
+       LEFT JOIN public.student_profiles sp ON u.id = sp.user_id
+       LEFT JOIN public.colleges c ON sp.college_id = c.id 
        WHERE u.id = $1`,
-      [id]
+      [id],
     );
 
     if (result.rows.length === 0)
@@ -136,31 +141,53 @@ exports.updateUser = async (req, res) => {
     const { id } = req.params;
     const { full_name, degree, year, college_id } = req.body;
 
-    // Explicitly update updated_at
-    const query = `
-      UPDATE public.users 
-      SET full_name = $1, 
-          degree = $2, 
-          year = $3, 
-          college_id = $4,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5 
-      RETURNING id, full_name, email, role, updated_at
-    `;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const result = await pool.query(query, [
-      full_name,
-      degree,
-      year,
-      college_id, // Ensure frontend sends null or a UUID string
-      id,
-    ]);
+      // 1. Update User (Identity)
+      const userUpdateQuery = `
+        UPDATE public.users 
+        SET full_name = $1, 
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2 
+        RETURNING id, full_name, email, role, updated_at
+      `;
+      const userResult = await client.query(userUpdateQuery, [full_name, id]);
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'User not found' });
+      if (userResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const user = userResult.rows[0];
+
+      // 2. Update Student Profile if applicable
+      if (user.role === 'student') {
+        const profileUpdateQuery = `
+          INSERT INTO public.student_profiles (user_id, degree, year, college_id)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (user_id) DO UPDATE 
+          SET degree = EXCLUDED.degree, 
+              year = EXCLUDED.year, 
+              college_id = EXCLUDED.college_id
+        `;
+        await client.query(profileUpdateQuery, [
+          id,
+          degree || null,
+          year || null,
+          college_id || null,
+        ]);
+      }
+
+      await client.query('COMMIT');
+      res.json(user);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    res.json(result.rows[0]);
   } catch (err) {
     console.error('Update User Error:', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -178,7 +205,7 @@ exports.changeUserRole = async (req, res) => {
        SET role = $1, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $2 
        RETURNING id, role, updated_at`,
-      [role, id]
+      [role, id],
     );
 
     if (result.rowCount === 0) {

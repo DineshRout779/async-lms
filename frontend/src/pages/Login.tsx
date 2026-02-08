@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GraduationCap } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 
 // Redux
@@ -21,6 +21,9 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  const [searchParams] = useSearchParams();
+  const userTypeParam = searchParams.get('user_type');
+
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
 
@@ -31,6 +34,24 @@ export default function Login() {
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
+    // ADMIN FLOW
+    if (user.role === 'admin') {
+      navigate('/dashboard/admin');
+      return;
+    }
+
+    // FACILITATOR FLOW
+    if (user.role === 'facilitator') {
+      if (user.onboarding_step !== 'done') {
+        navigate('/onboarding/facilitator');
+      } else if (!user.is_verified) {
+        navigate('/pending-verification');
+      } else {
+        navigate('/dashboard/facilitator');
+      }
+      return;
+    }
+
     // STUDENT FLOW
     if (user.role === 'student') {
       if (user.onboarding_step !== 'done') {
@@ -39,17 +60,6 @@ export default function Login() {
         navigate('/dashboard/student');
       }
       return;
-    }
-
-    // FACILITATOR FLOW
-    if (user.role === 'facilitator') {
-      navigate('/dashboard/facilitator');
-      return;
-    }
-
-    // ADMIN FLOW
-    if (user.role === 'admin') {
-      navigate('/dashboard/admin');
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -76,14 +86,14 @@ export default function Login() {
     e.preventDefault();
 
     const toastId = toast.loading(
-      authMode === 'signup' ? 'Creating account...' : 'Signing in...'
+      authMode === 'signup' ? 'Creating account...' : 'Signing in...',
     );
 
     try {
       if (authMode === 'signup') {
         validateSignup();
         await dispatch(
-          signupUser({ full_name: name, email, password })
+          signupUser({ full_name: name, email, password, role: userTypeParam }),
         ).unwrap();
         toast.success('Account created successfully!', { id: toastId });
       } else {
@@ -94,7 +104,9 @@ export default function Login() {
         toast.success('Login successful!', { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Authentication failed', { id: toastId });
+      const errorMessage =
+        typeof err === 'string' ? err : err?.message || 'Authentication failed';
+      toast.error(errorMessage, { id: toastId });
     }
   };
 
@@ -169,8 +181,8 @@ export default function Login() {
               {isLoading
                 ? 'Processing...'
                 : authMode === 'login'
-                ? 'Login'
-                : 'Create Account'}
+                  ? 'Login'
+                  : 'Create Account'}
             </Button>
           </form>
         </div>

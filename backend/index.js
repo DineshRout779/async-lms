@@ -15,7 +15,7 @@ const server = http.createServer(app);
 
 app.use((req, res, next) => {
   console.log(
-    `${new Date().toISOString()}: ${req.method} - ${req.originalUrl}`
+    `${new Date().toISOString()}: ${req.method} - ${req.originalUrl}`,
   );
   next();
 });
@@ -30,6 +30,7 @@ app.use('/api/v1/onboarding', require('./routes/onboarding.routes'));
 app.use('/api/v1/colleges', require('./routes/college.routes'));
 app.use('/api/v1/subjects', require('./routes/subject.routes'));
 app.use('/api/v1/admin', require('./routes/admin.routes'));
+app.use('/api/v1/facilitator', require('./routes/facilitator.routes'));
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 
 //  404 Catch-all (Place this at the very bottom)

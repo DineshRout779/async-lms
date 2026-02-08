@@ -45,14 +45,16 @@ exports.getAllStudents = async (req, res) => {
         u.id, 
         u.full_name, 
         u.email, 
-        u.degree, 
-        u.year as batch, 
+        sp.degree, 
+        sp.year as batch, 
         u.created_at as joined_date,
         u.role,
+        u.is_verified,
         c.name as college_name,
         c.short_code as college_short_name
       FROM public.users u
-      LEFT JOIN public.colleges c ON u.college_id = c.id
+      LEFT JOIN public.student_profiles sp ON u.id = sp.user_id
+      LEFT JOIN public.colleges c ON sp.college_id = c.id
       WHERE u.role = 'student'
       ORDER BY u.created_at DESC
     `;
@@ -1860,17 +1862,18 @@ exports.getLockControlBatches = async (req, res) => {
     const params = [];
 
     let query = `
-      SELECT DISTINCT year
-      FROM users
-      WHERE role = 'student'
+      SELECT DISTINCT sp.year
+      FROM public.users u
+      INNER JOIN public.student_profiles sp ON u.id = sp.user_id
+      WHERE u.role = 'student'
     `;
 
     if (collegeId) {
-      query += ` AND college_id = $1`;
+      query += ` AND sp.college_id = $1`;
       params.push(collegeId);
     }
 
-    query += ` ORDER BY year ASC;`;
+    query += ` ORDER BY sp.year ASC;`;
 
     const result = await pool.query(query, params);
 
@@ -2184,7 +2187,8 @@ exports.getWeeklyLeaderboard = async (req, res) => {
         c.name as college_name
       FROM leaderboards_weekly lw
       INNER JOIN users u ON lw.user_id = u.id
-      LEFT JOIN colleges c ON u.college_id = c.id
+      LEFT JOIN student_profiles sp ON u.id = sp.user_id
+      LEFT JOIN colleges c ON sp.college_id = c.id
       WHERE lw.week_start = $1
       ORDER BY lw.rank
       LIMIT $2;
@@ -2225,7 +2229,8 @@ exports.getTopicLeaderboard = async (req, res) => {
         t.title as topic_title
       FROM leaderboards_topic lt
       INNER JOIN users u ON lt.user_id = u.id
-      LEFT JOIN colleges c ON u.college_id = c.id
+      LEFT JOIN student_profiles sp ON u.id = sp.user_id
+      LEFT JOIN colleges c ON sp.college_id = c.id
       INNER JOIN topics t ON lt.topic_id = t.id
       WHERE lt.topic_id = $1
       ORDER BY lt.rank
@@ -2332,6 +2337,50 @@ exports.updateLeaderboards = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update leaderboards',
+      error: error.message,
+    });
+  }
+};
+
+// Verify/Unverify user
+exports.verifyUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_verified } = req.body;
+
+    if (is_verified === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'is_verified status is required',
+      });
+    }
+
+    const query = `
+      UPDATE users 
+      SET is_verified = $1, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $2 
+      RETURNING id, full_name, role, is_verified;
+    `;
+
+    const result = await pool.query(query, [is_verified, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `User ${is_verified ? 'verified' : 'unverified'} successfully`,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error verifying user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update verification status',
       error: error.message,
     });
   }

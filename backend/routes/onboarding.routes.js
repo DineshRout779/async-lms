@@ -10,5 +10,10 @@ const {
 router.post('/college', verifyToken, selectCollege);
 router.post('/batch', verifyToken, updateBatchDetails);
 router.post('/subjects', verifyToken, selectSubjects);
+router.post(
+  '/facilitator-colleges',
+  verifyToken,
+  require('../controllers/onboarding.controller').selectFacilitatorColleges,
+);
 
 module.exports = router;

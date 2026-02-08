@@ -40,7 +40,7 @@ const unlockNextSubtopicIfAvailable = async (userId, subtopicId) => {
       VALUES ($1, $2, true)
       ON CONFLICT (user_id, subtopic_id) DO NOTHING;
     `,
-    [userId, nextId]
+    [userId, nextId],
   );
 };
 
@@ -122,7 +122,7 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       WHERE user_id = $1 AND subtopic_id = $2 AND is_unlocked = true
       RETURNING *;
     `,
-    [userId, subtopicId]
+    [userId, subtopicId],
   );
 
   if (updateResult.rowCount > 0) {
@@ -333,7 +333,10 @@ exports.completeLesson = async (req, res) => {
     );
 
     if (subtopicResult.rows[0]?.subtopic_id) {
-      await checkAndCompleteSubtopic(userId, subtopicResult.rows[0].subtopic_id);
+      await checkAndCompleteSubtopic(
+        userId,
+        subtopicResult.rows[0].subtopic_id,
+      );
     }
 
     res.json({
@@ -397,7 +400,10 @@ exports.submitQuizAttempt = async (req, res) => {
       [quizId],
     );
     if (subtopicResult.rows[0]?.subtopic_id) {
-      await checkAndCompleteSubtopic(userId, subtopicResult.rows[0].subtopic_id);
+      await checkAndCompleteSubtopic(
+        userId,
+        subtopicResult.rows[0].subtopic_id,
+      );
     }
 
     res.json({
@@ -469,7 +475,10 @@ exports.submitExercise = async (req, res) => {
       [exerciseId],
     );
     if (subtopicResult.rows[0]?.subtopic_id) {
-      await checkAndCompleteSubtopic(userId, subtopicResult.rows[0].subtopic_id);
+      await checkAndCompleteSubtopic(
+        userId,
+        subtopicResult.rows[0].subtopic_id,
+      );
     }
 
     res.json({
@@ -563,7 +572,8 @@ exports.getWeeklyLeaderboard = async (req, res) => {
         lw.rank
       FROM leaderboards_weekly lw
       INNER JOIN users u ON lw.user_id = u.id
-      LEFT JOIN colleges c ON u.college_id = c.id
+      LEFT JOIN student_profiles sp ON u.id = sp.user_id
+      LEFT JOIN colleges c ON sp.college_id = c.id
       WHERE lw.week_start = $1
       ORDER BY lw.rank
       LIMIT $2;
@@ -608,7 +618,7 @@ exports.getCollegeLeaderboard = async (req, res) => {
 
     // Get user's college
     const userQuery = await pool.query(
-      'SELECT college_id FROM users WHERE id = $1',
+      'SELECT college_id FROM student_profiles WHERE user_id = $1',
       [userId],
     );
 

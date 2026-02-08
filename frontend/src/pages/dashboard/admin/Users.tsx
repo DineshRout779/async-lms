@@ -52,6 +52,7 @@ interface UserRow {
   progress_percent?: number;
   facilitator_college_ids?: string[];
   facilitator_college_names?: string[];
+  is_verified: boolean;
   created_at: string;
 }
 
@@ -193,6 +194,21 @@ const Users = () => {
     }
   };
 
+  const handleVerify = async (userId: string, currentStatus: boolean) => {
+    try {
+      await apiClient.patch(`/admin/users/${userId}/verify`, {
+        is_verified: !currentStatus,
+      });
+      toast.success(
+        `User ${!currentStatus ? 'verified' : 'unverified'} successfully`,
+      );
+      await fetchUsers();
+    } catch (error) {
+      console.error('Error verifying user:', error);
+      toast.error('Failed to update verification status');
+    }
+  };
+
   if (loading) {
     return (
       <div className='flex h-96 items-center justify-center'>
@@ -241,8 +257,11 @@ const Users = () => {
                   <TableHead className='font-bold uppercase'>Student</TableHead>
                   <TableHead className='font-bold uppercase'>College</TableHead>
                   <TableHead className='font-bold uppercase'>Courses</TableHead>
-                  <TableHead className='font-bold uppercase'>Progress</TableHead>
+                  <TableHead className='font-bold uppercase'>
+                    Progress
+                  </TableHead>
                   <TableHead className='font-bold uppercase'>Batch</TableHead>
+                  <TableHead className='font-bold uppercase'>Status</TableHead>
                   <TableHead className='text-right font-bold uppercase'>
                     Actions
                   </TableHead>
@@ -252,14 +271,18 @@ const Users = () => {
                 {filteredUsers.map((user) => (
                   <TableRow key={user.id} className='hover:bg-slate-50/60'>
                     <TableCell>
-                      <p className='font-bold text-slate-900'>{user.full_name}</p>
+                      <p className='font-bold text-slate-900'>
+                        {user.full_name}
+                      </p>
                       <p className='text-xs text-slate-500'>{user.email}</p>
                     </TableCell>
                     <TableCell>
                       <p className='font-semibold text-slate-800'>
                         {user.college_short_name || 'N/A'}
                       </p>
-                      <p className='text-xs text-slate-500'>{user.college_name}</p>
+                      <p className='text-xs text-slate-500'>
+                        {user.college_name}
+                      </p>
                     </TableCell>
                     <TableCell>
                       <Badge className='bg-slate-100 text-slate-700'>
@@ -286,6 +309,17 @@ const Users = () => {
                       ) : (
                         <span className='text-slate-400'>N/A</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          user.is_verified
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-yellow-50 text-yellow-700'
+                        }
+                      >
+                        {user.is_verified ? 'Verified' : 'Unverified'}
+                      </Badge>
                     </TableCell>
                     <TableCell className='text-right'>
                       <Button
@@ -322,6 +356,7 @@ const Users = () => {
                     Assigned Colleges
                   </TableHead>
                   <TableHead className='font-bold uppercase'>Joined</TableHead>
+                  <TableHead className='font-bold uppercase'>Status</TableHead>
                   <TableHead className='text-right font-bold uppercase'>
                     Actions
                   </TableHead>
@@ -331,7 +366,9 @@ const Users = () => {
                 {filteredUsers.map((user) => (
                   <TableRow key={user.id} className='hover:bg-slate-50/60'>
                     <TableCell>
-                      <p className='font-bold text-slate-900'>{user.full_name}</p>
+                      <p className='font-bold text-slate-900'>
+                        {user.full_name}
+                      </p>
                       <p className='text-xs text-slate-500'>{user.email}</p>
                     </TableCell>
                     <TableCell>
@@ -359,6 +396,29 @@ const Users = () => {
                         month: 'short',
                         year: 'numeric',
                       })}
+                    </TableCell>
+                    <TableCell>
+                      <div className='flex items-center gap-2'>
+                        <Badge
+                          className={
+                            user.is_verified
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-yellow-50 text-yellow-700'
+                          }
+                        >
+                          {user.is_verified ? 'Verified' : 'Pending'}
+                        </Badge>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          className='h-7 text-[10px]'
+                          onClick={() =>
+                            handleVerify(user.id, user.is_verified)
+                          }
+                        >
+                          {user.is_verified ? 'Unverify' : 'Verify'}
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className='text-right'>
                       <Button
@@ -464,6 +524,9 @@ const Users = () => {
               {editingUser.role === 'facilitator' && (
                 <div className='space-y-2'>
                   <Label>Assigned Colleges</Label>
+                  <small className='block mb-2 text-xs text-muted-foreground'>
+                    Click to toggle
+                  </small>
                   <div className='max-h-56 space-y-2 overflow-y-auto rounded-md border border-slate-200 p-3'>
                     {colleges.map((college) => {
                       const isSelected = form.facilitator_college_ids.includes(
@@ -491,7 +554,11 @@ const Users = () => {
           )}
 
           <DialogFooter>
-            <Button variant='outline' onClick={closeEditModal} disabled={saving}>
+            <Button
+              variant='outline'
+              onClick={closeEditModal}
+              disabled={saving}
+            >
               Cancel
             </Button>
             <Button onClick={saveUser} disabled={saving}>

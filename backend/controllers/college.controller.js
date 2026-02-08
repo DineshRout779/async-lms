@@ -107,7 +107,7 @@ exports.toggleSubjectAccess = async (req, res) => {
   try {
     const existing = await pool.query(
       'SELECT id FROM facilitator_colleges WHERE facilitator_id = $1 AND college_id = $2',
-      [facilitatorId, collegeId]
+      [facilitatorId, collegeId],
     );
 
     if (existing.rowCount > 0) {
@@ -119,11 +119,11 @@ exports.toggleSubjectAccess = async (req, res) => {
       // Grant access: ensure facilitator is linked to subject first
       await pool.query(
         'INSERT INTO facilitator_subjects (facilitator_id, subject_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [facilitatorId, courseId]
+        [facilitatorId, courseId],
       );
       await pool.query(
         'INSERT INTO facilitator_colleges (facilitator_id, college_id) VALUES ($1, $2)',
-        [facilitatorId, collegeId]
+        [facilitatorId, collegeId],
       );
     }
     res.json({ success: true, message: `Subject assigned!` });
@@ -140,12 +140,12 @@ exports.assignFacilitator = async (req, res) => {
     await client.query('BEGIN');
     await client.query(
       'DELETE FROM facilitator_colleges WHERE facilitator_id = $1',
-      [facilitator_id]
+      [facilitator_id],
     );
     if (college_ids?.length > 0) {
       await client.query(
         'INSERT INTO facilitator_colleges (facilitator_id, college_id) SELECT $1, unnest($2::uuid[])',
-        [facilitator_id, college_ids]
+        [facilitator_id, college_ids],
       );
     }
     await client.query('COMMIT');

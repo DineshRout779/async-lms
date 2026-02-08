@@ -19,10 +19,17 @@ exports.selectCollege = async (req, res) => {
     }
 
     await pool.query(
+      `UPDATE student_profiles 
+             SET college_id = $1 
+             WHERE user_id = $2`,
+      [college_id, userId],
+    );
+
+    await pool.query(
       `UPDATE users 
-             SET college_id = $1, onboarding_step = 'batch', updated_at = CURRENT_TIMESTAMP 
-             WHERE id = $2`,
-      [college_id, userId]
+             SET onboarding_step = 'batch', updated_at = CURRENT_TIMESTAMP 
+             WHERE id = $1`,
+      [userId],
     );
 
     res.json({ message: 'College added successfully', next_step: 'batch' });
@@ -43,10 +50,17 @@ exports.updateBatchDetails = async (req, res) => {
 
   try {
     await pool.query(
+      `UPDATE student_profiles 
+             SET degree = $1, year = $2 
+             WHERE user_id = $3`,
+      [degree, year, userId],
+    );
+
+    await pool.query(
       `UPDATE users 
-             SET degree = $1, year = $2, onboarding_step = 'subject', updated_at = CURRENT_TIMESTAMP 
-             WHERE id = $3`,
-      [degree, year, userId]
+             SET onboarding_step = 'subject', updated_at = CURRENT_TIMESTAMP 
+             WHERE id = $1`,
+      [userId],
     );
 
     res.json({ message: 'Batch details added', next_step: 'subject' });
@@ -78,7 +92,6 @@ exports.selectSubjects = async (req, res) => {
         `;
     await client.query(insertQuery, [userId, subjectIds]);
 
-    // Seed progress: unlock only the first subtopic per subject (if not already present)
     const seedProgressQuery = `
       WITH ordered AS (
         SELECT
@@ -101,7 +114,7 @@ exports.selectSubjects = async (req, res) => {
 
     await client.query(
       "UPDATE users SET onboarding_step = 'done', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
-      [userId]
+      [userId],
     );
 
     await client.query('COMMIT');
@@ -116,6 +129,54 @@ exports.selectSubjects = async (req, res) => {
     res
       .status(500)
       .json({ message: 'Failed to save subjects', error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+// 4. Facilitator College Selection Step
+exports.selectFacilitatorColleges = async (req, res) => {
+  const userId = req.user.id;
+  const { college_ids } = req.body;
+
+  if (!Array.isArray(college_ids) || college_ids.length === 0) {
+    return res
+      .status(400)
+      .json({ message: 'At least one college must be selected' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      'DELETE FROM facilitator_colleges WHERE facilitator_id = $1',
+      [userId],
+    );
+
+    const insertQuery = `
+      INSERT INTO facilitator_colleges (facilitator_id, college_id)
+      SELECT $1, unnest($2::uuid[])
+    `;
+    await client.query(insertQuery, [userId, college_ids]);
+
+    await client.query(
+      "UPDATE users SET onboarding_step = 'done', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+      [userId],
+    );
+
+    await client.query('COMMIT');
+    res.json({
+      success: true,
+      message: 'Colleges assigned! Awaiting admin verification.',
+      next_step: 'dashboard',
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Facilitator Onboarding Error:', err);
+    res
+      .status(500)
+      .json({ message: 'Failed to save colleges', error: err.message });
   } finally {
     client.release();
   }
