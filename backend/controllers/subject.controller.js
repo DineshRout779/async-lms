@@ -28,11 +28,12 @@ exports.getAllSubjects = async (req, res) => {
     // Note: We use order_index to keep your curated order
     const { rows } = await pool.query(`
       SELECT s.*, 
-             COUNT(DISTINCT t.id)::int as units_count, 
+             COUNT(DISTINCT u.id)::int as units_count, 
              COUNT(DISTINCT st.id)::int as topics_count
       FROM subjects s
       LEFT JOIN topics t ON s.id = t.subject_id
-      LEFT JOIN subtopics st ON t.id = st.topic_id
+      LEFT JOIN units u ON t.id = u.topic_id
+      LEFT JOIN subtopics st ON u.id = st.unit_id
       GROUP BY s.id
       ORDER BY s.order_index ASC
     `);
@@ -48,7 +49,7 @@ exports.getAllPublishedSubjects = async (req, res) => {
   try {
     // Note: We use order_index to keep your curated order
     const { rows } = await pool.query(
-      'SELECT id, name, slug, description FROM subjects WHERE is_published = true ORDER BY order_index ASC'
+      'SELECT id, name, slug, description FROM subjects WHERE is_published = true ORDER BY order_index ASC',
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -57,7 +58,7 @@ exports.getAllPublishedSubjects = async (req, res) => {
   }
 };
 
-// 2. Get a course with its nested topics, subtopics, and all related content
+// 2. Get a course with its nested topics, units, subtopics, and all related content
 exports.getCourseStructure = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -67,7 +68,7 @@ exports.getCourseStructure = async (req, res) => {
       `SELECT id, name, description 
        FROM subjects 
        WHERE slug = $1 AND is_published = true`,
-      [slug]
+      [slug],
     );
 
     if (subjectResult.rows.length === 0) {
@@ -84,6 +85,13 @@ exports.getCourseStructure = async (req, res) => {
         t.title AS topic_title,
         t.description AS topic_description,
         t.order_index AS topic_order,
+
+        -- Unit
+        u.id AS unit_id,
+        u.title AS unit_title,
+        u.slug AS unit_slug,
+        u.description AS unit_description,
+        u.order_index AS unit_order,
 
         -- Subtopic
         st.id AS subtopic_id,
@@ -126,7 +134,8 @@ exports.getCourseStructure = async (req, res) => {
         e.max_score AS exercise_max_score
 
       FROM topics t
-      LEFT JOIN subtopics st ON t.id = st.topic_id
+      LEFT JOIN units u ON t.id = u.topic_id
+      LEFT JOIN subtopics st ON u.id = st.unit_id
       LEFT JOIN lesson_content lc 
         ON st.id = lc.subtopic_id AND lc.is_published = true
       LEFT JOIN quizzes q ON st.id = q.subtopic_id
@@ -137,6 +146,7 @@ exports.getCourseStructure = async (req, res) => {
       WHERE t.subject_id = $1
       ORDER BY 
         t.order_index,
+        u.order_index,
         st.order_index,
         qq.order_index,
         qo.order_index;
@@ -155,15 +165,29 @@ exports.getCourseStructure = async (req, res) => {
           title: row.topic_title,
           description: row.topic_description,
           order_index: row.topic_order,
-          subtopics: new Map(),
+          units: new Map(),
         });
       }
 
       const topic = topicsMap.get(row.topic_id);
 
+      // Unit
+      if (row.unit_id && !topic.units.has(row.unit_id)) {
+        topic.units.set(row.unit_id, {
+          id: row.unit_id,
+          title: row.unit_title,
+          slug: row.unit_slug,
+          description: row.unit_description,
+          order_index: row.unit_order,
+          subtopics: new Map(),
+        });
+      }
+
+      const unit = topic.units.get(row.unit_id);
+
       // Subtopic
-      if (row.subtopic_id && !topic.subtopics.has(row.subtopic_id)) {
-        topic.subtopics.set(row.subtopic_id, {
+      if (row.subtopic_id && unit && !unit.subtopics.has(row.subtopic_id)) {
+        unit.subtopics.set(row.subtopic_id, {
           id: row.subtopic_id,
           title: row.subtopic_title,
           slug: row.subtopic_slug,
@@ -175,7 +199,7 @@ exports.getCourseStructure = async (req, res) => {
         });
       }
 
-      const subtopic = topic.subtopics.get(row.subtopic_id);
+      const subtopic = unit ? unit.subtopics.get(row.subtopic_id) : null;
 
       // Lesson Content
       if (row.lesson_id && subtopic) {
@@ -253,11 +277,18 @@ exports.getCourseStructure = async (req, res) => {
       title: topic.title,
       description: topic.description,
       order_index: topic.order_index,
-      subtopics: Array.from(topic.subtopics.values()).map((sub) => ({
-        ...sub,
-        quizzes: Array.from(sub.quizzes.values()).map((q) => ({
-          ...q,
-          questions: Array.from(q.questions.values()),
+      units: Array.from(topic.units.values()).map((unit) => ({
+        id: unit.id,
+        title: unit.title,
+        slug: unit.slug,
+        description: unit.description,
+        order_index: unit.order_index,
+        subtopics: Array.from(unit.subtopics.values()).map((sub) => ({
+          ...sub,
+          quizzes: Array.from(sub.quizzes.values()).map((q) => ({
+            ...q,
+            questions: Array.from(q.questions.values()),
+          })),
         })),
       })),
     }));
@@ -284,7 +315,7 @@ exports.getSubtopicContent = async (req, res) => {
 
     const subtopicResult = await pool.query(
       `SELECT id FROM subtopics WHERE slug = $1 LIMIT 1`,
-      [subtopicSlug]
+      [subtopicSlug],
     );
 
     if (subtopicResult.rows.length === 0) {
@@ -301,7 +332,7 @@ exports.getSubtopicContent = async (req, res) => {
           WHERE user_id = $1 AND subtopic_id = $2
           LIMIT 1;
         `,
-        [userId, subtopicId]
+        [userId, subtopicId],
       );
 
       if (!lockCheck.rows[0] || lockCheck.rows[0].is_unlocked !== true) {
@@ -325,7 +356,7 @@ exports.getSubtopicContent = async (req, res) => {
               AND lc.is_published = true
           ) AS lesson_completed
         `,
-        [userId, subtopicId]
+        [userId, subtopicId],
       );
       lessonCompleted = completionResult.rows[0]?.lesson_completed || false;
     }
@@ -568,7 +599,7 @@ exports.deleteSubject = async (req, res) => {
     // Note: Due to ON DELETE CASCADE in schema, this will also remove associated topics/subtopics
     const result = await pool.query(
       'DELETE FROM public.subjects WHERE id = $1',
-      [id]
+      [id],
     );
     if (result.rowCount === 0)
       return res.status(404).json({ message: 'Subject not found' });

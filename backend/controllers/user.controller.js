@@ -15,19 +15,22 @@ exports.getUserSubjects = async (req, res) => {
         -- Count total subtopics for this subject
         (SELECT COUNT(st.id) 
          FROM public.subtopics st 
-         JOIN public.topics t ON st.topic_id = t.id 
+         JOIN public.units u ON st.unit_id = u.id
+         JOIN public.topics t ON u.topic_id = t.id 
          WHERE t.subject_id = s.id) as total_lessons,
         -- Calculate progress using user_subtopic_progress table 
         COALESCE(
           (SELECT (COUNT(usp.id)::float / NULLIF((
             SELECT COUNT(st2.id) 
             FROM public.subtopics st2 
-            JOIN public.topics t2 ON st2.topic_id = t2.id 
+            JOIN public.units u2 ON st2.unit_id = u2.id
+            JOIN public.topics t2 ON u2.topic_id = t2.id 
             WHERE t2.subject_id = s.id
           ), 0) * 100)
            FROM public.user_subtopic_progress usp
            JOIN public.subtopics st3 ON usp.subtopic_id = st3.id
-           JOIN public.topics t3 ON st3.topic_id = t3.id
+           JOIN public.units u3 ON st3.unit_id = u3.id
+           JOIN public.topics t3 ON u3.topic_id = t3.id
            WHERE usp.user_id = $1 
              AND t3.subject_id = s.id 
              AND usp.is_completed = true -- Using the boolean from your schema 
@@ -84,7 +87,8 @@ exports.getAllUsers = async (req, res) => {
           COUNT(DISTINCT st.id)::int as total_subtopics
         FROM public.user_subjects us
         LEFT JOIN public.topics t ON t.subject_id = us.subject_id
-        LEFT JOIN public.subtopics st ON st.topic_id = t.id
+        LEFT JOIN public.units un ON un.topic_id = t.id
+        LEFT JOIN public.subtopics st ON st.unit_id = un.id
         LEFT JOIN public.user_subtopic_progress usp
           ON usp.user_id = u.id
           AND usp.subtopic_id = st.id

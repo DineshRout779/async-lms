@@ -222,7 +222,7 @@ const Lesson = () => {
     nextLesson: Subtopic | null;
   }>(() => {
     const flattened = courseStructure.flatMap((topic) =>
-      Array.isArray(topic.subtopics) ? topic.subtopics : [],
+      (topic.units || []).flatMap((unit) => unit.subtopics || []),
     );
     const total = flattened.length;
     const currentIndex = flattened.findIndex(

@@ -50,21 +50,28 @@ export const SubjectSidebar = () => {
               </span>
             </AccordionTrigger>
             <AccordionContent>
-              {topic.subtopics.map((sub: any) => (
-                <NavLink
-                  key={sub.id}
-                  to={`/dashboard/student/courses/${slug}/lesson/${sub.slug}`}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 pl-10 pr-4 py-3 text-sm transition-all ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700 border-r-4 border-blue-600'
-                        : 'text-slate-600'
-                    }`
-                  }
-                >
-                  <PlayCircle className='w-4 h-4' />
-                  {sub.title}
-                </NavLink>
+              {topic.units?.map((unit: any) => (
+                <div key={unit.id} className='mb-2'>
+                  <div className='bg-slate-100 px-6 py-2 text-xs font-bold uppercase text-slate-500'>
+                    {unit.title}
+                  </div>
+                  {unit.subtopics?.map((sub: any) => (
+                    <NavLink
+                      key={sub.id}
+                      to={`/dashboard/student/courses/${slug}/lesson/${sub.slug}`}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 py-2 pl-10 pr-4 text-sm transition-all ${
+                          isActive
+                            ? 'border-r-4 border-blue-600 bg-blue-50 text-blue-700'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`
+                      }
+                    >
+                      <PlayCircle className='h-4 w-4 shrink-0' />
+                      <span>{sub.title}</span>
+                    </NavLink>
+                  ))}
+                </div>
               ))}
             </AccordionContent>
           </AccordionItem>

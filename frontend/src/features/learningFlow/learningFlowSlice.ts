@@ -10,6 +10,7 @@ interface LearningFlowState {
   structure: Topic[];
   activeSubjectId: string | null;
   expandedTopics: string[]; // Store IDs
+  expandedUnits: string[]; // Store IDs
   expandedSubtopics: string[]; // Store IDs
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
@@ -19,6 +20,7 @@ const initialState: LearningFlowState = {
   structure: [],
   activeSubjectId: null,
   expandedTopics: [],
+  expandedUnits: [],
   expandedSubtopics: [],
   status: 'idle',
   error: null,
@@ -58,6 +60,16 @@ export const learningFlowSlice = createSlice({
         state.expandedTopics.push(id);
       }
     },
+    toggleUnitExpansion(state, action: PayloadAction<string>) {
+      const id = action.payload;
+      if (state.expandedUnits.includes(id)) {
+        state.expandedUnits = state.expandedUnits.filter(
+          (unitId) => unitId !== id,
+        );
+      } else {
+        state.expandedUnits.push(id);
+      }
+    },
     toggleSubtopicExpansion(state, action: PayloadAction<string>) {
       const id = action.payload;
       if (state.expandedSubtopics.includes(id)) {
@@ -91,6 +103,7 @@ export const learningFlowSlice = createSlice({
 export const {
   setActiveSubject,
   toggleTopicExpansion,
+  toggleUnitExpansion,
   toggleSubtopicExpansion,
   setStructure,
 } = learningFlowSlice.actions;

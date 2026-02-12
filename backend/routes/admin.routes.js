@@ -11,6 +11,9 @@ const {
   createTopic,
   updateTopic,
   deleteTopic,
+  createUnit,
+  updateUnit,
+  deleteUnit,
   createSubtopic,
   updateSubtopic,
   deleteSubtopic,
@@ -103,6 +106,11 @@ router.post(
 router.post('/topics', verifyToken, isAdmin, createTopic);
 router.put('/topics/:id', verifyToken, isAdmin, updateTopic);
 router.delete('/topics/:id', verifyToken, isAdmin, deleteTopic);
+
+// ===== UNIT MANAGEMENT =====
+router.post('/units', verifyToken, isAdmin, createUnit);
+router.put('/units/:id', verifyToken, isAdmin, updateUnit);
+router.delete('/units/:id', verifyToken, isAdmin, deleteUnit);
 
 // ===== SUBTOPIC MANAGEMENT =====
 router.post('/subtopics', verifyToken, isAdmin, createSubtopic);

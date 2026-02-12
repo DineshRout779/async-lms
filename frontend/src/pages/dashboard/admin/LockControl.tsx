@@ -39,11 +39,19 @@ interface LockSubtopic {
   is_unlocked: boolean;
 }
 
-interface LockTopic {
+interface LockUnit {
   id: string;
   title: string;
   order_index: number;
   subtopics: LockSubtopic[];
+}
+
+interface LockTopic {
+  id: string;
+  title: string;
+  order_index: number;
+  units?: LockUnit[];
+  subtopics: LockSubtopic[]; // Flattened for display
 }
 
 interface LockOverview {
@@ -115,10 +123,16 @@ const LockControl = () => {
     try {
       const res = await apiClient.get<LockBatchesResponse>(
         '/admin/lock-control/batches',
-        { params: selectedCollegeId === 'all' ? {} : { collegeId: selectedCollegeId } }
+        {
+          params:
+            selectedCollegeId === 'all' ? {} : { collegeId: selectedCollegeId },
+        },
       );
       setBatches(res.data.data);
-      if (selectedBatch !== 'all' && !res.data.data.includes(Number(selectedBatch))) {
+      if (
+        selectedBatch !== 'all' &&
+        !res.data.data.includes(Number(selectedBatch))
+      ) {
         setSelectedBatch('all');
       }
     } catch (error) {
@@ -133,9 +147,17 @@ const LockControl = () => {
       setLoadingOverview(true);
       const res = await apiClient.get<LockOverviewResponse>(
         '/admin/lock-control/overview',
-        { params: filterParams }
+        { params: filterParams },
       );
-      setOverview(res.data.data);
+      const data = res.data.data;
+      // Flatten units into subtopics for compatible display
+      const transformedTopics = data.topics.map((topic) => ({
+        ...topic,
+        subtopics: topic.units
+          ? topic.units.flatMap((u) => u.subtopics)
+          : topic.subtopics || [],
+      }));
+      setOverview({ ...data, topics: transformedTopics });
     } catch (error) {
       console.error('Failed to load lock overview:', error);
       toast.error('Failed to load lock overview');
@@ -159,7 +181,7 @@ const LockControl = () => {
   useEffect(() => {
     if (!overview?.topics?.length) return;
     setExpandedTopics((prev) =>
-      prev.length > 0 ? prev : [overview.topics[0].id]
+      prev.length > 0 ? prev : [overview.topics[0].id],
     );
   }, [overview?.topics]);
 
@@ -170,7 +192,7 @@ const LockControl = () => {
     const unlockedTopics = overview.topics.filter((topic) =>
       topic.subtopics.length > 0
         ? topic.subtopics.every((subtopic) => subtopic.is_unlocked)
-        : false
+        : false,
     ).length;
 
     return {
@@ -189,7 +211,7 @@ const LockControl = () => {
       .map((topic) => {
         const topicMatch = topic.title.toLowerCase().includes(query);
         const subtopics = topic.subtopics.filter((subtopic) =>
-          subtopic.title.toLowerCase().includes(query)
+          subtopic.title.toLowerCase().includes(query),
         );
         if (topicMatch) return topic;
         if (subtopics.length > 0) {
@@ -206,7 +228,7 @@ const LockControl = () => {
       await apiClient.post(
         `/admin/lock-control/topics/${topicId}/${unlock ? 'unlock' : 'lock'}`,
         null,
-        { params: filterParams }
+        { params: filterParams },
       );
       toast.success(unlock ? 'Topic unlocked' : 'Topic locked');
       await fetchOverview();
@@ -218,16 +240,13 @@ const LockControl = () => {
     }
   };
 
-  const handleSubtopicToggle = async (
-    subtopicId: string,
-    unlock: boolean
-  ) => {
+  const handleSubtopicToggle = async (subtopicId: string, unlock: boolean) => {
     try {
       setSubtopicLoadingIds((prev) => [...prev, subtopicId]);
       await apiClient.post(
         `/admin/lock-control/subtopics/${subtopicId}/${unlock ? 'unlock' : 'lock'}`,
         null,
-        { params: filterParams }
+        { params: filterParams },
       );
       toast.success(unlock ? 'Subtopic unlocked' : 'Subtopic locked');
       await fetchOverview();
@@ -397,7 +416,7 @@ const LockControl = () => {
           {filteredTopics.map((topic) => {
             const isExpanded = expandedTopics.includes(topic.id);
             const unlockedSubtopics = topic.subtopics.filter(
-              (subtopic) => subtopic.is_unlocked
+              (subtopic) => subtopic.is_unlocked,
             ).length;
             const progress =
               topic.subtopics.length > 0
@@ -420,7 +439,7 @@ const LockControl = () => {
                             setExpandedTopics((prev) =>
                               prev.includes(topic.id)
                                 ? prev.filter((id) => id !== topic.id)
-                                : [...prev, topic.id]
+                                : [...prev, topic.id],
                             )
                           }
                           aria-label='Toggle topic'
@@ -478,7 +497,7 @@ const LockControl = () => {
                     <div className='divide-y divide-slate-100'>
                       {topic.subtopics.map((subtopic) => {
                         const subtopicLoading = subtopicLoadingIds.includes(
-                          subtopic.id
+                          subtopic.id,
                         );
                         const isUnlocked = subtopic.is_unlocked;
 
@@ -496,9 +515,7 @@ const LockControl = () => {
                                   {subtopic.title}
                                 </p>
                                 <div className='flex items-center gap-2 mt-1'>
-                                  <Badge
-                                    className='bg-slate-100 text-slate-500 text-[10px] uppercase tracking-wide'
-                                  >
+                                  <Badge className='bg-slate-100 text-slate-500 text-[10px] uppercase tracking-wide'>
                                     {subtopic.content_type === 'video'
                                       ? 'Video'
                                       : subtopic.content_type === 'external'

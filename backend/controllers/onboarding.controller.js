@@ -101,7 +101,8 @@ exports.selectSubjects = async (req, res) => {
             ORDER BY t.order_index, st.order_index
           ) AS rn
         FROM topics t
-        INNER JOIN subtopics st ON st.topic_id = t.id
+        INNER JOIN units u ON u.topic_id = t.id
+        INNER JOIN subtopics st ON st.unit_id = u.id
         WHERE t.subject_id = ANY($2::uuid[])
       )
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)

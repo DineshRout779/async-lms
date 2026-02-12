@@ -12,10 +12,11 @@ const unlockNextSubtopicIfAvailable = async (userId, subtopicId) => {
         t.subject_id,
         ROW_NUMBER() OVER (
           PARTITION BY t.subject_id
-          ORDER BY t.order_index, st.order_index
+          ORDER BY t.order_index, u.order_index, st.order_index
         ) AS rn
       FROM subtopics st
-      INNER JOIN topics t ON st.topic_id = t.id
+      INNER JOIN units u ON st.unit_id = u.id
+      INNER JOIN topics t ON u.topic_id = t.id
     ),
     current AS (
       SELECT subject_id, rn
@@ -132,88 +133,157 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
 
 /**
  * Get current student's progress for a subject
- * GET /api/students/progress/:subjectId
+ * GET /api// Get current user's progress for a specific subject
  */
 exports.getMyProgress = async (req, res) => {
   try {
-    const userId = req.user.id; // from verifyToken middleware
-    const { subjectId } = req.params;
+    const userId = req.user.id;
+    const { subjectId } = req.query;
 
     const query = `
       SELECT 
-        t.id as topic_id,
-        t.title as topic_title,
-        t.description as topic_description,
-        utp.progress_percent,
-        utp.is_completed as topic_completed,
+        -- Topic
+        t.id AS topic_id,
+        t.title AS topic_title,
+        t.description AS topic_description,
+        t.order_index AS topic_order,
         
-        json_agg(
-          json_build_object(
-            'subtopic_id', st.id,
-            'subtopic_title', st.title,
-            'subtopic_slug', st.slug,
-            'is_unlocked', COALESCE(usp.is_unlocked, false),
-            'is_completed', COALESCE(usp.is_completed, false),
-            'completed_at', usp.completed_at,
-            'has_lesson', CASE WHEN lc.id IS NOT NULL THEN true ELSE false END,
-            'has_quiz', CASE WHEN q.id IS NOT NULL THEN true ELSE false END,
-            'has_exercise', CASE WHEN e.id IS NOT NULL THEN true ELSE false END,
-            'lesson_completed', COALESCE(ulp.is_completed, false),
-            'quiz_passed', COALESCE(
-              (SELECT bool_or(is_passed) 
-               FROM quiz_attempts 
-               WHERE user_id = $1 AND quiz_id IN (SELECT id FROM quizzes WHERE subtopic_id = st.id)
-              ), false
-            ),
-            'exercise_passed', COALESCE(
-              (SELECT bool_or(is_passed) 
-               FROM exercise_submissions 
-               WHERE user_id = $1 AND exercise_id IN (SELECT id FROM exercises WHERE subtopic_id = st.id)
-              ), false
-            ),
-            'best_quiz_score', (
-              SELECT MAX(score)
-              FROM quiz_attempts
-              WHERE user_id = $1 AND quiz_id IN (SELECT id FROM quizzes WHERE subtopic_id = st.id)
-            ),
-            'best_exercise_score', (
-              SELECT MAX(score)
-              FROM exercise_submissions
-              WHERE user_id = $1 AND exercise_id IN (SELECT id FROM exercises WHERE subtopic_id = st.id)
-            )
+        -- Unit
+        u.id AS unit_id,
+        u.title AS unit_title,
+        u.order_index AS unit_order,
+
+        -- Subtopic
+        st.id AS subtopic_id,
+        st.title AS subtopic_title,
+        st.slug AS subtopic_slug,
+        st.order_index AS subtopic_order,
+
+        -- Progress
+        COALESCE(usp.is_unlocked, false) AS is_unlocked,
+        COALESCE(usp.is_completed, false) AS is_completed,
+        usp.completed_at,
+
+        -- Content Existence
+        EXISTS(SELECT 1 FROM lesson_content WHERE subtopic_id = st.id AND is_published = true) AS has_lesson,
+        EXISTS(SELECT 1 FROM quizzes WHERE subtopic_id = st.id) AS has_quiz,
+        EXISTS(SELECT 1 FROM exercises WHERE subtopic_id = st.id) AS has_exercise,
+
+        -- Specific Content Progress
+        COALESCE(ulp.is_completed, false) AS lesson_completed,
+        
+        -- Quiz Best Score / Passed
+        (
+          SELECT json_build_object(
+            'is_passed', bool_or(qa.is_passed),
+            'max_score', MAX(qa.score)
           )
-          ORDER BY st.order_index
-        ) as subtopics
+          FROM quiz_attempts qa
+          INNER JOIN quizzes q ON q.id = qa.quiz_id
+          WHERE qa.user_id = $1 AND q.subtopic_id = st.id
+        ) AS quiz_stats,
+
+        -- Exercise Best Score / Passed
+        (
+          SELECT json_build_object(
+            'is_passed', bool_or(es.is_passed),
+            'max_score', MAX(es.score)
+          )
+          FROM exercise_submissions es
+          INNER JOIN exercises e ON e.id = es.exercise_id
+          WHERE es.user_id = $1 AND e.subtopic_id = st.id
+        ) AS exercise_stats,
+        
+        -- Topic Progress (Pre-calculated if needed, or we calculate in JS)
+        utp.progress_percent AS topic_progress,
+        utp.is_completed AS topic_is_completed
+
       FROM topics t
-      INNER JOIN subtopics st ON t.id = st.topic_id
+      INNER JOIN units u ON t.id = u.topic_id
+      INNER JOIN subtopics st ON u.id = st.unit_id
       LEFT JOIN user_topic_progress utp ON utp.topic_id = t.id AND utp.user_id = $1
       LEFT JOIN user_subtopic_progress usp ON usp.subtopic_id = st.id AND usp.user_id = $1
       LEFT JOIN lesson_content lc ON lc.subtopic_id = st.id AND lc.is_published = true
-      LEFT JOIN quizzes q ON q.subtopic_id = st.id
-      LEFT JOIN exercises e ON e.subtopic_id = st.id
       LEFT JOIN user_lesson_progress ulp ON ulp.lesson_content_id = lc.id AND ulp.user_id = $1
+      
       WHERE t.subject_id = $2
-      GROUP BY t.id, t.title, t.description, t.order_index, utp.progress_percent, utp.is_completed
-      ORDER BY t.order_index;
+      ORDER BY 
+        t.order_index,
+        u.order_index,
+        st.order_index;
     `;
 
-    const result = await pool.query(query, [userId, subjectId]);
+    const { rows } = await pool.query(query, [userId, subjectId]);
 
-    // Calculate overall progress
+    // Build Hierarchy
+    const topicsMap = new Map();
     let totalSubtopics = 0;
     let completedSubtopics = 0;
     let totalPoints = 0;
 
-    result.rows.forEach((topic) => {
-      topic.subtopics.forEach((subtopic) => {
-        totalSubtopics++;
-        if (subtopic.is_completed) {
-          completedSubtopics++;
-        }
-        totalPoints +=
-          (subtopic.best_quiz_score || 0) + (subtopic.best_exercise_score || 0);
+    rows.forEach((row) => {
+      // Topic
+      if (!topicsMap.has(row.topic_id)) {
+        topicsMap.set(row.topic_id, {
+          id: row.topic_id,
+          title: row.topic_title,
+          description: row.topic_description,
+          order_index: row.topic_order,
+          progress_percent: row.topic_progress || 0,
+          is_completed: row.topic_is_completed || false,
+          units: new Map(),
+        });
+      }
+      const topic = topicsMap.get(row.topic_id);
+
+      // Unit
+      if (!topic.units.has(row.unit_id)) {
+        topic.units.set(row.unit_id, {
+          id: row.unit_id,
+          title: row.unit_title,
+          order_index: row.unit_order,
+          subtopics: [],
+        });
+      }
+      const unit = topic.units.get(row.unit_id);
+
+      // Subtopic Stats
+      const quizPassed = row.quiz_stats?.is_passed || false;
+      const exercisePassed = row.exercise_stats?.is_passed || false;
+      const bestQuizScore = row.quiz_stats?.max_score || 0;
+      const bestExerciseScore = row.exercise_stats?.max_score || 0;
+
+      // Add Subtopic
+      unit.subtopics.push({
+        subtopic_id: row.subtopic_id,
+        subtopic_title: row.subtopic_title,
+        subtopic_slug: row.subtopic_slug,
+        is_unlocked: row.is_unlocked,
+        is_completed: row.is_completed,
+        completed_at: row.completed_at,
+        has_lesson: row.has_lesson,
+        has_quiz: row.has_quiz,
+        has_exercise: row.has_exercise,
+        lesson_completed: row.lesson_completed,
+        quiz_passed: quizPassed,
+        exercise_passed: exercisePassed,
+        best_quiz_score: bestQuizScore,
+        best_exercise_score: bestExerciseScore,
       });
+
+      // Aggregates
+      totalSubtopics++;
+      if (row.is_completed) {
+        completedSubtopics++;
+      }
+      totalPoints += (bestQuizScore || 0) + (bestExerciseScore || 0);
     });
+
+    // Formatting Response
+    const topics = Array.from(topicsMap.values()).map((topic) => ({
+      ...topic,
+      units: Array.from(topic.units.values()),
+    }));
 
     const overallProgress =
       totalSubtopics > 0
@@ -246,9 +316,11 @@ exports.getMyProgress = async (req, res) => {
         overall_progress: overallProgress,
         total_subtopics: totalSubtopics,
         completed_subtopics: completedSubtopics,
-        total_points: totalPoints,
+        total_points: totalPoints, // This is calculated from fetched rows, but user stats has total_points too.
+        // Note: The original code returned 'totalPoints' from the loop and 'stats' object.
+        // We keep both to match API signature.
         stats: stats,
-        topics: result.rows,
+        topics: topics,
       },
     });
   } catch (error) {

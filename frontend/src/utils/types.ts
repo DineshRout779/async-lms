@@ -66,11 +66,20 @@ export interface Subtopic {
   exercises?: Exercise[];
 }
 
+export interface Unit {
+  id: string;
+  title: string;
+  slug: string;
+  description?: string;
+  order_index: number;
+  subtopics: Subtopic[];
+}
+
 export interface Topic {
   id: string;
   title: string;
   description?: string;
-  subtopics: Subtopic[];
+  units: Unit[];
   order_index: number;
 }
 
@@ -112,6 +121,14 @@ export interface TopicModalProps {
 }
 
 export interface SubtopicModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: { title: string; description: string; slug: string }) => void;
+  topicTitle: string;
+  editData?: { title: string; description: string; slug: string };
+}
+
+export interface UnitModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: { title: string; description: string; slug: string }) => void;

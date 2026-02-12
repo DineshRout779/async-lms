@@ -108,10 +108,11 @@ exports.getFacilitatorStudents = async (req, res) => {
           COUNT(DISTINCT us.subject_id)::int as enrolled_courses,
           ROUND(AVG(
             COALESCE((
-              SELECT (COUNT(usp.id)::float / NULLIF((SELECT COUNT(st.id) FROM public.subtopics st JOIN public.topics t ON st.topic_id = t.id WHERE t.subject_id = us.subject_id), 0) * 100)
+              SELECT (COUNT(usp.id)::float / NULLIF((SELECT COUNT(st.id) FROM public.subtopics st JOIN public.units u ON st.unit_id = u.id JOIN public.topics t ON u.topic_id = t.id WHERE t.subject_id = us.subject_id), 0) * 100)
               FROM public.user_subtopic_progress usp
               JOIN public.subtopics st2 ON usp.subtopic_id = st2.id
-              JOIN public.topics t2 ON st2.topic_id = t2.id
+              JOIN public.units u2 ON st2.unit_id = u2.id
+              JOIN public.topics t2 ON u2.topic_id = t2.id
               WHERE usp.user_id = u.id AND t2.subject_id = us.subject_id AND usp.is_completed = true
             ), 0)
           ))::int as progress_percent

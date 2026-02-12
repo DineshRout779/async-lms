@@ -124,6 +124,13 @@ exports.getAdminSubjectStructure = async (req, res) => {
         t.description AS topic_description,
         t.order_index AS topic_order,
 
+        -- Unit
+        u.id AS unit_id,
+        u.title AS unit_title,
+        u.slug AS unit_slug,
+        u.description AS unit_description,
+        u.order_index AS unit_order,
+
         -- Subtopic
         st.id AS subtopic_id,
         st.title AS subtopic_title,
@@ -166,7 +173,8 @@ exports.getAdminSubjectStructure = async (req, res) => {
         e.max_score AS exercise_max_score
 
       FROM topics t
-      LEFT JOIN subtopics st ON t.id = st.topic_id
+      LEFT JOIN units u ON t.id = u.topic_id
+      LEFT JOIN subtopics st ON u.id = st.unit_id
       LEFT JOIN lesson_content lc 
         ON st.id = lc.subtopic_id
       LEFT JOIN quizzes q ON st.id = q.subtopic_id
@@ -177,6 +185,7 @@ exports.getAdminSubjectStructure = async (req, res) => {
       WHERE t.subject_id = $1
       ORDER BY 
         t.order_index,
+        u.order_index,
         st.order_index,
         lc.version,
         qq.order_index,
@@ -194,14 +203,29 @@ exports.getAdminSubjectStructure = async (req, res) => {
           title: row.topic_title,
           description: row.topic_description,
           order_index: row.topic_order,
-          subtopics: new Map(),
+          units: new Map(),
         });
       }
 
       const topic = topicsMap.get(row.topic_id);
 
-      if (row.subtopic_id && !topic.subtopics.has(row.subtopic_id)) {
-        topic.subtopics.set(row.subtopic_id, {
+      // Unit
+      if (row.unit_id && !topic.units.has(row.unit_id)) {
+        topic.units.set(row.unit_id, {
+          id: row.unit_id,
+          title: row.unit_title,
+          slug: row.unit_slug,
+          description: row.unit_description,
+          order_index: row.unit_order,
+          subtopics: new Map(),
+        });
+      }
+
+      const unit = topic.units.get(row.unit_id);
+
+      // Subtopic
+      if (row.subtopic_id && unit && !unit.subtopics.has(row.subtopic_id)) {
+        unit.subtopics.set(row.subtopic_id, {
           id: row.subtopic_id,
           title: row.subtopic_title,
           slug: row.subtopic_slug,
@@ -213,7 +237,7 @@ exports.getAdminSubjectStructure = async (req, res) => {
         });
       }
 
-      const subtopic = topic.subtopics.get(row.subtopic_id);
+      const subtopic = unit ? unit.subtopics.get(row.subtopic_id) : null;
 
       if (row.lesson_id && subtopic) {
         if (!subtopic.lesson_content.some((l) => l.id === row.lesson_id)) {
@@ -286,11 +310,18 @@ exports.getAdminSubjectStructure = async (req, res) => {
       title: topic.title,
       description: topic.description,
       order_index: topic.order_index,
-      subtopics: Array.from(topic.subtopics.values()).map((sub) => ({
-        ...sub,
-        quizzes: Array.from(sub.quizzes.values()).map((q) => ({
-          ...q,
-          questions: Array.from(q.questions.values()),
+      units: Array.from(topic.units.values()).map((unit) => ({
+        id: unit.id,
+        title: unit.title,
+        slug: unit.slug,
+        description: unit.description,
+        order_index: unit.order_index,
+        subtopics: Array.from(unit.subtopics.values()).map((sub) => ({
+          ...sub,
+          quizzes: Array.from(sub.quizzes.values()).map((q) => ({
+            ...q,
+            questions: Array.from(q.questions.values()),
+          })),
         })),
       })),
     }));
@@ -449,11 +480,12 @@ exports.deleteTopic = async (req, res) => {
 };
 
 // ============================================
-// SUBTOPIC MANAGEMENT
+// ============================================
+// UNIT MANAGEMENT
 // ============================================
 
-// Create a new subtopic
-exports.createSubtopic = async (req, res) => {
+// Create a new unit
+exports.createUnit = async (req, res) => {
   try {
     const { topic_id, title, description, slug, order_index } = req.body;
 
@@ -466,13 +498,175 @@ exports.createSubtopic = async (req, res) => {
     }
 
     const query = `
-      INSERT INTO subtopics (topic_id, title, description, slug, order_index)
+      INSERT INTO units (topic_id, title, description, slug, order_index)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *;
     `;
 
     const values = [
       topic_id,
+      title,
+      description || null,
+      slug,
+      order_index || 0,
+    ];
+
+    const result = await pool.query(query, values);
+
+    res.status(201).json({
+      success: true,
+      message: 'Unit created successfully',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error creating unit:', error);
+
+    // Handle unique constraint violation for slug
+    if (error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'A unit with this slug already exists',
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create unit',
+      error: error.message,
+    });
+  }
+};
+
+// Update an existing unit
+exports.updateUnit = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, slug, order_index } = req.body;
+
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (title !== undefined) {
+      updates.push(`title = $${paramCount++}`);
+      values.push(title);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramCount++}`);
+      values.push(description);
+    }
+    if (slug !== undefined) {
+      updates.push(`slug = $${paramCount++}`);
+      values.push(slug);
+    }
+    if (order_index !== undefined) {
+      updates.push(`order_index = $${paramCount++}`);
+      values.push(order_index);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update',
+      });
+    }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(id);
+
+    const query = `
+      UPDATE units
+      SET ${updates.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Unit not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Unit updated successfully',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error updating unit:', error);
+
+    if (error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'A unit with this slug already exists',
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update unit',
+      error: error.message,
+    });
+  }
+};
+
+// Delete a unit
+exports.deleteUnit = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const query = 'DELETE FROM units WHERE id = $1 RETURNING id;';
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Unit not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Unit deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting unit:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete unit',
+      error: error.message,
+    });
+  }
+};
+
+// ============================================
+// SUBTOPIC MANAGEMENT
+// ============================================
+
+// Create a new subtopic
+exports.createSubtopic = async (req, res) => {
+  try {
+    const { unit_id, title, description, slug, order_index } = req.body;
+
+    // Validation
+    if (!unit_id || !title || !slug) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit ID, title, and slug are required',
+      });
+    }
+
+    const query = `
+      INSERT INTO subtopics (unit_id, title, description, slug, order_index)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *;
+    `;
+
+    const values = [
+      unit_id,
       title,
       description || null,
       slug,
@@ -1911,11 +2105,12 @@ exports.getLockControlOverview = async (req, res) => {
 
     const query = `
       WITH cohort AS (
-        SELECT id
-        FROM users
-        WHERE role = 'student'
-          AND ($1::uuid IS NULL OR college_id = $1)
-          AND ($2::int IS NULL OR year = $2)
+        SELECT u.id
+        FROM users u
+        INNER JOIN student_profiles sp ON u.id = sp.user_id
+        WHERE u.role = 'student'
+          AND ($1::uuid IS NULL OR sp.college_id = $1)
+          AND ($2::int IS NULL OR sp.year = $2)
       ),
       cohort_count AS (
         SELECT COUNT(*)::int AS total
@@ -1926,18 +2121,23 @@ exports.getLockControlOverview = async (req, res) => {
           t.id AS topic_id,
           t.title AS topic_title,
           t.order_index AS topic_order,
+          u.id AS unit_id,
+          u.title AS unit_title,
+          u.order_index AS unit_order,
           st.id AS subtopic_id,
           st.title AS subtopic_title,
           st.slug AS subtopic_slug,
           st.order_index AS subtopic_order,
           MIN(lc.content_type) AS content_type
         FROM topics t
-        INNER JOIN subtopics st ON st.topic_id = t.id
+        INNER JOIN units u ON u.topic_id = t.id
+        INNER JOIN subtopics st ON st.unit_id = u.id
         LEFT JOIN lesson_content lc 
           ON lc.subtopic_id = st.id AND lc.is_published = true
         WHERE t.subject_id = $3::uuid
         GROUP BY 
           t.id, t.title, t.order_index,
+          u.id, u.title, u.order_index,
           st.id, st.title, st.slug, st.order_index
       )
       SELECT
@@ -1958,9 +2158,10 @@ exports.getLockControlOverview = async (req, res) => {
         ON usp.user_id = c.id AND usp.subtopic_id = sr.subtopic_id
       GROUP BY 
         sr.topic_id, sr.topic_title, sr.topic_order,
+        sr.unit_id, sr.unit_title, sr.unit_order,
         sr.subtopic_id, sr.subtopic_title, sr.subtopic_slug, sr.subtopic_order,
         sr.content_type, cc.total
-      ORDER BY sr.topic_order, sr.subtopic_order;
+      ORDER BY sr.topic_order, sr.unit_order, sr.subtopic_order;
     `;
 
     const result = await pool.query(query, [
@@ -1982,14 +2183,26 @@ exports.getLockControlOverview = async (req, res) => {
           id: row.topic_id,
           title: row.topic_title,
           order_index: row.topic_order,
+          units: new Map(),
+        });
+      }
+
+      const topic = topicsMap.get(row.topic_id);
+
+      if (!topic.units.has(row.unit_id)) {
+        topic.units.set(row.unit_id, {
+          id: row.unit_id,
+          title: row.unit_title,
+          order_index: row.unit_order,
           subtopics: [],
         });
       }
 
+      const unit = topic.units.get(row.unit_id);
       const isUnlocked =
         row.cohort_size > 0 && row.unlocked_count === row.cohort_size;
 
-      topicsMap.get(row.topic_id).subtopics.push({
+      unit.subtopics.push({
         id: row.subtopic_id,
         title: row.subtopic_title,
         slug: row.subtopic_slug,
@@ -2001,7 +2214,11 @@ exports.getLockControlOverview = async (req, res) => {
       });
     });
 
-    const topics = Array.from(topicsMap.values());
+    const topics = Array.from(topicsMap.values()).map((topic) => ({
+      ...topic,
+      units: Array.from(topic.units.values()),
+    }));
+
     const totalSubtopics = result.rows.length;
     const completionRate =
       cohortSize > 0 && totalSubtopics > 0
@@ -2057,9 +2274,10 @@ exports.setLockControlTopic = async (req, res) => {
           AND ($2::int IS NULL OR year = $2)
       ),
       topic_subtopics AS (
-        SELECT id
-        FROM subtopics
-        WHERE topic_id = $3
+        SELECT st.id
+        FROM subtopics st
+        INNER JOIN units u ON st.unit_id = u.id
+        WHERE u.topic_id = $3
       )
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT c.id, ts.id, $4
@@ -2107,11 +2325,12 @@ exports.setLockControlSubtopic = async (req, res) => {
 
     const query = `
       WITH cohort AS (
-        SELECT id
-        FROM users
-        WHERE role = 'student'
-          AND ($1::uuid IS NULL OR college_id = $1)
-          AND ($2::int IS NULL OR year = $2)
+        SELECT u.id
+        FROM users u
+        INNER JOIN student_profiles sp ON u.id = sp.user_id
+        WHERE u.role = 'student'
+          AND ($1::uuid IS NULL OR sp.college_id = $1)
+          AND ($2::int IS NULL OR sp.year = $2)
       )
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT c.id, $3, $4

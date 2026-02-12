@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type ChangeEvent } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Plus,
@@ -11,7 +11,6 @@ import {
   Layout,
   Loader2,
   Edit2,
-  BookOpen,
   ListChecks,
   Code,
   FolderOpen,
@@ -27,9 +26,11 @@ import type {
   LessonContent,
   Subject,
   Subtopic,
+  Unit,
   Topic,
 } from '@/utils/types';
 import TopicModal from '@/components/common/admin/TopicModal';
+import UnitModal from '@/components/common/admin/UnitModal';
 import SubtopicModal from '@/components/common/admin/SubTopicModal';
 import QuizModal from '@/components/common/admin/QuizModal';
 import ExerciseModal from '@/components/common/admin/ExerciseModal';
@@ -42,6 +43,7 @@ import {
   fetchCourseStructure,
   setActiveSubject,
   toggleTopicExpansion,
+  toggleUnitExpansion,
   toggleSubtopicExpansion,
   setStructure,
 } from '@/features/learningFlow/learningFlowSlice';
@@ -57,6 +59,7 @@ const LearningFlow: React.FC = () => {
     structure,
     activeSubjectId,
     expandedTopics,
+    expandedUnits,
     expandedSubtopics,
     status: structureStatus,
   } = useAppSelector((state) => state.learningFlow);
@@ -71,18 +74,22 @@ const LearningFlow: React.FC = () => {
 
   // Modal states
   const [topicModalOpen, setTopicModalOpen] = useState(false);
+  const [unitModalOpen, setUnitModalOpen] = useState(false);
   const [subtopicModalOpen, setSubtopicModalOpen] = useState(false);
   const [contentModalOpen, setContentModalOpen] = useState(false);
   const [quizModalOpen, setQuizModalOpen] = useState(false);
   const [exerciseModalOpen, setExerciseModalOpen] = useState(false);
 
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [editingSubtopic, setEditingSubtopic] = useState<{
     subtopic: Subtopic;
-    topicId: string;
+    unitId: string;
   } | null>(null);
-  const [selectedTopicForSubtopic, setSelectedTopicForSubtopic] =
+  const [selectedTopicForUnit, setSelectedTopicForUnit] =
     useState<Topic | null>(null);
+  const [selectedUnitForSubtopic, setSelectedUnitForSubtopic] =
+    useState<Unit | null>(null);
   const [selectedSubtopicForContent, setSelectedSubtopicForContent] =
     useState<Subtopic | null>(null);
   const [selectedSubtopicForQuiz, setSelectedSubtopicForQuiz] =
@@ -116,25 +123,14 @@ const LearningFlow: React.FC = () => {
     }
   }, [subjects, activeSubjectId, dispatch]);
 
-  // 2. Fetch specific hierarchy when a subject is selected
-  const handleSubjectChange = async (
-    slug: string,
-    id: string,
-  ): Promise<void> => {
-    dispatch(setActiveSubject(id));
-    dispatch(fetchCourseStructure(slug));
-  };
-
-  const handleSelectChange = (e: ChangeEvent<HTMLSelectElement>): void => {
-    const selected = subjects.find((s) => s.slug === e.target.value);
-    if (selected) {
-      handleSubjectChange(selected.slug, selected.id);
-    }
-  };
-
   // Toggle topic expansion
   const toggleTopic = (topicId: string) => {
     dispatch(toggleTopicExpansion(topicId));
+  };
+
+  // Toggle unit expansion
+  const toggleUnit = (unitId: string) => {
+    dispatch(toggleUnitExpansion(unitId));
   };
 
   // Toggle subtopic expansion
@@ -171,6 +167,78 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to create topic', error);
       toast.error('Failed to create topic');
+    }
+  };
+
+  // Create Unit
+  const handleCreateUnit = async (data: {
+    title: string;
+    description: string;
+    slug: string;
+  }) => {
+    if (!selectedTopicForUnit) return;
+
+    try {
+      const response = await apiClient.post('/admin/units', {
+        topic_id: selectedTopicForUnit.id,
+        title: data.title,
+        description: data.description,
+        slug: data.slug,
+        order_index: selectedTopicForUnit.units?.length || 0,
+      });
+
+      if (response.data.success) {
+        toast.success('Unit created successfully');
+        refreshStructure();
+        setUnitModalOpen(false);
+        setSelectedTopicForUnit(null);
+      }
+    } catch (error) {
+      console.error('Failed to create unit', error);
+      toast.error('Failed to create unit');
+    }
+  };
+
+  // Update Unit
+  const handleUpdateUnit = async (data: {
+    title: string;
+    description: string;
+    slug: string;
+  }) => {
+    if (!editingUnit) return;
+
+    try {
+      const response = await apiClient.put(`/admin/units/${editingUnit.id}`, {
+        title: data.title,
+        description: data.description,
+        slug: data.slug,
+      });
+
+      if (response.data.success) {
+        toast.success('Unit updated successfully');
+        refreshStructure();
+        setUnitModalOpen(false);
+        setEditingUnit(null);
+      }
+    } catch (error) {
+      console.error('Failed to update unit', error);
+      toast.error('Failed to update unit');
+    }
+  };
+
+  // Delete Unit
+  const handleDeleteUnit = async (unitId: string) => {
+    if (!confirm('Are you sure you want to delete this unit?')) return;
+
+    try {
+      const response = await apiClient.delete(`/admin/units/${unitId}`);
+      if (response.data.success) {
+        toast.success('Unit deleted successfully');
+        refreshStructure();
+      }
+    } catch (error) {
+      console.error('Failed to delete unit', error);
+      toast.error('Failed to delete unit');
     }
   };
 
@@ -221,22 +289,22 @@ const LearningFlow: React.FC = () => {
     description: string;
     slug: string;
   }) => {
-    if (!selectedTopicForSubtopic) return;
+    if (!selectedUnitForSubtopic) return;
 
     try {
       const response = await apiClient.post('/admin/subtopics', {
-        topic_id: selectedTopicForSubtopic.id,
+        unit_id: selectedUnitForSubtopic.id,
         title: data.title,
         description: data.description,
         slug: data.slug,
-        order_index: selectedTopicForSubtopic.subtopics.length,
+        order_index: selectedUnitForSubtopic.subtopics.length,
       });
 
       if (response.data.success) {
         toast.success('Subtopic created successfully');
         refreshStructure();
         setSubtopicModalOpen(false);
-        setSelectedTopicForSubtopic(null);
+        setSelectedUnitForSubtopic(null);
       }
     } catch (error: unknown) {
       console.error('Failed to create subtopic', error);
@@ -596,6 +664,57 @@ const LearningFlow: React.FC = () => {
     }
   };
 
+  // Reorder Units (Simplified: requires refreshing structure usually, or complex redux state update.
+  // For now we will rely on refreshStructure after API call, or just simplistic update if possible.
+  // Since Units are nested, we need to find the topic first.
+  // To avoid complex deep-cloning and updating of Redux state manually for nested items,
+  // we will just call API and refresh for now, which is safer.)
+  const handleMoveUnitUp = async (unitIndex: number, units: Unit[]) => {
+    if (unitIndex === 0) return;
+
+    const currentUnit = units[unitIndex];
+    const prevUnit = units[unitIndex - 1];
+
+    try {
+      await Promise.all([
+        apiClient.put(`/admin/units/${prevUnit.id}`, {
+          order_index: unitIndex,
+        }),
+        apiClient.put(`/admin/units/${currentUnit.id}`, {
+          order_index: unitIndex - 1,
+        }),
+      ]);
+      toast.success('Unit order updated');
+      refreshStructure();
+    } catch (error) {
+      console.error('Failed to reorder', error);
+      toast.error('Failed to update order');
+    }
+  };
+
+  const handleMoveUnitDown = async (unitIndex: number, units: Unit[]) => {
+    if (unitIndex === units.length - 1) return;
+
+    const currentUnit = units[unitIndex];
+    const nextUnit = units[unitIndex + 1];
+
+    try {
+      await Promise.all([
+        apiClient.put(`/admin/units/${currentUnit.id}`, {
+          order_index: unitIndex + 1,
+        }),
+        apiClient.put(`/admin/units/${nextUnit.id}`, {
+          order_index: unitIndex,
+        }),
+      ]);
+      toast.success('Unit order updated');
+      refreshStructure();
+    } catch (error) {
+      console.error('Failed to reorder', error);
+      toast.error('Failed to update order');
+    }
+  };
+
   // Helper function to get content type icon
   // const getContentIcon = (type: string) => {
   //   switch (type) {
@@ -689,7 +808,7 @@ const LearningFlow: React.FC = () => {
                               )}
                             </button>
                             <span className='font-semibold text-slate-800'>
-                              Unit {index + 1}: {topic.title}
+                              {topic.title}
                             </span>
                             {topic.description && (
                               <span className='text-xs text-slate-500'>
@@ -729,391 +848,484 @@ const LearningFlow: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Subtopics - only show when expanded */}
+                        {/* Units - only show when expanded */}
                         {expandedTopics.includes(topic.id) && (
-                          <div className='space-y-3 p-4'>
-                            {topic.subtopics.length === 0 ? (
+                          <div className='space-y-4 p-4'>
+                            {topic.units?.length === 0 ? (
                               <div className='rounded-lg border-2 border-dashed border-slate-200 bg-white py-8 text-center'>
-                                <BookOpen className='mx-auto h-8 w-8 text-slate-300' />
+                                <FolderOpen className='mx-auto h-8 w-8 text-slate-300' />
                                 <p className='mt-2 text-xs text-slate-400'>
-                                  No content steps yet
+                                  No units yet
                                 </p>
+                                <Button
+                                  variant='ghost'
+                                  size='sm'
+                                  onClick={() => {
+                                    setSelectedTopicForUnit(topic);
+                                    setUnitModalOpen(true);
+                                  }}
+                                  className='mt-2 text-indigo-600 hover:bg-indigo-50'
+                                >
+                                  <Plus className='mr-1 h-3 w-3' /> Add Unit
+                                </Button>
                               </div>
                             ) : (
-                              topic.subtopics.map((sub: Subtopic) => (
-                                <div key={sub.id} className='space-y-2'>
-                                  <div className='group flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-indigo-200'>
-                                    <div className='flex flex-1 items-center gap-4'>
-                                      <button
-                                        onClick={() => toggleSubtopic(sub.id)}
-                                        className='text-slate-400 hover:text-slate-600'
-                                      >
-                                        {expandedSubtopics.includes(sub.id) ? (
-                                          <ChevronDown className='h-4 w-4' />
-                                        ) : (
-                                          <ChevronRight className='h-4 w-4' />
-                                        )}
-                                      </button>
-                                      <div className='rounded-lg bg-slate-50 p-2'>
-                                        <FileText className='h-5 w-5 text-slate-400' />
-                                      </div>
-                                      <div className='flex-1'>
-                                        <p className='text-sm font-bold text-slate-700'>
-                                          {sub.title}
-                                        </p>
-                                        <div className='mt-0.5 flex items-center gap-2'>
-                                          <span className='font-mono text-[10px] text-slate-400'>
-                                            {sub.slug}
-                                          </span>
-                                          {sub.description && (
+                              <>
+                                {topic.units?.map(
+                                  (unit: Unit, uIndex: number) => (
+                                    <div
+                                      key={unit.id}
+                                      className='overflow-hidden rounded-lg border border-slate-200 bg-white'
+                                    >
+                                      <div className='flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-3'>
+                                        <div
+                                          onClick={() => toggleUnit(unit.id)}
+                                          className='flex cursor-pointer items-center gap-3'
+                                        >
+                                          <button className='text-slate-400 hover:text-slate-600'>
+                                            {expandedUnits.includes(unit.id) ? (
+                                              <ChevronDown className='h-4 w-4' />
+                                            ) : (
+                                              <ChevronRight className='h-4 w-4' />
+                                            )}
+                                          </button>
+                                          <div className='flex items-center gap-2'>
+                                            <Layout className='h-4 w-4 text-slate-400' />
+                                            <span className='font-medium text-slate-700'>
+                                              {unit.title}
+                                            </span>
+                                          </div>
+                                          {unit.description && (
                                             <span className='text-xs text-slate-500'>
-                                              • {sub.description}
+                                              • {unit.description}
                                             </span>
                                           )}
                                         </div>
-                                      </div>
-                                    </div>
-                                    <div className='flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100'>
-                                      <button
-                                        onClick={() => {
-                                          setEditingSubtopic({
-                                            subtopic: sub,
-                                            topicId: topic.id,
-                                          });
-                                          setSubtopicModalOpen(true);
-                                        }}
-                                        className='rounded-lg border border-slate-200 bg-white p-2 hover:border-indigo-300 hover:bg-indigo-50'
-                                        title='Edit subtopic'
-                                      >
-                                        <Edit2 className='h-3 w-3 text-slate-600' />
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          handleDeleteSubtopic(sub.id)
-                                        }
-                                        className='rounded-lg border border-slate-200 bg-white p-2 hover:border-red-300 hover:bg-red-50'
-                                        title='Delete subtopic'
-                                      >
-                                        <Trash2 className='h-3 w-3 text-slate-600' />
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Subtopic Content - Show when expanded */}
-                                  {expandedSubtopics.includes(sub.id) && (
-                                    <div className='space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-4'>
-                                      <div className='mb-3 flex items-center justify-between'>
-                                        <span className='text-xs font-bold uppercase tracking-wider text-slate-500'>
-                                          Contents
-                                        </span>
-                                        <div className='flex gap-2'>
-                                          {(!sub.lesson_content ||
-                                            sub.lesson_content.length ===
-                                              0) && (
+                                        <div className='flex items-center gap-2'>
+                                          <div className='flex items-center gap-1 text-slate-300'>
+                                            <ArrowUp
+                                              onClick={() =>
+                                                handleMoveUnitUp(
+                                                  uIndex,
+                                                  topic.units,
+                                                )
+                                              }
+                                              className={`h-3 w-3 ${
+                                                uIndex === 0
+                                                  ? 'cursor-not-allowed opacity-30'
+                                                  : 'cursor-pointer hover:text-slate-600'
+                                              }`}
+                                            />
+                                            <ArrowDown
+                                              onClick={() =>
+                                                handleMoveUnitDown(
+                                                  uIndex,
+                                                  topic.units,
+                                                )
+                                              }
+                                              className={`h-3 w-3 ${
+                                                uIndex ===
+                                                (topic.units?.length || 0) - 1
+                                                  ? 'cursor-not-allowed opacity-30'
+                                                  : 'cursor-pointer hover:text-slate-600'
+                                              }`}
+                                            />
+                                          </div>
+                                          <div className='mx-1 h-3 w-px bg-slate-200' />
+                                          <div className='flex items-center gap-1'>
                                             <button
                                               onClick={() => {
-                                                setEditingContent(null);
-                                                setSelectedSubtopicForContent(
-                                                  sub,
-                                                );
-                                                setContentModalOpen(true);
+                                                setEditingUnit(unit);
+                                                setUnitModalOpen(true);
                                               }}
-                                              className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
-                                              title='Add lesson content'
+                                              className='rounded p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'
                                             >
-                                              <Plus className='h-3 w-3' />
-                                              Add Content
+                                              <Edit2 className='h-3 w-3' />
                                             </button>
-                                          )}
-                                          {(!sub.quizzes ||
-                                            sub.quizzes.length === 0) && (
                                             <button
-                                              onClick={() => {
-                                                setSelectedSubtopicForQuiz(sub);
-                                                setQuizModalOpen(true);
-                                              }}
-                                              className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
+                                              onClick={() =>
+                                                handleDeleteUnit(unit.id)
+                                              }
+                                              className='rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500'
                                             >
-                                              <ListChecks className='h-3 w-3' />
-                                              Quiz
+                                              <Trash2 className='h-3 w-3' />
                                             </button>
-                                          )}
-                                          {(!sub.exercises ||
-                                            sub.exercises.length === 0) && (
-                                            <button
-                                              onClick={() => {
-                                                setSelectedSubtopicForExercise(
-                                                  sub,
-                                                );
-                                                setExerciseModalOpen(true);
-                                              }}
-                                              className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
-                                            >
-                                              <Code className='h-3 w-3' />
-                                              Exercise
-                                            </button>
-                                          )}
+                                          </div>
                                         </div>
                                       </div>
 
-                                      <div className='space-y-4 rounded-lg border border-slate-100 bg-slate-50 p-2'>
-                                        {/* LESSON CONTENT */}
-                                        <div>
-                                          <p className='mb-2 text-xs font-bold uppercase text-slate-500'>
-                                            Lesson Content
-                                          </p>
-
-                                          {sub.lesson_content &&
-                                          sub.lesson_content.length > 0 ? (
-                                            <div className='space-y-2'>
-                                              {sub.lesson_content.map(
-                                                (content) => (
+                                      {/* Subtopics */}
+                                      {expandedUnits.includes(unit.id) && (
+                                        <div className='space-y-2 p-3'>
+                                          {unit.subtopics?.length === 0 ? (
+                                            <div className='rounded border border-dashed border-slate-200 py-4 text-center'>
+                                              <p className='text-xs text-slate-400'>
+                                                No subtopics yet
+                                              </p>
+                                              <Button
+                                                variant='ghost'
+                                                size='sm'
+                                                onClick={() => {
+                                                  setSelectedUnitForSubtopic(
+                                                    unit,
+                                                  );
+                                                  setSubtopicModalOpen(true);
+                                                }}
+                                                className='mt-1 h-6 text-xs text-indigo-600 hover:bg-indigo-50'
+                                              >
+                                                <Plus className='mr-1 h-3 w-3' />{' '}
+                                                Add Subtopic
+                                              </Button>
+                                            </div>
+                                          ) : (
+                                            <>
+                                              {unit.subtopics.map(
+                                                (sub: Subtopic) => (
                                                   <div
-                                                    key={content.id}
-                                                    className='flex items-center justify-between rounded-md border bg-white p-2 text-xs'
+                                                    key={sub.id}
+                                                    className='space-y-2'
                                                   >
-                                                    <div className='flex flex-col'>
-                                                      <span className='font-mono text-slate-700'>
-                                                        {content.content_type ===
-                                                        'markdown'
-                                                          ? content.markdown_path
-                                                              .split('/')
-                                                              .pop()
-                                                          : content.video_url ||
-                                                            ''}
-                                                      </span>
-                                                      <span className='text-slate-400'>
-                                                        Type:{' '}
-                                                        {content.content_type} •
-                                                        Version{' '}
-                                                        {content.version}
-                                                      </span>
+                                                    <div className='group flex items-center justify-between rounded border border-slate-100 bg-white p-2 text-sm shadow-sm transition-all hover:border-indigo-100'>
+                                                      <div className='flex flex-1 items-center gap-3'>
+                                                        <button
+                                                          onClick={() =>
+                                                            toggleSubtopic(
+                                                              sub.id,
+                                                            )
+                                                          }
+                                                          className='text-slate-400 hover:text-slate-600'
+                                                        >
+                                                          {expandedSubtopics.includes(
+                                                            sub.id,
+                                                          ) ? (
+                                                            <ChevronDown className='h-3 w-3' />
+                                                          ) : (
+                                                            <ChevronRight className='h-3 w-3' />
+                                                          )}
+                                                        </button>
+                                                        <FileText className='h-4 w-4 text-slate-400' />
+                                                        <div className='flex-1'>
+                                                          <span className='font-medium text-slate-700'>
+                                                            {sub.title}
+                                                          </span>
+                                                          {sub.description && (
+                                                            <span className='ml-2 text-xs text-slate-400'>
+                                                              {sub.description}
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                      <div className='flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
+                                                        <button
+                                                          onClick={() => {
+                                                            setEditingSubtopic({
+                                                              subtopic: sub,
+                                                              unitId: unit.id,
+                                                            });
+                                                            setSubtopicModalOpen(
+                                                              true,
+                                                            );
+                                                          }}
+                                                          className='rounded p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'
+                                                        >
+                                                          <Edit2 className='h-3 w-3' />
+                                                        </button>
+                                                        <button
+                                                          onClick={() =>
+                                                            handleDeleteSubtopic(
+                                                              sub.id,
+                                                            )
+                                                          }
+                                                          className='rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500'
+                                                        >
+                                                          <Trash2 className='h-3 w-3' />
+                                                        </button>
+                                                      </div>
                                                     </div>
 
-                                                    <div className='flex items-center gap-2'>
-                                                      <button
-                                                        onClick={() =>
-                                                          handleTogglePublishContent(
-                                                            content,
-                                                          )
-                                                        }
-                                                        className='rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50'
-                                                        title={
-                                                          content.is_published
-                                                            ? 'Unpublish content'
-                                                            : 'Publish content'
-                                                        }
-                                                      >
-                                                        {content.is_published
-                                                          ? 'Unpublish'
-                                                          : 'Publish'}
-                                                      </button>
-                                                      <button
-                                                        onClick={() => {
-                                                          setEditingContent(
-                                                            content,
-                                                          );
-                                                          setSelectedSubtopicForContent(
-                                                            sub,
-                                                          );
-                                                          setContentModalOpen(
-                                                            true,
-                                                          );
-                                                        }}
-                                                        className='rounded border border-slate-200 bg-white p-1 hover:border-indigo-300 hover:bg-indigo-50'
-                                                        title='Edit content'
-                                                      >
-                                                        <Edit2 className='h-3 w-3 text-slate-600' />
-                                                      </button>
-                                                      <button
-                                                        onClick={() =>
-                                                          handleDeleteContent(
-                                                            content.id,
-                                                          )
-                                                        }
-                                                        className='rounded border border-slate-200 bg-white p-1 hover:border-red-300 hover:bg-red-50'
-                                                        title='Delete content'
-                                                      >
-                                                        <Trash2 className='h-3 w-3 text-red-500' />
-                                                      </button>
-                                                      <span
-                                                        className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                                                          content.is_published
-                                                            ? 'bg-green-100 text-green-700'
-                                                            : 'bg-yellow-100 text-yellow-700'
-                                                        }`}
-                                                      >
-                                                        {content.is_published
-                                                          ? 'Published'
-                                                          : 'Draft'}
-                                                      </span>
-                                                    </div>
+                                                    {/* Subtopic Content (Lessons, Quiz, etc) */}
+                                                    {expandedSubtopics.includes(
+                                                      sub.id,
+                                                    ) && (
+                                                      <div className='ml-6 space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3'>
+                                                        <div className='flex gap-2 mb-2'>
+                                                          <button
+                                                            onClick={() => {
+                                                              setEditingContent(
+                                                                null,
+                                                              );
+                                                              setSelectedSubtopicForContent(
+                                                                sub,
+                                                              );
+                                                              setContentModalOpen(
+                                                                true,
+                                                              );
+                                                            }}
+                                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
+                                                          >
+                                                            <Plus className='h-3 w-3' />
+                                                            Add Content
+                                                          </button>
+                                                          <button
+                                                            onClick={() => {
+                                                              setSelectedSubtopicForQuiz(
+                                                                sub,
+                                                              );
+                                                              setQuizModalOpen(
+                                                                true,
+                                                              );
+                                                            }}
+                                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
+                                                          >
+                                                            <ListChecks className='h-3 w-3' />
+                                                            Quiz
+                                                          </button>
+                                                          <button
+                                                            onClick={() => {
+                                                              setSelectedSubtopicForExercise(
+                                                                sub,
+                                                              );
+                                                              setExerciseModalOpen(
+                                                                true,
+                                                              );
+                                                            }}
+                                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
+                                                          >
+                                                            <Code className='h-3 w-3' />
+                                                            Exercise
+                                                          </button>
+                                                        </div>
+
+                                                        {/* Lesson Content List */}
+                                                        {sub.lesson_content?.map(
+                                                          (content) => (
+                                                            <div
+                                                              key={content.id}
+                                                              className='flex items-center justify-between rounded-md border bg-white p-2 text-xs'
+                                                            >
+                                                              <div className='flex items-center gap-2'>
+                                                                <FileText className='h-3 w-3 text-slate-400' />
+                                                                <div>
+                                                                  <div className='font-medium text-slate-700'>
+                                                                    {content.content_type ===
+                                                                    'markdown'
+                                                                      ? 'Markdown Content'
+                                                                      : content.content_type ===
+                                                                          'video'
+                                                                        ? 'Video Lesson'
+                                                                        : 'External Link'}
+                                                                  </div>
+                                                                  <div className='text-[10px] text-slate-400'>
+                                                                    {content.content_type ===
+                                                                    'markdown'
+                                                                      ? content.markdown_path
+                                                                          ?.split(
+                                                                            '/',
+                                                                          )
+                                                                          .pop()
+                                                                      : content.video_url}
+                                                                  </div>
+                                                                </div>
+                                                              </div>
+                                                              <div className='flex items-center gap-2'>
+                                                                <button
+                                                                  onClick={() =>
+                                                                    handleTogglePublishContent(
+                                                                      content,
+                                                                    )
+                                                                  }
+                                                                  className='rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50'
+                                                                  title={
+                                                                    content.is_published
+                                                                      ? 'Unpublish content'
+                                                                      : 'Publish content'
+                                                                  }
+                                                                >
+                                                                  {content.is_published
+                                                                    ? 'Unpublish'
+                                                                    : 'Publish'}
+                                                                </button>
+                                                                <div className='flex items-center gap-1'>
+                                                                  <button
+                                                                    onClick={() => {
+                                                                      setEditingContent(
+                                                                        content,
+                                                                      );
+                                                                      setSelectedSubtopicForContent(
+                                                                        sub,
+                                                                      );
+                                                                      setContentModalOpen(
+                                                                        true,
+                                                                      );
+                                                                    }}
+                                                                    className='p-1 text-slate-400 hover:text-indigo-600'
+                                                                  >
+                                                                    <Edit2 className='h-3 w-3' />
+                                                                  </button>
+                                                                  <button
+                                                                    onClick={() =>
+                                                                      handleDeleteContent(
+                                                                        content.id,
+                                                                      )
+                                                                    }
+                                                                    className='p-1 text-slate-400 hover:text-red-500'
+                                                                  >
+                                                                    <Trash2 className='h-3 w-3' />
+                                                                  </button>
+                                                                </div>
+                                                              </div>
+                                                            </div>
+                                                          ),
+                                                        )}
+
+                                                        {/* Quizzes List */}
+                                                        {sub.quizzes?.map(
+                                                          (quiz, qIndex) => (
+                                                            <div
+                                                              key={quiz.id}
+                                                              className='flex items-center justify-between rounded-md border bg-white p-2 text-xs'
+                                                            >
+                                                              <div className='flex items-center gap-2'>
+                                                                <ListChecks className='h-3 w-3 text-indigo-500' />
+                                                                <span className='font-medium text-slate-700'>
+                                                                  Quiz{' '}
+                                                                  {qIndex + 1}
+                                                                </span>
+                                                              </div>
+                                                              <div className='flex items-center gap-1'>
+                                                                <button
+                                                                  onClick={() => {
+                                                                    setSelectedQuizForQuestions(
+                                                                      quiz,
+                                                                    );
+                                                                    setSelectedSubtopicTitleForQuestions(
+                                                                      sub.title,
+                                                                    );
+                                                                    setQuestionsModalOpen(
+                                                                      true,
+                                                                    );
+                                                                  }}
+                                                                  className='rounded px-2 py-0.5 text-[10px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                                                                >
+                                                                  Questions
+                                                                </button>
+                                                                <button
+                                                                  onClick={() => {
+                                                                    setEditingQuiz(
+                                                                      quiz,
+                                                                    );
+                                                                    setSelectedSubtopicForQuiz(
+                                                                      sub,
+                                                                    );
+                                                                    setQuizModalOpen(
+                                                                      true,
+                                                                    );
+                                                                  }}
+                                                                  className='p-1 text-slate-400 hover:text-indigo-600'
+                                                                >
+                                                                  <Edit2 className='h-3 w-3' />
+                                                                </button>
+                                                                <button
+                                                                  onClick={() =>
+                                                                    handleDeleteQuiz(
+                                                                      quiz.id,
+                                                                    )
+                                                                  }
+                                                                  className='p-1 text-slate-400 hover:text-red-500'
+                                                                >
+                                                                  <Trash2 className='h-3 w-3' />
+                                                                </button>
+                                                              </div>
+                                                            </div>
+                                                          ),
+                                                        )}
+
+                                                        {/* Exercises List */}
+                                                        {sub.exercises?.map(
+                                                          (exercise) => (
+                                                            <div
+                                                              key={exercise.id}
+                                                              className='flex items-center justify-between rounded-md border bg-white p-2 text-xs'
+                                                            >
+                                                              <div className='flex items-center gap-2'>
+                                                                <Code className='h-3 w-3 text-emerald-500' />
+                                                                <span className='font-medium text-slate-700'>
+                                                                  {
+                                                                    exercise.title
+                                                                  }
+                                                                </span>
+                                                              </div>
+                                                              <div className='flex items-center gap-1'>
+                                                                <button
+                                                                  onClick={() => {
+                                                                    setEditingExercise(
+                                                                      exercise,
+                                                                    );
+                                                                    setSelectedSubtopicForExercise(
+                                                                      sub,
+                                                                    );
+                                                                    setExerciseModalOpen(
+                                                                      true,
+                                                                    );
+                                                                  }}
+                                                                  className='p-1 text-slate-400 hover:text-indigo-600'
+                                                                >
+                                                                  <Edit2 className='h-3 w-3' />
+                                                                </button>
+                                                                <button
+                                                                  onClick={() =>
+                                                                    handleDeleteExercise(
+                                                                      exercise.id,
+                                                                    )
+                                                                  }
+                                                                  className='p-1 text-slate-400 hover:text-red-500'
+                                                                >
+                                                                  <Trash2 className='h-3 w-3' />
+                                                                </button>
+                                                              </div>
+                                                            </div>
+                                                          ),
+                                                        )}
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 ),
                                               )}
-                                            </div>
-                                          ) : (
-                                            <p className='text-xs italic text-slate-400'>
-                                              No lesson content added yet.
-                                            </p>
+                                              <Button
+                                                variant='ghost'
+                                                size='sm'
+                                                onClick={() => {
+                                                  setSelectedUnitForSubtopic(
+                                                    unit,
+                                                  );
+                                                  setSubtopicModalOpen(true);
+                                                }}
+                                                className='w-full justify-center border border-dashed border-slate-200 text-xs text-slate-400 hover:bg-slate-50'
+                                              >
+                                                <Plus className='mr-1 h-3 w-3' />{' '}
+                                                Add Subtopic
+                                              </Button>
+                                            </>
                                           )}
                                         </div>
-
-                                        {/* QUIZZES */}
-                                        <div>
-                                          <p className='mb-2 text-xs font-bold uppercase text-slate-500'>
-                                            Quizzes
-                                          </p>
-
-                                          {sub.quizzes &&
-                                          sub.quizzes.length > 0 ? (
-                                            <div className='space-y-2'>
-                                              {sub.quizzes.map((quiz, idx) => (
-                                                <div
-                                                  key={quiz.id}
-                                                  className='rounded-md border bg-white p-2 text-xs'
-                                                >
-                                                  <div className='flex justify-between items-center'>
-                                                    <div>
-                                                      <p className='font-semibold'>
-                                                        Quiz {idx + 1}
-                                                      </p>
-                                                      <p className='text-xs text-slate-500'>
-                                                        Passing{' '}
-                                                        {quiz.passing_score}/
-                                                        {quiz.max_score}
-                                                      </p>
-                                                    </div>
-
-                                                    <div className='flex gap-2'>
-                                                      <button
-                                                        onClick={() => {
-                                                          setSelectedQuizForQuestions(
-                                                            quiz,
-                                                          );
-                                                          setSelectedSubtopicTitleForQuestions(
-                                                            sub.title,
-                                                          );
-                                                          setQuestionsModalOpen(
-                                                            true,
-                                                          );
-                                                        }}
-                                                        className='rounded border border-slate-200 bg-white p-1 hover:border-indigo-300 hover:bg-indigo-50'
-                                                        title='Manage questions'
-                                                      >
-                                                        <BookOpen className='h-3 w-3 text-slate-600' />
-                                                      </button>
-                                                      <button
-                                                        className='rounded border border-slate-200 bg-white p-1 hover:border-indigo-300 hover:bg-indigo-50'
-                                                        onClick={() => {
-                                                          setEditingQuiz(quiz);
-                                                          setSelectedSubtopicForQuiz(
-                                                            sub,
-                                                          );
-                                                          setQuizModalOpen(
-                                                            true,
-                                                          );
-                                                        }}
-                                                      >
-                                                        <Edit2 className='h-3 w-3 text-slate-600' />
-                                                      </button>
-                                                      <button
-                                                        className='rounded border border-slate-200 bg-white p-1 hover:border-indigo-300 hover:bg-indigo-50'
-                                                        onClick={() =>
-                                                          handleDeleteQuiz(
-                                                            quiz.id,
-                                                          )
-                                                        }
-                                                      >
-                                                        <Trash2 className='h-3 w-3 text-slate-600' />
-                                                      </button>
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <p className='text-xs italic text-slate-400'>
-                                              No quizzes created yet.
-                                            </p>
-                                          )}
-                                        </div>
-
-                                        {/* EXERCISES */}
-                                        <div>
-                                          <p className='mb-2 text-xs font-bold uppercase text-slate-500'>
-                                            Exercises
-                                          </p>
-
-                                          {sub.exercises &&
-                                          sub.exercises.length > 0 ? (
-                                            <div className='space-y-2'>
-                                              {sub.exercises.map((ex) => (
-                                                <div
-                                                  key={ex.id}
-                                                  className='rounded-md border bg-white p-2 text-xs'
-                                                >
-                                                  <div className='flex justify-between items-center'>
-                                                    <div>
-                                                      <p className='font-semibold'>
-                                                        {ex.title}
-                                                      </p>
-                                                      <p className='text-xs text-slate-500'>
-                                                        Max Score:{' '}
-                                                        {ex.max_score}
-                                                      </p>
-                                                    </div>
-
-                                                    <div className='flex gap-2'>
-                                                      <Edit2
-                                                        className='h-3 w-3 cursor-pointer'
-                                                        onClick={() => {
-                                                          setEditingExercise(
-                                                            ex,
-                                                          );
-                                                          setSelectedSubtopicForExercise(
-                                                            sub,
-                                                          );
-                                                          setExerciseModalOpen(
-                                                            true,
-                                                          );
-                                                        }}
-                                                      />
-                                                      <Trash2
-                                                        className='h-3 w-3 cursor-pointer text-red-500'
-                                                        onClick={() =>
-                                                          handleDeleteExercise(
-                                                            ex.id,
-                                                          )
-                                                        }
-                                                      />
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <p className='text-xs italic text-slate-400'>
-                                              No exercises added yet.
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
+                                      )}
                                     </div>
-                                  )}
-                                </div>
-                              ))
+                                  ),
+                                )}
+                                <Button
+                                  variant='ghost'
+                                  size='sm'
+                                  onClick={() => {
+                                    setSelectedTopicForUnit(topic);
+                                    setUnitModalOpen(true);
+                                  }}
+                                  className='w-full justify-center border border-dashed border-slate-200 py-4 text-sm text-slate-500 hover:bg-slate-50'
+                                >
+                                  <Plus className='mr-1 h-4 w-4' /> Add Another
+                                  Unit
+                                </Button>
+                              </>
                             )}
-                            <button
-                              onClick={() => {
-                                setSelectedTopicForSubtopic(topic);
-                                setEditingSubtopic(null);
-                                setSubtopicModalOpen(true);
-                              }}
-                              className='w-full rounded-xl border-2 border-dashed border-slate-200 py-4 text-sm font-medium text-slate-400 transition-all hover:border-indigo-300 hover:text-indigo-500'
-                            >
-                              + Add Content Step
-                            </button>
                           </div>
                         )}
                       </div>
@@ -1142,7 +1354,14 @@ const LearningFlow: React.FC = () => {
                 <select
                   className='mt-2 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500'
                   value={selectedSubject?.slug || ''}
-                  onChange={handleSelectChange}
+                  onChange={(e) => {
+                    const subject = subjects.find(
+                      (s) => s.slug === e.target.value,
+                    );
+                    if (subject) {
+                      dispatch(setActiveSubject(subject.slug));
+                    }
+                  }}
                 >
                   {subjects.map((s: Subject) => (
                     <option key={s.id} value={s.slug}>
@@ -1167,7 +1386,13 @@ const LearningFlow: React.FC = () => {
                     </span>
                     <span className='font-bold text-slate-900'>
                       {structure.reduce(
-                        (sum, topic) => sum + topic.subtopics.length,
+                        (sum, topic) =>
+                          sum +
+                          (topic.units?.reduce(
+                            (uSum, unit) =>
+                              uSum + (unit.subtopics?.length || 0),
+                            0,
+                          ) || 0),
                         0,
                       )}
                     </span>
@@ -1210,19 +1435,39 @@ const LearningFlow: React.FC = () => {
         }
       />
 
+      <UnitModal
+        isOpen={unitModalOpen}
+        onClose={() => setUnitModalOpen(false)}
+        onSave={(data) => {
+          if (editingUnit) {
+            handleUpdateUnit(data);
+          } else {
+            handleCreateUnit(data);
+          }
+        }}
+        topicTitle={selectedTopicForUnit?.title || ''}
+        editData={
+          editingUnit
+            ? {
+                title: editingUnit.title,
+                description: editingUnit.description || '',
+                slug: editingUnit.slug,
+              }
+            : undefined
+        }
+      />
+
       <SubtopicModal
         isOpen={subtopicModalOpen}
-        onClose={() => {
-          setSubtopicModalOpen(false);
-          setEditingSubtopic(null);
-          setSelectedTopicForSubtopic(null);
+        onClose={() => setSubtopicModalOpen(false)}
+        onSave={(data) => {
+          if (editingSubtopic) {
+            handleUpdateSubtopic(data);
+          } else {
+            handleCreateSubtopic(data);
+          }
         }}
-        onSave={editingSubtopic ? handleUpdateSubtopic : handleCreateSubtopic}
-        topicTitle={
-          selectedTopicForSubtopic?.title ||
-          structure.find((t) => t.id === editingSubtopic?.topicId)?.title ||
-          ''
-        }
+        topicTitle={selectedUnitForSubtopic?.title || ''}
         editData={
           editingSubtopic
             ? {
