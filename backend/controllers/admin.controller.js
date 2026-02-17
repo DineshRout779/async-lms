@@ -2003,7 +2003,8 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
         COALESCE(SUM(pl.points), 0) as total_points,
         MAX(us.current_streak) as current_streak
       FROM users u
-      LEFT JOIN colleges c ON u.college_id = c.id
+      LEFT JOIN student_profiles sp ON u.id = sp.user_id
+      LEFT JOIN colleges c ON sp.college_id = c.id
       LEFT JOIN user_subtopic_progress usp ON u.id = usp.user_id
       LEFT JOIN points_log pl ON u.id = pl.user_id
       LEFT JOIN user_streaks us ON u.id = us.user_id
@@ -2267,11 +2268,12 @@ exports.setLockControlTopic = async (req, res) => {
 
     const query = `
       WITH cohort AS (
-        SELECT id
-        FROM users
-        WHERE role = 'student'
-          AND ($1::uuid IS NULL OR college_id = $1)
-          AND ($2::int IS NULL OR year = $2)
+        SELECT u.id
+        FROM users u
+        INNER JOIN student_profiles sp ON u.id = sp.user_id
+        WHERE u.role = 'student'
+          AND ($1::uuid IS NULL OR sp.college_id = $1)
+          AND ($2::int IS NULL OR sp.year = $2)
       ),
       topic_subtopics AS (
         SELECT st.id

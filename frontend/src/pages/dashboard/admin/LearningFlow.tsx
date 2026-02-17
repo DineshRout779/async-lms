@@ -892,7 +892,7 @@ const LearningFlow: React.FC = () => {
                                           <div className='flex items-center gap-2'>
                                             <Layout className='h-4 w-4 text-slate-400' />
                                             <span className='font-medium text-slate-700'>
-                                              {unit.title}
+                                              Unit {uIndex + 1} - {unit.title}
                                             </span>
                                           </div>
                                           {unit.description && (

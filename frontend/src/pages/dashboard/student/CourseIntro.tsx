@@ -20,6 +20,30 @@ interface SubjectInfo {
   first_lesson_slug?: string;
 }
 
+interface Subtopic {
+  id: string;
+  title: string;
+  slug: string;
+}
+
+interface Unit {
+  id: string;
+  title: string;
+  subtopics: Subtopic[];
+}
+
+interface Module {
+  id: string;
+  title: string;
+  units: Unit[];
+}
+
+interface CourseData {
+  name: string;
+  description: string;
+  data: Module[];
+}
+
 const CourseIntro = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -29,26 +53,33 @@ const CourseIntro = () => {
   useEffect(() => {
     const fetchCourseDetails = async () => {
       try {
-        // You can use your existing /courses/:slug structure API
-        // and extract the name/description from the top level
-        const { data } = await apiClient.get(`/subjects/${slug}`);
+        const { data } = await apiClient.get<CourseData>(`/subjects/${slug}`);
 
-        // Assuming your backend returns the first lesson slug to help "Start Learning"
-        const firstLesson = data.data[0]?.subtopics[0]?.slug;
+        // Helper to count all subtopics across all modules and units
+        const totalSubtopics = data.data.reduce((total, module) => {
+          return (
+            total +
+            module.units.reduce(
+              (unitTotal, unit) => unitTotal + unit.subtopics.length,
+              0,
+            )
+          );
+        }, 0);
+
+        // Find the first lesson slug for "Start Learning"
+        // Traverse: First Module -> First Unit -> First Subtopic
+        const firstLesson = data.data[0]?.units[0]?.subtopics[0]?.slug;
 
         setCourse({
           name: data.name || 'Course Overview',
           description:
             data.description || "Welcome to this course. Let's get started!",
-          total_topics: data.data.length,
-          total_subtopics: data.data.reduce(
-            (acc: number, t: any) => acc + t.subtopics.length,
-            0
-          ),
+          total_topics: data.data.length, // Counting Modules as "Chapters"
+          total_subtopics: totalSubtopics,
           first_lesson_slug: firstLesson,
         });
       } catch (err) {
-        console.error(err);
+        console.error('Failed to fetch course details:', err);
       } finally {
         setLoading(false);
       }
@@ -59,7 +90,7 @@ const CourseIntro = () => {
   const startLearning = () => {
     if (course?.first_lesson_slug) {
       navigate(
-        `/dashboard/student/courses/${slug}/lesson/${course.first_lesson_slug}`
+        `/dashboard/student/courses/${slug}/lesson/${course.first_lesson_slug}`,
       );
     }
   };

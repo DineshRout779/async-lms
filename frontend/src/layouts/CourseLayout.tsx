@@ -29,7 +29,7 @@ const CourseViewLayout = () => {
                 <GraduationCap className='w-4 h-4 text-white' />
               </div>
               <span className='font-bold text-slate-800 uppercase tracking-tight'>
-                {subtopic?.title || 'Loading...'}
+                {subtopic?.title || 'Course Overview'}
               </span>
             </div>
           </div>

@@ -59,6 +59,8 @@ const Lesson = () => {
     lessonCompleted,
   } = useAppSelector((state) => state.lesson);
 
+  const [isNavigating, setIsNavigating] = useState(false);
+
   const loading = status === 'loading';
 
   useEffect(() => {
@@ -104,11 +106,48 @@ const Lesson = () => {
   };
 
   /* =======================
+     Data Processing
+  ======================= */
+
+  const { lessonIndex, totalLessons, nextLesson } = useMemo<{
+    lessonIndex: number | null;
+    totalLessons: number | null;
+    nextLesson: Subtopic | null;
+  }>(() => {
+    const flattened = courseStructure.flatMap((topic) =>
+      (topic.units || []).flatMap((unit) => unit.subtopics || []),
+    );
+    const total = flattened.length;
+    const currentIndex = flattened.findIndex(
+      (item) => item.slug === data?.subtopic?.slug,
+    );
+    const next = currentIndex >= 0 ? flattened[currentIndex + 1] : null;
+
+    console.log('[Lesson] Memo calculating:', {
+      flattenedCount: flattened.length,
+      currentIndex,
+      nextSlug: next?.slug,
+    });
+
+    return {
+      lessonIndex: currentIndex >= 0 ? currentIndex + 1 : null,
+      totalLessons: total || null,
+      nextLesson: next || null,
+    };
+  }, [courseStructure, data?.subtopic?.slug]);
+
+  /* =======================
      Lesson Completion
   ======================= */
 
   const handleCompleteLesson = async () => {
     const lessonId = data?.lesson?.id;
+    console.log('[Lesson] handleCompleteLesson called', {
+      lessonId,
+      nextLessonSlug: nextLesson?.slug,
+      slug,
+    });
+
     if (!lessonId) {
       toast.success('Lesson completed! 🎉');
       return;
@@ -117,11 +156,25 @@ const Lesson = () => {
     try {
       await dispatch(completeLesson(lessonId)).unwrap();
       toast.success('Lesson completed! +10 points 🎉');
+      setIsNavigating(true);
     } catch (error) {
       console.error('Error completing lesson:', error);
       toast.error('Failed to mark lesson complete');
     }
   };
+
+  useEffect(() => {
+    if (lessonCompleted && isNavigating && nextLesson?.slug && slug) {
+      console.log('[Lesson] Auto-navigating to', nextLesson.slug);
+      const timer = setTimeout(() => {
+        navigate(
+          `/dashboard/student/courses/${slug}/lesson/${nextLesson.slug}`,
+        );
+        setIsNavigating(false);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [lessonCompleted, isNavigating, nextLesson, slug, navigate]);
 
   /* =======================
      Quiz Submission
@@ -216,26 +269,6 @@ const Lesson = () => {
      Rendering
   ======================= */
 
-  const { lessonIndex, totalLessons, nextLesson } = useMemo<{
-    lessonIndex: number | null;
-    totalLessons: number | null;
-    nextLesson: Subtopic | null;
-  }>(() => {
-    const flattened = courseStructure.flatMap((topic) =>
-      (topic.units || []).flatMap((unit) => unit.subtopics || []),
-    );
-    const total = flattened.length;
-    const currentIndex = flattened.findIndex(
-      (item) => item.slug === data?.subtopic?.slug,
-    );
-    const next = currentIndex >= 0 ? flattened[currentIndex + 1] : null;
-    return {
-      lessonIndex: currentIndex >= 0 ? currentIndex + 1 : null,
-      totalLessons: total || null,
-      nextLesson: next || null,
-    };
-  }, [courseStructure, data?.subtopic?.slug]);
-
   if (loading) {
     return (
       <div className='flex h-[60vh] items-center justify-center'>
@@ -305,15 +338,6 @@ const Lesson = () => {
               Follow the material, then complete to unlock the next lesson
             </p>
           </div>
-          {!lessonCompleted && (
-            <Button
-              onClick={handleCompleteLesson}
-              className='bg-emerald-600 hover:bg-emerald-700'
-            >
-              <CheckCircle2 className='mr-2 h-4 w-4' />
-              Mark as Complete
-            </Button>
-          )}
         </div>
 
         <div className='bg-white px-6 py-8'>
@@ -340,6 +364,19 @@ const Lesson = () => {
               <p className='italic text-slate-400'>Lesson content is empty.</p>
             ) : null}
           </div>
+
+          {!lessonCompleted && (
+            <div className='mt-10 flex justify-center border-t border-slate-100 pt-8'>
+              <Button
+                onClick={handleCompleteLesson}
+                size='lg'
+                className='bg-emerald-600 px-8 py-6 text-lg font-bold shadow-lg hover:bg-emerald-700 transition-all hover:scale-105 active:scale-95'
+              >
+                <CheckCircle2 className='mr-2 h-6 w-6' />
+                Mark as Read & Next
+              </Button>
+            </div>
+          )}
 
           {lessonCompleted && (
             <div className='not-prose mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center'>
