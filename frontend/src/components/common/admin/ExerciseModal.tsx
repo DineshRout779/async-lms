@@ -9,11 +9,11 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   onClose,
   onSave,
   editData,
-  subtopicTitle,
+  subtopicTitle, // This will be used as the context title (Unit or Subtopic)
 }) => {
   const [title, setTitle] = useState(editData?.title ?? '');
   const [instructions, setInstructions] = useState(
-    editData?.instructions ?? ''
+    editData?.instructions ?? '',
   );
   const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
 
@@ -54,7 +54,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
             <h3 className='text-lg font-bold text-slate-900'>
               {editData ? 'Edit Exercise' : 'Create Exercise'}
             </h3>
-            <p className='text-sm text-slate-500'>Subtopic: {subtopicTitle}</p>
+            <p className='text-sm text-slate-500'>Context: {subtopicTitle}</p>
           </div>
           <button
             onClick={onClose}

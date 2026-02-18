@@ -10,23 +10,30 @@ import { Input } from '@/components/ui/input';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
 
-export const CreateCourseModal = ({ open, onOpenChange, onSuccess }: any) => {
+export const CreateCourseModal = ({
+  open,
+  onOpenChange,
+  onSuccess,
+  editData,
+}: any) => {
   const [formData, setFormData] = useState({
-    name: '',
-    slug: '',
-    description: '',
+    name: editData?.name || '',
+    description: editData?.description || '',
   });
 
   const handleSave = async () => {
     try {
-      const res = await apiClient.post('/subjects', formData);
-      if (res.status === 201) {
+      const res = editData
+        ? await apiClient.put(`/subjects/${editData.id}`, formData)
+        : await apiClient.post('/subjects', formData);
+      if (res.status === 201 || res.status === 200) {
         onSuccess();
         onOpenChange(false);
-        toast.success('Subject Created!');
+        toast.success(editData ? 'Subject Updated!' : 'Subject Created!');
       }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to save subject');
     }
   };
 
@@ -35,21 +42,19 @@ export const CreateCourseModal = ({ open, onOpenChange, onSuccess }: any) => {
       <DialogContent className='sm:max-w-125 p-8'>
         <DialogHeader>
           <DialogTitle className='text-2xl font-bold'>
-            Create New Course
+            {editData ? 'Edit Course' : 'Create New Course'}
           </DialogTitle>
         </DialogHeader>
         <div className='space-y-6 mt-4'>
           <Input
             placeholder='Course Title'
+            value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          />
-          <Input
-            placeholder='Slug (e.g., python)'
-            onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
           />
           <textarea
             className='w-full p-3 border rounded-md min-h-25'
             placeholder='Description'
+            value={formData.description}
             onChange={(e) =>
               setFormData({ ...formData, description: e.target.value })
             }

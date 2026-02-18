@@ -7,12 +7,16 @@ const {
   getAllPublishedSubjects,
   updateSubject,
   deleteSubject,
+  getExerciseContent,
 } = require('../controllers/subject.controller');
 const isAdmin = require('../middlewares/isAdmin');
 const verifyToken = require('../middlewares/verfiyToken');
 
 // GET specific content when clicking a subtopic
 router.get('/content/:subtopicSlug', verifyToken, getSubtopicContent);
+
+// GET specific exercise content
+router.get('/exercise/:exerciseId', verifyToken, getExerciseContent);
 
 // Fetch all published subjects
 router.get('/published', verifyToken, getAllPublishedSubjects);

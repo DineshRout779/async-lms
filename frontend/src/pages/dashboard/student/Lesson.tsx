@@ -20,6 +20,7 @@ import {
   submitQuiz,
   submitExercise,
   completeLesson,
+  fetchExercise,
   setQuizAnswer,
   resetQuiz,
   setExerciseCode,
@@ -29,7 +30,6 @@ import type {
   Quiz,
   Exercise,
   Topic,
-  Subtopic,
   SubjectDetailResponse,
 } from '@/utils/types';
 import apiClient from '@/services/api';
@@ -39,8 +39,9 @@ import apiClient from '@/services/api';
 ======================= */
 
 const Lesson = () => {
-  const { subtopicSlug, slug } = useParams<{
+  const { subtopicSlug, exerciseId, slug } = useParams<{
     subtopicSlug?: string;
+    exerciseId?: string;
     slug?: string;
   }>();
   const navigate = useNavigate();
@@ -66,11 +67,13 @@ const Lesson = () => {
   useEffect(() => {
     if (subtopicSlug) {
       dispatch(fetchLesson(subtopicSlug));
+    } else if (exerciseId) {
+      dispatch(fetchExercise(exerciseId));
     }
     return () => {
       dispatch(resetLessonState());
     };
-  }, [subtopicSlug, dispatch]);
+  }, [subtopicSlug, exerciseId, dispatch]);
 
   useEffect(() => {
     const fetchStructure = async () => {
@@ -109,32 +112,52 @@ const Lesson = () => {
      Data Processing
   ======================= */
 
-  const { lessonIndex, totalLessons, nextLesson } = useMemo<{
+  const { lessonIndex, totalLessons, nextItem } = useMemo<{
     lessonIndex: number | null;
     totalLessons: number | null;
-    nextLesson: Subtopic | null;
+    nextItem: {
+      type: 'subtopic' | 'exercise';
+      slug?: string;
+      id?: string;
+    } | null;
   }>(() => {
-    const flattened = courseStructure.flatMap((topic) =>
-      (topic.units || []).flatMap((unit) => unit.subtopics || []),
-    );
-    const total = flattened.length;
-    const currentIndex = flattened.findIndex(
-      (item) => item.slug === data?.subtopic?.slug,
-    );
-    const next = currentIndex >= 0 ? flattened[currentIndex + 1] : null;
-
-    console.log('[Lesson] Memo calculating:', {
-      flattenedCount: flattened.length,
-      currentIndex,
-      nextSlug: next?.slug,
+    const flattened: any[] = [];
+    courseStructure.forEach((topic) => {
+      (topic.units || []).forEach((unit) => {
+        (unit.subtopics || []).forEach((sub) => {
+          flattened.push({ ...sub, type: 'subtopic' });
+        });
+        (unit.exercises || []).forEach((ex) => {
+          flattened.push({ ...ex, type: 'exercise' });
+        });
+      });
     });
+
+    const total = flattened.length;
+    const currentSlug = subtopicSlug;
+    const currentId = exerciseId;
+
+    const currentIndex = flattened.findIndex((item) => {
+      if (currentSlug && item.type === 'subtopic')
+        return item.slug === currentSlug;
+      if (currentId && item.type === 'exercise') return item.id === currentId;
+      return false;
+    });
+
+    const next = currentIndex >= 0 ? flattened[currentIndex + 1] : null;
 
     return {
       lessonIndex: currentIndex >= 0 ? currentIndex + 1 : null,
       totalLessons: total || null,
-      nextLesson: next || null,
+      nextItem: next
+        ? {
+            type: next.type,
+            slug: next.slug,
+            id: next.id,
+          }
+        : null,
     };
-  }, [courseStructure, data?.subtopic?.slug]);
+  }, [courseStructure, subtopicSlug, exerciseId]);
 
   /* =======================
      Lesson Completion
@@ -144,7 +167,7 @@ const Lesson = () => {
     const lessonId = data?.lesson?.id;
     console.log('[Lesson] handleCompleteLesson called', {
       lessonId,
-      nextLessonSlug: nextLesson?.slug,
+      nextItem,
       slug,
     });
 
@@ -164,17 +187,20 @@ const Lesson = () => {
   };
 
   useEffect(() => {
-    if (lessonCompleted && isNavigating && nextLesson?.slug && slug) {
-      console.log('[Lesson] Auto-navigating to', nextLesson.slug);
+    if (lessonCompleted && isNavigating && nextItem && slug) {
+      const nextUrl =
+        nextItem.type === 'subtopic'
+          ? `/dashboard/student/courses/${slug}/lesson/${nextItem.slug}`
+          : `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`;
+
+      console.log('[Lesson] Auto-navigating to', nextUrl);
       const timer = setTimeout(() => {
-        navigate(
-          `/dashboard/student/courses/${slug}/lesson/${nextLesson.slug}`,
-        );
+        navigate(nextUrl);
         setIsNavigating(false);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [lessonCompleted, isNavigating, nextLesson, slug, navigate]);
+  }, [lessonCompleted, isNavigating, nextItem, slug, navigate]);
 
   /* =======================
      Quiz Submission
@@ -259,6 +285,9 @@ const Lesson = () => {
       toast.success(
         `Exercise submitted! Score: ${mockScore}/${exercise.max_score} 🎉`,
       );
+      if (!lessonCompleted) {
+        setIsNavigating(true);
+      }
     } catch (error) {
       console.error('Error submitting exercise:', error);
       toast.error('Failed to submit exercise');
@@ -279,7 +308,9 @@ const Lesson = () => {
 
   if (!data) {
     return (
-      <div className='p-10 text-center text-slate-500'>Lesson not found.</div>
+      <div className='p-10 text-center text-slate-500'>
+        Lesson not found or locked
+      </div>
     );
   }
 
@@ -382,19 +413,23 @@ const Lesson = () => {
             <div className='not-prose mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center'>
               <CheckCircle2 className='mx-auto mb-2 h-7 w-7 text-emerald-600' />
               <p className='font-semibold text-emerald-800'>
-                Lesson Completed!
+                {lesson.content_type === 'exercise'
+                  ? 'Exercise Completed!'
+                  : 'Lesson Completed!'}
               </p>
-              {nextLesson?.slug && slug && (
+              {nextItem && slug && (
                 <Button
                   variant='outline'
                   className='mt-4 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
-                  onClick={() =>
-                    navigate(
-                      `/dashboard/student/courses/${slug}/lesson/${nextLesson.slug}`,
-                    )
-                  }
+                  onClick={() => {
+                    const nextUrl =
+                      nextItem.type === 'subtopic'
+                        ? `/dashboard/student/courses/${slug}/lesson/${nextItem.slug}`
+                        : `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`;
+                    navigate(nextUrl);
+                  }}
                 >
-                  Next Lesson
+                  Next {nextItem.type === 'subtopic' ? 'Lesson' : 'Exercise'}
                 </Button>
               )}
             </div>

@@ -24,8 +24,6 @@ export default function AdminHeader({
   const title =
     pathname === '/dashboard/admin' ? 'Home' : pathname.split('/').at(-1);
 
-  console.log('title:', title);
-
   const handleLogout = () => {
     dispatch(logout());
     toast.success('Signed out successfully');

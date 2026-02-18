@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const https = require('https');
 const http = require('http');
+const slugify = require('../utils/slugify');
 
 const fetchTextFromUrl = (url) =>
   new Promise((resolve, reject) => {
@@ -131,7 +132,9 @@ exports.getCourseStructure = async (req, res) => {
         e.id AS exercise_id,
         e.title AS exercise_title,
         e.instructions AS exercise_instructions,
-        e.max_score AS exercise_max_score
+        e.max_score AS exercise_max_score,
+        e.subtopic_id AS exercise_subtopic_id,
+        e.unit_id AS exercise_unit_id
 
       FROM topics t
       LEFT JOIN units u ON t.id = u.topic_id
@@ -141,7 +144,7 @@ exports.getCourseStructure = async (req, res) => {
       LEFT JOIN quizzes q ON st.id = q.subtopic_id
       LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
       LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
-      LEFT JOIN exercises e ON st.id = e.subtopic_id
+      LEFT JOIN exercises e ON (st.id = e.subtopic_id OR u.id = e.unit_id)
 
       WHERE t.subject_id = $1
       ORDER BY 
@@ -180,6 +183,7 @@ exports.getCourseStructure = async (req, res) => {
           description: row.unit_description,
           order_index: row.unit_order,
           subtopics: new Map(),
+          exercises: [],
         });
       }
 
@@ -259,14 +263,25 @@ exports.getCourseStructure = async (req, res) => {
       }
 
       // Exercise
-      if (row.exercise_id && subtopic) {
-        if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
-          subtopic.exercises.push({
-            id: row.exercise_id,
-            title: row.exercise_title,
-            instructions: row.exercise_instructions,
-            max_score: row.exercise_max_score,
-          });
+      if (row.exercise_id) {
+        if (row.exercise_subtopic_id && subtopic) {
+          if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
+            subtopic.exercises.push({
+              id: row.exercise_id,
+              title: row.exercise_title,
+              instructions: row.exercise_instructions,
+              max_score: row.exercise_max_score,
+            });
+          }
+        } else if (row.exercise_unit_id && unit) {
+          if (!unit.exercises.some((e) => e.id === row.exercise_id)) {
+            unit.exercises.push({
+              id: row.exercise_id,
+              title: row.exercise_title,
+              instructions: row.exercise_instructions,
+              max_score: row.exercise_max_score,
+            });
+          }
         }
       }
     });
@@ -283,6 +298,7 @@ exports.getCourseStructure = async (req, res) => {
         slug: unit.slug,
         description: unit.description,
         order_index: unit.order_index,
+        exercises: unit.exercises || [],
         subtopics: Array.from(unit.subtopics.values()).map((sub) => ({
           ...sub,
           quizzes: Array.from(sub.quizzes.values()).map((q) => ({
@@ -364,6 +380,7 @@ exports.getSubtopicContent = async (req, res) => {
     const query = `
       SELECT
         st.id AS subtopic_id,
+        st.slug AS subtopic_slug,
         st.title AS subtopic_title,
         st.description AS subtopic_description,
 
@@ -498,6 +515,7 @@ exports.getSubtopicContent = async (req, res) => {
       data: {
         subtopic: {
           id: base.subtopic_id,
+          slug: base.subtopic_slug,
           title: base.subtopic_title,
           description: base.subtopic_description,
         },
@@ -527,13 +545,14 @@ exports.getSubtopicContent = async (req, res) => {
 
 // 4. Create a new subject
 exports.createSubject = async (req, res) => {
-  const { name, slug, description } = req.body;
+  const { name, slug: manualSlug, description } = req.body;
+  const slug = manualSlug || slugify(name);
 
   // Basic validation
   if (!name || !slug) {
     return res.status(400).json({
       success: false,
-      message: 'Name and Slug are required.',
+      message: 'Name is required.',
     });
   }
 
@@ -574,7 +593,8 @@ exports.createSubject = async (req, res) => {
 // Update existing subject (Edit & Publish)
 exports.updateSubject = async (req, res) => {
   const { id } = req.params;
-  const { name, slug, description, is_published } = req.body;
+  const { name, slug: manualSlug, description, is_published } = req.body;
+  const slug = manualSlug || slugify(name);
   try {
     const query = `
       UPDATE public.subjects 
@@ -608,5 +628,63 @@ exports.deleteSubject = async (req, res) => {
       .json({ success: true, message: 'Subject deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+// 5. Get a specific exercise content
+exports.getExerciseContent = async (req, res) => {
+  try {
+    const { exerciseId } = req.params;
+
+    const query = `
+      SELECT 
+        e.id AS exercise_id,
+        e.title AS exercise_title,
+        e.instructions,
+        e.max_score AS exercise_max_score,
+        e.subtopic_id,
+        e.unit_id,
+        st.title AS subtopic_title,
+        u.title AS unit_title
+      FROM exercises e
+      LEFT JOIN subtopics st ON e.subtopic_id = st.id
+      LEFT JOIN units u ON e.unit_id = u.id
+      WHERE e.id = $1
+    `;
+
+    const { rows } = await pool.query(query, [exerciseId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Exercise not found' });
+    }
+
+    const row = rows[0];
+
+    res.json({
+      success: true,
+      data: {
+        subtopic: {
+          id: row.subtopic_id || row.unit_id,
+          title: row.subtopic_title || row.unit_title,
+          description: row.instructions,
+        },
+        lesson: {
+          id: null,
+          content_type: 'exercise',
+          markdown_content: row.instructions,
+        },
+        quizzes: [],
+        exercises: [
+          {
+            id: row.exercise_id,
+            title: row.exercise_title,
+            instructions: row.instructions,
+            max_score: row.exercise_max_score,
+          },
+        ],
+      },
+    });
+  } catch (err) {
+    console.error('Error | getExerciseContent:', err);
+    res.status(500).json({ message: 'Failed to load exercise' });
   }
 };

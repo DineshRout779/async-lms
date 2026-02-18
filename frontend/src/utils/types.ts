@@ -73,6 +73,7 @@ export interface Unit {
   description?: string;
   order_index: number;
   subtopics: Subtopic[];
+  exercises?: Exercise[];
 }
 
 export interface Topic {
@@ -123,7 +124,7 @@ export interface TopicModalProps {
 export interface SubtopicModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: { title: string; description: string; slug: string }) => void;
+  onSave: (data: { title: string; description: string; slug?: string }) => void;
   topicTitle: string;
   editData?: { title: string; description: string; slug: string };
 }
@@ -131,7 +132,7 @@ export interface SubtopicModalProps {
 export interface UnitModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: { title: string; description: string; slug: string }) => void;
+  onSave: (data: { title: string; description: string; slug?: string }) => void;
   topicTitle: string;
   editData?: { title: string; description: string; slug: string };
 }

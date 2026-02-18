@@ -168,6 +168,26 @@ exports.getMyProgress = async (req, res) => {
         EXISTS(SELECT 1 FROM lesson_content WHERE subtopic_id = st.id AND is_published = true) AS has_lesson,
         EXISTS(SELECT 1 FROM quizzes WHERE subtopic_id = st.id) AS has_quiz,
         EXISTS(SELECT 1 FROM exercises WHERE subtopic_id = st.id) AS has_exercise,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', e.id,
+              'title', e.title,
+              'instructions', e.instructions,
+              'max_score', e.max_score,
+              'is_passed', COALESCE(es_inner.is_passed, false),
+              'best_score', COALESCE(es_inner.max_score, 0)
+            )
+          )
+          FROM exercises e
+          LEFT JOIN (
+            SELECT exercise_id, bool_or(is_passed) as is_passed, MAX(score) as max_score
+            FROM exercise_submissions
+            WHERE user_id = $1
+            GROUP BY exercise_id
+          ) es_inner ON e.id = es_inner.exercise_id
+          WHERE e.unit_id = u.id
+        ) AS unit_exercises,
 
         -- Specific Content Progress
         COALESCE(ulp.is_completed, false) AS lesson_completed,
@@ -242,6 +262,7 @@ exports.getMyProgress = async (req, res) => {
           id: row.unit_id,
           title: row.unit_title,
           order_index: row.unit_order,
+          exercises: row.unit_exercises || [],
           subtopics: [],
         });
       }
@@ -542,15 +563,14 @@ exports.submitExercise = async (req, res) => {
       [userId, 'exercise_completion', pointsAwarded],
     );
 
-    const subtopicResult = await pool.query(
-      'SELECT subtopic_id FROM exercises WHERE id = $1 LIMIT 1',
+    const exerciseDataResult = await pool.query(
+      'SELECT subtopic_id, unit_id FROM exercises WHERE id = $1 LIMIT 1',
       [exerciseId],
     );
-    if (subtopicResult.rows[0]?.subtopic_id) {
-      await checkAndCompleteSubtopic(
-        userId,
-        subtopicResult.rows[0].subtopic_id,
-      );
+    const exerciseData = exerciseDataResult.rows[0];
+
+    if (exerciseData?.subtopic_id) {
+      await checkAndCompleteSubtopic(userId, exerciseData.subtopic_id);
     }
 
     res.json({

@@ -96,6 +96,8 @@ const LearningFlow: React.FC = () => {
     useState<Subtopic | null>(null);
   const [selectedSubtopicForExercise, setSelectedSubtopicForExercise] =
     useState<Subtopic | null>(null);
+  const [selectedUnitForExercise, setSelectedUnitForExercise] =
+    useState<Unit | null>(null);
   const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [editingContent, setEditingContent] = useState<LessonContent | null>(
@@ -528,11 +530,12 @@ const LearningFlow: React.FC = () => {
     instructions: string;
     max_score: number;
   }) => {
-    if (!selectedSubtopicForExercise) return;
+    if (!selectedSubtopicForExercise && !selectedUnitForExercise) return;
 
     try {
       const response = await apiClient.post('/admin/exercises', {
-        subtopic_id: selectedSubtopicForExercise.id,
+        subtopic_id: selectedSubtopicForExercise?.id || null,
+        unit_id: selectedUnitForExercise?.id || null,
         title: data.title,
         instructions: data.instructions,
         max_score: data.max_score,
@@ -543,6 +546,7 @@ const LearningFlow: React.FC = () => {
         await refreshStructure();
         setExerciseModalOpen(false);
         setSelectedSubtopicForExercise(null);
+        setSelectedUnitForExercise(null);
       }
     } catch (error) {
       console.error('Failed to create exercise', error);
@@ -932,27 +936,84 @@ const LearningFlow: React.FC = () => {
                                             />
                                           </div>
                                           <div className='mx-1 h-3 w-px bg-slate-200' />
-                                          <div className='flex items-center gap-1'>
+                                          <div className='flex items-center gap-2'>
                                             <button
                                               onClick={() => {
-                                                setEditingUnit(unit);
-                                                setUnitModalOpen(true);
+                                                setSelectedUnitForExercise(
+                                                  unit,
+                                                );
+                                                setExerciseModalOpen(true);
                                               }}
-                                              className='rounded p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'
+                                              className='rounded p-1 text-slate-400 hover:bg-white hover:text-indigo-600'
+                                              title='Add unit-level exercise'
                                             >
-                                              <Edit2 className='h-3 w-3' />
+                                              <Code className='h-3 w-3' />
                                             </button>
-                                            <button
-                                              onClick={() =>
-                                                handleDeleteUnit(unit.id)
-                                              }
-                                              className='rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500'
-                                            >
-                                              <Trash2 className='h-3 w-3' />
-                                            </button>
+                                            <div className='mx-1 h-3 w-px bg-slate-200' />
+                                            <div className='flex items-center gap-1'>
+                                              <button
+                                                onClick={() => {
+                                                  setEditingUnit(unit);
+                                                  setUnitModalOpen(true);
+                                                }}
+                                                className='rounded p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'
+                                              >
+                                                <Edit2 className='h-3 w-3' />
+                                              </button>
+                                              <button
+                                                onClick={() =>
+                                                  handleDeleteUnit(unit.id)
+                                                }
+                                                className='rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500'
+                                              >
+                                                <Trash2 className='h-3 w-3' />
+                                              </button>
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
+
+                                      {/* Unit Level Exercises */}
+                                      {expandedUnits.includes(unit.id) &&
+                                        unit.exercises &&
+                                        unit.exercises.length > 0 && (
+                                          <div className='border-b border-slate-100 bg-indigo-50/30 p-2'>
+                                            <div className='flex flex-wrap gap-2'>
+                                              {unit.exercises.map((ex) => (
+                                                <div
+                                                  key={ex.id}
+                                                  className='flex items-center gap-2 rounded border border-indigo-100 bg-white px-2 py-1 text-xs text-indigo-700 shadow-sm'
+                                                >
+                                                  <Code className='h-3 w-3' />
+                                                  <span>{ex.title}</span>
+                                                  <div className='flex items-center gap-1 ml-1 pl-1 border-l border-indigo-100'>
+                                                    <button
+                                                      onClick={() => {
+                                                        setEditingExercise(ex);
+                                                        setExerciseModalOpen(
+                                                          true,
+                                                        );
+                                                      }}
+                                                      className='p-0.5 hover:text-indigo-900'
+                                                    >
+                                                      <Edit2 className='h-2.5 w-2.5' />
+                                                    </button>
+                                                    <button
+                                                      onClick={() =>
+                                                        handleDeleteExercise(
+                                                          ex.id,
+                                                        )
+                                                      }
+                                                      className='p-0.5 hover:text-red-600'
+                                                    >
+                                                      <Trash2 className='h-2.5 w-2.5' />
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
 
                                       {/* Subtopics */}
                                       {expandedUnits.includes(unit.id) && (
@@ -1520,7 +1581,11 @@ const LearningFlow: React.FC = () => {
               }
             : undefined
         }
-        subtopicTitle={selectedSubtopicForExercise?.title || ''}
+        subtopicTitle={
+          selectedSubtopicForExercise?.title ||
+          selectedUnitForExercise?.title ||
+          ''
+        }
       />
 
       {questionsModalOpen && selectedQuizForQuestions && (

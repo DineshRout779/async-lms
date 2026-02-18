@@ -120,6 +120,10 @@ const router = createBrowserRouter([
                     path: 'lesson/:subtopicSlug',
                     element: <LessonView />,
                   },
+                  {
+                    path: 'exercise/:exerciseId',
+                    element: <LessonView />,
+                  },
                 ],
               },
             ],

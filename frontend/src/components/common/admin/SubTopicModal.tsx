@@ -13,13 +13,11 @@ const SubtopicModal: React.FC<SubtopicModalProps> = ({
 }) => {
   const [title, setTitle] = useState(editData?.title || '');
   const [description, setDescription] = useState(editData?.description || '');
-  const [slug, setSlug] = useState(editData?.slug || '');
 
   useEffect(() => {
     if (isOpen) {
       setTitle(editData?.title || '');
       setDescription(editData?.description || '');
-      setSlug(editData?.slug || '');
     }
   }, [isOpen, editData]);
 
@@ -28,18 +26,12 @@ const SubtopicModal: React.FC<SubtopicModalProps> = ({
       toast.error('Subtopic title is required');
       return;
     }
-    if (!slug.trim()) {
-      toast.error('Slug is required');
-      return;
-    }
     onSave({
       title: title.trim(),
       description: description.trim(),
-      slug: slug.trim(),
     });
     setTitle('');
     setDescription('');
-    setSlug('');
   };
 
   if (!isOpen) return null;
@@ -74,22 +66,6 @@ const SubtopicModal: React.FC<SubtopicModalProps> = ({
               placeholder='e.g., What are Arrays?'
               className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
             />
-          </div>
-
-          <div>
-            <label className='mb-2 block text-sm font-medium text-slate-700'>
-              URL Slug
-            </label>
-            <input
-              type='text'
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder='what-are-arrays'
-              className='w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
-            />
-            <p className='mt-1 text-xs text-slate-500'>
-              URL: /course/topic/{slug}
-            </p>
           </div>
 
           <div>

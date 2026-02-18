@@ -17,7 +17,7 @@ interface LessonResponse {
   };
   lesson: {
     id: string;
-    content_type: 'markdown' | 'video' | 'external' | null;
+    content_type: 'markdown' | 'video' | 'external' | 'exercise' | null;
     markdown_content: string;
     read_time: number | null;
     video_url?: string | null;
@@ -83,6 +83,23 @@ export const fetchLesson = createAsyncThunk<
   } catch (error: any) {
     return rejectWithValue(
       error.response?.data?.message || 'Failed to load lesson',
+    );
+  }
+});
+
+export const fetchExercise = createAsyncThunk<
+  LessonResponse,
+  string,
+  { rejectValue: string }
+>('lesson/fetchExercise', async (exerciseId, { rejectWithValue }) => {
+  try {
+    const response = await apiClient.get<{ data: LessonResponse }>(
+      `/subjects/exercise/${exerciseId}`,
+    );
+    return response.data.data;
+  } catch (error: any) {
+    return rejectWithValue(
+      error.response?.data?.message || 'Failed to load exercise',
     );
   }
 });
@@ -190,6 +207,25 @@ const lessonSlice = createSlice({
         state.lessonCompleted = action.payload.lesson_completed ?? false;
       })
       .addCase(fetchLesson.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload as string;
+      })
+      // Fetch Exercise
+      .addCase(fetchExercise.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+        state.quizAnswers = {};
+        state.quizSubmitted = false;
+        state.quizResults = null;
+        state.exerciseCode = {};
+        state.lessonCompleted = false;
+      })
+      .addCase(fetchExercise.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.data = action.payload;
+        state.lessonCompleted = false; // Exercises are not subtopic lessons
+      })
+      .addCase(fetchExercise.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload as string;
       })

@@ -1,6 +1,7 @@
 const pool = require('../config/pg');
 const path = require('path');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const slugify = require('../utils/slugify');
 
 // ============================================
 // EXISTING ADMIN FEATURES (Keep these!)
@@ -168,6 +169,8 @@ exports.getAdminSubjectStructure = async (req, res) => {
 
         -- Exercise
         e.id AS exercise_id,
+        e.subtopic_id AS exercise_subtopic_id,
+        e.unit_id AS exercise_unit_id,
         e.title AS exercise_title,
         e.instructions AS exercise_instructions,
         e.max_score AS exercise_max_score
@@ -180,7 +183,7 @@ exports.getAdminSubjectStructure = async (req, res) => {
       LEFT JOIN quizzes q ON st.id = q.subtopic_id
       LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
       LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
-      LEFT JOIN exercises e ON st.id = e.subtopic_id
+      LEFT JOIN exercises e ON (st.id = e.subtopic_id OR u.id = e.unit_id)
 
       WHERE t.subject_id = $1
       ORDER BY 
@@ -218,6 +221,7 @@ exports.getAdminSubjectStructure = async (req, res) => {
           description: row.unit_description,
           order_index: row.unit_order,
           subtopics: new Map(),
+          exercises: [],
         });
       }
 
@@ -293,14 +297,27 @@ exports.getAdminSubjectStructure = async (req, res) => {
         }
       }
 
-      if (row.exercise_id && subtopic) {
-        if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
-          subtopic.exercises.push({
-            id: row.exercise_id,
-            title: row.exercise_title,
-            instructions: row.exercise_instructions,
-            max_score: row.exercise_max_score,
-          });
+      if (row.exercise_id) {
+        if (row.subtopic_id && subtopic && row.exercise_subtopic_id) {
+          // It's a subtopic exercise
+          if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
+            subtopic.exercises.push({
+              id: row.exercise_id,
+              title: row.exercise_title,
+              instructions: row.exercise_instructions,
+              max_score: row.exercise_max_score,
+            });
+          }
+        } else if (unit && row.exercise_unit_id) {
+          // It's a unit-level exercise
+          if (!unit.exercises.some((e) => e.id === row.exercise_id)) {
+            unit.exercises.push({
+              id: row.exercise_id,
+              title: row.exercise_title,
+              instructions: row.exercise_instructions,
+              max_score: row.exercise_max_score,
+            });
+          }
         }
       }
     });
@@ -316,6 +333,7 @@ exports.getAdminSubjectStructure = async (req, res) => {
         slug: unit.slug,
         description: unit.description,
         order_index: unit.order_index,
+        exercises: unit.exercises,
         subtopics: Array.from(unit.subtopics.values()).map((sub) => ({
           ...sub,
           quizzes: Array.from(sub.quizzes.values()).map((q) => ({
@@ -487,13 +505,20 @@ exports.deleteTopic = async (req, res) => {
 // Create a new unit
 exports.createUnit = async (req, res) => {
   try {
-    const { topic_id, title, description, slug, order_index } = req.body;
+    const {
+      topic_id,
+      title,
+      description,
+      slug: manualSlug,
+      order_index,
+    } = req.body;
+    const slug = manualSlug || slugify(title);
 
     // Validation
     if (!topic_id || !title || !slug) {
       return res.status(400).json({
         success: false,
-        message: 'Topic ID, title, and slug are required',
+        message: 'Topic ID and title are required',
       });
     }
 
@@ -541,7 +566,8 @@ exports.createUnit = async (req, res) => {
 exports.updateUnit = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, slug, order_index } = req.body;
+    const { title, description, slug: manualSlug, order_index } = req.body;
+    const slug = manualSlug || (title ? slugify(title) : undefined);
 
     const updates = [];
     const values = [];
@@ -649,13 +675,20 @@ exports.deleteUnit = async (req, res) => {
 // Create a new subtopic
 exports.createSubtopic = async (req, res) => {
   try {
-    const { unit_id, title, description, slug, order_index } = req.body;
+    const {
+      unit_id,
+      title,
+      description,
+      slug: manualSlug,
+      order_index,
+    } = req.body;
+    const slug = manualSlug || slugify(title);
 
     // Validation
     if (!unit_id || !title || !slug) {
       return res.status(400).json({
         success: false,
-        message: 'Unit ID, title, and slug are required',
+        message: 'Unit ID and title are required',
       });
     }
 
@@ -703,7 +736,8 @@ exports.createSubtopic = async (req, res) => {
 exports.updateSubtopic = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, slug, order_index } = req.body;
+    const { title, description, slug: manualSlug, order_index } = req.body;
+    const slug = manualSlug || (title ? slugify(title) : undefined);
 
     const updates = [];
     const values = [];
@@ -1183,23 +1217,24 @@ exports.deleteQuiz = async (req, res) => {
 
 exports.createExercise = async (req, res) => {
   try {
-    const { subtopic_id, title, instructions, max_score } = req.body;
+    const { subtopic_id, unit_id, title, instructions, max_score } = req.body;
 
-    if (!subtopic_id || !title || !max_score) {
+    if (!(subtopic_id || unit_id) || !title || !max_score) {
       return res.status(400).json({
         success: false,
-        message: 'Subtopic ID, title, and max score are required',
+        message: 'Subtopic ID or Unit ID, title, and max score are required',
       });
     }
 
     const query = `
-      INSERT INTO exercises (subtopic_id, title, instructions, max_score)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO exercises (subtopic_id, unit_id, title, instructions, max_score)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *;
     `;
 
     const result = await pool.query(query, [
-      subtopic_id,
+      subtopic_id || null,
+      unit_id || null,
       title,
       instructions,
       max_score,

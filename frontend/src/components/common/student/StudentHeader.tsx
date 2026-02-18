@@ -33,7 +33,6 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  console.log('user', user);
   const handleLogout = () => {
     dispatch(logout());
     toast.success('Signed out successfully');
