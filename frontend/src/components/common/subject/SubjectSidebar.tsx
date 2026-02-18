@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, NavLink } from 'react-router'; // Use react-router
 import apiClient from '@/services/api';
-import { Loader2, PlayCircle } from 'lucide-react';
+import { Loader2, PlayCircle, ListChecks, Code } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -69,6 +69,38 @@ export const SubjectSidebar = () => {
                     >
                       <PlayCircle className='h-4 w-4 shrink-0' />
                       <span>{sub.title}</span>
+                    </NavLink>
+                  ))}
+                  {unit.assignments?.map((a: any) => (
+                    <NavLink
+                      key={a.id}
+                      to={`/dashboard/student/courses/${slug}/assignment/${a.id}`}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 py-2 pl-10 pr-4 text-sm transition-all ${
+                          isActive
+                            ? 'border-r-4 border-blue-600 bg-blue-50 text-blue-700'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`
+                      }
+                    >
+                      <Code className='h-4 w-4 shrink-0' />
+                      <span>{a.title}</span>
+                    </NavLink>
+                  ))}
+                  {unit.quizzes?.map((quiz: any, qIdx: number) => (
+                    <NavLink
+                      key={quiz.id}
+                      to={`/dashboard/student/courses/${slug}/quiz/${quiz.id}`}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 py-2 pl-10 pr-4 text-sm transition-all ${
+                          isActive
+                            ? 'border-r-4 border-blue-600 bg-blue-50 text-blue-700'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`
+                      }
+                    >
+                      <ListChecks className='h-4 w-4 shrink-0' />
+                      <span>Quiz {qIdx + 1}</span>
                     </NavLink>
                   ))}
                 </div>

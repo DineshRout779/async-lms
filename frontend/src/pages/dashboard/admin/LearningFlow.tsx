@@ -92,8 +92,9 @@ const LearningFlow: React.FC = () => {
     useState<Unit | null>(null);
   const [selectedSubtopicForContent, setSelectedSubtopicForContent] =
     useState<Subtopic | null>(null);
-  const [selectedSubtopicForQuiz, setSelectedSubtopicForQuiz] =
-    useState<Subtopic | null>(null);
+  const [selectedUnitForQuiz, setSelectedUnitForQuiz] = useState<Unit | null>(
+    null,
+  );
   const [selectedSubtopicForExercise, setSelectedSubtopicForExercise] =
     useState<Subtopic | null>(null);
   const [selectedUnitForExercise, setSelectedUnitForExercise] =
@@ -106,10 +107,8 @@ const LearningFlow: React.FC = () => {
   const [questionsModalOpen, setQuestionsModalOpen] = useState(false);
   const [selectedQuizForQuestions, setSelectedQuizForQuestions] =
     useState<Quiz | null>(null);
-  const [
-    selectedSubtopicTitleForQuestions,
-    setSelectedSubtopicTitleForQuestions,
-  ] = useState<string>('');
+  const [selectedUnitTitleForQuestions, setSelectedUnitTitleForQuestions] =
+    useState<string>('');
 
   // 1. Initial Load: Get all subjects
   useEffect(() => {
@@ -498,25 +497,24 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  // Create Quiz
   const handleCreateQuiz = async (data: {
     passing_score: number;
     max_score: number;
   }) => {
-    if (!selectedSubtopicForQuiz) return;
+    if (!selectedUnitForQuiz) return;
 
     try {
       const response = await apiClient.post('/admin/quizzes', {
-        subtopic_id: selectedSubtopicForQuiz.id,
+        unit_id: selectedUnitForQuiz.id,
         passing_score: data.passing_score,
         max_score: data.max_score,
       });
 
       if (response.data.success) {
         toast.success('Quiz created successfully');
-        await refreshStructure();
+        refreshStructure();
         setQuizModalOpen(false);
-        setSelectedSubtopicForQuiz(null);
+        setSelectedUnitForQuiz(null);
       }
     } catch (error) {
       console.error('Failed to create quiz', error);
@@ -950,6 +948,17 @@ const LearningFlow: React.FC = () => {
                                               <Code className='h-3 w-3' />
                                             </button>
                                             <div className='mx-1 h-3 w-px bg-slate-200' />
+                                            <button
+                                              onClick={() => {
+                                                setSelectedUnitForQuiz(unit);
+                                                setQuizModalOpen(true);
+                                              }}
+                                              className='rounded p-1 text-slate-400 hover:bg-white hover:text-indigo-600'
+                                              title='Add unit-level quiz'
+                                            >
+                                              <ListChecks className='h-3 w-3' />
+                                            </button>
+                                            <div className='mx-1 h-3 w-px bg-slate-200' />
                                             <div className='flex items-center gap-1'>
                                               <button
                                                 onClick={() => {
@@ -973,44 +982,112 @@ const LearningFlow: React.FC = () => {
                                         </div>
                                       </div>
 
-                                      {/* Unit Level Exercises */}
+                                      {/* Unit Level Assignments */}
                                       {expandedUnits.includes(unit.id) &&
-                                        unit.exercises &&
-                                        unit.exercises.length > 0 && (
+                                        unit.assignments &&
+                                        unit.assignments.length > 0 && (
                                           <div className='border-b border-slate-100 bg-indigo-50/30 p-2'>
                                             <div className='flex flex-wrap gap-2'>
-                                              {unit.exercises.map((ex) => (
-                                                <div
-                                                  key={ex.id}
-                                                  className='flex items-center gap-2 rounded border border-indigo-100 bg-white px-2 py-1 text-xs text-indigo-700 shadow-sm'
-                                                >
-                                                  <Code className='h-3 w-3' />
-                                                  <span>{ex.title}</span>
-                                                  <div className='flex items-center gap-1 ml-1 pl-1 border-l border-indigo-100'>
-                                                    <button
-                                                      onClick={() => {
-                                                        setEditingExercise(ex);
-                                                        setExerciseModalOpen(
-                                                          true,
-                                                        );
-                                                      }}
-                                                      className='p-0.5 hover:text-indigo-900'
-                                                    >
-                                                      <Edit2 className='h-2.5 w-2.5' />
-                                                    </button>
-                                                    <button
-                                                      onClick={() =>
-                                                        handleDeleteExercise(
-                                                          ex.id,
-                                                        )
-                                                      }
-                                                      className='p-0.5 hover:text-red-600'
-                                                    >
-                                                      <Trash2 className='h-2.5 w-2.5' />
-                                                    </button>
+                                              {unit.assignments.map(
+                                                (a: any) => (
+                                                  <div
+                                                    key={a.id}
+                                                    className='flex items-center gap-2 rounded border border-indigo-100 bg-white px-2 py-1 text-xs text-indigo-700 shadow-sm'
+                                                  >
+                                                    <Code className='h-3 w-3' />
+                                                    <span>{a.title}</span>
+                                                    <div className='flex items-center gap-1 ml-1 pl-1 border-l border-indigo-100'>
+                                                      <button
+                                                        onClick={() => {
+                                                          setEditingExercise(a);
+                                                          setExerciseModalOpen(
+                                                            true,
+                                                          );
+                                                        }}
+                                                        className='p-0.5 hover:text-indigo-900'
+                                                      >
+                                                        <Edit2 className='h-2.5 w-2.5' />
+                                                      </button>
+                                                      <button
+                                                        onClick={() =>
+                                                          handleDeleteExercise(
+                                                            a.id,
+                                                          )
+                                                        }
+                                                        className='p-0.5 hover:text-red-600'
+                                                      >
+                                                        <Trash2 className='h-2.5 w-2.5' />
+                                                      </button>
+                                                    </div>
                                                   </div>
-                                                </div>
-                                              ))}
+                                                ),
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                      {/* Unit Level Quizzes */}
+                                      {expandedUnits.includes(unit.id) &&
+                                        unit.quizzes &&
+                                        unit.quizzes.length > 0 && (
+                                          <div className='border-b border-slate-100 bg-indigo-50/30 p-2'>
+                                            <div className='flex flex-wrap gap-2'>
+                                              {unit.quizzes.map(
+                                                (quiz: any, qIndex: number) => (
+                                                  <div
+                                                    key={quiz.id}
+                                                    className='flex items-center gap-2 rounded border border-indigo-100 bg-white px-2 py-1 text-xs text-indigo-700 shadow-sm'
+                                                  >
+                                                    <ListChecks className='h-3 w-3 text-indigo-500' />
+                                                    <span>
+                                                      Quiz {qIndex + 1}
+                                                    </span>
+                                                    <div className='flex items-center gap-1 ml-1 pl-1 border-l border-indigo-100'>
+                                                      <button
+                                                        onClick={() => {
+                                                          setSelectedQuizForQuestions(
+                                                            quiz,
+                                                          );
+                                                          setSelectedUnitTitleForQuestions(
+                                                            unit.title,
+                                                          );
+                                                          setQuestionsModalOpen(
+                                                            true,
+                                                          );
+                                                        }}
+                                                        className='p-0.5 hover:text-indigo-900'
+                                                        title='Manage questions'
+                                                      >
+                                                        <Settings className='h-2.5 w-2.5' />
+                                                      </button>
+                                                      <button
+                                                        onClick={() => {
+                                                          setEditingQuiz(quiz);
+                                                          setSelectedUnitForQuiz(
+                                                            unit,
+                                                          );
+                                                          setQuizModalOpen(
+                                                            true,
+                                                          );
+                                                        }}
+                                                        className='p-0.5 hover:text-indigo-900'
+                                                      >
+                                                        <Edit2 className='h-2.5 w-2.5' />
+                                                      </button>
+                                                      <button
+                                                        onClick={() =>
+                                                          handleDeleteQuiz(
+                                                            quiz.id,
+                                                          )
+                                                        }
+                                                        className='p-0.5 hover:text-red-600'
+                                                      >
+                                                        <Trash2 className='h-2.5 w-2.5' />
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ),
+                                              )}
                                             </div>
                                           </div>
                                         )}
@@ -1129,20 +1206,6 @@ const LearningFlow: React.FC = () => {
                                                           </button>
                                                           <button
                                                             onClick={() => {
-                                                              setSelectedSubtopicForQuiz(
-                                                                sub,
-                                                              );
-                                                              setQuizModalOpen(
-                                                                true,
-                                                              );
-                                                            }}
-                                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
-                                                          >
-                                                            <ListChecks className='h-3 w-3' />
-                                                            Quiz
-                                                          </button>
-                                                          <button
-                                                            onClick={() => {
                                                               setSelectedSubtopicForExercise(
                                                                 sub,
                                                               );
@@ -1234,68 +1297,6 @@ const LearningFlow: React.FC = () => {
                                                                     <Trash2 className='h-3 w-3' />
                                                                   </button>
                                                                 </div>
-                                                              </div>
-                                                            </div>
-                                                          ),
-                                                        )}
-
-                                                        {/* Quizzes List */}
-                                                        {sub.quizzes?.map(
-                                                          (quiz, qIndex) => (
-                                                            <div
-                                                              key={quiz.id}
-                                                              className='flex items-center justify-between rounded-md border bg-white p-2 text-xs'
-                                                            >
-                                                              <div className='flex items-center gap-2'>
-                                                                <ListChecks className='h-3 w-3 text-indigo-500' />
-                                                                <span className='font-medium text-slate-700'>
-                                                                  Quiz{' '}
-                                                                  {qIndex + 1}
-                                                                </span>
-                                                              </div>
-                                                              <div className='flex items-center gap-1'>
-                                                                <button
-                                                                  onClick={() => {
-                                                                    setSelectedQuizForQuestions(
-                                                                      quiz,
-                                                                    );
-                                                                    setSelectedSubtopicTitleForQuestions(
-                                                                      sub.title,
-                                                                    );
-                                                                    setQuestionsModalOpen(
-                                                                      true,
-                                                                    );
-                                                                  }}
-                                                                  className='rounded px-2 py-0.5 text-[10px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                                                                >
-                                                                  Questions
-                                                                </button>
-                                                                <button
-                                                                  onClick={() => {
-                                                                    setEditingQuiz(
-                                                                      quiz,
-                                                                    );
-                                                                    setSelectedSubtopicForQuiz(
-                                                                      sub,
-                                                                    );
-                                                                    setQuizModalOpen(
-                                                                      true,
-                                                                    );
-                                                                  }}
-                                                                  className='p-1 text-slate-400 hover:text-indigo-600'
-                                                                >
-                                                                  <Edit2 className='h-3 w-3' />
-                                                                </button>
-                                                                <button
-                                                                  onClick={() =>
-                                                                    handleDeleteQuiz(
-                                                                      quiz.id,
-                                                                    )
-                                                                  }
-                                                                  className='p-1 text-slate-400 hover:text-red-500'
-                                                                >
-                                                                  <Trash2 className='h-3 w-3' />
-                                                                </button>
                                                               </div>
                                                             </div>
                                                           ),
@@ -1469,7 +1470,7 @@ const LearningFlow: React.FC = () => {
                 <ul className='mt-3 space-y-2 text-xs text-slate-600'>
                   <li>• Click chevron to expand/collapse</li>
                   <li>• Hover over items to see actions</li>
-                  <li>• Add quizzes & exercises to subtopics</li>
+                  <li>• Add quizzes & exercises to units</li>
                   <li>• Reorder topics with arrows</li>
                 </ul>
               </div>
@@ -1501,9 +1502,9 @@ const LearningFlow: React.FC = () => {
         onClose={() => setUnitModalOpen(false)}
         onSave={(data) => {
           if (editingUnit) {
-            handleUpdateUnit(data);
+            handleUpdateUnit({ ...data, slug: data.slug || '' });
           } else {
-            handleCreateUnit(data);
+            handleCreateUnit({ ...data, slug: data.slug || '' });
           }
         }}
         topicTitle={selectedTopicForUnit?.title || ''}
@@ -1512,7 +1513,7 @@ const LearningFlow: React.FC = () => {
             ? {
                 title: editingUnit.title,
                 description: editingUnit.description || '',
-                slug: editingUnit.slug,
+                slug: editingUnit.slug || '',
               }
             : undefined
         }
@@ -1523,9 +1524,9 @@ const LearningFlow: React.FC = () => {
         onClose={() => setSubtopicModalOpen(false)}
         onSave={(data) => {
           if (editingSubtopic) {
-            handleUpdateSubtopic(data);
+            handleUpdateSubtopic({ ...data, slug: data.slug || '' });
           } else {
-            handleCreateSubtopic(data);
+            handleCreateSubtopic({ ...data, slug: data.slug || '' });
           }
         }}
         topicTitle={selectedUnitForSubtopic?.title || ''}
@@ -1534,7 +1535,7 @@ const LearningFlow: React.FC = () => {
             ? {
                 title: editingSubtopic.subtopic.title,
                 description: editingSubtopic.subtopic.description || '',
-                slug: editingSubtopic.subtopic.slug,
+                slug: editingSubtopic.subtopic.slug || '',
               }
             : undefined
         }
@@ -1557,11 +1558,11 @@ const LearningFlow: React.FC = () => {
         onClose={() => {
           setQuizModalOpen(false);
           setEditingQuiz(null);
-          setSelectedSubtopicForQuiz(null);
+          setSelectedUnitForQuiz(null);
         }}
         onSave={editingQuiz ? handleUpdateQuiz : handleCreateQuiz}
         editData={editingQuiz || undefined}
-        subtopicTitle={selectedSubtopicForQuiz?.title || ''}
+        unitTitle={selectedUnitForQuiz?.title || ''}
       />
 
       <ExerciseModal
@@ -1599,7 +1600,7 @@ const LearningFlow: React.FC = () => {
                 onClick={() => {
                   setQuestionsModalOpen(false);
                   setSelectedQuizForQuestions(null);
-                  setSelectedSubtopicTitleForQuestions('');
+                  setSelectedUnitTitleForQuestions('');
                 }}
                 className='text-slate-400 hover:text-slate-600'
                 title='Close'
@@ -1610,7 +1611,7 @@ const LearningFlow: React.FC = () => {
 
             <QuizQuestionsList
               quizId={selectedQuizForQuestions.id}
-              subtopicTitle={selectedSubtopicTitleForQuestions}
+              subtopicTitle={selectedUnitTitleForQuestions}
             />
           </div>
         </div>

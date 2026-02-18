@@ -27,6 +27,9 @@ const {
   createExercise,
   updateExercise,
   deleteExercise,
+  createAssignment,
+  updateAssignment,
+  deleteAssignment,
   createProject,
   updateProject,
   deleteProject,
@@ -174,6 +177,11 @@ router.delete(
 router.post('/exercises', verifyToken, isAdmin, createExercise);
 router.put('/exercises/:id', verifyToken, isAdmin, updateExercise);
 router.delete('/exercises/:id', verifyToken, isAdmin, deleteExercise);
+
+// ===== ASSIGNMENT MANAGEMENT =====
+router.post('/assignments', verifyToken, isAdmin, createAssignment);
+router.put('/assignments/:id', verifyToken, isAdmin, updateAssignment);
+router.delete('/assignments/:id', verifyToken, isAdmin, deleteAssignment);
 
 // ===== PROJECT MANAGEMENT =====
 router.post('/projects', verifyToken, isAdmin, createProject);

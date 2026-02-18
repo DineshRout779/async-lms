@@ -128,23 +128,28 @@ exports.getCourseStructure = async (req, res) => {
         qo.is_correct,
         qo.order_index AS option_order,
 
-        -- Exercise
+        -- Exercise (subtopic-level)
         e.id AS exercise_id,
         e.title AS exercise_title,
         e.instructions AS exercise_instructions,
         e.max_score AS exercise_max_score,
-        e.subtopic_id AS exercise_subtopic_id,
-        e.unit_id AS exercise_unit_id
+
+        -- Assignment (unit-level)
+        a.id AS assignment_id,
+        a.title AS assignment_title,
+        a.instructions AS assignment_instructions,
+        a.max_score AS assignment_max_score
 
       FROM topics t
       LEFT JOIN units u ON t.id = u.topic_id
       LEFT JOIN subtopics st ON u.id = st.unit_id
       LEFT JOIN lesson_content lc 
         ON st.id = lc.subtopic_id AND lc.is_published = true
-      LEFT JOIN quizzes q ON st.id = q.subtopic_id
+      LEFT JOIN quizzes q ON u.id = q.unit_id
       LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
       LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
-      LEFT JOIN exercises e ON (st.id = e.subtopic_id OR u.id = e.unit_id)
+      LEFT JOIN exercises e ON st.id = e.subtopic_id
+      LEFT JOIN assignments a ON u.id = a.unit_id
 
       WHERE t.subject_id = $1
       ORDER BY 
@@ -183,7 +188,8 @@ exports.getCourseStructure = async (req, res) => {
           description: row.unit_description,
           order_index: row.unit_order,
           subtopics: new Map(),
-          exercises: [],
+          assignments: [],
+          quizzes: new Map(),
         });
       }
 
@@ -198,7 +204,6 @@ exports.getCourseStructure = async (req, res) => {
           description: row.subtopic_description,
           order_index: row.subtopic_order,
           lesson_content: [],
-          quizzes: new Map(),
           exercises: [],
         });
       }
@@ -220,9 +225,9 @@ exports.getCourseStructure = async (req, res) => {
       }
 
       // Quiz
-      if (row.quiz_id && subtopic) {
-        if (!subtopic.quizzes.has(row.quiz_id)) {
-          subtopic.quizzes.set(row.quiz_id, {
+      if (row.quiz_id && unit) {
+        if (!unit.quizzes.has(row.quiz_id)) {
+          unit.quizzes.set(row.quiz_id, {
             id: row.quiz_id,
             passing_score: row.quiz_passing_score,
             max_score: row.quiz_max_score,
@@ -230,7 +235,7 @@ exports.getCourseStructure = async (req, res) => {
           });
         }
 
-        const quiz = subtopic.quizzes.get(row.quiz_id);
+        const quiz = unit.quizzes.get(row.quiz_id);
 
         // Question
         if (row.question_id && quiz) {
@@ -262,26 +267,27 @@ exports.getCourseStructure = async (req, res) => {
         }
       }
 
-      // Exercise
-      if (row.exercise_id) {
-        if (row.exercise_subtopic_id && subtopic) {
-          if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
-            subtopic.exercises.push({
-              id: row.exercise_id,
-              title: row.exercise_title,
-              instructions: row.exercise_instructions,
-              max_score: row.exercise_max_score,
-            });
-          }
-        } else if (row.exercise_unit_id && unit) {
-          if (!unit.exercises.some((e) => e.id === row.exercise_id)) {
-            unit.exercises.push({
-              id: row.exercise_id,
-              title: row.exercise_title,
-              instructions: row.exercise_instructions,
-              max_score: row.exercise_max_score,
-            });
-          }
+      // Exercise (subtopic-level)
+      if (row.exercise_id && subtopic) {
+        if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
+          subtopic.exercises.push({
+            id: row.exercise_id,
+            title: row.exercise_title,
+            instructions: row.exercise_instructions,
+            max_score: row.exercise_max_score,
+          });
+        }
+      }
+
+      // Assignment (unit-level)
+      if (row.assignment_id && unit) {
+        if (!unit.assignments.some((a) => a.id === row.assignment_id)) {
+          unit.assignments.push({
+            id: row.assignment_id,
+            title: row.assignment_title,
+            instructions: row.assignment_instructions,
+            max_score: row.assignment_max_score,
+          });
         }
       }
     });
@@ -298,13 +304,13 @@ exports.getCourseStructure = async (req, res) => {
         slug: unit.slug,
         description: unit.description,
         order_index: unit.order_index,
-        exercises: unit.exercises || [],
+        assignments: unit.assignments || [],
+        quizzes: Array.from(unit.quizzes.values()).map((q) => ({
+          ...q,
+          questions: Array.from(q.questions.values()),
+        })),
         subtopics: Array.from(unit.subtopics.values()).map((sub) => ({
           ...sub,
-          quizzes: Array.from(sub.quizzes.values()).map((q) => ({
-            ...q,
-            questions: Array.from(q.questions.values()),
-          })),
         })),
       })),
     }));
@@ -415,7 +421,7 @@ exports.getSubtopicContent = async (req, res) => {
       FROM subtopics st
       LEFT JOIN lesson_content lc
         ON lc.subtopic_id = st.id AND lc.is_published = true
-      LEFT JOIN quizzes q ON q.subtopic_id = st.id
+      LEFT JOIN quizzes q ON q.unit_id = (SELECT unit_id FROM subtopics WHERE slug = $1)
       LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
       LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id
       LEFT JOIN exercises e ON e.subtopic_id = st.id
@@ -686,5 +692,95 @@ exports.getExerciseContent = async (req, res) => {
   } catch (err) {
     console.error('Error | getExerciseContent:', err);
     res.status(500).json({ message: 'Failed to load exercise' });
+  }
+};
+// 6. Get a specific quiz content
+exports.getQuizContent = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+
+    const query = `
+      SELECT 
+        q.id AS quiz_id,
+        q.passing_score,
+        q.max_score,
+        q.unit_id,
+        u.title AS unit_title,
+        u.description AS unit_description,
+        qq.id AS question_id,
+        qq.question_text,
+        qq.question_type,
+        qq.points,
+        qq.explanation,
+        qo.id AS option_id,
+        qo.option_text,
+        qo.is_correct
+      FROM quizzes q
+      LEFT JOIN units u ON q.unit_id = u.id
+      LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
+      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
+      WHERE q.id = $1
+      ORDER BY qq.order_index, qo.order_index
+    `;
+
+    const { rows } = await pool.query(query, [quizId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    const base = rows[0];
+    const questionsMap = new Map();
+
+    rows.forEach((row) => {
+      if (row.question_id) {
+        if (!questionsMap.has(row.question_id)) {
+          questionsMap.set(row.question_id, {
+            id: row.question_id,
+            question_text: row.question_text,
+            question_type: row.question_type,
+            points: row.points,
+            explanation: row.explanation,
+            options: [],
+          });
+        }
+        const question = questionsMap.get(row.question_id);
+        if (row.option_id) {
+          question.options.push({
+            id: row.option_id,
+            option_text: row.option_text,
+            is_correct: row.is_correct,
+          });
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        subtopic: {
+          id: base.unit_id,
+          title: `Quiz: ${base.unit_title}`,
+          description: base.unit_description,
+        },
+        lesson: {
+          id: null,
+          content_type: 'quiz',
+          markdown_content: 'Please complete the quiz to proceed.',
+        },
+        quizzes: [
+          {
+            id: base.quiz_id,
+            passing_score: base.passing_score,
+            max_score: base.max_score,
+            questions: Array.from(questionsMap.values()),
+          },
+        ],
+        exercises: [],
+      },
+    });
+  } catch (err) {
+    console.error('Error | getQuizContent:', err);
+    res.status(500).json({ message: 'Failed to load quiz' });
   }
 };

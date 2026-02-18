@@ -41,7 +41,7 @@ export interface QuizQuestion {
 
 export interface Quiz {
   id: string;
-  subtopic_id: string;
+  unit_id: string;
   passing_score: number;
   max_score: number;
   questions: QuizQuestion[];
@@ -55,6 +55,14 @@ export interface Exercise {
   max_score: number;
 }
 
+export interface Assignment {
+  id: string;
+  unit_id: string;
+  title: string;
+  instructions?: string;
+  max_score: number;
+}
+
 export interface Subtopic {
   id: string;
   title: string;
@@ -62,7 +70,6 @@ export interface Subtopic {
   description?: string;
   order_index: number;
   lesson_content?: LessonContent[];
-  quizzes?: Quiz[];
   exercises?: Exercise[];
 }
 
@@ -73,7 +80,8 @@ export interface Unit {
   description?: string;
   order_index: number;
   subtopics: Subtopic[];
-  exercises?: Exercise[];
+  assignments?: Assignment[];
+  quizzes?: Quiz[];
 }
 
 export interface Topic {
@@ -161,7 +169,7 @@ export interface QuizModalProps {
   onClose: () => void;
   onSave: (data: { passing_score: number; max_score: number }) => void;
   editData?: { passing_score: number; max_score: number };
-  subtopicTitle: string;
+  unitTitle: string;
 }
 
 export interface ExerciseModalProps {

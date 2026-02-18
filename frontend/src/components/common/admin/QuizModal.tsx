@@ -9,10 +9,10 @@ const QuizModal: React.FC<QuizModalProps> = ({
   onClose,
   onSave,
   editData,
-  subtopicTitle,
+  unitTitle,
 }) => {
   const [passingScore, setPassingScore] = useState(
-    editData?.passing_score ?? 70
+    editData?.passing_score ?? 70,
   );
   const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
 
@@ -50,7 +50,7 @@ const QuizModal: React.FC<QuizModalProps> = ({
             <h3 className='text-lg font-bold text-slate-900'>
               {editData ? 'Update' : 'Create'} Quiz
             </h3>
-            <p className='text-sm text-slate-500'>Subtopic: {subtopicTitle}</p>
+            <p className='text-sm text-slate-500'>Unit: {unitTitle}</p>
           </div>
           <button
             onClick={onClose}

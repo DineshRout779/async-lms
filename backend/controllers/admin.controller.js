@@ -167,23 +167,28 @@ exports.getAdminSubjectStructure = async (req, res) => {
         qo.is_correct,
         qo.order_index AS option_order,
 
-        -- Exercise
+        -- Exercise (subtopic-level only)
         e.id AS exercise_id,
-        e.subtopic_id AS exercise_subtopic_id,
-        e.unit_id AS exercise_unit_id,
         e.title AS exercise_title,
         e.instructions AS exercise_instructions,
-        e.max_score AS exercise_max_score
+        e.max_score AS exercise_max_score,
+
+        -- Assignment (unit-level)
+        a.id AS assignment_id,
+        a.title AS assignment_title,
+        a.instructions AS assignment_instructions,
+        a.max_score AS assignment_max_score
 
       FROM topics t
       LEFT JOIN units u ON t.id = u.topic_id
       LEFT JOIN subtopics st ON u.id = st.unit_id
       LEFT JOIN lesson_content lc 
         ON st.id = lc.subtopic_id
-      LEFT JOIN quizzes q ON st.id = q.subtopic_id
+      LEFT JOIN quizzes q ON u.id = q.unit_id
       LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
       LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
-      LEFT JOIN exercises e ON (st.id = e.subtopic_id OR u.id = e.unit_id)
+      LEFT JOIN exercises e ON st.id = e.subtopic_id
+      LEFT JOIN assignments a ON u.id = a.unit_id
 
       WHERE t.subject_id = $1
       ORDER BY 
@@ -221,7 +226,8 @@ exports.getAdminSubjectStructure = async (req, res) => {
           description: row.unit_description,
           order_index: row.unit_order,
           subtopics: new Map(),
-          exercises: [],
+          assignments: [],
+          quizzes: new Map(),
         });
       }
 
@@ -236,7 +242,6 @@ exports.getAdminSubjectStructure = async (req, res) => {
           description: row.subtopic_description,
           order_index: row.subtopic_order,
           lesson_content: [],
-          quizzes: new Map(),
           exercises: [],
         });
       }
@@ -257,9 +262,9 @@ exports.getAdminSubjectStructure = async (req, res) => {
         }
       }
 
-      if (row.quiz_id && subtopic) {
-        if (!subtopic.quizzes.has(row.quiz_id)) {
-          subtopic.quizzes.set(row.quiz_id, {
+      if (row.quiz_id && unit) {
+        if (!unit.quizzes.has(row.quiz_id)) {
+          unit.quizzes.set(row.quiz_id, {
             id: row.quiz_id,
             passing_score: row.quiz_passing_score,
             max_score: row.quiz_max_score,
@@ -267,7 +272,7 @@ exports.getAdminSubjectStructure = async (req, res) => {
           });
         }
 
-        const quiz = subtopic.quizzes.get(row.quiz_id);
+        const quiz = unit.quizzes.get(row.quiz_id);
 
         if (row.question_id && quiz) {
           if (!quiz.questions.has(row.question_id)) {
@@ -297,27 +302,27 @@ exports.getAdminSubjectStructure = async (req, res) => {
         }
       }
 
-      if (row.exercise_id) {
-        if (row.subtopic_id && subtopic && row.exercise_subtopic_id) {
-          // It's a subtopic exercise
-          if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
-            subtopic.exercises.push({
-              id: row.exercise_id,
-              title: row.exercise_title,
-              instructions: row.exercise_instructions,
-              max_score: row.exercise_max_score,
-            });
-          }
-        } else if (unit && row.exercise_unit_id) {
-          // It's a unit-level exercise
-          if (!unit.exercises.some((e) => e.id === row.exercise_id)) {
-            unit.exercises.push({
-              id: row.exercise_id,
-              title: row.exercise_title,
-              instructions: row.exercise_instructions,
-              max_score: row.exercise_max_score,
-            });
-          }
+      // Exercise (subtopic-level)
+      if (row.exercise_id && subtopic) {
+        if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
+          subtopic.exercises.push({
+            id: row.exercise_id,
+            title: row.exercise_title,
+            instructions: row.exercise_instructions,
+            max_score: row.exercise_max_score,
+          });
+        }
+      }
+
+      // Assignment (unit-level)
+      if (row.assignment_id && unit) {
+        if (!unit.assignments.some((a) => a.id === row.assignment_id)) {
+          unit.assignments.push({
+            id: row.assignment_id,
+            title: row.assignment_title,
+            instructions: row.assignment_instructions,
+            max_score: row.assignment_max_score,
+          });
         }
       }
     });
@@ -333,13 +338,13 @@ exports.getAdminSubjectStructure = async (req, res) => {
         slug: unit.slug,
         description: unit.description,
         order_index: unit.order_index,
-        exercises: unit.exercises,
+        assignments: unit.assignments,
+        quizzes: Array.from(unit.quizzes.values()).map((q) => ({
+          ...q,
+          questions: Array.from(q.questions.values()),
+        })),
         subtopics: Array.from(unit.subtopics.values()).map((sub) => ({
           ...sub,
-          quizzes: Array.from(sub.quizzes.values()).map((q) => ({
-            ...q,
-            questions: Array.from(q.questions.values()),
-          })),
         })),
       })),
     }));
@@ -1095,26 +1100,22 @@ exports.publishLessonContent = async (req, res) => {
 
 exports.createQuiz = async (req, res) => {
   try {
-    const { subtopic_id, passing_score, max_score } = req.body;
+    const { unit_id, passing_score, max_score } = req.body;
 
-    if (!subtopic_id || !passing_score || !max_score) {
+    if (!unit_id || !passing_score || !max_score) {
       return res.status(400).json({
         success: false,
-        message: 'Subtopic ID, passing score, and max score are required',
+        message: 'Unit ID, passing score, and max score are required',
       });
     }
 
     const query = `
-      INSERT INTO quizzes (subtopic_id, passing_score, max_score)
+      INSERT INTO quizzes (unit_id, passing_score, max_score)
       VALUES ($1, $2, $3)
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [
-      subtopic_id,
-      passing_score,
-      max_score,
-    ]);
+    const result = await pool.query(query, [unit_id, passing_score, max_score]);
 
     res.status(201).json({
       success: true,
@@ -1217,24 +1218,23 @@ exports.deleteQuiz = async (req, res) => {
 
 exports.createExercise = async (req, res) => {
   try {
-    const { subtopic_id, unit_id, title, instructions, max_score } = req.body;
+    const { subtopic_id, title, instructions, max_score } = req.body;
 
-    if (!(subtopic_id || unit_id) || !title || !max_score) {
+    if (!subtopic_id || !title || !max_score) {
       return res.status(400).json({
         success: false,
-        message: 'Subtopic ID or Unit ID, title, and max score are required',
+        message: 'Subtopic ID, title, and max score are required',
       });
     }
 
     const query = `
-      INSERT INTO exercises (subtopic_id, unit_id, title, instructions, max_score)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO exercises (subtopic_id, title, instructions, max_score)
+      VALUES ($1, $2, $3, $4)
       RETURNING *;
     `;
 
     const result = await pool.query(query, [
-      subtopic_id || null,
-      unit_id || null,
+      subtopic_id,
       title,
       instructions,
       max_score,
@@ -1334,6 +1334,133 @@ exports.deleteExercise = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete exercise',
+      error: error.message,
+    });
+  }
+};
+
+// ============================================
+// ASSIGNMENT MANAGEMENT
+// ============================================
+
+exports.createAssignment = async (req, res) => {
+  try {
+    const { unit_id, title, instructions, max_score } = req.body;
+
+    if (!unit_id || !title || !max_score) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit ID, title, and max score are required',
+      });
+    }
+
+    const query = `
+      INSERT INTO assignments (unit_id, title, instructions, max_score)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, [
+      unit_id,
+      title,
+      instructions,
+      max_score,
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Assignment created successfully',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error creating assignment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create assignment',
+      error: error.message,
+    });
+  }
+};
+
+exports.updateAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, instructions, max_score } = req.body;
+
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (title !== undefined) {
+      updates.push(`title = $${paramCount++}`);
+      values.push(title);
+    }
+    if (instructions !== undefined) {
+      updates.push(`instructions = $${paramCount++}`);
+      values.push(instructions);
+    }
+    if (max_score !== undefined) {
+      updates.push(`max_score = $${paramCount++}`);
+      values.push(max_score);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update',
+      });
+    }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(id);
+
+    const query = `
+      UPDATE assignments
+      SET ${updates.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, values);
+
+    res.json({
+      success: true,
+      message: 'Assignment updated successfully',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error updating assignment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update assignment',
+      error: error.message,
+    });
+  }
+};
+
+exports.deleteAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const query = 'DELETE FROM assignments WHERE id = $1 RETURNING id;';
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assignment not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Assignment deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting assignment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete assignment',
       error: error.message,
     });
   }

@@ -124,6 +124,10 @@ const router = createBrowserRouter([
                     path: 'exercise/:exerciseId',
                     element: <LessonView />,
                   },
+                  {
+                    path: 'quiz/:quizId',
+                    element: <LessonView />,
+                  },
                 ],
               },
             ],

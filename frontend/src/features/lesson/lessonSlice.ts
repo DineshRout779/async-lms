@@ -104,6 +104,23 @@ export const fetchExercise = createAsyncThunk<
   }
 });
 
+export const fetchQuiz = createAsyncThunk<
+  LessonResponse,
+  string,
+  { rejectValue: string }
+>('lesson/fetchQuiz', async (quizId, { rejectWithValue }) => {
+  try {
+    const response = await apiClient.get<{ data: LessonResponse }>(
+      `/subjects/quiz/${quizId}`,
+    );
+    return response.data.data;
+  } catch (error: any) {
+    return rejectWithValue(
+      error.response?.data?.message || 'Failed to load quiz',
+    );
+  }
+});
+
 export const submitQuiz = createAsyncThunk<
   QuizAttemptResult,
   { quizId: string; score: number },
@@ -226,6 +243,25 @@ const lessonSlice = createSlice({
         state.lessonCompleted = false; // Exercises are not subtopic lessons
       })
       .addCase(fetchExercise.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload as string;
+      })
+      // Fetch Quiz
+      .addCase(fetchQuiz.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+        state.quizAnswers = {};
+        state.quizSubmitted = false;
+        state.quizResults = null;
+        state.exerciseCode = {};
+        state.lessonCompleted = false;
+      })
+      .addCase(fetchQuiz.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.data = action.payload;
+        state.lessonCompleted = false;
+      })
+      .addCase(fetchQuiz.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload as string;
       })

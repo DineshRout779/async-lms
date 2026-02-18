@@ -56,7 +56,7 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       EXISTS (
         SELECT 1
         FROM quizzes
-        WHERE subtopic_id = $1
+        WHERE unit_id = (SELECT unit_id FROM subtopics WHERE id = $1)
       ) AS has_quiz,
       EXISTS (
         SELECT 1
@@ -86,7 +86,7 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       FROM quiz_attempts qa
       INNER JOIN quizzes q ON q.id = qa.quiz_id
       WHERE qa.user_id = $1
-        AND q.subtopic_id = $2
+        AND q.unit_id = (SELECT unit_id FROM subtopics WHERE id = $2)
         AND qa.is_passed = true
     ) AS quiz_done
   `;
@@ -166,7 +166,7 @@ exports.getMyProgress = async (req, res) => {
 
         -- Content Existence
         EXISTS(SELECT 1 FROM lesson_content WHERE subtopic_id = st.id AND is_published = true) AS has_lesson,
-        EXISTS(SELECT 1 FROM quizzes WHERE subtopic_id = st.id) AS has_quiz,
+        EXISTS(SELECT 1 FROM quizzes WHERE unit_id = u.id) AS has_quiz,
         EXISTS(SELECT 1 FROM exercises WHERE subtopic_id = st.id) AS has_exercise,
         (
           SELECT json_agg(
@@ -200,7 +200,7 @@ exports.getMyProgress = async (req, res) => {
           )
           FROM quiz_attempts qa
           INNER JOIN quizzes q ON q.id = qa.quiz_id
-          WHERE qa.user_id = $1 AND q.subtopic_id = st.id
+          WHERE qa.user_id = $1 AND q.unit_id = u.id
         ) AS quiz_stats,
 
         -- Exercise Best Score / Passed
@@ -489,14 +489,20 @@ exports.submitQuizAttempt = async (req, res) => {
     );
 
     const subtopicResult = await pool.query(
-      'SELECT subtopic_id FROM quizzes WHERE id = $1 LIMIT 1',
+      'SELECT unit_id FROM quizzes WHERE id = $1 LIMIT 1',
       [quizId],
     );
-    if (subtopicResult.rows[0]?.subtopic_id) {
-      await checkAndCompleteSubtopic(
-        userId,
-        subtopicResult.rows[0].subtopic_id,
+    if (subtopicResult.rows[0]?.unit_id) {
+      // Need to find a subtopic in this unit to trigger checkAndCompleteSubtopic
+      // OR better, we should have a checkAndCompleteUnit function.
+      // For now, let's find the first subtopic of this unit.
+      const firstSubtopic = await pool.query(
+        'SELECT id FROM subtopics WHERE unit_id = $1 ORDER BY order_index LIMIT 1',
+        [subtopicResult.rows[0].unit_id],
       );
+      if (firstSubtopic.rows[0]?.id) {
+        await checkAndCompleteSubtopic(userId, firstSubtopic.rows[0].id);
+      }
     }
 
     res.json({

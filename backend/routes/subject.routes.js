@@ -8,6 +8,7 @@ const {
   updateSubject,
   deleteSubject,
   getExerciseContent,
+  getQuizContent,
 } = require('../controllers/subject.controller');
 const isAdmin = require('../middlewares/isAdmin');
 const verifyToken = require('../middlewares/verfiyToken');
@@ -15,8 +16,8 @@ const verifyToken = require('../middlewares/verfiyToken');
 // GET specific content when clicking a subtopic
 router.get('/content/:subtopicSlug', verifyToken, getSubtopicContent);
 
-// GET specific exercise content
-router.get('/exercise/:exerciseId', verifyToken, getExerciseContent);
+// GET specific quiz content
+router.get('/quiz/:quizId', verifyToken, getQuizContent);
 
 // Fetch all published subjects
 router.get('/published', verifyToken, getAllPublishedSubjects);

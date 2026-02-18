@@ -21,6 +21,7 @@ import {
   submitExercise,
   completeLesson,
   fetchExercise,
+  fetchQuiz,
   setQuizAnswer,
   resetQuiz,
   setExerciseCode,
@@ -39,9 +40,10 @@ import apiClient from '@/services/api';
 ======================= */
 
 const Lesson = () => {
-  const { subtopicSlug, exerciseId, slug } = useParams<{
+  const { subtopicSlug, exerciseId, quizId, slug } = useParams<{
     subtopicSlug?: string;
     exerciseId?: string;
+    quizId?: string;
     slug?: string;
   }>();
   const navigate = useNavigate();
@@ -69,11 +71,13 @@ const Lesson = () => {
       dispatch(fetchLesson(subtopicSlug));
     } else if (exerciseId) {
       dispatch(fetchExercise(exerciseId));
+    } else if (quizId) {
+      dispatch(fetchQuiz(quizId));
     }
     return () => {
       dispatch(resetLessonState());
     };
-  }, [subtopicSlug, exerciseId, dispatch]);
+  }, [subtopicSlug, exerciseId, quizId, dispatch]);
 
   useEffect(() => {
     const fetchStructure = async () => {
@@ -127,8 +131,15 @@ const Lesson = () => {
         (unit.subtopics || []).forEach((sub) => {
           flattened.push({ ...sub, type: 'subtopic' });
         });
-        (unit.exercises || []).forEach((ex) => {
-          flattened.push({ ...ex, type: 'exercise' });
+        (unit.assignments || []).forEach((assignment: any) => {
+          flattened.push({ ...assignment, type: 'assignment' });
+        });
+        (unit.quizzes || []).forEach((quiz: any) => {
+          flattened.push({
+            ...quiz,
+            type: 'quiz',
+            title: `Unit Quiz: ${unit.title}`,
+          });
         });
       });
     });
@@ -153,7 +164,7 @@ const Lesson = () => {
         ? {
             type: next.type,
             slug: next.slug,
-            id: next.id,
+            id: next.id || next.quiz_id,
           }
         : null,
     };
@@ -191,7 +202,9 @@ const Lesson = () => {
       const nextUrl =
         nextItem.type === 'subtopic'
           ? `/dashboard/student/courses/${slug}/lesson/${nextItem.slug}`
-          : `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`;
+          : nextItem.type === 'exercise'
+            ? `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`
+            : `/dashboard/student/courses/${slug}/quiz/${nextItem.id}`;
 
       console.log('[Lesson] Auto-navigating to', nextUrl);
       const timer = setTimeout(() => {
@@ -425,11 +438,18 @@ const Lesson = () => {
                     const nextUrl =
                       nextItem.type === 'subtopic'
                         ? `/dashboard/student/courses/${slug}/lesson/${nextItem.slug}`
-                        : `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`;
+                        : nextItem.type === 'exercise'
+                          ? `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`
+                          : `/dashboard/student/courses/${slug}/quiz/${nextItem.id}`;
                     navigate(nextUrl);
                   }}
                 >
-                  Next {nextItem.type === 'subtopic' ? 'Lesson' : 'Exercise'}
+                  Next{' '}
+                  {nextItem.type === 'subtopic'
+                    ? 'Lesson'
+                    : nextItem.type === 'exercise'
+                      ? 'Exercise'
+                      : 'Quiz'}
                 </Button>
               )}
             </div>
@@ -438,7 +458,7 @@ const Lesson = () => {
       </Card>
 
       {/* Quizzes */}
-      {quizzes && quizzes.length > 0 && (
+      {quizId && quizzes && quizzes.length > 0 && (
         <section className='space-y-6'>
           <div className='flex items-center gap-2'>
             <Award className='h-6 w-6 text-indigo-600' />
