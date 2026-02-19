@@ -1,10 +1,26 @@
 import { Button } from '@/components/ui/button';
-import type { QuizModalProps } from '@/utils/types';
 import { Save, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
-const QuizModal: React.FC<QuizModalProps> = ({
+interface AssignmentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: {
+    title: string;
+    instructions: string;
+    max_score: number;
+  }) => void;
+  editData?: {
+    title: string;
+    instructions?: string;
+    max_score: number;
+  };
+  unitTitle: string;
+  loading?: boolean;
+}
+
+const AssignmentModal: React.FC<AssignmentModalProps> = ({
   isOpen,
   onClose,
   onSave,
@@ -12,34 +28,38 @@ const QuizModal: React.FC<QuizModalProps> = ({
   unitTitle,
   loading = false,
 }) => {
-  const [passingScore, setPassingScore] = useState(
-    editData?.passing_score ?? 70,
+  const [title, setTitle] = useState(editData?.title ?? '');
+  const [instructions, setInstructions] = useState(
+    editData?.instructions ?? '',
   );
   const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
 
-  const handleSave = () => {
-    if (passingScore <= 0 || maxScore <= 0) {
-      toast.error('Scores must be greater than 0');
-      return;
-    }
-    if (passingScore > maxScore) {
-      toast.error('Passing score cannot exceed max score');
-      return;
-    }
-    onSave({
-      passing_score: passingScore,
-      max_score: maxScore,
-    });
-    setPassingScore(70);
-    setMaxScore(100);
-  };
-
   useEffect(() => {
     if (isOpen) {
-      setPassingScore(editData?.passing_score ?? 70);
+      setTitle(editData?.title ?? '');
+      setInstructions(editData?.instructions ?? '');
       setMaxScore(editData?.max_score ?? 100);
     }
   }, [isOpen, editData]);
+
+  const handleSave = () => {
+    if (!title.trim()) {
+      toast.error('Assignment title is required');
+      return;
+    }
+    if (maxScore <= 0) {
+      toast.error('Max score must be greater than 0');
+      return;
+    }
+    onSave({
+      title: title.trim(),
+      instructions: instructions.trim(),
+      max_score: maxScore,
+    });
+    setTitle('');
+    setInstructions('');
+    setMaxScore(100);
+  };
 
   if (!isOpen) return null;
 
@@ -49,7 +69,7 @@ const QuizModal: React.FC<QuizModalProps> = ({
         <div className='mb-4 flex items-center justify-between'>
           <div>
             <h3 className='text-lg font-bold text-slate-900'>
-              {editData ? 'Update' : 'Create'} Quiz
+              {editData ? 'Edit Assignment' : 'Create Assignment'}
             </h3>
             <p className='text-sm text-slate-500'>Unit: {unitTitle}</p>
           </div>
@@ -64,6 +84,32 @@ const QuizModal: React.FC<QuizModalProps> = ({
         <div className='space-y-4'>
           <div>
             <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Assignment Title
+            </label>
+            <input
+              type='text'
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder='e.g., Build a REST API'
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Instructions
+            </label>
+            <textarea
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder='Detailed instructions for the assignment...'
+              rows={4}
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
               Maximum Score
             </label>
             <input
@@ -74,25 +120,6 @@ const QuizModal: React.FC<QuizModalProps> = ({
               min='1'
               className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
             />
-          </div>
-
-          <div>
-            <label className='mb-2 block text-sm font-medium text-slate-700'>
-              Passing Score
-            </label>
-            <input
-              type='number'
-              value={passingScore}
-              onChange={(e) => setPassingScore(parseInt(e.target.value) || 0)}
-              placeholder='70'
-              min='1'
-              max={maxScore}
-              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
-            />
-            <p className='mt-1 text-xs text-slate-500'>
-              Students must score at least {passingScore} out of {maxScore} to
-              pass
-            </p>
           </div>
         </div>
 
@@ -109,7 +136,7 @@ const QuizModal: React.FC<QuizModalProps> = ({
             className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
           >
             {!loading && <Save className='mr-2 h-4 w-4' />}
-            {editData ? 'Update' : 'Create'} Quiz
+            {editData ? 'Update' : 'Create'} Assignment
           </Button>
         </div>
       </div>
@@ -117,4 +144,4 @@ const QuizModal: React.FC<QuizModalProps> = ({
   );
 };
 
-export default QuizModal;
+export default AssignmentModal;

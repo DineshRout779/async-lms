@@ -10,6 +10,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   onSave,
   editData,
   subtopicTitle, // This will be used as the context title (Unit or Subtopic)
+  loading = false,
 }) => {
   const [title, setTitle] = useState(editData?.title ?? '');
   const [instructions, setInstructions] = useState(
@@ -115,9 +116,10 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
           </Button>
           <Button
             onClick={handleSave}
+            loading={loading}
             className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
           >
-            <Save className='mr-2 h-4 w-4' />
+            {!loading && <Save className='mr-2 h-4 w-4' />}
             {editData ? 'Update' : 'Create'} Exercise
           </Button>
         </div>

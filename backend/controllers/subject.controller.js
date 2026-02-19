@@ -784,3 +784,14 @@ exports.getQuizContent = async (req, res) => {
     res.status(500).json({ message: 'Failed to load quiz' });
   }
 };
+
+exports.getMarkdownContent = async (req, res) => {
+  try {
+    const { markdownPathURL } = req.body;
+    const content = await fetchTextFromUrl(markdownPathURL);
+    res.json({ success: true, data: content });
+  } catch (err) {
+    console.error('Error | getMarkdownContent:', err);
+    res.status(500).json({ message: 'Failed to load markdown content' });
+  }
+};

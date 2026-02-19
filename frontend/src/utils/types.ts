@@ -127,6 +127,7 @@ export interface TopicModalProps {
   onClose: () => void;
   onSave: (data: { title: string; description: string }) => void;
   editData?: { title: string; description: string };
+  loading?: boolean;
 }
 
 export interface SubtopicModalProps {
@@ -135,6 +136,7 @@ export interface SubtopicModalProps {
   onSave: (data: { title: string; description: string; slug?: string }) => void;
   topicTitle: string;
   editData?: { title: string; description: string; slug: string };
+  loading?: boolean;
 }
 
 export interface UnitModalProps {
@@ -143,6 +145,7 @@ export interface UnitModalProps {
   onSave: (data: { title: string; description: string; slug?: string }) => void;
   topicTitle: string;
   editData?: { title: string; description: string; slug: string };
+  loading?: boolean;
 }
 
 export interface ContentModalProps {
@@ -162,6 +165,7 @@ export interface ContentModalProps {
     estimated_read_time?: number;
     video_url?: string | null;
   };
+  loading?: boolean;
 }
 
 export interface QuizModalProps {
@@ -170,6 +174,7 @@ export interface QuizModalProps {
   onSave: (data: { passing_score: number; max_score: number }) => void;
   editData?: { passing_score: number; max_score: number };
   unitTitle: string;
+  loading?: boolean;
 }
 
 export interface ExerciseModalProps {
@@ -186,4 +191,5 @@ export interface ExerciseModalProps {
     max_score: number;
   };
   subtopicTitle: string;
+  loading?: boolean;
 }

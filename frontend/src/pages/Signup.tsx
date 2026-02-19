@@ -98,7 +98,11 @@ export default function Login() {
               />
             </div>
 
-            <Button className='w-full mt-2' onClick={handleSubmit}>
+            <Button
+              className='w-full mt-2'
+              onClick={handleSubmit}
+              loading={false}
+            >
               {authMode === 'login' ? 'Login' : 'Create Account'}
             </Button>
 

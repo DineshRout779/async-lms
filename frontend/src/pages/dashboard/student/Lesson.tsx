@@ -413,10 +413,11 @@ const Lesson = () => {
             <div className='mt-10 flex justify-center border-t border-slate-100 pt-8'>
               <Button
                 onClick={handleCompleteLesson}
+                loading={isNavigating}
                 size='lg'
                 className='bg-emerald-600 px-8 py-6 text-lg font-bold shadow-lg hover:bg-emerald-700 transition-all hover:scale-105 active:scale-95'
               >
-                <CheckCircle2 className='mr-2 h-6 w-6' />
+                {!isNavigating && <CheckCircle2 className='mr-2 h-6 w-6' />}
                 Mark as Read & Next
               </Button>
             </div>
@@ -628,17 +629,10 @@ const Lesson = () => {
                 {!quizSubmitted ? (
                   <Button
                     onClick={() => handleSubmitQuiz(quiz)}
-                    disabled={submittingQuiz}
+                    loading={submittingQuiz}
                     className='flex-1 bg-indigo-600 hover:bg-indigo-700'
                   >
-                    {submittingQuiz ? (
-                      <>
-                        <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                        Submitting...
-                      </>
-                    ) : (
-                      'Submit Quiz'
-                    )}
+                    Submit Quiz
                   </Button>
                 ) : (
                   <Button
@@ -683,17 +677,10 @@ const Lesson = () => {
               <div className='mt-4'>
                 <Button
                   onClick={() => handleSubmitExercise(ex)}
-                  disabled={submittingExercise[ex.id]}
+                  loading={submittingExercise[ex.id]}
                   className='bg-indigo-600 hover:bg-indigo-700'
                 >
-                  {submittingExercise[ex.id] ? (
-                    <>
-                      <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                      Submitting...
-                    </>
-                  ) : (
-                    'Submit Exercise'
-                  )}
+                  Submit Exercise
                 </Button>
               </div>
             </Card>

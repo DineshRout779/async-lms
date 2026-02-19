@@ -177,12 +177,8 @@ export default function Login() {
               </div>
             )}
 
-            <Button type='submit' className='w-full' disabled={isLoading}>
-              {isLoading
-                ? 'Processing...'
-                : authMode === 'login'
-                  ? 'Login'
-                  : 'Create Account'}
+            <Button type='submit' className='w-full' loading={isLoading}>
+              {authMode === 'login' ? 'Login' : 'Create Account'}
             </Button>
           </form>
         </div>

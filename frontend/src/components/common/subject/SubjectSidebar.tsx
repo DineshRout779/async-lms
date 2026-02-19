@@ -10,9 +10,10 @@ import {
 } from '@/components/ui/accordion';
 
 export const SubjectSidebar = () => {
-  const { slug } = useParams(); // Matches :slug in routes
+  const { slug, subtopicSlug, exerciseId, quizId } = useParams(); // Matches params in routes
   const [structure, setStructure] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedValue, setExpandedValue] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchStructure = async () => {
@@ -29,6 +30,27 @@ export const SubjectSidebar = () => {
     if (slug) fetchStructure();
   }, [slug]);
 
+  // Auto-expand topic when a lesson/content within it is active
+  useEffect(() => {
+    if (!structure.length) return;
+
+    const currentTopic = structure.find((topic) =>
+      topic.units?.some(
+        (unit: any) =>
+          unit.subtopics?.some((sub: any) => sub.slug === subtopicSlug) ||
+          unit.assignments?.some((a: any) => a.id === exerciseId) ||
+          unit.quizzes?.some((q: any) => q.id === quizId),
+      ),
+    );
+
+    if (currentTopic) {
+      const itemValue = `item-${currentTopic.id}`;
+      setExpandedValue((prev) =>
+        prev.includes(itemValue) ? prev : [...prev, itemValue],
+      );
+    }
+  }, [structure, subtopicSlug, exerciseId, quizId]);
+
   if (loading)
     return (
       <div className='p-10 flex justify-center'>
@@ -41,7 +63,12 @@ export const SubjectSidebar = () => {
       <div className='p-6 border-b bg-white'>
         <h2 className='font-bold text-lg'>Course Content</h2>
       </div>
-      <Accordion type='multiple' className='w-full'>
+      <Accordion
+        type='multiple'
+        className='w-full'
+        value={expandedValue}
+        onValueChange={setExpandedValue}
+      >
         {structure.map((topic, index) => (
           <AccordionItem value={`item-${topic.id}`} key={topic.id}>
             <AccordionTrigger className='px-6 hover:no-underline'>
@@ -74,7 +101,7 @@ export const SubjectSidebar = () => {
                   {unit.assignments?.map((a: any) => (
                     <NavLink
                       key={a.id}
-                      to={`/dashboard/student/courses/${slug}/assignment/${a.id}`}
+                      to={`/dashboard/student/courses/${slug}/exercise/${a.id}`}
                       className={({ isActive }) =>
                         `flex items-center gap-3 py-2 pl-10 pr-4 text-sm transition-all ${
                           isActive

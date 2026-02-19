@@ -10,6 +10,7 @@ const ContentModal: React.FC<ContentModalProps> = ({
   onSave,
   subtopicTitle,
   editData,
+  loading = false,
 }) => {
   const [markdownPath, setMarkdownPath] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
@@ -104,7 +105,7 @@ const ContentModal: React.FC<ContentModalProps> = ({
               value={readTime || ''}
               onChange={(e) =>
                 setReadTime(
-                  e.target.value ? parseInt(e.target.value) : undefined
+                  e.target.value ? parseInt(e.target.value) : undefined,
                 )
               }
               placeholder='10'
@@ -123,9 +124,10 @@ const ContentModal: React.FC<ContentModalProps> = ({
           </Button>
           <Button
             onClick={handleSave}
+            loading={loading}
             className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
           >
-            <Save className='mr-2 h-4 w-4' />
+            {!loading && <Save className='mr-2 h-4 w-4' />}
             {editData ? 'Update Content' : 'Add Content'}
           </Button>
         </div>

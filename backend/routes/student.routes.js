@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const verifyToken = require('../middlewares/verfiyToken');
 const isStudent = require('../middlewares/isStudent');
+const isAdmin = require('../middlewares/isAdmin');
 
 const {
   getMyProgress,
@@ -19,13 +20,13 @@ router.post(
   '/progress/subtopic/:subtopicId/start',
   verifyToken,
   isStudent,
-  startSubtopic
+  startSubtopic,
 );
 router.post(
   '/progress/lesson/:lessonId/complete',
   verifyToken,
   isStudent,
-  completeLesson
+  completeLesson,
 );
 
 // ===== QUIZ & EXERCISE SUBMISSION =====
@@ -34,7 +35,7 @@ router.post(
   '/exercise/:exerciseId/submit',
   verifyToken,
   isStudent,
-  submitExercise
+  submitExercise,
 );
 
 // ===== LEADERBOARDS =====
@@ -42,14 +43,14 @@ router.get(
   '/leaderboard/overall',
   verifyToken,
   isStudent,
-  getOverallLeaderboard
+  getOverallLeaderboard,
 );
 router.get('/leaderboard/weekly', verifyToken, isStudent, getWeeklyLeaderboard);
 router.get(
   '/leaderboard/college',
   verifyToken,
   isStudent,
-  getCollegeLeaderboard
+  getCollegeLeaderboard,
 );
 
 module.exports = router;

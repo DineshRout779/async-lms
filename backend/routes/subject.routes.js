@@ -9,6 +9,7 @@ const {
   deleteSubject,
   getExerciseContent,
   getQuizContent,
+  getMarkdownContent,
 } = require('../controllers/subject.controller');
 const isAdmin = require('../middlewares/isAdmin');
 const verifyToken = require('../middlewares/verfiyToken');
@@ -36,5 +37,8 @@ router.put('/:id', verifyToken, isAdmin, updateSubject);
 
 // DELETE: Subject
 router.delete('/:id', verifyToken, isAdmin, deleteSubject);
+
+// GET markdown content for a lesson
+router.post('/markdown-content', verifyToken, isAdmin, getMarkdownContent);
 
 module.exports = router;

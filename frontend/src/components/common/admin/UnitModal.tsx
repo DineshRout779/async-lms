@@ -10,6 +10,7 @@ const UnitModal: React.FC<UnitModalProps> = ({
   onSave,
   topicTitle,
   editData,
+  loading = false,
 }) => {
   const [title, setTitle] = useState(editData?.title || '');
   const [description, setDescription] = useState(editData?.description || '');
@@ -91,9 +92,10 @@ const UnitModal: React.FC<UnitModalProps> = ({
           </Button>
           <Button
             onClick={handleSave}
+            loading={loading}
             className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
           >
-            <Save className='mr-2 h-4 w-4' />
+            {!loading && <Save className='mr-2 h-4 w-4' />}
             {editData ? 'Update' : 'Create'} Unit
           </Button>
         </div>

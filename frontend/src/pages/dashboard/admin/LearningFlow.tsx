@@ -15,6 +15,7 @@ import {
   Code,
   FolderOpen,
   XCircle,
+  Eye,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,7 @@ import UnitModal from '@/components/common/admin/UnitModal';
 import SubtopicModal from '@/components/common/admin/SubTopicModal';
 import QuizModal from '@/components/common/admin/QuizModal';
 import ExerciseModal from '@/components/common/admin/ExerciseModal';
+import AssignmentModal from '@/components/common/admin/AssignmentModal';
 import { QuizQuestionsList } from '@/components/common/admin/QuizQuestions';
 import ContentModal from '@/components/common/admin/ContentModal';
 import { isAxiosError } from 'axios';
@@ -47,6 +49,7 @@ import {
   toggleSubtopicExpansion,
   setStructure,
 } from '@/features/learningFlow/learningFlowSlice';
+import AdminLessonPreviewModal from '@/components/common/admin/AdminLessonPreview';
 
 const LearningFlow: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -79,6 +82,7 @@ const LearningFlow: React.FC = () => {
   const [contentModalOpen, setContentModalOpen] = useState(false);
   const [quizModalOpen, setQuizModalOpen] = useState(false);
   const [exerciseModalOpen, setExerciseModalOpen] = useState(false);
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
 
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
@@ -97,10 +101,13 @@ const LearningFlow: React.FC = () => {
   );
   const [selectedSubtopicForExercise, setSelectedSubtopicForExercise] =
     useState<Subtopic | null>(null);
-  const [selectedUnitForExercise, setSelectedUnitForExercise] =
-    useState<Unit | null>(null);
   const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
+  const [selectedUnitForAssignment, setSelectedUnitForAssignment] =
+    useState<Unit | null>(null);
+  const [editingAssignment, setEditingAssignment] = useState<Exercise | null>(
+    null,
+  );
   const [editingContent, setEditingContent] = useState<LessonContent | null>(
     null,
   );
@@ -109,6 +116,9 @@ const LearningFlow: React.FC = () => {
     useState<Quiz | null>(null);
   const [selectedUnitTitleForQuestions, setSelectedUnitTitleForQuestions] =
     useState<string>('');
+  const [showLessonPreview, setShowLessonPreview] = useState(false);
+  const [lessonPreviewContent, setLessonPreviewContent] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
 
   // 1. Initial Load: Get all subjects
   useEffect(() => {
@@ -151,6 +161,7 @@ const LearningFlow: React.FC = () => {
     description: string;
   }) => {
     if (!selectedSubject) return;
+    setModalLoading(true);
 
     try {
       const response = await apiClient.post('/admin/topics', {
@@ -168,6 +179,8 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to create topic', error);
       toast.error('Failed to create topic');
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -178,6 +191,7 @@ const LearningFlow: React.FC = () => {
     slug: string;
   }) => {
     if (!selectedTopicForUnit) return;
+    setModalLoading(true);
 
     try {
       const response = await apiClient.post('/admin/units', {
@@ -197,6 +211,8 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to create unit', error);
       toast.error('Failed to create unit');
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -207,6 +223,7 @@ const LearningFlow: React.FC = () => {
     slug: string;
   }) => {
     if (!editingUnit) return;
+    setModalLoading(true);
 
     try {
       const response = await apiClient.put(`/admin/units/${editingUnit.id}`, {
@@ -224,6 +241,8 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to update unit', error);
       toast.error('Failed to update unit');
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -249,6 +268,7 @@ const LearningFlow: React.FC = () => {
     description: string;
   }) => {
     if (!editingTopic) return;
+    setModalLoading(true);
 
     try {
       const response = await apiClient.put(`/admin/topics/${editingTopic.id}`, {
@@ -265,6 +285,8 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to update topic', error);
       toast.error('Failed to update topic');
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -291,6 +313,7 @@ const LearningFlow: React.FC = () => {
     slug: string;
   }) => {
     if (!selectedUnitForSubtopic) return;
+    setModalLoading(true);
 
     try {
       const response = await apiClient.post('/admin/subtopics', {
@@ -314,6 +337,8 @@ const LearningFlow: React.FC = () => {
       } else {
         toast.error('Failed to create subtopic');
       }
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -324,6 +349,7 @@ const LearningFlow: React.FC = () => {
     slug: string;
   }) => {
     if (!editingSubtopic) return;
+    setModalLoading(true);
 
     try {
       const response = await apiClient.put(
@@ -344,6 +370,8 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to update subtopic', error);
       toast.error('Failed to update subtopic');
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -389,6 +417,7 @@ const LearningFlow: React.FC = () => {
     file?: File | null;
   }) => {
     if (!selectedSubtopicForContent) return;
+    setModalLoading(true);
 
     try {
       let markdownPath = data.markdown_path;
@@ -415,6 +444,8 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to create content', error);
       toast.error('Failed to create lesson content');
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -427,6 +458,7 @@ const LearningFlow: React.FC = () => {
     file?: File | null;
   }) => {
     if (!editingContent) return;
+    setModalLoading(true);
 
     try {
       let markdownPath = data.markdown_path;
@@ -456,6 +488,8 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to update content', error);
       toast.error('Failed to update lesson content');
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -502,6 +536,7 @@ const LearningFlow: React.FC = () => {
     max_score: number;
   }) => {
     if (!selectedUnitForQuiz) return;
+    setModalLoading(true);
 
     try {
       const response = await apiClient.post('/admin/quizzes', {
@@ -519,21 +554,22 @@ const LearningFlow: React.FC = () => {
     } catch (error) {
       console.error('Failed to create quiz', error);
       toast.error('Failed to create quiz');
+    } finally {
+      setModalLoading(false);
     }
   };
 
-  // Create Exercise
+  // Create Exercise (subtopic-level only)
   const handleCreateExercise = async (data: {
     title: string;
     instructions: string;
     max_score: number;
   }) => {
-    if (!selectedSubtopicForExercise && !selectedUnitForExercise) return;
+    if (!selectedSubtopicForExercise) return;
 
     try {
       const response = await apiClient.post('/admin/exercises', {
-        subtopic_id: selectedSubtopicForExercise?.id || null,
-        unit_id: selectedUnitForExercise?.id || null,
+        subtopic_id: selectedSubtopicForExercise.id,
         title: data.title,
         instructions: data.instructions,
         max_score: data.max_score,
@@ -542,13 +578,40 @@ const LearningFlow: React.FC = () => {
       if (response.data.success) {
         toast.success('Exercise created successfully');
         await refreshStructure();
-        setExerciseModalOpen(false);
+        setAssignmentModalOpen(false);
         setSelectedSubtopicForExercise(null);
-        setSelectedUnitForExercise(null);
       }
     } catch (error) {
       console.error('Failed to create exercise', error);
       toast.error('Failed to create exercise');
+    }
+  };
+
+  // Create Assignment (unit-level)
+  const handleCreateAssignment = async (data: {
+    title: string;
+    instructions: string;
+    max_score: number;
+  }) => {
+    if (!selectedUnitForAssignment) return;
+
+    try {
+      const response = await apiClient.post('/admin/assignments', {
+        unit_id: selectedUnitForAssignment.id,
+        title: data.title,
+        instructions: data.instructions,
+        max_score: data.max_score,
+      });
+
+      if (response.data.success) {
+        toast.success('Assignment created successfully');
+        await refreshStructure();
+        setAssignmentModalOpen(false);
+        setSelectedUnitForAssignment(null);
+      }
+    } catch (error) {
+      console.error('Failed to create assignment', error);
+      toast.error('Failed to create assignment');
     }
   };
 
@@ -593,7 +656,7 @@ const LearningFlow: React.FC = () => {
       toast.success('Exercise updated');
       refreshStructure();
       setEditingExercise(null);
-      setExerciseModalOpen(false);
+      setAssignmentModalOpen(false);
     } catch {
       toast.error('Failed to update exercise');
     }
@@ -608,6 +671,36 @@ const LearningFlow: React.FC = () => {
       refreshStructure();
     } catch {
       toast.error('Failed to delete exercise');
+    }
+  };
+
+  const handleUpdateAssignment = async (data: {
+    title: string;
+    instructions: string;
+    max_score: number;
+  }) => {
+    if (!editingAssignment) return;
+
+    try {
+      await apiClient.put(`/admin/assignments/${editingAssignment.id}`, data);
+      toast.success('Assignment updated');
+      refreshStructure();
+      setEditingAssignment(null);
+      setAssignmentModalOpen(false);
+    } catch {
+      toast.error('Failed to update assignment');
+    }
+  };
+
+  const handleDeleteAssignment = async (id: string) => {
+    if (!confirm('Delete this assignment?')) return;
+
+    try {
+      await apiClient.delete(`/admin/assignments/${id}`);
+      toast.success('Assignment deleted');
+      refreshStructure();
+    } catch {
+      toast.error('Failed to delete assignment');
     }
   };
 
@@ -717,17 +810,23 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  // Helper function to get content type icon
-  // const getContentIcon = (type: string) => {
-  //   switch (type) {
-  //     case 'video':
-  //       return <Video className='h-4 w-4' />;
-  //     case 'external':
-  //       return <LinkIcon className='h-4 w-4' />;
-  //     default:
-  //       return <FileText className='h-4 w-4' />;
-  //   }
-  // };
+  const previewLesson = async (markdownPath: string) => {
+    setShowLessonPreview(true);
+    try {
+      const res = await apiClient.post('/subjects/markdown-content', {
+        markdownPathURL: markdownPath,
+      });
+      console.log('Markdown content:', res.data);
+      setLessonPreviewContent(res.data.data);
+    } catch (error) {
+      console.error('Failed to load markdown content', error);
+    }
+  };
+
+  const closeLessonPreview = () => {
+    setShowLessonPreview(false);
+    setLessonPreviewContent('');
+  };
 
   if (loading) {
     return (
@@ -937,15 +1036,15 @@ const LearningFlow: React.FC = () => {
                                           <div className='flex items-center gap-2'>
                                             <button
                                               onClick={() => {
-                                                setSelectedUnitForExercise(
+                                                setSelectedUnitForAssignment(
                                                   unit,
                                                 );
-                                                setExerciseModalOpen(true);
+                                                setAssignmentModalOpen(true);
                                               }}
                                               className='rounded p-1 text-slate-400 hover:bg-white hover:text-indigo-600'
-                                              title='Add unit-level exercise'
+                                              title='Add Assignment'
                                             >
-                                              <Code className='h-3 w-3' />
+                                              <FileText className='h-3 w-3' />
                                             </button>
                                             <div className='mx-1 h-3 w-px bg-slate-200' />
                                             <button
@@ -994,13 +1093,18 @@ const LearningFlow: React.FC = () => {
                                                     key={a.id}
                                                     className='flex items-center gap-2 rounded border border-indigo-100 bg-white px-2 py-1 text-xs text-indigo-700 shadow-sm'
                                                   >
-                                                    <Code className='h-3 w-3' />
+                                                    <FileText className='h-3 w-3' />
                                                     <span>{a.title}</span>
                                                     <div className='flex items-center gap-1 ml-1 pl-1 border-l border-indigo-100'>
                                                       <button
                                                         onClick={() => {
-                                                          setEditingExercise(a);
-                                                          setExerciseModalOpen(
+                                                          setEditingAssignment(
+                                                            a,
+                                                          );
+                                                          setSelectedUnitForAssignment(
+                                                            unit,
+                                                          );
+                                                          setAssignmentModalOpen(
                                                             true,
                                                           );
                                                         }}
@@ -1010,7 +1114,7 @@ const LearningFlow: React.FC = () => {
                                                       </button>
                                                       <button
                                                         onClick={() =>
-                                                          handleDeleteExercise(
+                                                          handleDeleteAssignment(
                                                             a.id,
                                                           )
                                                         }
@@ -1254,6 +1358,18 @@ const LearningFlow: React.FC = () => {
                                                               <div className='flex items-center gap-2'>
                                                                 <button
                                                                   onClick={() =>
+                                                                    previewLesson(
+                                                                      content.markdown_path,
+                                                                    )
+                                                                  }
+                                                                  title='Preview Lesson'
+                                                                  className='flex justify-center items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50'
+                                                                >
+                                                                  <Eye className='h-3 w-3' />
+                                                                  Preview Lesson
+                                                                </button>
+                                                                <button
+                                                                  onClick={() =>
                                                                     handleTogglePublishContent(
                                                                       content,
                                                                     )
@@ -1495,6 +1611,7 @@ const LearningFlow: React.FC = () => {
               }
             : undefined
         }
+        loading={modalLoading}
       />
 
       <UnitModal
@@ -1508,6 +1625,7 @@ const LearningFlow: React.FC = () => {
           }
         }}
         topicTitle={selectedTopicForUnit?.title || ''}
+        loading={modalLoading}
         editData={
           editingUnit
             ? {
@@ -1522,14 +1640,24 @@ const LearningFlow: React.FC = () => {
       <SubtopicModal
         isOpen={subtopicModalOpen}
         onClose={() => setSubtopicModalOpen(false)}
-        onSave={(data) => {
-          if (editingSubtopic) {
-            handleUpdateSubtopic({ ...data, slug: data.slug || '' });
-          } else {
-            handleCreateSubtopic({ ...data, slug: data.slug || '' });
+        onSave={async (data) => {
+          setModalLoading(true);
+          try {
+            if (editingSubtopic) {
+              await handleUpdateSubtopic({ ...data, slug: data.slug || '' });
+            } else {
+              await handleCreateSubtopic({ ...data, slug: data.slug || '' });
+            }
+          } finally {
+            setModalLoading(false);
           }
         }}
-        topicTitle={selectedUnitForSubtopic?.title || ''}
+        topicTitle={
+          editingSubtopic?.subtopic.title ||
+          selectedUnitForSubtopic?.title ||
+          ''
+        }
+        loading={modalLoading}
         editData={
           editingSubtopic
             ? {
@@ -1548,8 +1676,20 @@ const LearningFlow: React.FC = () => {
           setSelectedSubtopicForContent(null);
           setEditingContent(null);
         }}
-        onSave={editingContent ? handleUpdateContent : handleCreateContent}
+        onSave={async (data) => {
+          setModalLoading(true);
+          try {
+            if (editingContent) {
+              await handleUpdateContent(data);
+            } else {
+              await handleCreateContent(data);
+            }
+          } finally {
+            setModalLoading(false);
+          }
+        }}
         subtopicTitle={selectedSubtopicForContent?.title || ''}
+        loading={modalLoading}
         editData={editingContent || undefined}
       />
 
@@ -1560,9 +1700,21 @@ const LearningFlow: React.FC = () => {
           setEditingQuiz(null);
           setSelectedUnitForQuiz(null);
         }}
-        onSave={editingQuiz ? handleUpdateQuiz : handleCreateQuiz}
+        onSave={async (data) => {
+          setModalLoading(true);
+          try {
+            if (editingQuiz) {
+              await handleUpdateQuiz(data);
+            } else {
+              await handleCreateQuiz(data);
+            }
+          } finally {
+            setModalLoading(false);
+          }
+        }}
         editData={editingQuiz || undefined}
         unitTitle={selectedUnitForQuiz?.title || ''}
+        loading={modalLoading}
       />
 
       <ExerciseModal
@@ -1572,7 +1724,18 @@ const LearningFlow: React.FC = () => {
           setEditingExercise(null);
           setSelectedSubtopicForExercise(null);
         }}
-        onSave={editingExercise ? handleUpdateExercise : handleCreateExercise}
+        onSave={async (data) => {
+          setModalLoading(true);
+          try {
+            if (editingExercise) {
+              await handleUpdateExercise(data);
+            } else {
+              await handleCreateExercise(data);
+            }
+          } finally {
+            setModalLoading(false);
+          }
+        }}
         editData={
           editingExercise
             ? {
@@ -1582,11 +1745,46 @@ const LearningFlow: React.FC = () => {
               }
             : undefined
         }
-        subtopicTitle={
-          selectedSubtopicForExercise?.title ||
-          selectedUnitForExercise?.title ||
-          ''
+        subtopicTitle={selectedSubtopicForExercise?.title || ''}
+        loading={modalLoading}
+      />
+
+      <AssignmentModal
+        isOpen={assignmentModalOpen}
+        onClose={() => {
+          setAssignmentModalOpen(false);
+          setEditingAssignment(null);
+          setSelectedUnitForAssignment(null);
+        }}
+        onSave={async (data) => {
+          setModalLoading(true);
+          try {
+            if (editingAssignment) {
+              await handleUpdateAssignment(data);
+            } else {
+              await handleCreateAssignment(data);
+            }
+          } finally {
+            setModalLoading(false);
+          }
+        }}
+        editData={
+          editingAssignment
+            ? {
+                title: editingAssignment.title,
+                instructions: editingAssignment.instructions || '',
+                max_score: editingAssignment.max_score,
+              }
+            : undefined
         }
+        unitTitle={selectedUnitForAssignment?.title || ''}
+        loading={modalLoading}
+      />
+
+      <AdminLessonPreviewModal
+        isOpen={showLessonPreview}
+        onClose={closeLessonPreview}
+        content={lessonPreviewContent}
       />
 
       {questionsModalOpen && selectedQuizForQuestions && (
