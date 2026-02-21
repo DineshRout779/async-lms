@@ -1015,12 +1015,15 @@ exports.getAssignmentById = async (req, res) => {
         a.max_score,
         s.name AS subject_title,
         s.slug AS subject_slug,
-        u.title AS unit_title
+        u.title AS unit_title,
+        sub.submission_link,
+        sub.submitted_at
        FROM assignments a
        INNER JOIN units u ON a.unit_id = u.id
        INNER JOIN topics t ON u.topic_id = t.id
        INNER JOIN subjects s ON t.subject_id = s.id
        INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.user_id = $1
        WHERE a.id = $2`,
       [userId, id],
     );
@@ -1033,6 +1036,51 @@ exports.getAssignmentById = async (req, res) => {
   } catch (error) {
     console.error('Error fetching assignment:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch assignment', error: error.message });
+  }
+};
+
+/**
+ * Submit (or update) an assignment solution link
+ * POST /api/students/assignments/:id/submit
+ */
+exports.submitAssignment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const { submission_link } = req.body;
+
+    if (!submission_link || !submission_link.trim()) {
+      return res.status(400).json({ success: false, message: 'submission_link is required' });
+    }
+
+    // Verify the student is enrolled in the subject this assignment belongs to
+    const enrolled = await pool.query(
+      `SELECT a.id FROM assignments a
+       INNER JOIN units u ON a.unit_id = u.id
+       INNER JOIN topics t ON u.topic_id = t.id
+       INNER JOIN subjects s ON t.subject_id = s.id
+       INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       WHERE a.id = $2`,
+      [userId, id],
+    );
+
+    if (enrolled.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Assignment not found' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO assignment_submissions (assignment_id, user_id, submission_link)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (assignment_id, user_id)
+       DO UPDATE SET submission_link = EXCLUDED.submission_link, updated_at = CURRENT_TIMESTAMP
+       RETURNING submission_link, submitted_at`,
+      [id, userId, submission_link.trim()],
+    );
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error submitting assignment:', error);
+    res.status(500).json({ success: false, message: 'Failed to submit assignment', error: error.message });
   }
 };
 
