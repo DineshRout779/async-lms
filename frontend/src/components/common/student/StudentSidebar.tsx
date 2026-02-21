@@ -8,6 +8,7 @@ import {
   MessageSquare,
   LogOut,
   Code,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation, Link, useNavigate } from 'react-router';
@@ -21,14 +22,20 @@ interface StudentSidebarProps {
   onToggle: () => void;
 }
 
-const menuItems = [
+type MenuItem = {
+  name: string;
+  icon: LucideIcon;
+  path: string;
+  badge?: number;
+};
+
+const menuItems: MenuItem[] = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/student' },
   { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
   {
     name: 'Assignments',
     icon: ClipboardList,
     path: '/dashboard/student/assignments',
-    badge: 3,
   },
   {
     name: 'Code Playground',
@@ -61,7 +68,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
     <aside
       className={cn(
         'h-full flex flex-col transition-all duration-300 bg-white text-[#1e2653] border-r border-[#ebe5e5] shrink-0 overflow-hidden',
-        isOpen ? 'w-64' : 'w-20'
+        isOpen ? 'w-64' : 'w-20',
       )}
     >
       {/* Brand Header matching Admin */}
@@ -102,7 +109,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
                 'flex items-center justify-center gap-3 px-3 py-3 rounded-lg transition-all group relative',
                 isActive
                   ? 'bg-[#333d7c] text-white shadow-sm'
-                  : 'hover:bg-[#f4f5f8] hover:text-[#1e2653]'
+                  : 'hover:bg-[#f4f5f8] hover:text-[#1e2653]',
               )}
             >
               <item.icon
@@ -110,7 +117,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
                 className={cn(
                   isActive
                     ? 'text-white'
-                    : 'text-slate-400 group-hover:text-[#1e2653]'
+                    : 'text-slate-400 group-hover:text-[#1e2653]',
                 )}
               />
 
@@ -119,9 +126,9 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
                   <span className='font-medium text-[14px] flex-1'>
                     {item.name}
                   </span>
-                  {item.badge && !isActive && (
+                  {item?.badge && !isActive && (
                     <span className='bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full '>
-                      {item.badge}
+                      {item?.badge}
                     </span>
                   )}
                   {isActive && (

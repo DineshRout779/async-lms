@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, NavLink } from 'react-router'; // Use react-router
 import apiClient from '@/services/api';
-import { Loader2, PlayCircle, ListChecks, Code } from 'lucide-react';
+import { Loader2, PlayCircle, ListChecks } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -101,7 +101,7 @@ export const SubjectSidebar = () => {
                   {unit.assignments?.map((a: any) => (
                     <NavLink
                       key={a.id}
-                      to={`/dashboard/student/courses/${slug}/exercise/${a.id}`}
+                      to={`/dashboard/student/courses/${slug}/assignment/${a.id}`}
                       className={({ isActive }) =>
                         `flex items-center gap-3 py-2 pl-10 pr-4 text-sm transition-all ${
                           isActive
@@ -110,7 +110,7 @@ export const SubjectSidebar = () => {
                         }`
                       }
                     >
-                      <Code className='h-4 w-4 shrink-0' />
+                      <ListChecks className='h-4 w-4 shrink-0' />
                       <span>{a.title}</span>
                     </NavLink>
                   ))}

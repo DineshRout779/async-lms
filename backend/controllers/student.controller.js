@@ -999,6 +999,44 @@ exports.deleteStudentProject = async (req, res) => {
 // ============================================
 
 /**
+ * Get a single assignment by ID (student must be enrolled in the subject)
+ * GET /api/students/assignments/:id
+ */
+exports.getAssignmentById = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT
+        a.id,
+        a.title,
+        a.instructions,
+        a.max_score,
+        s.name AS subject_title,
+        s.slug AS subject_slug,
+        u.title AS unit_title
+       FROM assignments a
+       INNER JOIN units u ON a.unit_id = u.id
+       INNER JOIN topics t ON u.topic_id = t.id
+       INNER JOIN subjects s ON t.subject_id = s.id
+       INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       WHERE a.id = $2`,
+      [userId, id],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Assignment not found' });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching assignment:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch assignment', error: error.message });
+  }
+};
+
+/**
  * Get all assignments for the student's enrolled subjects
  * GET /api/students/assignments
  */
@@ -1012,7 +1050,7 @@ exports.getStudentAssignments = async (req, res) => {
         a.title,
         a.instructions,
         a.max_score,
-        s.title AS subject_title,
+        s.name AS subject_title,
         s.slug AS subject_slug,
         u.title AS unit_title
       FROM assignments a
@@ -1020,7 +1058,7 @@ exports.getStudentAssignments = async (req, res) => {
       INNER JOIN topics t ON u.topic_id = t.id
       INNER JOIN subjects s ON t.subject_id = s.id
       INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
-      ORDER BY s.title, t.order_index, u.order_index, a.id;
+      ORDER BY s.name, t.order_index, u.order_index, a.id;
     `;
 
     const result = await pool.query(query, [userId]);

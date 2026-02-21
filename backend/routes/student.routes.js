@@ -17,6 +17,7 @@ const {
   initExerciseWorkspace,
   runExercise,
   getStudentAssignments,
+  getAssignmentById,
 } = require('../controllers/student.controller');
 
 // ===== PROGRESS TRACKING =====
@@ -44,6 +45,7 @@ router.post('/exercise/:exerciseId/run', verifyToken, isStudent, runExercise);
 
 // ===== ASSIGNMENTS =====
 router.get('/assignments', verifyToken, isStudent, getStudentAssignments);
+router.get('/assignments/:id', verifyToken, isStudent, getAssignmentById);
 
 // ===== PERSONAL PROJECTS =====
 router.get('/projects', verifyToken, isStudent, getStudentProjects);
