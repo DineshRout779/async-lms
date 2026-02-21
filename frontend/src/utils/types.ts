@@ -41,6 +41,7 @@ export interface QuizQuestion {
 
 export interface Quiz {
   id: string;
+  title?: string;
   unit_id: string;
   passing_score: number;
   max_score: number;
@@ -57,10 +58,16 @@ export interface Exercise {
 
 export interface Assignment {
   id: string;
-  unit_id: string;
   title: string;
   instructions?: string;
   max_score: number;
+  // Enriched fields from student assignments API
+  unit_id?: string;
+  unit_title?: string;
+  subject_title?: string;
+  subject_slug?: string;
+  status?: 'PENDING' | 'COMPLETED';
+  score?: number;
 }
 
 export interface Subtopic {
@@ -98,6 +105,9 @@ export interface Subject {
   slug: string;
   description: string;
   is_published: boolean;
+  level?: string;
+  total_lessons?: number;
+  progress_percent?: number;
   units_count?: number;
   topics_count?: number;
 }
@@ -184,11 +194,15 @@ export interface ExerciseModalProps {
     title: string;
     instructions: string;
     max_score: number;
+    language: string;
+    initial_files: { name: string; content: string }[];
   }) => void;
   editData?: {
     title: string;
     instructions: string;
     max_score: number;
+    language?: string;
+    initial_files?: { name: string; content: string }[];
   };
   subtopicTitle: string;
   loading?: boolean;

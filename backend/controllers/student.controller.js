@@ -598,6 +598,152 @@ exports.submitExercise = async (req, res) => {
 };
 
 // ============================================
+// EXERCISE WORKSPACE
+// ============================================
+
+const fs = require('fs');
+const path = require('path');
+const { spawn } = require('child_process');
+
+const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
+
+const EXERCISE_RUNNER = {
+  javascript: { image: 'workspace-node',  cmd: ['node',    'index.js'] },
+  python:     { image: 'workspace-python', cmd: ['python3', 'main.py']  },
+};
+
+const DEFAULT_INITIAL_FILES = {
+  javascript: [{ name: 'index.js', content: '// Write your solution here\n' }],
+  python:     [{ name: 'main.py',  content: '# Write your solution here\n'  }],
+};
+
+/**
+ * Initialise (or re-open) an exercise workspace for the student.
+ * Creates the directory and seeds initial files on the first open.
+ * POST /api/students/exercise/:exerciseId/workspace/init
+ */
+exports.initExerciseWorkspace = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { exerciseId } = req.params;
+
+    const exerciseResult = await pool.query(
+      'SELECT language, initial_files FROM exercises WHERE id = $1',
+      [exerciseId],
+    );
+
+    if (exerciseResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Exercise not found' });
+    }
+
+    const { language, initial_files } = exerciseResult.rows[0];
+    const projectId = `exercise-${exerciseId}`;
+    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
+
+    fs.mkdirSync(workspaceDir, { recursive: true });
+
+    const existing = fs.readdirSync(workspaceDir);
+    if (existing.length === 0) {
+      const filesToSeed =
+        (Array.isArray(initial_files) && initial_files.length > 0)
+          ? initial_files
+          : (DEFAULT_INITIAL_FILES[language] ?? DEFAULT_INITIAL_FILES.javascript);
+
+      for (const file of filesToSeed) {
+        const filePath = path.join(workspaceDir, file.name);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, file.content, 'utf-8');
+      }
+    }
+
+    // Return current files from disk so returning students see their saved work
+    const files = fs.readdirSync(workspaceDir)
+      .filter(f => fs.statSync(path.join(workspaceDir, f)).isFile())
+      .map(name => ({
+        name,
+        content: fs.readFileSync(path.join(workspaceDir, name), 'utf-8'),
+      }));
+
+    res.json({ success: true, data: { language, files, projectId } });
+  } catch (error) {
+    console.error('Error initialising exercise workspace:', error);
+    res.status(500).json({ success: false, message: 'Failed to init workspace', error: error.message });
+  }
+};
+
+/**
+ * Run the student's exercise code and return stdout + stderr.
+ * POST /api/students/exercise/:exerciseId/run
+ */
+exports.runExercise = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { exerciseId } = req.params;
+
+    const exerciseResult = await pool.query(
+      'SELECT language FROM exercises WHERE id = $1',
+      [exerciseId],
+    );
+
+    if (exerciseResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Exercise not found' });
+    }
+
+    const { language } = exerciseResult.rows[0];
+    const runner = EXERCISE_RUNNER[language] ?? EXERCISE_RUNNER.javascript;
+    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}`);
+
+    if (!fs.existsSync(workspaceDir)) {
+      return res.status(400).json({ success: false, message: 'Workspace not initialised' });
+    }
+
+    const child = spawn('docker', [
+      'run', '--rm',
+      '--memory=256m', '--cpus=0.5',
+      '--network=none', '--pids-limit=64',
+      '--read-only', '--tmpfs', '/tmp',
+      '-v', `${workspaceDir}:/workspace`,
+      '-w', '/workspace',
+      runner.image,
+      ...runner.cmd,
+    ]);
+
+    let output = '';
+    let finished = false;
+
+    const timeout = setTimeout(() => {
+      if (!finished) {
+        child.kill();
+        finished = true;
+        res.json({ success: true, data: { output: output + '\n[Timed out after 10 seconds]', exitCode: -1 } });
+      }
+    }, 10000);
+
+    child.stdout.on('data', (d) => { output += d.toString(); });
+    child.stderr.on('data', (d) => { output += d.toString(); });
+
+    child.on('close', (code) => {
+      if (!finished) {
+        finished = true;
+        clearTimeout(timeout);
+        res.json({ success: true, data: { output, exitCode: code } });
+      }
+    });
+
+    child.on('error', (err) => {
+      if (!finished) {
+        finished = true;
+        clearTimeout(timeout);
+        res.status(500).json({ success: false, message: err.message });
+      }
+    });
+  } catch (error) {
+    console.error('Error running exercise:', error);
+    res.status(500).json({ success: false, message: 'Failed to run exercise', error: error.message });
+  }
+};
+
+// ============================================
 // STUDENT LEADERBOARDS
 // ============================================
 
@@ -767,6 +913,122 @@ exports.getCollegeLeaderboard = async (req, res) => {
       message: 'Failed to fetch college leaderboard',
       error: error.message,
     });
+  }
+};
+
+// ============================================
+// STUDENT PROJECTS (personal editor workspaces)
+// ============================================
+
+/**
+ * List all personal projects for the logged-in student
+ * GET /api/students/projects
+ */
+exports.getStudentProjects = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      `SELECT id, name, profile, created_at, updated_at
+       FROM student_projects
+       WHERE user_id = $1
+       ORDER BY updated_at DESC`,
+      [userId],
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error fetching student projects:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch projects', error: error.message });
+  }
+};
+
+/**
+ * Create a new personal project
+ * POST /api/students/projects
+ * Body: { name: string, profile: string }
+ */
+exports.createStudentProject = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, profile } = req.body;
+
+    if (!name || !profile) {
+      return res.status(400).json({ success: false, message: 'name and profile are required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO student_projects (user_id, name, profile)
+       VALUES ($1, $2, $3)
+       RETURNING id, name, profile, created_at`,
+      [userId, name.trim(), profile],
+    );
+
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating student project:', error);
+    res.status(500).json({ success: false, message: 'Failed to create project', error: error.message });
+  }
+};
+
+/**
+ * Delete a personal project
+ * DELETE /api/students/projects/:id
+ */
+exports.deleteStudentProject = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `DELETE FROM student_projects WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, userId],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    res.json({ success: true, message: 'Project deleted' });
+  } catch (error) {
+    console.error('Error deleting student project:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete project', error: error.message });
+  }
+};
+
+// ============================================
+// ASSIGNMENTS
+// ============================================
+
+/**
+ * Get all assignments for the student's enrolled subjects
+ * GET /api/students/assignments
+ */
+exports.getStudentAssignments = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const query = `
+      SELECT
+        a.id,
+        a.title,
+        a.instructions,
+        a.max_score,
+        s.title AS subject_title,
+        s.slug AS subject_slug,
+        u.title AS unit_title
+      FROM assignments a
+      INNER JOIN units u ON a.unit_id = u.id
+      INNER JOIN topics t ON u.topic_id = t.id
+      INNER JOIN subjects s ON t.subject_id = s.id
+      INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+      ORDER BY s.title, t.order_index, u.order_index, a.id;
+    `;
+
+    const result = await pool.query(query, [userId]);
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error fetching student assignments:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch assignments', error: error.message });
   }
 };
 

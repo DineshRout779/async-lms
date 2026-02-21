@@ -8,16 +8,11 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FileText, CheckCircle2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { Assignment } from '@/utils/types';
 
-export interface Assignment {
-  id: string;
-  title: string;
-  description: string;
-  course: string;
-  dueDate: string;
-  status: 'PENDING' | 'COMPLETED';
-  score?: number;
-}
+export type { Assignment };
 
 export const AssignmentCard = ({ assignment }: { assignment: Assignment }) => {
   const isCompleted = assignment.status === 'COMPLETED';
@@ -53,34 +48,38 @@ export const AssignmentCard = ({ assignment }: { assignment: Assignment }) => {
           <CardTitle className='text-xl font-bold text-slate-800'>
             {assignment.title}
           </CardTitle>
-          <p className='text-sm text-slate-500 leading-relaxed line-clamp-2'>
-            {assignment.description}
-          </p>
+          <div className='prose prose-sm max-w-none text-slate-500 leading-relaxed line-clamp-3'>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {assignment.instructions}
+            </ReactMarkdown>
+          </div>
         </div>
 
         <div className='space-y-2 text-sm pt-2'>
           <div className='flex justify-between'>
             <span className='text-slate-400'>Course:</span>
             <span className='font-semibold text-slate-700 text-right'>
-              {assignment.course}
+              {assignment.subject_title}
             </span>
           </div>
           <div className='flex justify-between'>
-            <span className='text-slate-400'>Due Date:</span>
-            <span
-              className={
-                isCompleted ? 'text-slate-700' : 'text-orange-500 font-semibold'
-              }
-            >
-              {assignment.dueDate}
+            <span className='text-slate-400'>Unit:</span>
+            <span className='text-slate-600 text-right'>
+              {assignment.unit_title}
+            </span>
+          </div>
+          <div className='flex justify-between'>
+            <span className='text-slate-400'>Max Score:</span>
+            <span className='font-semibold text-slate-700'>
+              {assignment.max_score} pts
             </span>
           </div>
         </div>
 
-        {isCompleted && assignment.score && (
+        {isCompleted && assignment.score !== undefined && (
           <div className='flex items-center justify-between p-3 bg-emerald-50/50 rounded-lg mt-4 border border-emerald-100'>
             <span className='text-emerald-700 font-bold'>
-              Score: {assignment.score}/100
+              Score: {assignment.score}/{assignment.max_score}
             </span>
             <button className='text-xs font-bold text-emerald-600 hover:underline'>
               View Feedback

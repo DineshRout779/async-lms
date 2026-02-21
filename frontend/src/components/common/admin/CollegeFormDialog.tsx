@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import toast from 'react-hot-toast';
 import apiClient from '@/services/api';
 import type { College } from '@/utils/types';
+import { isAxiosError } from 'axios';
 
 interface Props {
   open: boolean;
@@ -61,7 +62,7 @@ export default function CollegeFormDialog({
           is_verified: isVerified,
         });
         toast.success(
-          isVerified ? 'College verified & updated' : 'College updated'
+          isVerified ? 'College verified & updated' : 'College updated',
         );
       } else {
         await apiClient.post('/colleges', form);
@@ -70,8 +71,15 @@ export default function CollegeFormDialog({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Action failed');
+    } catch (err: unknown) {
+      if (isAxiosError(err)) {
+        const serverMessage = err.response?.data?.message || 'Action failed';
+        toast.error(serverMessage);
+      } else if (err instanceof Error) {
+        toast.error(err.message);
+      } else {
+        toast.error('An unexpected error occurred');
+      }
     } finally {
       setLoading(false);
     }

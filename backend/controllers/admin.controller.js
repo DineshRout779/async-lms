@@ -1218,7 +1218,7 @@ exports.deleteQuiz = async (req, res) => {
 
 exports.createExercise = async (req, res) => {
   try {
-    const { subtopic_id, title, instructions, max_score } = req.body;
+    const { subtopic_id, title, instructions, max_score, language, initial_files } = req.body;
 
     if (!subtopic_id || !title || !max_score) {
       return res.status(400).json({
@@ -1228,8 +1228,8 @@ exports.createExercise = async (req, res) => {
     }
 
     const query = `
-      INSERT INTO exercises (subtopic_id, title, instructions, max_score)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO exercises (subtopic_id, title, instructions, max_score, language, initial_files)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
 
@@ -1238,6 +1238,8 @@ exports.createExercise = async (req, res) => {
       title,
       instructions,
       max_score,
+      language || 'javascript',
+      JSON.stringify(initial_files || []),
     ]);
 
     res.status(201).json({
@@ -1258,7 +1260,7 @@ exports.createExercise = async (req, res) => {
 exports.updateExercise = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score } = req.body;
+    const { title, instructions, max_score, language, initial_files } = req.body;
 
     const updates = [];
     const values = [];
@@ -1275,6 +1277,14 @@ exports.updateExercise = async (req, res) => {
     if (max_score !== undefined) {
       updates.push(`max_score = $${paramCount++}`);
       values.push(max_score);
+    }
+    if (language !== undefined) {
+      updates.push(`language = $${paramCount++}`);
+      values.push(language);
+    }
+    if (initial_files !== undefined) {
+      updates.push(`initial_files = $${paramCount++}`);
+      values.push(JSON.stringify(initial_files));
     }
 
     if (updates.length === 0) {

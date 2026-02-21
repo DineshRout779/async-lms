@@ -5,50 +5,23 @@ import {
   type Assignment,
 } from '@/components/common/student/AssignmentCard';
 import { Loader2 } from 'lucide-react';
-
-// This would eventually move to your database/API
-const INITIAL_DATA: Assignment[] = [
-  {
-    id: '1',
-    title: 'Personal Portfolio Website',
-    description:
-      'Build a responsive personal portfolio using HTML, CSS, and JavaScript.',
-    course: 'Full Stack Web Development',
-    dueDate: 'March 02, 2026',
-    status: 'PENDING',
-  },
-  {
-    id: '2',
-    title: 'E-commerce API Integration',
-    description: 'Fetch products from a dummy API and display them in a grid.',
-    course: 'Advanced React Patterns',
-    dueDate: 'Apr 02, 2026',
-    status: 'PENDING',
-  },
-  {
-    id: '3',
-    title: 'Task Manager Backend',
-    description: 'Build a RESTful API using Node.js and Express.',
-    course: 'Node.js Performance Tuning',
-    dueDate: 'May 02, 2026',
-    status: 'COMPLETED',
-    score: 92,
-  },
-];
+import apiClient from '@/services/api';
 
 export default function Assignments() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  // 1. Simulate data fetching from an API
   useEffect(() => {
     const fetchAssignments = async () => {
       try {
         setLoading(true);
-        // Simulate network delay
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        setAssignments(INITIAL_DATA);
+        const response = await apiClient.get<{ success: boolean; data: Omit<Assignment, 'status'>[] }>('/students/assignments');
+        const data = (response.data?.data || []).map((a) => ({
+          ...a,
+          status: 'PENDING' as const,
+        }));
+        setAssignments(data);
       } catch (error) {
         console.error('Failed to fetch assignments:', error);
       } finally {
@@ -59,10 +32,9 @@ export default function Assignments() {
     fetchAssignments();
   }, []);
 
-  // 2. Client-side filtering logic
   const filteredAssignments = assignments.filter((item) => {
     if (filter === 'all') return true;
-    return item.status.toLowerCase() === filter.toLowerCase();
+    return (item.status ?? '').toLowerCase() === filter.toLowerCase();
   });
 
   return (
@@ -76,7 +48,6 @@ export default function Assignments() {
             <p className='text-slate-500'>Track and submit your projects</p>
           </div>
 
-          {/* 3. Link Tabs to the 'filter' state */}
           <Tabs
             defaultValue='all'
             className='w-fit'
@@ -105,7 +76,6 @@ export default function Assignments() {
           </Tabs>
         </header>
 
-        {/* 4. Conditional Rendering based on Loading and Filter state */}
         {loading ? (
           <div className='flex flex-col items-center justify-center h-64 space-y-4'>
             <Loader2 className='w-10 h-10 animate-spin text-indigo-600' />

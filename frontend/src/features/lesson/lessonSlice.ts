@@ -17,7 +17,7 @@ interface LessonResponse {
   };
   lesson: {
     id: string;
-    content_type: 'markdown' | 'video' | 'external' | 'exercise' | null;
+    content_type: 'markdown' | 'video' | 'external' | 'exercise' | 'quiz' | null;
     markdown_content: string;
     read_time: number | null;
     video_url?: string | null;

@@ -19,11 +19,12 @@ exports.getAllColleges = async (req, res) => {
 exports.createCollege = async (req, res) => {
   const { name, short_code, city, state } = req.body;
   try {
+    const is_verfied = req.user.role === 'admin';
     const query = `
-      INSERT INTO colleges (name, short_code, city, state) 
-      VALUES ($1, $2, $3, $4) 
+      INSERT INTO colleges (name, short_code, city, state, is_verified) 
+      VALUES ($1, $2, $3, $4, $5) 
       RETURNING *`;
-    const values = [name, short_code, city, state];
+    const values = [name, short_code, city, state, is_verfied];
     const result = await pool.query(query, values);
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
@@ -38,14 +39,14 @@ exports.createCollege = async (req, res) => {
 // UPDATE college
 exports.updateCollege = async (req, res) => {
   const { id } = req.params;
-  const { name, short_code, city, state } = req.body;
+  const { name, short_code, city, state, is_verified } = req.body;
   try {
     const query = `
       UPDATE colleges 
-      SET name = $1, short_code = $2, city = $3, state = $4, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5 
+      SET name = $1, short_code = $2, city = $3, state = $4, is_verified = $5, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $6
       RETURNING *`;
-    const values = [name, short_code, city, state, id];
+    const values = [name, short_code, city, state, is_verified, id];
     const result = await pool.query(query, values);
     if (result.rowCount === 0)
       return res.status(404).json({ message: 'College not found' });

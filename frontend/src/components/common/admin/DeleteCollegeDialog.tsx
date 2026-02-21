@@ -32,6 +32,8 @@ export default function DeleteCollegeDialog({
     }
   };
 
+  console.log('delete dialog rendered');
+
   return (
     <AlertDialog open={open} onOpenChange={onClose}>
       <AlertDialogContent>

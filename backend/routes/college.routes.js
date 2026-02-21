@@ -9,12 +9,13 @@ const {
 } = require('../controllers/college.controller');
 
 const isAdmin = require('../middlewares/isAdmin');
+const isAdminOrFacilitator = require('../middlewares/isAdminOrFacilitator');
 const verifyToken = require('../middlewares/verfiyToken');
 const router = require('express').Router();
 
 // General CRUD
 router.get('/', verifyToken, getAllColleges);
-router.post('/', verifyToken, isAdmin, createCollege);
+router.post('/', verifyToken, isAdminOrFacilitator, createCollege);
 router.put('/:id', verifyToken, isAdmin, updateCollege);
 router.delete('/:id', verifyToken, isAdmin, deleteCollege);
 
@@ -23,7 +24,7 @@ router.get(
   '/assignment/:subjectId',
   verifyToken,
   isAdmin,
-  getCollegesBySubject
+  getCollegesBySubject,
 );
 router.post('/toggle-assignment', verifyToken, isAdmin, toggleSubjectAccess);
 router.post('/assign-facilitator', verifyToken, isAdmin, assignFacilitator);

@@ -1,0 +1,260 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Editor from '@monaco-editor/react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Play,
+  Loader2,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import apiClient from '@/services/api';
+import { useAppSelector } from '@/app/hooks';
+import { selectUser } from '@/features/auth/authSelectors';
+import type { Exercise } from '@/utils/types';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface WorkspaceFile {
+  name: string;
+  content: string;
+}
+
+interface ExerciseEditorProps {
+  exercise: Exercise;
+  submitting: boolean;
+  onSubmit: (exerciseId: string) => void;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const EXT_TO_LANG: Record<string, string> = {
+  js: 'javascript',
+  ts: 'typescript',
+  py: 'python',
+  json: 'json',
+  html: 'html',
+  css: 'css',
+  md: 'markdown',
+};
+
+function monacoLang(filename: string): string {
+  const ext = filename.split('.').pop() ?? '';
+  return EXT_TO_LANG[ext] ?? 'plaintext';
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps) => {
+  const user = useAppSelector(selectUser);
+
+  const [loading, setLoading] = useState(true);
+  const [files, setFiles] = useState<WorkspaceFile[]>([]);
+  const [activeFile, setActiveFile] = useState<string>('');
+  const [language, setLanguage] = useState('javascript');
+  const [projectId, setProjectId] = useState('');
+
+  const [running, setRunning] = useState(false);
+  const [output, setOutput] = useState<string | null>(null);
+  const [outputOpen, setOutputOpen] = useState(false);
+  const [exitCode, setExitCode] = useState<number | null>(null);
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Bootstrap workspace on mount ────────────────────────────────────────────
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const init = async () => {
+      try {
+        const res = await apiClient.post<{
+          success: boolean;
+          data: { language: string; files: WorkspaceFile[]; projectId: string };
+        }>(`/students/exercise/${exercise.id}/workspace/init`);
+
+        if (cancelled) return;
+
+        const { language: lang, files: initialFiles, projectId: pid } = res.data.data;
+        setLanguage(lang);
+        setFiles(initialFiles);
+        setProjectId(pid);
+        setActiveFile(initialFiles[0]?.name ?? '');
+      } catch (err) {
+        console.error('Failed to init exercise workspace:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    init();
+    return () => { cancelled = true; };
+  }, [exercise.id]);
+
+  // ── Auto-save on content change (debounced 800ms) ───────────────────────────
+
+  const handleContentChange = useCallback(
+    (content: string | undefined) => {
+      if (!content === undefined || !activeFile || !user || !projectId) return;
+
+      setFiles((prev) =>
+        prev.map((f) => (f.name === activeFile ? { ...f, content: content ?? '' } : f)),
+      );
+
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        apiClient.post('/workspace/file', {
+          userId: user.id,
+          projectId,
+          filePath: activeFile,
+          content: content ?? '',
+        }).catch(console.error);
+      }, 800);
+    },
+    [activeFile, user, projectId],
+  );
+
+  // ── Run code ────────────────────────────────────────────────────────────────
+
+  const handleRun = async () => {
+    setRunning(true);
+    setOutput(null);
+    setOutputOpen(true);
+    try {
+      const res = await apiClient.post<{
+        success: boolean;
+        data: { output: string; exitCode: number };
+      }>(`/students/exercise/${exercise.id}/run`);
+      setOutput(res.data.data.output || '(no output)');
+      setExitCode(res.data.data.exitCode);
+    } catch (err: any) {
+      setOutput(err?.response?.data?.message ?? 'Failed to run code');
+      setExitCode(-1);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  // ── Active file content ──────────────────────────────────────────────────────
+
+  const activeContent = files.find((f) => f.name === activeFile)?.content ?? '';
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className='flex items-center gap-2 text-slate-400 text-sm py-6'>
+        <Loader2 className='w-4 h-4 animate-spin' />
+        Setting up editor…
+      </div>
+    );
+  }
+
+  return (
+    <div className='rounded-xl border border-slate-200 overflow-hidden bg-[#1e1e1e]'>
+
+      {/* ── File tabs ── */}
+      <div className='flex items-center gap-0 border-b border-slate-700 bg-[#252526] overflow-x-auto'>
+        {files.map((f) => (
+          <button
+            key={f.name}
+            onClick={() => setActiveFile(f.name)}
+            className={`px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-r border-slate-700 ${
+              activeFile === f.name
+                ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#2d2d2d]'
+            }`}
+          >
+            {f.name}
+          </button>
+        ))}
+
+        {/* Language badge pushed to the right */}
+        <div className='ml-auto px-3 flex items-center'>
+          <Badge variant='secondary' className='text-[10px] uppercase font-medium bg-slate-700 text-slate-300 border-0'>
+            {language}
+          </Badge>
+        </div>
+      </div>
+
+      {/* ── Monaco editor ── */}
+      <Editor
+        height='320px'
+        language={monacoLang(activeFile)}
+        value={activeContent}
+        onChange={handleContentChange}
+        theme='vs-dark'
+        options={{
+          fontSize: 13,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          lineNumbers: 'on',
+          wordWrap: 'on',
+          padding: { top: 12, bottom: 12 },
+          fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+          fontLigatures: true,
+        }}
+      />
+
+      {/* ── Output panel ── */}
+      {output !== null && (
+        <div className='border-t border-slate-700'>
+          <button
+            onClick={() => setOutputOpen((o) => !o)}
+            className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
+          >
+            <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
+              Output
+              {exitCode !== null && (
+                <span className={`font-mono ${exitCode === 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  (exit {exitCode})
+                </span>
+              )}
+            </span>
+            {outputOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
+          </button>
+          {outputOpen && (
+            <pre className='px-4 py-3 text-xs font-mono text-slate-200 bg-[#1e1e1e] whitespace-pre-wrap max-h-48 overflow-y-auto'>
+              {output}
+            </pre>
+          )}
+        </div>
+      )}
+
+      {/* ── Action bar ── */}
+      <div className='flex items-center gap-3 px-4 py-3 bg-[#252526] border-t border-slate-700'>
+        <Button
+          size='sm'
+          variant='outline'
+          onClick={handleRun}
+          disabled={running}
+          className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
+        >
+          {running
+            ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Running…</>
+            : <><Play className='w-3.5 h-3.5 mr-1.5' />Run</>
+          }
+        </Button>
+
+        <Button
+          size='sm'
+          onClick={() => onSubmit(exercise.id)}
+          disabled={submitting}
+          className='bg-indigo-600 hover:bg-indigo-700 text-white'
+        >
+          {submitting
+            ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Submitting…</>
+            : <><CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />Submit</>
+          }
+        </Button>
+
+        <span className='ml-auto text-[10px] text-slate-500 font-mono'>
+          Auto-save enabled
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export default ExerciseEditor;

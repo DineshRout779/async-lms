@@ -44,6 +44,7 @@ interface QuizQuestionModalProps {
     points: number;
     explanation?: string;
   };
+  addedCount?: number;
 }
 
 export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
@@ -52,6 +53,7 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
   quizId,
   onSave,
   editData,
+  addedCount = 0,
 }) => {
   const [questionText, setQuestionText] = useState(
     editData?.question_text || ''
@@ -67,31 +69,37 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
   );
   const [loading, setLoading] = useState(false);
 
+  // Pre-fill form when opening in edit mode
   useEffect(() => {
     if (editData) {
       setQuestionText(editData.question_text);
       setQuestionType(editData.question_type);
       setPoints(editData.points);
       setExplanation(editData.explanation || '');
-
-      // Fetch existing options
       fetchOptions(editData.id);
-    } else {
-      // Initialize with empty options for multiple choice
-      if (questionType === 'multiple_choice') {
-        setOptions([
-          { option_text: '', is_correct: false, order_index: 0 },
-          { option_text: '', is_correct: false, order_index: 1 },
-        ]);
-      } else if (questionType === 'true_false') {
-        setOptions([
-          { option_text: 'True', is_correct: true, order_index: 0 },
-          { option_text: 'False', is_correct: false, order_index: 1 },
-        ]);
-        setTrueFalseAnswer('True');
-      }
     }
-  }, [editData, questionType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editData?.id]);
+
+  // Reset options when question type changes in add mode
+  useEffect(() => {
+    if (editData) return;
+    if (questionType === 'multiple_choice') {
+      setOptions([
+        { option_text: '', is_correct: false, order_index: 0 },
+        { option_text: '', is_correct: false, order_index: 1 },
+      ]);
+    } else if (questionType === 'true_false') {
+      setOptions([
+        { option_text: 'True', is_correct: true, order_index: 0 },
+        { option_text: 'False', is_correct: false, order_index: 1 },
+      ]);
+      setTrueFalseAnswer('True');
+    } else {
+      setOptions([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questionType]);
 
   const fetchOptions = async (questionId: string) => {
     try {
@@ -142,21 +150,28 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
     setOptions(newOptions);
   };
 
-  const handleSave = async () => {
+  const resetForm = () => {
+    setQuestionText('');
+    setQuestionType('multiple_choice');
+    setPoints(1);
+    setExplanation('');
+    setOptions([
+      { option_text: '', is_correct: false, order_index: 0 },
+      { option_text: '', is_correct: false, order_index: 1 },
+    ]);
+    setTrueFalseAnswer('True');
+  };
+
+  const saveQuestion = async (closeAfterSave: boolean) => {
     if (!questionText.trim()) {
       toast.error('Question text is required');
       return;
     }
-
     if (questionType === 'multiple_choice' && options.length < 2) {
       toast.error('Multiple choice questions need at least 2 options');
       return;
     }
-
-    if (
-      questionType === 'multiple_choice' &&
-      !options.some((o) => o.is_correct)
-    ) {
+    if (questionType === 'multiple_choice' && !options.some((o) => o.is_correct)) {
       toast.error('At least one option must be marked as correct');
       return;
     }
@@ -164,13 +179,12 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
     try {
       setLoading(true);
 
-      // Create or update question
       const questionData = {
         quiz_id: quizId,
         question_text: questionText,
         question_type: questionType,
-        points: points,
-        explanation: explanation,
+        points,
+        explanation,
       };
 
       let questionId: string;
@@ -188,31 +202,20 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
         questionId = res.data.data.id;
       }
 
-      // Create or update options (for multiple choice / true-false)
       if (questionType === 'multiple_choice' || questionType === 'true_false') {
         if (editData) {
           await Promise.all(
             options
               .filter((o) => o.id)
-              .map((o) =>
-                apiClient.delete(`/admin/quiz-question-options/${o.id}`)
-              )
+              .map((o) => apiClient.delete(`/admin/quiz-question-options/${o.id}`))
           );
         }
 
         const finalOptions =
           questionType === 'true_false'
             ? [
-                {
-                  option_text: 'True',
-                  is_correct: trueFalseAnswer === 'True',
-                  order_index: 0,
-                },
-                {
-                  option_text: 'False',
-                  is_correct: trueFalseAnswer === 'False',
-                  order_index: 1,
-                },
+                { option_text: 'True', is_correct: trueFalseAnswer === 'True', order_index: 0 },
+                { option_text: 'False', is_correct: trueFalseAnswer === 'False', order_index: 1 },
               ]
             : options.map((option, index) => ({
                 option_text: option.option_text,
@@ -224,17 +227,21 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
           finalOptions.map((option) =>
             apiClient.post('/admin/quiz-question-options', {
               question_id: questionId,
-              option_text: option.option_text,
-              is_correct: option.is_correct,
-              order_index: option.order_index,
+              ...option,
             })
           )
         );
       }
 
-      toast.success(editData ? 'Question updated!' : 'Question created!');
+      toast.success(
+        editData ? 'Question updated!' : closeAfterSave ? 'Question created!' : 'Question saved! Add another.',
+      );
       onSave();
-      onClose();
+      if (closeAfterSave) {
+        onClose();
+      } else {
+        resetForm();
+      }
     } catch (error: unknown) {
       console.error('Error saving question:', error);
       const err = error as { response?: { data?: { message?: string } } };
@@ -411,22 +418,39 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
           </div>
         </div>
 
-        <div className='mt-6 flex gap-3 sticky bottom-0 bg-white pt-4 border-t'>
-          <Button
-            onClick={onClose}
-            className='flex-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
-            disabled={loading}
-          >
-            <Save className='mr-2 h-4 w-4' />
-            {loading ? 'Saving...' : editData ? 'Update' : 'Create'}
-          </Button>
+        <div className='mt-6 sticky bottom-0 bg-white pt-4 border-t space-y-2'>
+          {addedCount > 0 && !editData && (
+            <p className='text-xs text-center text-emerald-600 font-medium'>
+              {addedCount} question{addedCount > 1 ? 's' : ''} added this session
+            </p>
+          )}
+          <div className='flex gap-3'>
+            <Button
+              onClick={onClose}
+              className='flex-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            {!editData && (
+              <Button
+                onClick={() => saveQuestion(false)}
+                className='flex-1 border border-indigo-600 text-indigo-600 bg-white hover:bg-indigo-50'
+                disabled={loading}
+              >
+                <Plus className='mr-2 h-4 w-4' />
+                {loading ? 'Saving...' : 'Save & Add Another'}
+              </Button>
+            )}
+            <Button
+              onClick={() => saveQuestion(true)}
+              className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
+              disabled={loading}
+            >
+              <Save className='mr-2 h-4 w-4' />
+              {loading ? 'Saving...' : editData ? 'Update' : 'Save & Close'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -449,9 +473,8 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | null>(
-    null
-  );
+  const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | null>(null);
+  const [sessionAddedCount, setSessionAddedCount] = useState(0);
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -591,10 +614,15 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
         onClose={() => {
           setModalOpen(false);
           setEditingQuestion(null);
+          setSessionAddedCount(0);
         }}
         quizId={quizId}
-        onSave={fetchQuestions}
+        onSave={() => {
+          fetchQuestions();
+          if (!editingQuestion) setSessionAddedCount((c) => c + 1);
+        }}
         editData={editingQuestion ?? undefined}
+        addedCount={sessionAddedCount}
       />
     </div>
   );

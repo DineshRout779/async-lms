@@ -1,7 +1,6 @@
 const router = require('express').Router();
 const verifyToken = require('../middlewares/verfiyToken');
 const isStudent = require('../middlewares/isStudent');
-const isAdmin = require('../middlewares/isAdmin');
 
 const {
   getMyProgress,
@@ -12,6 +11,12 @@ const {
   getOverallLeaderboard,
   getWeeklyLeaderboard,
   getCollegeLeaderboard,
+  getStudentProjects,
+  createStudentProject,
+  deleteStudentProject,
+  initExerciseWorkspace,
+  runExercise,
+  getStudentAssignments,
 } = require('../controllers/student.controller');
 
 // ===== PROGRESS TRACKING =====
@@ -31,12 +36,19 @@ router.post(
 
 // ===== QUIZ & EXERCISE SUBMISSION =====
 router.post('/quiz/:quizId/submit', verifyToken, isStudent, submitQuizAttempt);
-router.post(
-  '/exercise/:exerciseId/submit',
-  verifyToken,
-  isStudent,
-  submitExercise,
-);
+router.post('/exercise/:exerciseId/submit', verifyToken, isStudent, submitExercise);
+
+// ===== EXERCISE WORKSPACE =====
+router.post('/exercise/:exerciseId/workspace/init', verifyToken, isStudent, initExerciseWorkspace);
+router.post('/exercise/:exerciseId/run', verifyToken, isStudent, runExercise);
+
+// ===== ASSIGNMENTS =====
+router.get('/assignments', verifyToken, isStudent, getStudentAssignments);
+
+// ===== PERSONAL PROJECTS =====
+router.get('/projects', verifyToken, isStudent, getStudentProjects);
+router.post('/projects', verifyToken, isStudent, createStudentProject);
+router.delete('/projects/:id', verifyToken, isStudent, deleteStudentProject);
 
 // ===== LEADERBOARDS =====
 router.get(
