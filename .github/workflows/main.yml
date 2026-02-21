@@ -22,6 +22,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/lms-be
-            git pull origin main
+            git pull origin staging
             npm install
-            pm2 restart lms-be
+            pm2 restart lms-be --update-env
