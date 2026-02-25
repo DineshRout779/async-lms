@@ -1,6 +1,9 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/pg');
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_AUTH_CLIENT_ID);
 
 /**
  * SIGNUP (STUDENT ONLY)
@@ -136,6 +139,107 @@ exports.login = async (req, res) => {
   } catch (error) {
     console.error(`[${logID}] LOGIN ERROR:`, error);
     res.status(500).json({ message: error.message || 'Internal server error' });
+  }
+};
+
+/**
+ * GOOGLE OAUTH — verify Google ID token, upsert user, return our JWT
+ */
+exports.googleAuth = async (req, res) => {
+  const { credential } = req.body;
+
+  if (!credential) {
+    return res.status(400).json({ message: 'Google credential required' });
+  }
+
+  try {
+    // Verify the Google ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_AUTH_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name } = payload;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Google account has no email' });
+    }
+
+    // Check if user exists by email
+    const existingRes = await pool.query(
+      `SELECT u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified, u.google_id,
+              sp.college_id, sp.degree, sp.year
+       FROM users u
+       LEFT JOIN student_profiles sp ON u.id = sp.user_id
+       WHERE u.email = $1`,
+      [email],
+    );
+
+    let user;
+
+    if (existingRes.rowCount) {
+      user = existingRes.rows[0];
+      // Link google_id if not already set
+      if (!user.google_id) {
+        await pool.query('UPDATE users SET google_id = $1 WHERE id = $2', [
+          googleId,
+          user.id,
+        ]);
+      }
+    } else {
+      // Create new student account
+      const insertRes = await pool.query(
+        `INSERT INTO users (full_name, email, google_id, role, onboarding_step, is_verified)
+         VALUES ($1, $2, $3, 'student', 'college', true)
+         RETURNING id, full_name, email, role, onboarding_step, is_verified`,
+        [name, email, googleId],
+      );
+      user = insertRes.rows[0];
+
+      // Create student profile
+      await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [
+        user.id,
+      ]);
+    }
+
+    // Build token payload (same shape as regular login)
+    const tokenPayload = {
+      id: user.id,
+      role: user.role,
+      college_id: user.role === 'student' ? user.college_id : undefined,
+    };
+
+    if (user.role === 'facilitator') {
+      const colRes = await pool.query(
+        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+        [user.id],
+      );
+      tokenPayload.college_ids = colRes.rows.map((r) => r.college_id);
+    }
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role,
+        onboarding_step: user.onboarding_step,
+        is_verified: user.is_verified,
+        college_id: user.college_id ?? null,
+        college_ids: tokenPayload.college_ids ?? [],
+        degree: user.degree ?? null,
+        year: user.year ?? null,
+      },
+    });
+  } catch (err) {
+    console.error('GOOGLE AUTH ERROR:', err);
+    res.status(401).json({ message: 'Invalid Google credential' });
   }
 };
 

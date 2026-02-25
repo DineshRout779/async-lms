@@ -24,9 +24,11 @@ const {
   createQuiz,
   updateQuiz,
   deleteQuiz,
+  getExercise,
   createExercise,
   updateExercise,
   deleteExercise,
+  getAssignment,
   createAssignment,
   updateAssignment,
   deleteAssignment,
@@ -174,11 +176,13 @@ router.delete(
 );
 
 // ===== EXERCISE MANAGEMENT =====
+router.get('/exercises/:id', verifyToken, isAdmin, getExercise);
 router.post('/exercises', verifyToken, isAdmin, createExercise);
 router.put('/exercises/:id', verifyToken, isAdmin, updateExercise);
 router.delete('/exercises/:id', verifyToken, isAdmin, deleteExercise);
 
 // ===== ASSIGNMENT MANAGEMENT =====
+router.get('/assignments/:id', verifyToken, isAdmin, getAssignment);
 router.post('/assignments', verifyToken, isAdmin, createAssignment);
 router.put('/assignments/:id', verifyToken, isAdmin, updateAssignment);
 router.delete('/assignments/:id', verifyToken, isAdmin, deleteAssignment);

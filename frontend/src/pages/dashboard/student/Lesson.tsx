@@ -13,6 +13,7 @@ import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import toast from 'react-hot-toast';
 
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -283,16 +284,13 @@ const Lesson = () => {
   ======================= */
 
   const handleSubmitExercise = async (exerciseId: string) => {
-    const exercise = exercises?.find((e) => e.id === exerciseId);
-    if (!exercise) return;
-
     try {
-      await dispatch(
-        submitExercise({ exerciseId: exercise.id, score: exercise.max_score }),
-      ).unwrap();
-
+      const result = await dispatch(submitExercise({ exerciseId })).unwrap();
+      const score = result?.score ?? null;
       toast.success(
-        `Exercise submitted! Score: ${exercise.max_score}/${exercise.max_score} 🎉`,
+        score !== null
+          ? `Exercise submitted! Score: ${score} 🎉`
+          : 'Exercise submitted! 🎉',
       );
       if (!lessonCompleted) {
         setIsNavigating(true);
@@ -760,25 +758,54 @@ const Lesson = () => {
             <h2 className='text-2xl font-bold text-slate-900'>Exercises</h2>
           </div>
 
-          {exercises.map((ex) => (
-            <Card key={ex.id} className='p-6'>
-              <h3 className='text-lg font-semibold mb-2'>{ex.title}</h3>
+          {exercises.length === 1 ? (
+            <Card className='p-6'>
+              <h3 className='text-lg font-semibold mb-2'>{exercises[0].title}</h3>
               <div className='prose prose-sm max-w-none text-slate-600 mb-4'>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {ex.instructions}
+                  {exercises[0].instructions}
                 </ReactMarkdown>
               </div>
               <p className='text-xs text-slate-500 mb-4'>
-                Max Score: {ex.max_score} points
+                Max Score: {exercises[0].max_score} points
               </p>
-
               <ExerciseEditor
-                exercise={ex}
-                submitting={!!submittingExercise[ex.id]}
+                exercise={exercises[0]}
+                submitting={!!submittingExercise[exercises[0].id]}
                 onSubmit={handleSubmitExercise}
               />
             </Card>
-          ))}
+          ) : (
+            <Tabs defaultValue={exercises[0].id}>
+              <TabsList className='mb-4'>
+                {exercises.map((ex) => (
+                  <TabsTrigger key={ex.id} value={ex.id} className='max-w-40 truncate'>
+                    {ex.title}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {exercises.map((ex) => (
+                <TabsContent key={ex.id} value={ex.id}>
+                  <Card className='p-6'>
+                    <h3 className='text-lg font-semibold mb-2'>{ex.title}</h3>
+                    <div className='prose prose-sm max-w-none text-slate-600 mb-4'>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {ex.instructions}
+                      </ReactMarkdown>
+                    </div>
+                    <p className='text-xs text-slate-500 mb-4'>
+                      Max Score: {ex.max_score} points
+                    </p>
+                    <ExerciseEditor
+                      exercise={ex}
+                      submitting={!!submittingExercise[ex.id]}
+                      onSubmit={handleSubmitExercise}
+                    />
+                  </Card>
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
         </section>
       )}
     </div>

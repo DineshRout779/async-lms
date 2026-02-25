@@ -16,6 +16,7 @@ import {
   FolderOpen,
   XCircle,
   Eye,
+  Trophy,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,8 @@ import type {
   Subtopic,
   Unit,
   Topic,
+  CapstoneProject,
+  Assignment,
 } from '@/utils/types';
 import TopicModal from '@/components/common/admin/TopicModal';
 import UnitModal from '@/components/common/admin/UnitModal';
@@ -36,6 +39,7 @@ import SubtopicModal from '@/components/common/admin/SubTopicModal';
 import QuizModal from '@/components/common/admin/QuizModal';
 import ExerciseModal from '@/components/common/admin/ExerciseModal';
 import AssignmentModal from '@/components/common/admin/AssignmentModal';
+import CapstoneModal from '@/components/common/admin/CapstoneModal';
 import { QuizQuestionsList } from '@/components/common/admin/QuizQuestions';
 import ContentModal from '@/components/common/admin/ContentModal';
 import { isAxiosError } from 'axios';
@@ -83,6 +87,11 @@ const LearningFlow: React.FC = () => {
   const [quizModalOpen, setQuizModalOpen] = useState(false);
   const [exerciseModalOpen, setExerciseModalOpen] = useState(false);
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [capstoneModalOpen, setCapstoneModalOpen] = useState(false);
+  const [editingCapstone, setEditingCapstone] =
+    useState<CapstoneProject | null>(null);
+  const [selectedTopicForCapstone, setSelectedTopicForCapstone] =
+    useState<Topic | null>(null);
 
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
@@ -105,7 +114,7 @@ const LearningFlow: React.FC = () => {
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [selectedUnitForAssignment, setSelectedUnitForAssignment] =
     useState<Unit | null>(null);
-  const [editingAssignment, setEditingAssignment] = useState<Exercise | null>(
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(
     null,
   );
   const [editingContent, setEditingContent] = useState<LessonContent | null>(
@@ -564,6 +573,8 @@ const LearningFlow: React.FC = () => {
     title: string;
     instructions: string;
     max_score: number;
+    language: string;
+    initial_files: { name: string; content: string }[];
   }) => {
     if (!selectedSubtopicForExercise) return;
 
@@ -573,12 +584,14 @@ const LearningFlow: React.FC = () => {
         title: data.title,
         instructions: data.instructions,
         max_score: data.max_score,
+        language: data.language,
+        initial_files: data.initial_files,
       });
 
       if (response.data.success) {
         toast.success('Exercise created successfully');
         await refreshStructure();
-        setAssignmentModalOpen(false);
+        setExerciseModalOpen(false);
         setSelectedSubtopicForExercise(null);
       }
     } catch (error) {
@@ -648,15 +661,23 @@ const LearningFlow: React.FC = () => {
     title: string;
     instructions: string;
     max_score: number;
+    language: string;
+    initial_files: { name: string; content: string }[];
   }) => {
     if (!editingExercise) return;
 
     try {
-      await apiClient.put(`/admin/exercises/${editingExercise.id}`, data);
+      await apiClient.put(`/admin/exercises/${editingExercise.id}`, {
+        title: data.title,
+        instructions: data.instructions,
+        max_score: data.max_score,
+        language: data.language,
+        initial_files: data.initial_files,
+      });
       toast.success('Exercise updated');
       refreshStructure();
       setEditingExercise(null);
-      setAssignmentModalOpen(false);
+      setExerciseModalOpen(false);
     } catch {
       toast.error('Failed to update exercise');
     }
@@ -701,6 +722,63 @@ const LearningFlow: React.FC = () => {
       refreshStructure();
     } catch {
       toast.error('Failed to delete assignment');
+    }
+  };
+
+  // Capstone CRUD
+  const handleCreateCapstone = async (data: {
+    title: string;
+    instructions: string;
+  }) => {
+    if (!selectedTopicForCapstone) return;
+    setModalLoading(true);
+    try {
+      await apiClient.post('/admin/projects', {
+        topic_id: selectedTopicForCapstone.id,
+        title: data.title,
+        instructions: data.instructions,
+      });
+      toast.success('Capstone project created');
+      refreshStructure();
+      setCapstoneModalOpen(false);
+      setSelectedTopicForCapstone(null);
+    } catch {
+      toast.error('Failed to create capstone');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleUpdateCapstone = async (data: {
+    title: string;
+    instructions: string;
+  }) => {
+    if (!editingCapstone) return;
+    setModalLoading(true);
+    try {
+      await apiClient.put(`/admin/projects/${editingCapstone.id}`, {
+        title: data.title,
+        instructions: data.instructions,
+      });
+      toast.success('Capstone updated');
+      refreshStructure();
+      setEditingCapstone(null);
+      setCapstoneModalOpen(false);
+    } catch {
+      toast.error('Failed to update capstone');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleDeleteCapstone = async (id: string) => {
+    if (!confirm('Delete this capstone project?')) return;
+    try {
+      await apiClient.delete(`/admin/projects/${id}`);
+      toast.success('Capstone deleted');
+      refreshStructure();
+    } catch {
+      toast.error('Failed to delete capstone');
     }
   };
 
@@ -918,6 +996,19 @@ const LearningFlow: React.FC = () => {
                             )}
                           </div>
                           <div className='flex items-center gap-3 text-slate-300'>
+                            <span
+                              onClick={() => {
+                                setSelectedTopicForCapstone(topic);
+                                setEditingCapstone(topic.capstone ?? null);
+                                setCapstoneModalOpen(true);
+                              }}
+                              title={topic.capstone ? 'Edit Capstone' : 'Add Capstone'}
+                            >
+                              <Trophy
+                                className={`h-4 w-4 cursor-pointer ${topic.capstone ? 'text-amber-400 hover:text-amber-600' : 'hover:text-amber-500'}`}
+                              />
+                            </span>
+                            <div className='mx-1 h-4 w-px bg-slate-200' />
                             <Edit2
                               onClick={() => {
                                 setEditingTopic(topic);
@@ -976,34 +1067,31 @@ const LearningFlow: React.FC = () => {
                                   (unit: Unit, uIndex: number) => (
                                     <div
                                       key={unit.id}
-                                      className='overflow-hidden rounded-lg border border-slate-200 bg-white'
+                                      className='overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm'
                                     >
-                                      <div className='flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-3'>
+                                      {/* Unit Header */}
+                                      <div className='flex items-center justify-between bg-linear-to-r from-slate-50 to-white px-4 py-3 border-b border-slate-100'>
                                         <div
                                           onClick={() => toggleUnit(unit.id)}
-                                          className='flex cursor-pointer items-center gap-3'
+                                          className='flex cursor-pointer items-center gap-3 flex-1 min-w-0'
                                         >
-                                          <button className='text-slate-400 hover:text-slate-600'>
-                                            {expandedUnits.includes(unit.id) ? (
-                                              <ChevronDown className='h-4 w-4' />
-                                            ) : (
-                                              <ChevronRight className='h-4 w-4' />
-                                            )}
-                                          </button>
-                                          <div className='flex items-center gap-2'>
-                                            <Layout className='h-4 w-4 text-slate-400' />
-                                            <span className='font-medium text-slate-700'>
-                                              Unit {uIndex + 1} - {unit.title}
-                                            </span>
+                                          <div
+                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold ${expandedUnits.includes(unit.id) ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}
+                                          >
+                                            {uIndex + 1}
                                           </div>
+                                          <span className='font-semibold text-slate-800 truncate'>
+                                            {unit.title}
+                                          </span>
                                           {unit.description && (
-                                            <span className='text-xs text-slate-500'>
-                                              • {unit.description}
+                                            <span className='hidden text-xs text-slate-400 md:block truncate'>
+                                              {unit.description}
                                             </span>
                                           )}
                                         </div>
-                                        <div className='flex items-center gap-2'>
-                                          <div className='flex items-center gap-1 text-slate-300'>
+                                        <div className='flex items-center gap-1 shrink-0 ml-2'>
+                                          {/* Reorder */}
+                                          <div className='flex items-center gap-0.5 text-slate-300 border border-slate-100 rounded-md px-1 py-0.5'>
                                             <ArrowUp
                                               onClick={() =>
                                                 handleMoveUnitUp(
@@ -1011,11 +1099,7 @@ const LearningFlow: React.FC = () => {
                                                   topic.units,
                                                 )
                                               }
-                                              className={`h-3 w-3 ${
-                                                uIndex === 0
-                                                  ? 'cursor-not-allowed opacity-30'
-                                                  : 'cursor-pointer hover:text-slate-600'
-                                              }`}
+                                              className={`h-3 w-3 ${uIndex === 0 ? 'cursor-not-allowed opacity-30' : 'cursor-pointer hover:text-slate-600'}`}
                                             />
                                             <ArrowDown
                                               onClick={() =>
@@ -1024,185 +1108,182 @@ const LearningFlow: React.FC = () => {
                                                   topic.units,
                                                 )
                                               }
-                                              className={`h-3 w-3 ${
-                                                uIndex ===
-                                                (topic.units?.length || 0) - 1
-                                                  ? 'cursor-not-allowed opacity-30'
-                                                  : 'cursor-pointer hover:text-slate-600'
-                                              }`}
+                                              className={`h-3 w-3 ${uIndex === (topic.units?.length || 0) - 1 ? 'cursor-not-allowed opacity-30' : 'cursor-pointer hover:text-slate-600'}`}
                                             />
                                           </div>
-                                          <div className='mx-1 h-3 w-px bg-slate-200' />
-                                          <div className='flex items-center gap-2'>
-                                            <button
-                                              onClick={() => {
-                                                setSelectedUnitForAssignment(
-                                                  unit,
-                                                );
-                                                setAssignmentModalOpen(true);
-                                              }}
-                                              className='rounded p-1 text-slate-400 hover:bg-white hover:text-indigo-600'
-                                              title='Add Assignment'
-                                            >
-                                              <FileText className='h-3 w-3' />
-                                            </button>
-                                            <div className='mx-1 h-3 w-px bg-slate-200' />
-                                            <button
-                                              onClick={() => {
-                                                setSelectedUnitForQuiz(unit);
-                                                setQuizModalOpen(true);
-                                              }}
-                                              className='rounded p-1 text-slate-400 hover:bg-white hover:text-indigo-600'
-                                              title='Add unit-level quiz'
-                                            >
-                                              <ListChecks className='h-3 w-3' />
-                                            </button>
-                                            <div className='mx-1 h-3 w-px bg-slate-200' />
-                                            <div className='flex items-center gap-1'>
-                                              <button
-                                                onClick={() => {
-                                                  setEditingUnit(unit);
-                                                  setUnitModalOpen(true);
-                                                }}
-                                                className='rounded p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'
-                                              >
-                                                <Edit2 className='h-3 w-3' />
-                                              </button>
-                                              <button
-                                                onClick={() =>
-                                                  handleDeleteUnit(unit.id)
-                                                }
-                                                className='rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500'
-                                              >
-                                                <Trash2 className='h-3 w-3' />
-                                              </button>
-                                            </div>
-                                          </div>
+                                          <div className='w-px h-4 bg-slate-100 mx-1' />
+                                          {/* Add content buttons */}
+                                          <button
+                                            onClick={() => {
+                                              setSelectedUnitForAssignment(
+                                                unit,
+                                              );
+                                              setAssignmentModalOpen(true);
+                                            }}
+                                            className='flex items-center gap-1 rounded-md border border-slate-100 px-2 py-1 text-xs text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 transition-colors'
+                                            title='Add Assignment'
+                                          >
+                                            <FileText className='h-3 w-3' />
+                                            <span className='hidden sm:inline'>
+                                              Assignment
+                                            </span>
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setSelectedUnitForQuiz(unit);
+                                              setQuizModalOpen(true);
+                                            }}
+                                            className='flex items-center gap-1 rounded-md border border-slate-100 px-2 py-1 text-xs text-slate-500 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-600 transition-colors'
+                                            title='Add Quiz'
+                                          >
+                                            <ListChecks className='h-3 w-3' />
+                                            <span className='hidden sm:inline'>
+                                              Quiz
+                                            </span>
+                                          </button>
+                                          <div className='w-px h-4 bg-slate-100 mx-1' />
+                                          <button
+                                            onClick={() => {
+                                              setEditingUnit(unit);
+                                              setUnitModalOpen(true);
+                                            }}
+                                            className='rounded-md p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors'
+                                          >
+                                            <Edit2 className='h-3 w-3' />
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              handleDeleteUnit(unit.id)
+                                            }
+                                            className='rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors'
+                                          >
+                                            <Trash2 className='h-3 w-3' />
+                                          </button>
                                         </div>
                                       </div>
 
-                                      {/* Unit Level Assignments */}
+                                      {/* Assignments & Quizzes pills */}
                                       {expandedUnits.includes(unit.id) &&
-                                        unit.assignments &&
-                                        unit.assignments.length > 0 && (
-                                          <div className='border-b border-slate-100 bg-indigo-50/30 p-2'>
-                                            <div className='flex flex-wrap gap-2'>
-                                              {unit.assignments.map(
-                                                (a: any) => (
-                                                  <div
-                                                    key={a.id}
-                                                    className='flex items-center gap-2 rounded border border-indigo-100 bg-white px-2 py-1 text-xs text-indigo-700 shadow-sm'
-                                                  >
-                                                    <FileText className='h-3 w-3' />
-                                                    <span>{a.title}</span>
-                                                    <div className='flex items-center gap-1 ml-1 pl-1 border-l border-indigo-100'>
-                                                      <button
-                                                        onClick={() => {
+                                        ((unit.assignments &&
+                                          unit.assignments.length > 0) ||
+                                          (unit.quizzes &&
+                                            unit.quizzes.length > 0)) && (
+                                          <div className='flex flex-wrap gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5'>
+                                            {unit.assignments?.map(
+                                              (a: Assignment) => (
+                                                <div
+                                                  key={a.id}
+                                                  className='group flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 pl-2.5 pr-1.5 py-1 text-xs font-medium text-blue-700'
+                                                >
+                                                  <FileText className='h-3 w-3 shrink-0' />
+                                                  <span>{a.title}</span>
+                                                  <div className='flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                                                    <button
+                                                      onClick={async () => {
+                                                        setSelectedUnitForAssignment(
+                                                          unit,
+                                                        );
+                                                        setAssignmentModalOpen(
+                                                          true,
+                                                        );
+                                                        try {
+                                                          const res =
+                                                            await apiClient.get(
+                                                              `/admin/assignments/${a.id}`,
+                                                            );
+                                                          setEditingAssignment({
+                                                            ...a,
+                                                            instructions:
+                                                              res.data.data
+                                                                .instructions ??
+                                                              '',
+                                                          });
+                                                        } catch {
                                                           setEditingAssignment(
                                                             a,
                                                           );
-                                                          setSelectedUnitForAssignment(
-                                                            unit,
-                                                          );
-                                                          setAssignmentModalOpen(
-                                                            true,
-                                                          );
-                                                        }}
-                                                        className='p-0.5 hover:text-indigo-900'
-                                                      >
-                                                        <Edit2 className='h-2.5 w-2.5' />
-                                                      </button>
-                                                      <button
-                                                        onClick={() =>
-                                                          handleDeleteAssignment(
-                                                            a.id,
-                                                          )
                                                         }
-                                                        className='p-0.5 hover:text-red-600'
-                                                      >
-                                                        <Trash2 className='h-2.5 w-2.5' />
-                                                      </button>
-                                                    </div>
+                                                      }}
+                                                      className='rounded-full p-0.5 hover:bg-blue-100'
+                                                    >
+                                                      <Edit2 className='h-2.5 w-2.5' />
+                                                    </button>
+                                                    <button
+                                                      onClick={() =>
+                                                        handleDeleteAssignment(
+                                                          a.id,
+                                                        )
+                                                      }
+                                                      className='rounded-full p-0.5 hover:bg-red-100 hover:text-red-600'
+                                                    >
+                                                      <Trash2 className='h-2.5 w-2.5' />
+                                                    </button>
                                                   </div>
-                                                ),
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
-
-                                      {/* Unit Level Quizzes */}
-                                      {expandedUnits.includes(unit.id) &&
-                                        unit.quizzes &&
-                                        unit.quizzes.length > 0 && (
-                                          <div className='border-b border-slate-100 bg-indigo-50/30 p-2'>
-                                            <div className='flex flex-wrap gap-2'>
-                                              {unit.quizzes.map(
-                                                (quiz: any, qIndex: number) => (
-                                                  <div
-                                                    key={quiz.id}
-                                                    className='flex items-center gap-2 rounded border border-indigo-100 bg-white px-2 py-1 text-xs text-indigo-700 shadow-sm'
-                                                  >
-                                                    <ListChecks className='h-3 w-3 text-indigo-500' />
-                                                    <span>
-                                                      Quiz {qIndex + 1}
-                                                    </span>
-                                                    <div className='flex items-center gap-1 ml-1 pl-1 border-l border-indigo-100'>
-                                                      <button
-                                                        onClick={() => {
-                                                          setSelectedQuizForQuestions(
-                                                            quiz,
-                                                          );
-                                                          setSelectedUnitTitleForQuestions(
-                                                            unit.title,
-                                                          );
-                                                          setQuestionsModalOpen(
-                                                            true,
-                                                          );
-                                                        }}
-                                                        className='p-0.5 hover:text-indigo-900'
-                                                        title='Manage questions'
-                                                      >
-                                                        <Settings className='h-2.5 w-2.5' />
-                                                      </button>
-                                                      <button
-                                                        onClick={() => {
-                                                          setEditingQuiz(quiz);
-                                                          setSelectedUnitForQuiz(
-                                                            unit,
-                                                          );
-                                                          setQuizModalOpen(
-                                                            true,
-                                                          );
-                                                        }}
-                                                        className='p-0.5 hover:text-indigo-900'
-                                                      >
-                                                        <Edit2 className='h-2.5 w-2.5' />
-                                                      </button>
-                                                      <button
-                                                        onClick={() =>
-                                                          handleDeleteQuiz(
-                                                            quiz.id,
-                                                          )
-                                                        }
-                                                        className='p-0.5 hover:text-red-600'
-                                                      >
-                                                        <Trash2 className='h-2.5 w-2.5' />
-                                                      </button>
-                                                    </div>
+                                                </div>
+                                              ),
+                                            )}
+                                            {unit.quizzes?.map(
+                                              (quiz: Quiz, qIndex: number) => (
+                                                <div
+                                                  key={quiz.id}
+                                                  className='group flex items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 pl-2.5 pr-1.5 py-1 text-xs font-medium text-violet-700'
+                                                >
+                                                  <ListChecks className='h-3 w-3 shrink-0' />
+                                                  <span>Quiz {qIndex + 1}</span>
+                                                  <div className='flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                                                    <button
+                                                      onClick={() => {
+                                                        setSelectedQuizForQuestions(
+                                                          quiz,
+                                                        );
+                                                        setSelectedUnitTitleForQuestions(
+                                                          unit.title,
+                                                        );
+                                                        setQuestionsModalOpen(
+                                                          true,
+                                                        );
+                                                      }}
+                                                      className='rounded-full p-0.5 hover:bg-violet-100'
+                                                      title='Manage questions'
+                                                    >
+                                                      <Settings className='h-2.5 w-2.5' />
+                                                    </button>
+                                                    <button
+                                                      onClick={() => {
+                                                        setEditingQuiz(quiz);
+                                                        setSelectedUnitForQuiz(
+                                                          unit,
+                                                        );
+                                                        setQuizModalOpen(true);
+                                                      }}
+                                                      className='rounded-full p-0.5 hover:bg-violet-100'
+                                                    >
+                                                      <Edit2 className='h-2.5 w-2.5' />
+                                                    </button>
+                                                    <button
+                                                      onClick={() =>
+                                                        handleDeleteQuiz(
+                                                          quiz.id,
+                                                        )
+                                                      }
+                                                      className='rounded-full p-0.5 hover:bg-red-100 hover:text-red-600'
+                                                    >
+                                                      <Trash2 className='h-2.5 w-2.5' />
+                                                    </button>
                                                   </div>
-                                                ),
-                                              )}
-                                            </div>
+                                                </div>
+                                              ),
+                                            )}
                                           </div>
                                         )}
 
                                       {/* Subtopics */}
                                       {expandedUnits.includes(unit.id) && (
-                                        <div className='space-y-2 p-3'>
+                                        <div className='divide-y divide-slate-50'>
                                           {unit.subtopics?.length === 0 ? (
-                                            <div className='rounded border border-dashed border-slate-200 py-4 text-center'>
+                                            <div className='px-4 py-6 text-center'>
                                               <p className='text-xs text-slate-400'>
-                                                No subtopics yet
+                                                No lessons yet
                                               </p>
                                               <Button
                                                 variant='ghost'
@@ -1213,10 +1294,10 @@ const LearningFlow: React.FC = () => {
                                                   );
                                                   setSubtopicModalOpen(true);
                                                 }}
-                                                className='mt-1 h-6 text-xs text-indigo-600 hover:bg-indigo-50'
+                                                className='mt-1 h-7 text-xs text-indigo-600 hover:bg-indigo-50'
                                               >
                                                 <Plus className='mr-1 h-3 w-3' />{' '}
-                                                Add Subtopic
+                                                Add Lesson
                                               </Button>
                                             </div>
                                           ) : (
@@ -1225,39 +1306,60 @@ const LearningFlow: React.FC = () => {
                                                 (sub: Subtopic) => (
                                                   <div
                                                     key={sub.id}
-                                                    className='space-y-2'
+                                                    className='group'
                                                   >
-                                                    <div className='group flex items-center justify-between rounded border border-slate-100 bg-white p-2 text-sm shadow-sm transition-all hover:border-indigo-100'>
-                                                      <div className='flex flex-1 items-center gap-3'>
+                                                    <div className='flex items-center justify-between px-4 py-2.5 hover:bg-slate-50/80 transition-colors'>
+                                                      <div className='flex flex-1 items-center gap-3 min-w-0'>
                                                         <button
                                                           onClick={() =>
                                                             toggleSubtopic(
                                                               sub.id,
                                                             )
                                                           }
-                                                          className='text-slate-400 hover:text-slate-600'
+                                                          className='shrink-0 text-slate-300 hover:text-slate-500 transition-colors'
                                                         >
                                                           {expandedSubtopics.includes(
                                                             sub.id,
                                                           ) ? (
-                                                            <ChevronDown className='h-3 w-3' />
+                                                            <ChevronDown className='h-3.5 w-3.5' />
                                                           ) : (
-                                                            <ChevronRight className='h-3 w-3' />
+                                                            <ChevronRight className='h-3.5 w-3.5' />
                                                           )}
                                                         </button>
-                                                        <FileText className='h-4 w-4 text-slate-400' />
-                                                        <div className='flex-1'>
-                                                          <span className='font-medium text-slate-700'>
+                                                        <div className='flex h-5 w-5 shrink-0 items-center justify-center rounded bg-indigo-50'>
+                                                          <FileText className='h-3 w-3 text-indigo-400' />
+                                                        </div>
+                                                        <div className='flex-1 min-w-0'>
+                                                          <span className='text-sm font-medium text-slate-700'>
                                                             {sub.title}
                                                           </span>
                                                           {sub.description && (
-                                                            <span className='ml-2 text-xs text-slate-400'>
+                                                            <span className='ml-2 text-xs text-slate-400 truncate'>
                                                               {sub.description}
                                                             </span>
                                                           )}
                                                         </div>
+                                                        {((sub.lesson_content?.length ?? 0) > 0 ||
+                                                          (sub.exercises?.length ?? 0) > 0) && (
+                                                          <div className='flex items-center gap-1.5 shrink-0'>
+                                                            {(sub.lesson_content?.length ?? 0) > 0 && (
+                                                              <span className='rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600'>
+                                                                {sub.lesson_content!.length}{' '}
+                                                                lesson
+                                                                {sub.lesson_content!.length > 1 ? 's' : ''}
+                                                              </span>
+                                                            )}
+                                                            {(sub.exercises?.length ?? 0) > 0 && (
+                                                              <span className='rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-medium text-orange-600'>
+                                                                {sub.exercises!.length}{' '}
+                                                                exercise
+                                                                {sub.exercises!.length > 1 ? 's' : ''}
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                        )}
                                                       </div>
-                                                      <div className='flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
+                                                      <div className='flex items-center gap-0.5 ml-2 opacity-0 transition-opacity group-hover:opacity-100'>
                                                         <button
                                                           onClick={() => {
                                                             setEditingSubtopic({
@@ -1268,7 +1370,7 @@ const LearningFlow: React.FC = () => {
                                                               true,
                                                             );
                                                           }}
-                                                          className='rounded p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'
+                                                          className='rounded-md p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors'
                                                         >
                                                           <Edit2 className='h-3 w-3' />
                                                         </button>
@@ -1278,7 +1380,7 @@ const LearningFlow: React.FC = () => {
                                                               sub.id,
                                                             )
                                                           }
-                                                          className='rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500'
+                                                          className='rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors'
                                                         >
                                                           <Trash2 className='h-3 w-3' />
                                                         </button>
@@ -1435,16 +1537,34 @@ const LearningFlow: React.FC = () => {
                                                               </div>
                                                               <div className='flex items-center gap-1'>
                                                                 <button
-                                                                  onClick={() => {
-                                                                    setEditingExercise(
-                                                                      exercise,
-                                                                    );
+                                                                  onClick={async () => {
                                                                     setSelectedSubtopicForExercise(
                                                                       sub,
                                                                     );
                                                                     setExerciseModalOpen(
                                                                       true,
                                                                     );
+                                                                    try {
+                                                                      const res =
+                                                                        await apiClient.get(
+                                                                          `/admin/exercises/${exercise.id}`,
+                                                                        );
+                                                                      setEditingExercise(
+                                                                        {
+                                                                          ...exercise,
+                                                                          instructions:
+                                                                            res
+                                                                              .data
+                                                                              .data
+                                                                              .instructions ??
+                                                                            '',
+                                                                        },
+                                                                      );
+                                                                    } catch {
+                                                                      setEditingExercise(
+                                                                        exercise,
+                                                                      );
+                                                                    }
                                                                   }}
                                                                   className='p-1 text-slate-400 hover:text-indigo-600'
                                                                 >
@@ -1504,6 +1624,55 @@ const LearningFlow: React.FC = () => {
                                 </Button>
                               </>
                             )}
+
+                            {/* Capstone Project Row */}
+                            <div className='mt-4 border-t border-dashed border-amber-200 pt-4'>
+                              {topic.capstone ? (
+                                <div className='flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3'>
+                                  <div className='flex items-center gap-2'>
+                                    <Trophy className='h-4 w-4 text-amber-500 shrink-0' />
+                                    <div>
+                                      <span className='text-sm font-medium text-slate-700'>
+                                        {topic.capstone.title}
+                                      </span>
+                                      <span className='ml-2 text-xs text-amber-600'>
+                                        +{topic.capstone.max_score} XP
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className='flex items-center gap-2 text-slate-300'>
+                                    <Edit2
+                                      onClick={() => {
+                                        setSelectedTopicForCapstone(topic);
+                                        setEditingCapstone(topic.capstone!);
+                                        setCapstoneModalOpen(true);
+                                      }}
+                                      className='h-4 w-4 cursor-pointer hover:text-amber-500'
+                                    />
+                                    <Trash2
+                                      onClick={() =>
+                                        handleDeleteCapstone(topic.capstone!.id)
+                                      }
+                                      className='h-4 w-4 cursor-pointer hover:text-red-500'
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <Button
+                                  variant='ghost'
+                                  size='sm'
+                                  onClick={() => {
+                                    setSelectedTopicForCapstone(topic);
+                                    setEditingCapstone(null);
+                                    setCapstoneModalOpen(true);
+                                  }}
+                                  className='w-full justify-center border border-dashed border-amber-200 py-3 text-sm text-amber-600 hover:bg-amber-50'
+                                >
+                                  <Trophy className='mr-1 h-4 w-4' /> Add
+                                  Capstone Project
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1742,6 +1911,8 @@ const LearningFlow: React.FC = () => {
                 title: editingExercise.title,
                 instructions: editingExercise.instructions || '',
                 max_score: editingExercise.max_score,
+                language: editingExercise.language || 'javascript',
+                initial_files: editingExercise.initial_files || [],
               }
             : undefined
         }
@@ -1778,6 +1949,37 @@ const LearningFlow: React.FC = () => {
             : undefined
         }
         unitTitle={selectedUnitForAssignment?.title || ''}
+        loading={modalLoading}
+      />
+
+      <CapstoneModal
+        isOpen={capstoneModalOpen}
+        onClose={() => {
+          setCapstoneModalOpen(false);
+          setEditingCapstone(null);
+          setSelectedTopicForCapstone(null);
+        }}
+        onSave={async (data) => {
+          setModalLoading(true);
+          try {
+            if (editingCapstone) {
+              await handleUpdateCapstone(data);
+            } else {
+              await handleCreateCapstone(data);
+            }
+          } finally {
+            setModalLoading(false);
+          }
+        }}
+        editData={
+          editingCapstone
+            ? {
+                title: editingCapstone.title,
+                instructions: editingCapstone.instructions,
+              }
+            : undefined
+        }
+        topicTitle={selectedTopicForCapstone?.title || ''}
         loading={modalLoading}
       />
 

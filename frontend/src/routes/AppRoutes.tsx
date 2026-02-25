@@ -32,6 +32,7 @@ const StudentDashboardHome = lazy(
 const MyCourses = lazy(() => import('@/pages/dashboard/student/MyCourses'));
 const LessonView = lazy(() => import('@/pages/dashboard/student/Lesson'));
 const AssignmentView = lazy(() => import('@/pages/dashboard/student/AssignmentView'));
+const CapstoneView = lazy(() => import('@/pages/dashboard/student/CapstoneView'));
 const CourseIntro = lazy(() => import('@/pages/dashboard/student/CourseIntro'));
 const EditorProfile = lazy(() => import('@/pages/playground/EditorProfile'));
 const Assignments = lazy(() => import('@/pages/dashboard/student/Assignments'));
@@ -132,6 +133,10 @@ const router = createBrowserRouter([
                   {
                     path: 'quiz/:quizId',
                     element: <LessonView />,
+                  },
+                  {
+                    path: 'capstone/:projectId',
+                    element: <CapstoneView />,
                   },
                 ],
               },

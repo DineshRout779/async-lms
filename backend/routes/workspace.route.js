@@ -9,6 +9,7 @@ router.use(verifyToken);
 // Read-only — any authenticated user can view (enables share-by-link)
 router.get('/tree', ctrl.getTree);
 router.get('/file', ctrl.readFile);
+router.get('/quota', ctrl.getQuota);
 
 // Write operations — owner only (enforced in controller via req.user.id)
 router.post('/file', ctrl.writeFile);

@@ -48,12 +48,22 @@ export interface Quiz {
   questions: QuizQuestion[];
 }
 
+export interface TestCase {
+  id: string;
+  description: string;
+  test_code: string;
+  is_hidden: boolean;
+}
+
 export interface Exercise {
   id: string;
   subtopic_id: string;
   title: string;
   instructions?: string;
   max_score: number;
+  language?: string;
+  initial_files?: { name: string; content: string }[];
+  test_cases?: TestCase[];
 }
 
 export interface Assignment {
@@ -91,12 +101,20 @@ export interface Unit {
   quizzes?: Quiz[];
 }
 
+export interface CapstoneProject {
+  id: string;
+  title: string;
+  instructions?: string | null;
+  max_score: number;
+}
+
 export interface Topic {
   id: string;
   title: string;
   description?: string;
   units: Unit[];
   order_index: number;
+  capstone?: CapstoneProject | null;
 }
 
 export interface Subject {
@@ -196,6 +214,7 @@ export interface ExerciseModalProps {
     max_score: number;
     language: string;
     initial_files: { name: string; content: string }[];
+    test_cases: TestCase[];
   }) => void;
   editData?: {
     title: string;
@@ -203,6 +222,7 @@ export interface ExerciseModalProps {
     max_score: number;
     language?: string;
     initial_files?: { name: string; content: string }[];
+    test_cases?: TestCase[];
   };
   subtopicTitle: string;
   loading?: boolean;

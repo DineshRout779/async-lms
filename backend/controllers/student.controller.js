@@ -1,6 +1,43 @@
 const pool = require('../config/pg');
 
 // ============================================
+// HELPERS
+// ============================================
+
+/**
+ * Upsert streak for a user based on today's activity.
+ * - Same day  → no change
+ * - Yesterday → increment streak
+ * - Older     → reset to 1
+ */
+async function updateStreak(userId) {
+  await pool.query(
+    `INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity)
+     VALUES ($1, 1, 1, CURRENT_DATE)
+     ON CONFLICT (user_id) DO UPDATE SET
+       current_streak = CASE
+         WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.current_streak
+         WHEN user_streaks.last_activity = CURRENT_DATE - INTERVAL '1 day' THEN user_streaks.current_streak + 1
+         ELSE 1
+       END,
+       longest_streak = GREATEST(
+         user_streaks.longest_streak,
+         CASE
+           WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.current_streak
+           WHEN user_streaks.last_activity = CURRENT_DATE - INTERVAL '1 day' THEN user_streaks.current_streak + 1
+           ELSE 1
+         END
+       ),
+       last_activity = CASE
+         WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.last_activity
+         ELSE CURRENT_DATE
+       END,
+       updated_at = CURRENT_TIMESTAMP`,
+    [userId],
+  );
+}
+
+// ============================================
 // STUDENT PROGRESS
 // ============================================
 
@@ -419,6 +456,7 @@ exports.completeLesson = async (req, res) => {
       'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
       [userId, 'lesson_completion', 10],
     );
+    await updateStreak(userId);
 
     const subtopicResult = await pool.query(
       'SELECT subtopic_id FROM lesson_content WHERE id = $1 LIMIT 1',
@@ -481,12 +519,13 @@ exports.submitQuizAttempt = async (req, res) => {
 
     const result = await pool.query(query, [quizId, userId, score, isPassed]);
 
-    // Award points
-    const pointsAwarded = Math.round((score / quiz.max_score) * 50);
+    // Award flat 15 points for quiz completion
+    const pointsAwarded = 15;
     await pool.query(
       'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
       [userId, 'quiz_completion', pointsAwarded],
     );
+    await updateStreak(userId);
 
     const subtopicResult = await pool.query(
       'SELECT unit_id FROM quizzes WHERE id = $1 LIMIT 1',
@@ -531,69 +570,70 @@ exports.submitExercise = async (req, res) => {
   try {
     const userId = req.user.id;
     const { exerciseId } = req.params;
-    const { score } = req.body;
 
-    // Get exercise details
     const exerciseQuery = await pool.query(
-      'SELECT max_score FROM exercises WHERE id = $1',
+      'SELECT max_score, language, test_cases, subtopic_id FROM exercises WHERE id = $1',
       [exerciseId],
     );
 
     if (exerciseQuery.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Exercise not found',
-      });
+      return res.status(404).json({ success: false, message: 'Exercise not found' });
     }
 
     const exercise = exerciseQuery.rows[0];
-    const isPassed = score >= exercise.max_score * 0.7; // 70% pass threshold
+    let score;
+    let testResults = null;
 
-    const query = `
-      INSERT INTO exercise_submissions (exercise_id, user_id, score, is_passed)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *;
-    `;
+    if (exercise.test_cases && exercise.test_cases.length > 0) {
+      // Run test cases and auto-calculate score
+      const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}`);
+      if (!fs.existsSync(workspaceDir)) {
+        return res.status(400).json({ success: false, message: 'Workspace not initialised. Open the exercise first.' });
+      }
+      try {
+        testResults = await runTestFile(workspaceDir, exercise.language, exercise.test_cases);
+        score = testResults.total > 0
+          ? Math.round((testResults.passed / testResults.total) * exercise.max_score)
+          : 0;
+      } catch (err) {
+        return res.status(500).json({ success: false, message: `Test runner failed: ${err.message}` });
+      }
+    } else {
+      // No test cases — accept manual score from body (legacy behaviour)
+      score = req.body.score ?? exercise.max_score;
+    }
 
-    const result = await pool.query(query, [
-      exerciseId,
-      userId,
-      score,
-      isPassed,
-    ]);
+    const isPassed = score >= exercise.max_score * 0.7;
 
-    // Award points
+    const submissionResult = await pool.query(
+      `INSERT INTO exercise_submissions (exercise_id, user_id, score, is_passed)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *;`,
+      [exerciseId, userId, score, isPassed],
+    );
+
     const pointsAwarded = Math.round((score / exercise.max_score) * 100);
     await pool.query(
       'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
       [userId, 'exercise_completion', pointsAwarded],
     );
 
-    const exerciseDataResult = await pool.query(
-      'SELECT subtopic_id, unit_id FROM exercises WHERE id = $1 LIMIT 1',
-      [exerciseId],
-    );
-    const exerciseData = exerciseDataResult.rows[0];
-
-    if (exerciseData?.subtopic_id) {
-      await checkAndCompleteSubtopic(userId, exerciseData.subtopic_id);
+    if (exercise.subtopic_id) {
+      await checkAndCompleteSubtopic(userId, exercise.subtopic_id);
     }
 
     res.json({
       success: true,
       message: isPassed ? 'Exercise passed!' : 'Exercise submitted',
       data: {
-        submission: result.rows[0],
+        submission: submissionResult.rows[0],
         points_awarded: pointsAwarded,
+        test_results: testResults,
       },
     });
   } catch (error) {
     console.error('Error submitting exercise:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to submit exercise',
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: 'Failed to submit exercise', error: error.message });
   }
 };
 
@@ -611,6 +651,92 @@ const EXERCISE_RUNNER = {
   javascript: { image: 'workspace-node',  cmd: ['node',    'index.js'] },
   python:     { image: 'workspace-python', cmd: ['python3', 'main.py']  },
 };
+
+const TEST_RUNNER_CMD = {
+  javascript: { image: 'workspace-node',  cmd: ['node',    '__tests__.js']  },
+  python:     { image: 'workspace-python', cmd: ['python3', '__tests__.py']  },
+};
+
+const JS_TEST_HEADER = `let __p=0,__f=0,__r=[];
+const __test=(d,fn)=>{try{fn();__r.push({description:d,passed:true});__p++;}catch(e){__r.push({description:d,passed:false,error:e.message});__f++;}};
+const __expect=(a)=>({
+  toBe:(e)=>{if(a!==e)throw new Error(\`Expected \${JSON.stringify(e)}, got \${JSON.stringify(a)}\`)},
+  toEqual:(e)=>{if(JSON.stringify(a)!==JSON.stringify(e))throw new Error(\`Expected \${JSON.stringify(e)}, got \${JSON.stringify(a)}\`)},
+  toBeTruthy:()=>{if(!a)throw new Error('Expected truthy')},
+  toBeFalsy:()=>{if(a)throw new Error('Expected falsy')},
+  toBeNull:()=>{if(a!==null)throw new Error('Expected null')},
+  toBeUndefined:()=>{if(a!==undefined)throw new Error('Expected undefined')},
+});
+`;
+const JS_TEST_FOOTER = `\nconsole.log(JSON.stringify({passed:__p,failed:__f,total:__p+__f,results:__r}));\nprocess.exit(__f>0?1:0);\n`;
+
+const PY_TEST_HEADER = `import json,sys\n_p,_f,_r=0,0,[]\ndef __test(d,fn):\n  global _p,_f\n  try: fn();_r.append({"description":d,"passed":True});_p+=1\n  except Exception as e: _r.append({"description":d,"passed":False,"error":str(e)});_f+=1\nclass _E:\n  def __init__(self,a):self._a=a\n  def to_be(self,e):\n    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"\n  def to_equal(self,e):\n    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"\n  def to_be_truthy(self):\n    assert self._a,"Expected truthy"\n  def to_be_falsy(self):\n    assert not self._a,"Expected falsy"\ndef __expect(a): return _E(a)\n`;
+const PY_TEST_FOOTER = `\nprint(json.dumps({"passed":_p,"failed":_f,"total":_p+_f,"results":_r}))\nsys.exit(1 if _f>0 else 0)\n`;
+
+/**
+ * Build + write the test runner file and return the run result.
+ * Returns { passed, failed, total, results } or throws on docker error.
+ */
+function runTestFile(workspaceDir, language, testCases) {
+  return new Promise((resolve, reject) => {
+    const isJs = language !== 'python';
+    const header  = isJs ? JS_TEST_HEADER  : PY_TEST_HEADER;
+    const footer  = isJs ? JS_TEST_FOOTER  : PY_TEST_FOOTER;
+    const testCode = testCases.map((tc) => tc.test_code).join('\n');
+    const fileContent = header + testCode + footer;
+    const testFile = path.join(workspaceDir, isJs ? '__tests__.js' : '__tests__.py');
+
+    fs.writeFileSync(testFile, fileContent, 'utf-8');
+
+    const runner = TEST_RUNNER_CMD[language] ?? TEST_RUNNER_CMD.javascript;
+    const child = spawn('docker', [
+      'run', '--rm',
+      '--memory=256m', '--cpus=0.5',
+      '--network=none', '--pids-limit=64',
+      '--read-only', '--tmpfs', '/tmp',
+      '-v', `${workspaceDir}:/workspace`,
+      '-w', '/workspace',
+      runner.image,
+      ...runner.cmd,
+    ]);
+
+    let stdout = '';
+    let stderr = '';
+    let finished = false;
+
+    const timeout = setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        child.kill();
+        reject(new Error('Test runner timed out after 15 seconds'));
+      }
+    }, 15000);
+
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    child.on('close', () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+
+      // Find the last JSON line in stdout
+      const lines = stdout.trim().split('\n');
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const parsed = JSON.parse(lines[i]);
+          if (typeof parsed.passed === 'number') return resolve(parsed);
+        } catch {}
+      }
+      // If we can't parse results, return raw output as error
+      reject(new Error(`Test runner produced no parseable output.\n${stderr || stdout}`));
+    });
+
+    child.on('error', (err) => {
+      if (!finished) { finished = true; clearTimeout(timeout); reject(err); }
+    });
+  });
+}
 
 const DEFAULT_INITIAL_FILES = {
   javascript: [{ name: 'index.js', content: '// Write your solution here\n' }],
@@ -743,6 +869,41 @@ exports.runExercise = async (req, res) => {
   }
 };
 
+/**
+ * Run test cases against the student's workspace (without submitting).
+ * POST /api/students/exercise/:exerciseId/run-tests
+ */
+exports.runExerciseTests = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { exerciseId } = req.params;
+
+    const result = await pool.query(
+      'SELECT language, test_cases FROM exercises WHERE id = $1',
+      [exerciseId],
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Exercise not found' });
+    }
+
+    const { language, test_cases } = result.rows[0];
+    if (!test_cases || test_cases.length === 0) {
+      return res.json({ success: true, data: { message: 'No test cases defined for this exercise' } });
+    }
+
+    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}`);
+    if (!fs.existsSync(workspaceDir)) {
+      return res.status(400).json({ success: false, message: 'Workspace not initialised' });
+    }
+
+    const testResult = await runTestFile(workspaceDir, language, test_cases);
+    res.json({ success: true, data: testResult });
+  } catch (error) {
+    console.error('Error running exercise tests:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to run tests' });
+  }
+};
+
 // ============================================
 // STUDENT LEADERBOARDS
 // ============================================
@@ -756,41 +917,46 @@ exports.getOverallLeaderboard = async (req, res) => {
     const userId = req.user.id;
     const { limit = 50 } = req.query;
 
-    const query = `
-      SELECT 
-        user_id,
-        full_name,
-        college_name,
-        total_points,
-        rank
-      FROM leaderboard_overall
-      LIMIT $1;
-    `;
+    const result = await pool.query(
+      `WITH ranked AS (
+        SELECT
+          u.id AS user_id,
+          u.full_name,
+          c.name AS college_name,
+          COALESCE(SUM(pl.points), 0)::integer AS total_points,
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+        FROM users u
+        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+        LEFT JOIN colleges c ON sp.college_id = c.id
+        LEFT JOIN points_log pl ON pl.user_id = u.id
+        WHERE u.role = 'student'
+        GROUP BY u.id, u.full_name, c.name
+      )
+      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
+      [limit],
+    );
 
-    const result = await pool.query(query, [limit]);
-
-    // Get current user's rank
-    const userRankQuery = `
-      SELECT rank, total_points
-      FROM leaderboard_overall
-      WHERE user_id = $1;
-    `;
-    const userRank = await pool.query(userRankQuery, [userId]);
+    const userRank = await pool.query(
+      `SELECT rank, total_points FROM (
+        SELECT
+          u.id AS user_id,
+          COALESCE(SUM(pl.points), 0)::integer AS total_points,
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+        FROM users u
+        LEFT JOIN points_log pl ON pl.user_id = u.id
+        WHERE u.role = 'student'
+        GROUP BY u.id
+      ) ranked WHERE user_id = $1`,
+      [userId],
+    );
 
     res.json({
       success: true,
-      data: {
-        leaderboard: result.rows,
-        my_rank: userRank.rows[0] || null,
-      },
+      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
     });
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch leaderboard',
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch leaderboard', error: error.message });
   }
 };
 
@@ -803,51 +969,56 @@ exports.getWeeklyLeaderboard = async (req, res) => {
     const userId = req.user.id;
     const { limit = 50 } = req.query;
 
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Monday
-    const weekStartStr = weekStart.toISOString().split('T')[0];
+    // ISO Monday of current week
+    const now = new Date();
+    const day = now.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+    const weekStartStr = monday.toISOString().split('T')[0];
 
-    const query = `
-      SELECT 
-        lw.user_id,
-        u.full_name,
-        c.name as college_name,
-        lw.total_points,
-        lw.rank
-      FROM leaderboards_weekly lw
-      INNER JOIN users u ON lw.user_id = u.id
-      LEFT JOIN student_profiles sp ON u.id = sp.user_id
-      LEFT JOIN colleges c ON sp.college_id = c.id
-      WHERE lw.week_start = $1
-      ORDER BY lw.rank
-      LIMIT $2;
-    `;
+    const result = await pool.query(
+      `WITH ranked AS (
+        SELECT
+          u.id AS user_id,
+          u.full_name,
+          c.name AS college_name,
+          COALESCE(SUM(pl.points), 0)::integer AS total_points,
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+        FROM users u
+        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+        LEFT JOIN colleges c ON sp.college_id = c.id
+        LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $2
+        WHERE u.role = 'student'
+        GROUP BY u.id, u.full_name, c.name
+      )
+      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
+      [limit, weekStartStr],
+    );
 
-    const result = await pool.query(query, [weekStartStr, limit]);
-
-    // Get current user's rank
-    const userRankQuery = `
-      SELECT rank, total_points
-      FROM leaderboards_weekly
-      WHERE user_id = $1 AND week_start = $2;
-    `;
-    const userRank = await pool.query(userRankQuery, [userId, weekStartStr]);
+    const userRank = await pool.query(
+      `SELECT rank, total_points FROM (
+        SELECT
+          u.id AS user_id,
+          COALESCE(SUM(pl.points), 0)::integer AS total_points,
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+        FROM users u
+        LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $2
+        WHERE u.role = 'student'
+        GROUP BY u.id
+      ) ranked WHERE user_id = $1`,
+      [userId, weekStartStr],
+    );
 
     res.json({
       success: true,
       week_start: weekStartStr,
-      data: {
-        leaderboard: result.rows,
-        my_rank: userRank.rows[0] || null,
-      },
+      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
     });
   } catch (error) {
     console.error('Error fetching weekly leaderboard:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch weekly leaderboard',
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch weekly leaderboard', error: error.message });
   }
 };
 
@@ -860,59 +1031,53 @@ exports.getCollegeLeaderboard = async (req, res) => {
     const userId = req.user.id;
     const { limit = 50 } = req.query;
 
-    // Get user's college
-    const userQuery = await pool.query(
-      'SELECT college_id FROM student_profiles WHERE user_id = $1',
-      [userId],
-    );
-
-    if (!userQuery.rows[0] || !userQuery.rows[0].college_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'User is not associated with any college',
-      });
+    const userQuery = await pool.query('SELECT college_id FROM student_profiles WHERE user_id = $1', [userId]);
+    if (!userQuery.rows[0]?.college_id) {
+      return res.status(400).json({ success: false, message: 'User is not associated with any college' });
     }
 
     const collegeId = userQuery.rows[0].college_id;
 
-    const query = `
-      SELECT 
-        lc.user_id,
-        u.full_name,
-        lc.total_points,
-        lc.rank
-      FROM leaderboards_college lc
-      INNER JOIN users u ON lc.user_id = u.id
-      WHERE lc.college_id = $1
-      ORDER BY lc.rank
-      LIMIT $2;
-    `;
+    const result = await pool.query(
+      `WITH ranked AS (
+        SELECT
+          u.id AS user_id,
+          u.full_name,
+          COALESCE(SUM(pl.points), 0)::integer AS total_points,
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+        FROM users u
+        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+        LEFT JOIN points_log pl ON pl.user_id = u.id
+        WHERE u.role = 'student' AND sp.college_id = $2
+        GROUP BY u.id, u.full_name
+      )
+      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
+      [limit, collegeId],
+    );
 
-    const result = await pool.query(query, [collegeId, limit]);
-
-    // Get current user's rank
-    const userRankQuery = `
-      SELECT rank, total_points
-      FROM leaderboards_college
-      WHERE user_id = $1 AND college_id = $2;
-    `;
-    const userRank = await pool.query(userRankQuery, [userId, collegeId]);
+    const userRank = await pool.query(
+      `SELECT rank, total_points FROM (
+        SELECT
+          u.id AS user_id,
+          COALESCE(SUM(pl.points), 0)::integer AS total_points,
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+        FROM users u
+        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+        LEFT JOIN points_log pl ON pl.user_id = u.id
+        WHERE u.role = 'student' AND sp.college_id = $2
+        GROUP BY u.id
+      ) ranked WHERE user_id = $1`,
+      [userId, collegeId],
+    );
 
     res.json({
       success: true,
       college_id: collegeId,
-      data: {
-        leaderboard: result.rows,
-        my_rank: userRank.rows[0] || null,
-      },
+      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
     });
   } catch (error) {
     console.error('Error fetching college leaderboard:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch college leaderboard',
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch college leaderboard', error: error.message });
   }
 };
 
@@ -1115,6 +1280,101 @@ exports.getStudentAssignments = async (req, res) => {
   } catch (error) {
     console.error('Error fetching student assignments:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch assignments', error: error.message });
+  }
+};
+
+// ============================================
+// CAPSTONE PROJECTS
+// ============================================
+
+/**
+ * Get capstone project for a topic (with existing submission if any)
+ * GET /api/students/capstone/:projectId
+ */
+exports.getCapstone = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { projectId } = req.params;
+
+    const result = await pool.query(
+      `SELECT
+        p.id, p.title, p.instructions, p.max_score,
+        ps.submission_link, ps.is_approved, ps.submitted_at
+       FROM projects p
+       INNER JOIN topics t ON p.topic_id = t.id
+       INNER JOIN subjects s ON t.subject_id = s.id
+       INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       LEFT JOIN project_submissions ps ON ps.project_id = p.id AND ps.user_id = $1
+       WHERE p.id = $2`,
+      [userId, projectId],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Capstone project not found' });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching capstone:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch capstone', error: error.message });
+  }
+};
+
+/**
+ * Submit (or update) a capstone project solution link
+ * POST /api/students/capstone/:projectId/submit
+ */
+exports.submitCapstone = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { projectId } = req.params;
+    const { submission_link } = req.body;
+
+    if (!submission_link || !submission_link.trim()) {
+      return res.status(400).json({ success: false, message: 'submission_link is required' });
+    }
+
+    // Verify enrollment
+    const enrolled = await pool.query(
+      `SELECT p.id FROM projects p
+       INNER JOIN topics t ON p.topic_id = t.id
+       INNER JOIN subjects s ON t.subject_id = s.id
+       INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       WHERE p.id = $2`,
+      [userId, projectId],
+    );
+
+    if (enrolled.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO project_submissions (project_id, user_id, submission_link)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (project_id, user_id)
+       DO UPDATE SET submission_link = EXCLUDED.submission_link, updated_at = CURRENT_TIMESTAMP
+       RETURNING submission_link, submitted_at, is_approved`,
+      [projectId, userId, submission_link.trim()],
+    );
+
+    // Award 20 points once per capstone (idempotent via unique source key)
+    const source = `capstone_${projectId}`;
+    const alreadyAwarded = await pool.query(
+      'SELECT 1 FROM points_log WHERE user_id = $1 AND source = $2 LIMIT 1',
+      [userId, source],
+    );
+    if (alreadyAwarded.rows.length === 0) {
+      await pool.query(
+        'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
+        [userId, source, 20],
+      );
+      await updateStreak(userId);
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error submitting capstone:', error);
+    res.status(500).json({ success: false, message: 'Failed to submit capstone', error: error.message });
   }
 };
 

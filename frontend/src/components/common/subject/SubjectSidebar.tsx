@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, NavLink } from 'react-router'; // Use react-router
 import apiClient from '@/services/api';
-import { Loader2, PlayCircle, ListChecks } from 'lucide-react';
+import { Loader2, PlayCircle, ListChecks, Trophy } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -132,6 +132,22 @@ export const SubjectSidebar = () => {
                   ))}
                 </div>
               ))}
+              {/* Capstone (topic-level) */}
+              {topic.capstone && (
+                <NavLink
+                  to={`/dashboard/student/courses/${slug}/capstone/${topic.capstone.id}`}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 py-2 pl-6 pr-4 text-sm transition-all border-t border-slate-200 ${
+                      isActive
+                        ? 'border-r-4 border-amber-500 bg-amber-50 text-amber-700'
+                        : 'text-slate-600 hover:bg-amber-50/60'
+                    }`
+                  }
+                >
+                  <Trophy className='h-4 w-4 shrink-0 text-amber-500' />
+                  <span className='font-medium'>{topic.capstone.title}</span>
+                </NavLink>
+              )}
             </AccordionContent>
           </AccordionItem>
         ))}

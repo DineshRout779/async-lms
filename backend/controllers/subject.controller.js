@@ -138,9 +138,16 @@ exports.getCourseStructure = async (req, res) => {
         a.id AS assignment_id,
         a.title AS assignment_title,
         a.instructions AS assignment_instructions,
-        a.max_score AS assignment_max_score
+        a.max_score AS assignment_max_score,
+
+        -- Capstone (topic-level)
+        p.id AS capstone_id,
+        p.title AS capstone_title,
+        p.instructions AS capstone_instructions,
+        p.max_score AS capstone_max_score
 
       FROM topics t
+      LEFT JOIN projects p ON t.id = p.topic_id
       LEFT JOIN units u ON t.id = u.topic_id
       LEFT JOIN subtopics st ON u.id = st.unit_id
       LEFT JOIN lesson_content lc 
@@ -173,6 +180,9 @@ exports.getCourseStructure = async (req, res) => {
           title: row.topic_title,
           description: row.topic_description,
           order_index: row.topic_order,
+          capstone: row.capstone_id
+            ? { id: row.capstone_id, title: row.capstone_title, instructions: row.capstone_instructions, max_score: row.capstone_max_score }
+            : null,
           units: new Map(),
         });
       }
@@ -298,6 +308,7 @@ exports.getCourseStructure = async (req, res) => {
       title: topic.title,
       description: topic.description,
       order_index: topic.order_index,
+      capstone: topic.capstone,
       units: Array.from(topic.units.values()).map((unit) => ({
         id: unit.id,
         title: unit.title,

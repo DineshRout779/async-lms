@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Play,
+  FlaskConical,
   Loader2,
   CheckCircle2,
+  XCircle,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -19,6 +21,19 @@ import type { Exercise } from '@/utils/types';
 interface WorkspaceFile {
   name: string;
   content: string;
+}
+
+interface TestResult {
+  description: string;
+  passed: boolean;
+  error?: string;
+}
+
+interface TestRunResult {
+  passed: number;
+  failed: number;
+  total: number;
+  results: TestResult[];
 }
 
 interface ExerciseEditorProps {
@@ -60,7 +75,13 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
   const [outputOpen, setOutputOpen] = useState(false);
   const [exitCode, setExitCode] = useState<number | null>(null);
 
+  const [testRunning, setTestRunning] = useState(false);
+  const [testResults, setTestResults] = useState<TestRunResult | null>(null);
+  const [testPanelOpen, setTestPanelOpen] = useState(false);
+
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasTestCases = (exercise.test_cases?.length ?? 0) > 0;
 
   // ── Bootstrap workspace on mount ────────────────────────────────────────────
 
@@ -133,6 +154,30 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
       setExitCode(-1);
     } finally {
       setRunning(false);
+    }
+  };
+
+  // ── Run tests ────────────────────────────────────────────────────────────────
+
+  const handleRunTests = async () => {
+    setTestRunning(true);
+    setTestResults(null);
+    setTestPanelOpen(true);
+    try {
+      const res = await apiClient.post<{
+        success: boolean;
+        data: TestRunResult;
+      }>(`/students/exercise/${exercise.id}/run-tests`);
+      setTestResults(res.data.data);
+    } catch (err: any) {
+      setTestResults({
+        passed: 0,
+        failed: 1,
+        total: 1,
+        results: [{ description: 'Test runner', passed: false, error: err?.response?.data?.message ?? 'Failed to run tests' }],
+      });
+    } finally {
+      setTestRunning(false);
     }
   };
 
@@ -222,13 +267,52 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
         </div>
       )}
 
+      {/* ── Test results panel ── */}
+      {(testResults !== null || testRunning) && (
+        <div className='border-t border-slate-700'>
+          <button
+            onClick={() => setTestPanelOpen((o) => !o)}
+            className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
+          >
+            <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
+              Test Results
+              {testResults && (
+                <span className={testResults.failed === 0 ? 'text-emerald-400' : 'text-red-400'}>
+                  {testResults.passed}/{testResults.total} passed
+                </span>
+              )}
+              {testRunning && <Loader2 className='w-3 h-3 animate-spin text-indigo-400' />}
+            </span>
+            {testPanelOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
+          </button>
+          {testPanelOpen && testResults && (
+            <div className='bg-[#1e1e1e] max-h-64 overflow-y-auto divide-y divide-slate-800'>
+              {testResults.results.map((r, i) => (
+                <div key={i} className='flex items-start gap-3 px-4 py-2.5'>
+                  {r.passed
+                    ? <CheckCircle2 className='w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5' />
+                    : <XCircle className='w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5' />
+                  }
+                  <div className='min-w-0'>
+                    <p className='text-xs text-slate-200'>{r.description}</p>
+                    {r.error && (
+                      <p className='text-xs font-mono text-red-400 mt-0.5 break-all'>{r.error}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Action bar ── */}
       <div className='flex items-center gap-3 px-4 py-3 bg-[#252526] border-t border-slate-700'>
         <Button
           size='sm'
           variant='outline'
           onClick={handleRun}
-          disabled={running}
+          disabled={running || testRunning}
           className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
         >
           {running
@@ -236,6 +320,21 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
             : <><Play className='w-3.5 h-3.5 mr-1.5' />Run</>
           }
         </Button>
+
+        {hasTestCases && (
+          <Button
+            size='sm'
+            variant='outline'
+            onClick={handleRunTests}
+            disabled={running || testRunning}
+            className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
+          >
+            {testRunning
+              ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Testing…</>
+              : <><FlaskConical className='w-3.5 h-3.5 mr-1.5' />Run Tests</>
+            }
+          </Button>
+        )}
 
         <Button
           size='sm'

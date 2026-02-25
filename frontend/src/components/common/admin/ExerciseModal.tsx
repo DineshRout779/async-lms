@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import type { ExerciseModalProps } from '@/utils/types';
+import type { ExerciseModalProps, TestCase } from '@/utils/types';
 import { Save, X, Plus, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
@@ -26,6 +26,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       ? editData.initial_files
       : [{ ...LANGUAGE_DEFAULTS['javascript'] }],
   );
+  const [testCases, setTestCases] = useState<TestCase[]>(editData?.test_cases ?? []);
 
   useEffect(() => {
     if (isOpen) {
@@ -39,12 +40,12 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
           ? editData.initial_files
           : [{ ...LANGUAGE_DEFAULTS[lang] }],
       );
+      setTestCases(editData?.test_cases ?? []);
     }
   }, [isOpen, editData]);
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
-    // Only reset files if they still look like defaults (user hasn't edited yet)
     setInitialFiles((prev) => {
       const isDefault = prev.length === 1 && Object.values(LANGUAGE_DEFAULTS).some(
         (d) => d.name === prev[0].name && prev[0].content.trim() === d.content.trim(),
@@ -67,6 +68,23 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     );
   };
 
+  const addTestCase = () => {
+    setTestCases((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), description: '', test_code: '', is_hidden: false },
+    ]);
+  };
+
+  const removeTestCase = (id: string) => {
+    setTestCases((prev) => prev.filter((tc) => tc.id !== id));
+  };
+
+  const updateTestCase = (id: string, field: keyof TestCase, value: string | boolean) => {
+    setTestCases((prev) =>
+      prev.map((tc) => (tc.id === id ? { ...tc, [field]: value } : tc)),
+    );
+  };
+
   const handleSave = () => {
     if (!title.trim()) {
       toast.error('Exercise title is required');
@@ -80,18 +98,24 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       toast.error('All files must have a name');
       return;
     }
+    if (testCases.some((tc) => !tc.description.trim() || !tc.test_code.trim())) {
+      toast.error('All test cases must have a description and test code');
+      return;
+    }
     onSave({
       title: title.trim(),
       instructions: instructions.trim(),
       max_score: maxScore,
       language,
       initial_files: initialFiles,
+      test_cases: testCases,
     });
     setTitle('');
     setInstructions('');
     setMaxScore(100);
     setLanguage('javascript');
     setInitialFiles([{ ...LANGUAGE_DEFAULTS['javascript'] }]);
+    setTestCases([]);
   };
 
   if (!isOpen) return null;
@@ -204,6 +228,66 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Test Cases */}
+          <div>
+            <div className='flex items-center justify-between mb-2'>
+              <label className='text-sm font-medium text-slate-700'>
+                Test Cases
+                <span className='ml-2 text-xs text-slate-400 font-normal'>auto-grade student submissions</span>
+              </label>
+              <Button onClick={addTestCase} size='sm' variant='outline' className='text-xs'>
+                <Plus className='w-3 h-3 mr-1' /> Add Test Case
+              </Button>
+            </div>
+
+            {testCases.length === 0 ? (
+              <p className='text-xs text-slate-400 italic'>
+                No test cases — submissions will not be auto-graded.
+              </p>
+            ) : (
+              <div className='space-y-3'>
+                {testCases.map((tc, index) => (
+                  <div key={tc.id} className='rounded-lg border border-slate-200 overflow-hidden'>
+                    <div className='flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200'>
+                      <span className='text-xs text-slate-400 font-mono shrink-0'>#{index + 1}</span>
+                      <input
+                        type='text'
+                        value={tc.description}
+                        onChange={(e) => updateTestCase(tc.id, 'description', e.target.value)}
+                        placeholder='e.g., adds two positive numbers'
+                        className='flex-1 text-xs bg-transparent outline-none text-slate-700'
+                      />
+                      <label className='flex items-center gap-1 text-xs text-slate-500 shrink-0 cursor-pointer'>
+                        <input
+                          type='checkbox'
+                          checked={tc.is_hidden}
+                          onChange={(e) => updateTestCase(tc.id, 'is_hidden', e.target.checked)}
+                          className='rounded'
+                        />
+                        Hidden
+                      </label>
+                      <button onClick={() => removeTestCase(tc.id)} className='text-slate-400 hover:text-red-500 shrink-0'>
+                        <Trash2 className='w-3.5 h-3.5' />
+                      </button>
+                    </div>
+                    <textarea
+                      value={tc.test_code}
+                      onChange={(e) => updateTestCase(tc.id, 'test_code', e.target.value)}
+                      placeholder={`__test('${tc.description || 'description'}', () => {\n  __expect(add(1, 2)).toBe(3);\n});`}
+                      rows={5}
+                      className='w-full px-3 py-2 font-mono text-xs text-slate-700 bg-white outline-none resize-y'
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className='mt-1.5 text-xs text-slate-400'>
+              Use <code className='bg-slate-100 px-1 rounded'>__test(description, fn)</code> and{' '}
+              <code className='bg-slate-100 px-1 rounded'>__expect(value).toBe(expected)</code> helpers.
+              Hidden tests show only pass/fail to students, not the test code.
+            </p>
           </div>
         </div>
 

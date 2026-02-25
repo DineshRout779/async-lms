@@ -1,4 +1,5 @@
 const pool = require('../config/pg');
+const bcrypt = require('bcrypt');
 
 // @desc    Get subjects for a specific student
 exports.getUserSubjects = async (req, res) => {
@@ -46,6 +47,126 @@ exports.getUserSubjects = async (req, res) => {
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('Error fetching student subjects:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// @desc    Get authenticated user's profile (all roles)
+exports.getUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      `SELECT
+         u.id, u.full_name, u.email, u.role, u.created_at,
+         sp.degree, sp.year,
+         COALESCE(c.id, fc_c.id) AS college_id,
+         COALESCE(c.name, fc_c.name) AS college_name,
+         COALESCE(SUM(pl.points), 0)::integer AS total_points,
+         COALESCE(us.current_streak, 0) AS current_streak,
+         COALESCE(us.longest_streak, 0) AS longest_streak,
+         COUNT(DISTINCT ub.badge_id)::integer AS badge_count
+       FROM public.users u
+       LEFT JOIN public.student_profiles sp ON sp.user_id = u.id
+       LEFT JOIN public.colleges c ON c.id = sp.college_id
+       LEFT JOIN public.facilitator_colleges fc ON fc.facilitator_id = u.id
+       LEFT JOIN public.colleges fc_c ON fc_c.id = fc.college_id
+       LEFT JOIN public.points_log pl ON pl.user_id = u.id
+       LEFT JOIN public.user_streaks us ON us.user_id = u.id
+       LEFT JOIN public.user_badges ub ON ub.user_id = u.id
+       WHERE u.id = $1
+       GROUP BY u.id, u.full_name, u.email, u.role, u.created_at,
+         sp.degree, sp.year, c.id, c.name, fc_c.id, fc_c.name,
+         us.current_streak, us.longest_streak`,
+      [userId],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('getUserProfile error:', err.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// @desc    Get authenticated user's earned badges
+exports.getUserBadges = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      `SELECT b.id, b.name, b.description, b.icon, ub.awarded_at
+       FROM public.user_badges ub
+       JOIN public.badges b ON b.id = ub.badge_id
+       WHERE ub.user_id = $1
+       ORDER BY ub.awarded_at DESC`,
+      [userId],
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('getUserBadges error:', err.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// @desc    Get recent points activity for the authenticated user
+exports.getUserActivity = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      `SELECT source, points, created_at
+       FROM public.points_log
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [userId],
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('getUserActivity error:', err.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// @desc    Change authenticated user's password
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({ success: false, message: 'Both current and new password are required' });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT password_hash FROM public.users WHERE id = $1`,
+      [userId],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const valid = await bcrypt.compare(current_password, rows[0].password_hash);
+    if (!valid) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(new_password, 10);
+    await pool.query(
+      `UPDATE public.users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [newHash, userId],
+    );
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('changePassword error:', err.message);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };

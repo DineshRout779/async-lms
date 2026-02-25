@@ -92,24 +92,48 @@ exports.selectSubjects = async (req, res) => {
         `;
     await client.query(insertQuery, [userId, subjectIds]);
 
+    // Seed progress for all subtopics:
+    //  - All subtopics in the first unit of each subject are always unlocked
+    //  - Remaining subtopics inherit the cohort's current admin-applied lock state
+    //    (bool_and = true means EVERY existing peer in same college+year has it unlocked,
+    //     i.e. an admin did a broad unlock for this cohort)
+    //  - ON CONFLICT: never re-lock a row that is already unlocked
     const seedProgressQuery = `
-      WITH ordered AS (
+      WITH new_student_profile AS (
+        SELECT college_id, year FROM student_profiles WHERE user_id = $1
+      ),
+      subject_subtopics AS (
         SELECT
           st.id AS subtopic_id,
-          ROW_NUMBER() OVER (
+          DENSE_RANK() OVER (
             PARTITION BY t.subject_id
-            ORDER BY t.order_index, st.order_index
-          ) AS rn
+            ORDER BY t.order_index, u.order_index
+          ) AS unit_rn
         FROM topics t
         INNER JOIN units u ON u.topic_id = t.id
         INNER JOIN subtopics st ON st.unit_id = u.id
         WHERE t.subject_id = ANY($2::uuid[])
+      ),
+      cohort_unlock AS (
+        SELECT usp.subtopic_id, bool_and(usp.is_unlocked) AS is_unlocked
+        FROM user_subtopic_progress usp
+        INNER JOIN student_profiles sp ON sp.user_id = usp.user_id
+        CROSS JOIN new_student_profile nsp
+        WHERE sp.college_id = nsp.college_id
+          AND sp.year = nsp.year
+          AND usp.user_id <> $1
+        GROUP BY usp.subtopic_id
+        HAVING COUNT(*) > 0
       )
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
-      SELECT $1, subtopic_id, true
-      FROM ordered
-      WHERE rn = 1
-      ON CONFLICT (user_id, subtopic_id) DO NOTHING;
+      SELECT $1, ss.subtopic_id,
+        CASE WHEN ss.unit_rn = 1 THEN true
+             ELSE COALESCE(cu.is_unlocked, false)
+        END
+      FROM subject_subtopics ss
+      LEFT JOIN cohort_unlock cu ON cu.subtopic_id = ss.subtopic_id
+      ON CONFLICT (user_id, subtopic_id) DO UPDATE
+        SET is_unlocked = (user_subtopic_progress.is_unlocked OR EXCLUDED.is_unlocked);
     `;
     await client.query(seedProgressQuery, [userId, subjectIds]);
 

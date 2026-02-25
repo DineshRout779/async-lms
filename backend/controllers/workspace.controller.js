@@ -57,3 +57,9 @@ exports.rename = (req, res) => {
   fsService.renamePath(userId, projectId, oldPath, newPath);
   res.json({ status: 'renamed' });
 };
+
+exports.getQuota = (req, res) => {
+  const { userId, projectId } = req.query;
+  if (!assertOwner(req, res, userId)) return;
+  res.json(fsService.getWorkspaceQuota(userId, projectId));
+};

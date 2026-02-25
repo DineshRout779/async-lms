@@ -1,5 +1,17 @@
-const { spawnSync } = require('child_process');
+const { spawnSync, spawn } = require('child_process');
 const path = require('path');
+
+// Async wrapper for one-shot docker commands (stop, rm, etc.)
+function runDockerAsync(args) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('docker', args, { stdio: 'ignore' });
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`docker ${args[0]} exited with code ${code}`));
+    });
+    proc.on('error', reject);
+  });
+}
 
 function containerExists(name) {
   const res = spawnSync('docker', ['inspect', name], { stdio: 'ignore' });
@@ -66,4 +78,27 @@ async function ensureWorkspaceContainer({ userId, projectId, image }) {
   await waitForContainer(name);
 }
 
-module.exports = { ensureWorkspaceContainer };
+/**
+ * Gracefully stop and remove a workspace container.
+ * Safe to call even if the container doesn't exist.
+ */
+async function stopWorkspaceContainer(userId, projectId) {
+  const name = `workspace-${userId}-${projectId}`;
+  if (!containerExists(name)) return;
+
+  try {
+    // Give the container 5 s to stop cleanly, then SIGKILL
+    await runDockerAsync(['stop', '--time=5', name]);
+  } catch (err) {
+    console.error(`[cleanup] docker stop ${name} failed:`, err.message);
+  }
+
+  try {
+    await runDockerAsync(['rm', name]);
+    console.log(`[cleanup] Container ${name} stopped and removed`);
+  } catch (err) {
+    console.error(`[cleanup] docker rm ${name} failed:`, err.message);
+  }
+}
+
+module.exports = { ensureWorkspaceContainer, stopWorkspaceContainer };

@@ -21,6 +21,23 @@ const pool = new Pool({
     console.log(`✅ Database connected to host: ${connectedHost}`);
     console.log(`📁 Target database: ${connectedDb}`);
 
+    // Idempotent schema migrations
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id text UNIQUE`);
+    await client.query(`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`);
+    await client.query(`ALTER TABLE project_submissions ADD COLUMN IF NOT EXISTS submission_link text`);
+    await client.query(`ALTER TABLE exercises ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb`);
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS instructions text`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'project_submissions_project_user_unique'
+        ) THEN
+          ALTER TABLE project_submissions
+            ADD CONSTRAINT project_submissions_project_user_unique UNIQUE (project_id, user_id);
+        END IF;
+      END $$
+    `);
+
     client.release(); // Always release the client back to the pool
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);

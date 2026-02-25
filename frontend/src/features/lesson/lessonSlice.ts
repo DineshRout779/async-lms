@@ -153,15 +153,15 @@ export const completeLesson = createAsyncThunk<
 });
 
 export const submitExercise = createAsyncThunk<
-  { exerciseId: string; score: number },
-  { exerciseId: string; score: number },
+  { exerciseId: string; score: number | null },
+  { exerciseId: string },
   { rejectValue: string }
 >('lesson/submitExercise', async (payload, { rejectWithValue }) => {
   try {
-    await apiClient.post(`/students/exercise/${payload.exerciseId}/submit`, {
-      score: payload.score,
-    });
-    return payload;
+    const res = await apiClient.post<{ data: { score?: number } }>(
+      `/students/exercise/${payload.exerciseId}/submit`,
+    );
+    return { exerciseId: payload.exerciseId, score: res.data.data?.score ?? null };
   } catch (error: any) {
     return rejectWithValue(
       error.response?.data?.message || 'Failed to submit exercise',

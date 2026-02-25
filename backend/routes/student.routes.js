@@ -16,9 +16,12 @@ const {
   deleteStudentProject,
   initExerciseWorkspace,
   runExercise,
+  runExerciseTests,
   getStudentAssignments,
   getAssignmentById,
   submitAssignment,
+  getCapstone,
+  submitCapstone,
 } = require('../controllers/student.controller');
 
 // ===== PROGRESS TRACKING =====
@@ -43,6 +46,7 @@ router.post('/exercise/:exerciseId/submit', verifyToken, isStudent, submitExerci
 // ===== EXERCISE WORKSPACE =====
 router.post('/exercise/:exerciseId/workspace/init', verifyToken, isStudent, initExerciseWorkspace);
 router.post('/exercise/:exerciseId/run', verifyToken, isStudent, runExercise);
+router.post('/exercise/:exerciseId/run-tests', verifyToken, isStudent, runExerciseTests);
 
 // ===== ASSIGNMENTS =====
 router.get('/assignments', verifyToken, isStudent, getStudentAssignments);
@@ -53,6 +57,10 @@ router.post('/assignments/:id/submit', verifyToken, isStudent, submitAssignment)
 router.get('/projects', verifyToken, isStudent, getStudentProjects);
 router.post('/projects', verifyToken, isStudent, createStudentProject);
 router.delete('/projects/:id', verifyToken, isStudent, deleteStudentProject);
+
+// ===== CAPSTONE PROJECTS =====
+router.get('/capstone/:projectId', verifyToken, isStudent, getCapstone);
+router.post('/capstone/:projectId/submit', verifyToken, isStudent, submitCapstone);
 
 // ===== LEADERBOARDS =====
 router.get(

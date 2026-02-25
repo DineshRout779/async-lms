@@ -5,10 +5,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GraduationCap } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
+import { GoogleLogin } from '@react-oauth/google';
 
 // Redux
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { loginUser, signupUser } from '@/features/auth/authThunks';
+import { loginUser, signupUser, googleAuth } from '@/features/auth/authThunks';
 import { clearAuthError } from '@/features/auth/authSlice';
 import { selectAuth } from '@/features/auth/authSelectors';
 
@@ -181,6 +182,35 @@ export default function Login() {
               {authMode === 'login' ? 'Login' : 'Create Account'}
             </Button>
           </form>
+
+          <div className='relative my-5'>
+            <div className='absolute inset-0 flex items-center'>
+              <div className='w-full border-t border-slate-200' />
+            </div>
+            <div className='relative flex justify-center'>
+              <span className='bg-white px-3 text-xs text-slate-400'>
+                or continue with
+              </span>
+            </div>
+          </div>
+
+          <div className='flex justify-center'>
+            <GoogleLogin
+              onSuccess={async (response) => {
+                if (!response.credential) return;
+                const toastId = toast.loading('Signing in with Google...');
+                try {
+                  await dispatch(googleAuth(response.credential)).unwrap();
+                  toast.success('Signed in with Google!', { id: toastId });
+                } catch (err: unknown) {
+                  toast.error('Google sign-in failed');
+                }
+              }}
+              onError={() => toast.error('Google sign-in was cancelled')}
+              useOneTap={false}
+              width='368'
+            />
+          </div>
         </div>
       </div>
     </div>

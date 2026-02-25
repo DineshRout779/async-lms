@@ -3,8 +3,12 @@ const userController = require('../controllers/user.controller');
 const verifyToken = require('../middlewares/verfiyToken');
 const isAdmin = require('../middlewares/isAdmin');
 
-// Student Routes
+// Authenticated Routes (any role)
 router.get('/subjects', verifyToken, userController.getUserSubjects);
+router.get('/profile', verifyToken, userController.getUserProfile);
+router.get('/badges', verifyToken, userController.getUserBadges);
+router.get('/activity', verifyToken, userController.getUserActivity);
+router.put('/password', verifyToken, userController.changePassword);
 
 // Admin Routes (Protecting all subsequent routes with isAdmin)
 router.use(verifyToken, isAdmin);

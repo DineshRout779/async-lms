@@ -148,56 +148,43 @@ exports.getAdminSubjectStructure = async (req, res) => {
         lc.is_published AS lesson_is_published,
         lc.video_url AS lesson_video_url,
 
-        -- Quiz
+        -- Quiz (presence only — questions loaded separately on demand)
         q.id AS quiz_id,
         q.passing_score AS quiz_passing_score,
         q.max_score AS quiz_max_score,
 
-        -- Quiz Question
-        qq.id AS question_id,
-        qq.question_text,
-        qq.question_type,
-        qq.points,
-        qq.order_index AS question_order,
-        qq.explanation,
-
-        -- Quiz Options
-        qo.id AS option_id,
-        qo.option_text,
-        qo.is_correct,
-        qo.order_index AS option_order,
-
-        -- Exercise (subtopic-level only)
+        -- Exercise (subtopic-level only — instructions omitted, fetched on edit)
         e.id AS exercise_id,
         e.title AS exercise_title,
-        e.instructions AS exercise_instructions,
         e.max_score AS exercise_max_score,
 
-        -- Assignment (unit-level)
+        -- Assignment (unit-level — instructions omitted, fetched on edit)
         a.id AS assignment_id,
         a.title AS assignment_title,
-        a.instructions AS assignment_instructions,
-        a.max_score AS assignment_max_score
+        a.max_score AS assignment_max_score,
+
+        -- Capstone (topic-level)
+        p.id AS capstone_id,
+        p.title AS capstone_title,
+        p.instructions AS capstone_instructions,
+        p.max_score AS capstone_max_score
 
       FROM topics t
+      LEFT JOIN projects p ON t.id = p.topic_id
       LEFT JOIN units u ON t.id = u.topic_id
       LEFT JOIN subtopics st ON u.id = st.unit_id
-      LEFT JOIN lesson_content lc 
+      LEFT JOIN lesson_content lc
         ON st.id = lc.subtopic_id
       LEFT JOIN quizzes q ON u.id = q.unit_id
-      LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
-      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
       LEFT JOIN exercises e ON st.id = e.subtopic_id
       LEFT JOIN assignments a ON u.id = a.unit_id
 
       WHERE t.subject_id = $1
-      ORDER BY 
+      ORDER BY
         t.order_index,
         u.order_index,
         st.order_index,
-        lc.version,
-        qq.order_index,
-        qo.order_index;
+        lc.version;
     `;
 
     const { rows } = await pool.query(query, [subject.id]);
@@ -211,6 +198,9 @@ exports.getAdminSubjectStructure = async (req, res) => {
           title: row.topic_title,
           description: row.topic_description,
           order_index: row.topic_order,
+          capstone: row.capstone_id
+            ? { id: row.capstone_id, title: row.capstone_title, instructions: row.capstone_instructions, max_score: row.capstone_max_score }
+            : null,
           units: new Map(),
         });
       }
@@ -262,65 +252,34 @@ exports.getAdminSubjectStructure = async (req, res) => {
         }
       }
 
+      // Quiz (title/score only — no questions)
       if (row.quiz_id && unit) {
         if (!unit.quizzes.has(row.quiz_id)) {
           unit.quizzes.set(row.quiz_id, {
             id: row.quiz_id,
             passing_score: row.quiz_passing_score,
             max_score: row.quiz_max_score,
-            questions: new Map(),
           });
-        }
-
-        const quiz = unit.quizzes.get(row.quiz_id);
-
-        if (row.question_id && quiz) {
-          if (!quiz.questions.has(row.question_id)) {
-            quiz.questions.set(row.question_id, {
-              id: row.question_id,
-              question_text: row.question_text,
-              question_type: row.question_type,
-              points: row.points,
-              order_index: row.question_order,
-              explanation: row.explanation,
-              options: [],
-            });
-          }
-
-          const question = quiz.questions.get(row.question_id);
-
-          if (row.option_id && question) {
-            if (!question.options.some((o) => o.id === row.option_id)) {
-              question.options.push({
-                id: row.option_id,
-                option_text: row.option_text,
-                is_correct: row.is_correct,
-                order_index: row.option_order,
-              });
-            }
-          }
         }
       }
 
-      // Exercise (subtopic-level)
+      // Exercise (subtopic-level — no instructions)
       if (row.exercise_id && subtopic) {
         if (!subtopic.exercises.some((e) => e.id === row.exercise_id)) {
           subtopic.exercises.push({
             id: row.exercise_id,
             title: row.exercise_title,
-            instructions: row.exercise_instructions,
             max_score: row.exercise_max_score,
           });
         }
       }
 
-      // Assignment (unit-level)
+      // Assignment (unit-level — no instructions)
       if (row.assignment_id && unit) {
         if (!unit.assignments.some((a) => a.id === row.assignment_id)) {
           unit.assignments.push({
             id: row.assignment_id,
             title: row.assignment_title,
-            instructions: row.assignment_instructions,
             max_score: row.assignment_max_score,
           });
         }
@@ -332,6 +291,7 @@ exports.getAdminSubjectStructure = async (req, res) => {
       title: topic.title,
       description: topic.description,
       order_index: topic.order_index,
+      capstone: topic.capstone,
       units: Array.from(topic.units.values()).map((unit) => ({
         id: unit.id,
         title: unit.title,
@@ -339,10 +299,7 @@ exports.getAdminSubjectStructure = async (req, res) => {
         description: unit.description,
         order_index: unit.order_index,
         assignments: unit.assignments,
-        quizzes: Array.from(unit.quizzes.values()).map((q) => ({
-          ...q,
-          questions: Array.from(q.questions.values()),
-        })),
+        quizzes: Array.from(unit.quizzes.values()),
         subtopics: Array.from(unit.subtopics.values()).map((sub) => ({
           ...sub,
         })),
@@ -1216,9 +1173,23 @@ exports.deleteQuiz = async (req, res) => {
 // EXERCISE MANAGEMENT
 // ============================================
 
+exports.getExercise = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'SELECT id, title, instructions, max_score, subtopic_id, language, initial_files, test_cases FROM exercises WHERE id = $1',
+      [id],
+    );
+    if (!result.rowCount) return res.status(404).json({ message: 'Exercise not found' });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 exports.createExercise = async (req, res) => {
   try {
-    const { subtopic_id, title, instructions, max_score, language, initial_files } = req.body;
+    const { subtopic_id, title, instructions, max_score, language, initial_files, test_cases } = req.body;
 
     if (!subtopic_id || !title || !max_score) {
       return res.status(400).json({
@@ -1228,8 +1199,8 @@ exports.createExercise = async (req, res) => {
     }
 
     const query = `
-      INSERT INTO exercises (subtopic_id, title, instructions, max_score, language, initial_files)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO exercises (subtopic_id, title, instructions, max_score, language, initial_files, test_cases)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
 
@@ -1240,6 +1211,7 @@ exports.createExercise = async (req, res) => {
       max_score,
       language || 'javascript',
       JSON.stringify(initial_files || []),
+      JSON.stringify(test_cases || []),
     ]);
 
     res.status(201).json({
@@ -1260,7 +1232,7 @@ exports.createExercise = async (req, res) => {
 exports.updateExercise = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score, language, initial_files } = req.body;
+    const { title, instructions, max_score, language, initial_files, test_cases } = req.body;
 
     const updates = [];
     const values = [];
@@ -1285,6 +1257,10 @@ exports.updateExercise = async (req, res) => {
     if (initial_files !== undefined) {
       updates.push(`initial_files = $${paramCount++}`);
       values.push(JSON.stringify(initial_files));
+    }
+    if (test_cases !== undefined) {
+      updates.push(`test_cases = $${paramCount++}`);
+      values.push(JSON.stringify(test_cases));
     }
 
     if (updates.length === 0) {
@@ -1352,6 +1328,20 @@ exports.deleteExercise = async (req, res) => {
 // ============================================
 // ASSIGNMENT MANAGEMENT
 // ============================================
+
+exports.getAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'SELECT id, title, instructions, max_score, unit_id FROM assignments WHERE id = $1',
+      [id],
+    );
+    if (!result.rowCount) return res.status(404).json({ message: 'Assignment not found' });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
 
 exports.createAssignment = async (req, res) => {
   try {
@@ -1482,22 +1472,22 @@ exports.deleteAssignment = async (req, res) => {
 
 exports.createProject = async (req, res) => {
   try {
-    const { topic_id, title, type, max_score } = req.body;
+    const { topic_id, title, instructions } = req.body;
 
-    if (!topic_id || !title || !max_score) {
+    if (!topic_id || !title) {
       return res.status(400).json({
         success: false,
-        message: 'Topic ID, title, and max score are required',
+        message: 'Topic ID and title are required',
       });
     }
 
     const query = `
-      INSERT INTO projects (topic_id, title, type, max_score)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO projects (topic_id, title, instructions, max_score)
+      VALUES ($1, $2, $3, 20)
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [topic_id, title, type, max_score]);
+    const result = await pool.query(query, [topic_id, title, instructions || null]);
 
     res.status(201).json({
       success: true,
@@ -1517,7 +1507,7 @@ exports.createProject = async (req, res) => {
 exports.updateProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, type, max_score } = req.body;
+    const { title, instructions } = req.body;
 
     const updates = [];
     const values = [];
@@ -1527,13 +1517,9 @@ exports.updateProject = async (req, res) => {
       updates.push(`title = $${paramCount++}`);
       values.push(title);
     }
-    if (type !== undefined) {
-      updates.push(`type = $${paramCount++}`);
-      values.push(type);
-    }
-    if (max_score !== undefined) {
-      updates.push(`max_score = $${paramCount++}`);
-      values.push(max_score);
+    if (instructions !== undefined) {
+      updates.push(`instructions = $${paramCount++}`);
+      values.push(instructions);
     }
 
     if (updates.length === 0) {
