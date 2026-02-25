@@ -64,12 +64,12 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
         {/* Stats Badges - Gamification items */}
         <div className='hidden lg:flex items-center gap-2 bg-orange-50 text-orange-600 px-3 py-1.5 rounded-full border border-orange-100 text-xs font-bold'>
           <Flame className='w-3.5 h-3.5 fill-orange-500' />
-          <span>12 DAY STREAK</span>
+          <span>1 DAY STREAK</span>
         </div>
 
         <div className='hidden lg:flex items-center gap-2 bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full border border-indigo-100 text-xs font-bold'>
           <Star className='w-3.5 h-3.5 fill-indigo-500' />
-          <span>2,450 XP</span>
+          <span>10 XP</span>
         </div>
 
         {/* Action Controls */}
