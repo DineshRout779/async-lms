@@ -184,7 +184,7 @@ export default function StudentProfile() {
         />
         <StatCard
           icon={<Flame className='h-5 w-5 text-orange-500' />}
-          value={String(profile.current_streak)}
+          value={String(1)}
           label='Current Streak'
           color='text-orange-600'
         />
