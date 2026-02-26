@@ -36,7 +36,7 @@ export default function AdminSidebar({
   return (
     <aside
       className={cn(
-        'h-full flex flex-col transition-all duration-300 bg-[#1e2653] text-slate-300',
+        'h-full flex flex-col transition-all duration-300 bg-[#191C34] text-slate-300',
         isOpen ? 'w-64' : 'w-20',
       )}
     >
@@ -92,7 +92,7 @@ export default function AdminSidebar({
       </nav>
 
       {/* User Profile Section - Bottom */}
-      <div className='p-4 border-t border-[#2a3469] bg-[#1a214d]'>
+      <div className='p-4 border-t border-[#222644] bg-[#191C34]'>
         <div
           className={cn('flex items-center gap-3', !isOpen && 'justify-center')}
         >

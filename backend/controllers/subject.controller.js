@@ -48,13 +48,23 @@ exports.getAllSubjects = async (req, res) => {
 // 2. Get all published subjects
 exports.getAllPublishedSubjects = async (req, res) => {
   try {
-    // Note: We use order_index to keep your curated order
-    const { rows } = await pool.query(
-      'SELECT id, name, slug, description FROM subjects WHERE is_published = true ORDER BY order_index ASC',
-    );
+    const { rows } = await pool.query(`
+      SELECT
+        s.id, s.name, s.slug, s.description, s.level,
+        (
+          SELECT COUNT(st.id)
+          FROM subtopics st
+          JOIN units u ON st.unit_id = u.id
+          JOIN topics t ON u.topic_id = t.id
+          WHERE t.subject_id = s.id
+        ) AS total_lessons
+      FROM subjects s
+      WHERE s.is_published = true
+      ORDER BY s.order_index ASC
+    `);
     res.json({ success: true, data: rows });
   } catch (err) {
-    console.error('Error | getAllSubjects:', err);
+    console.error('Error | getAllPublishedSubjects:', err);
     res.status(500).json({ message: 'Error fetching subjects' });
   }
 };
@@ -122,10 +132,9 @@ exports.getCourseStructure = async (req, res) => {
         qq.order_index AS question_order,
         qq.explanation,
 
-        -- Quiz Options
+        -- Quiz Options (is_correct intentionally omitted — scoring is server-side)
         qo.id AS option_id,
         qo.option_text,
-        qo.is_correct,
         qo.order_index AS option_order,
 
         -- Exercise (subtopic-level)
@@ -269,7 +278,6 @@ exports.getCourseStructure = async (req, res) => {
               question.options.push({
                 id: row.option_id,
                 option_text: row.option_text,
-                is_correct: row.is_correct,
                 order_index: row.option_order,
               });
             }
@@ -368,7 +376,7 @@ exports.getSubtopicContent = async (req, res) => {
         [userId, subtopicId],
       );
 
-      if (!lockCheck.rows[0] || lockCheck.rows[0].is_unlocked !== true) {
+      if (lockCheck.rows[0]?.is_unlocked === false) {
         return res.status(403).json({
           success: false,
           message: 'This subtopic is locked by your admin.',
@@ -421,7 +429,6 @@ exports.getSubtopicContent = async (req, res) => {
 
         qo.id AS option_id,
         qo.option_text,
-        qo.is_correct,
         qo.order_index AS option_order,
 
         e.id AS exercise_id,
@@ -510,7 +517,6 @@ exports.getSubtopicContent = async (req, res) => {
             question.options.push({
               id: row.option_id,
               option_text: row.option_text,
-              is_correct: row.is_correct,
             });
           }
         }
@@ -724,8 +730,7 @@ exports.getQuizContent = async (req, res) => {
         qq.points,
         qq.explanation,
         qo.id AS option_id,
-        qo.option_text,
-        qo.is_correct
+        qo.option_text
       FROM quizzes q
       LEFT JOIN units u ON q.unit_id = u.id
       LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
@@ -760,7 +765,6 @@ exports.getQuizContent = async (req, res) => {
           question.options.push({
             id: row.option_id,
             option_text: row.option_text,
-            is_correct: row.is_correct,
           });
         }
       }

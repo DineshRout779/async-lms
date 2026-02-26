@@ -22,6 +22,8 @@ const {
   submitAssignment,
   getCapstone,
   submitCapstone,
+  getStudentScorecard,
+  enrollInSubject,
 } = require('../controllers/student.controller');
 
 // ===== PROGRESS TRACKING =====
@@ -61,6 +63,12 @@ router.delete('/projects/:id', verifyToken, isStudent, deleteStudentProject);
 // ===== CAPSTONE PROJECTS =====
 router.get('/capstone/:projectId', verifyToken, isStudent, getCapstone);
 router.post('/capstone/:projectId/submit', verifyToken, isStudent, submitCapstone);
+
+// ===== ENROLLMENT =====
+router.post('/subjects/:subjectId/enroll', verifyToken, isStudent, enrollInSubject);
+
+// ===== SCORECARD =====
+router.get('/scorecard', verifyToken, isStudent, getStudentScorecard);
 
 // ===== LEADERBOARDS =====
 router.get(

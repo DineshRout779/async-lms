@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loginWithToken } from '@/features/auth/authSlice';
-import { loadUser } from '@/features/auth/authThunks';
 import { selectAuth } from '@/features/auth/authSelectors';
 import toast from 'react-hot-toast';
 
@@ -24,7 +23,6 @@ export default function AuthCallback() {
     }
 
     dispatch(loginWithToken(token));
-    dispatch(loadUser());
   }, []);
 
   useEffect(() => {

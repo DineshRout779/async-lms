@@ -12,7 +12,7 @@ exports.getUserSubjects = async (req, res) => {
         s.name, 
         s.slug, 
         s.description, 
-        s.level, -- Requires the ALTER TABLE above
+        s.level, 
         -- Count total subtopics for this subject
         (SELECT COUNT(st.id) 
          FROM public.subtopics st 
@@ -82,7 +82,9 @@ exports.getUserProfile = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'User not found' });
     }
 
     res.json({ success: true, data: result.rows[0] });
@@ -137,11 +139,21 @@ exports.changePassword = async (req, res) => {
     const { current_password, new_password } = req.body;
 
     if (!current_password || !new_password) {
-      return res.status(400).json({ success: false, message: 'Both current and new password are required' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: 'Both current and new password are required',
+        });
     }
 
     if (new_password.length < 6) {
-      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: 'New password must be at least 6 characters',
+        });
     }
 
     const { rows } = await pool.query(
@@ -150,12 +162,16 @@ exports.changePassword = async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'User not found' });
     }
 
     const valid = await bcrypt.compare(current_password, rows[0].password_hash);
     if (!valid) {
-      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'Current password is incorrect' });
     }
 
     const newHash = await bcrypt.hash(new_password, 10);

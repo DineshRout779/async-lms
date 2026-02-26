@@ -27,7 +27,6 @@ export interface LessonContent {
 export interface QuizOption {
   id: string;
   option_text: string;
-  is_correct: boolean;
 }
 
 export interface QuizQuestion {
@@ -145,8 +144,14 @@ export interface SubjectListResponse {
 export interface QuizAttemptResult {
   attempt: {
     score: number;
+    is_passed: boolean;
   };
   points_awarded: number;
+  question_results: Record<string, {
+    is_correct: boolean;
+    correct_option_id: string | null;
+    correct_option_text: string | null;
+  }>;
 }
 
 // Modal Components

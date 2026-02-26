@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Calendar,
   CheckCircle2,
+  BarChart2,
 } from 'lucide-react';
 import apiClient from '@/services/api';
 
@@ -51,6 +52,22 @@ interface MyRank {
   total_points: number;
 }
 
+interface ScorecardTopic {
+  topic_id: string;
+  topic_title: string;
+  exercise_score: number;
+  quiz_score: number;
+  assignment_score: number;
+  project_score: number;
+  total_score: number;
+}
+
+interface ScorecardSubject {
+  subject_id: string;
+  subject_name: string;
+  topics: ScorecardTopic[];
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function getInitials(name: string) {
@@ -87,6 +104,7 @@ export default function StudentProfile() {
   const [badges, setBadges] = useState<UserBadge[]>([]);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [myRank, setMyRank] = useState<MyRank | null>(null);
+  const [scorecard, setScorecard] = useState<ScorecardSubject[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -100,7 +118,10 @@ export default function StudentProfile() {
         success: boolean;
         data: { leaderboard: unknown[]; my_rank: MyRank | null };
       }>('/students/leaderboard/overall?limit=1'),
-    ]).then(([profileRes, badgesRes, activityRes, rankRes]) => {
+      apiClient.get<{ success: boolean; data: ScorecardSubject[] }>(
+        '/students/scorecard',
+      ),
+    ]).then(([profileRes, badgesRes, activityRes, rankRes, scorecardRes]) => {
       if (profileRes.status === 'fulfilled')
         setProfile(profileRes.value.data.data);
       if (badgesRes.status === 'fulfilled')
@@ -109,6 +130,8 @@ export default function StudentProfile() {
         setActivity(activityRes.value.data.data);
       if (rankRes.status === 'fulfilled')
         setMyRank(rankRes.value.data.data.my_rank);
+      if (scorecardRes.status === 'fulfilled')
+        setScorecard(scorecardRes.value.data.data);
       setLoading(false);
     });
   }, []);
@@ -184,7 +207,7 @@ export default function StudentProfile() {
         />
         <StatCard
           icon={<Flame className='h-5 w-5 text-orange-500' />}
-          value={String(1)}
+          value={profile.current_streak.toString() || '0'}
           label='Current Streak'
           color='text-orange-600'
         />
@@ -243,6 +266,131 @@ export default function StudentProfile() {
         </section>
       )}
 
+      {/* ── Scorecard ────────────────────────────────────────────────────────── */}
+      {scorecard.length > 0 && (
+        <section>
+          <h2 className='text-lg font-semibold text-slate-800 mb-1 flex items-center gap-2'>
+            <BarChart2 className='h-5 w-5 text-indigo-500' />
+            Scorecard
+          </h2>
+          <p className='text-xs text-slate-400 mb-4'>
+            Topic-wise performance breakdown
+          </p>
+
+          {/* Weight legend */}
+          <div className='flex flex-wrap gap-2 mb-4'>
+            {[
+              {
+                label: 'Exercises',
+                pct: '20%',
+                color: 'bg-blue-100 text-blue-700',
+              },
+              {
+                label: 'Quizzes',
+                pct: '10%',
+                color: 'bg-violet-100 text-violet-700',
+              },
+              {
+                label: 'Assignments',
+                pct: '30%',
+                color: 'bg-amber-100 text-amber-700',
+              },
+              {
+                label: 'Projects',
+                pct: '40%',
+                color: 'bg-emerald-100 text-emerald-700',
+              },
+            ].map((w) => (
+              <span
+                key={w.label}
+                className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${w.color}`}
+              >
+                {w.label} {w.pct}
+              </span>
+            ))}
+          </div>
+
+          <div className='space-y-6'>
+            {scorecard.map((subject) => (
+              <div key={subject.subject_id}>
+                <p className='text-xs font-bold uppercase tracking-widest text-slate-400 mb-2'>
+                  {subject.subject_name}
+                </p>
+                <div className='space-y-2'>
+                  {subject.topics.map((topic) => (
+                    <Card key={topic.topic_id} className='p-4'>
+                      <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+                        <p className='font-semibold text-slate-800 text-sm min-w-32'>
+                          {topic.topic_title}
+                        </p>
+
+                        <div className='flex flex-wrap gap-3 flex-1'>
+                          <ScoreCell
+                            label='Ex'
+                            score={topic.exercise_score}
+                            max={20}
+                            barColor='#60a5fa'
+                          />
+                          <ScoreCell
+                            label='Quiz'
+                            score={topic.quiz_score}
+                            max={10}
+                            barColor='#a78bfa'
+                          />
+                          <ScoreCell
+                            label='Asn'
+                            score={topic.assignment_score}
+                            max={30}
+                            barColor='#fbbf24'
+                          />
+                          <ScoreCell
+                            label='Proj'
+                            score={topic.project_score}
+                            max={40}
+                            barColor='#34d399'
+                          />
+                        </div>
+
+                        <div className='shrink-0 text-right'>
+                          <span
+                            className={`text-lg font-bold ${
+                              topic.total_score >= 70
+                                ? 'text-emerald-600'
+                                : topic.total_score >= 50
+                                  ? 'text-amber-600'
+                                  : 'text-red-500'
+                            }`}
+                          >
+                            {topic.total_score}
+                          </span>
+                          <span className='text-xs text-slate-400'>/100</span>
+                        </div>
+                      </div>
+
+                      {/* Total bar */}
+                      <div className='mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden'>
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            topic.total_score >= 70
+                              ? 'bg-emerald-400'
+                              : topic.total_score >= 50
+                                ? 'bg-amber-400'
+                                : 'bg-red-400'
+                          }`}
+                          style={{
+                            width: `${Math.min(topic.total_score, 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ── Recent Activity ──────────────────────────────────────────────────── */}
       <section>
         <h2 className='text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2'>
@@ -279,6 +427,44 @@ export default function StudentProfile() {
           </Card>
         )}
       </section>
+    </div>
+  );
+}
+
+// ── ScoreCell sub-component ────────────────────────────────────────────────────
+
+function ScoreCell({
+  label,
+  score,
+  max,
+  barColor,
+}: {
+  label: string;
+  score: number;
+  max: number;
+  barColor: string; // hex color
+}) {
+  const pct = max > 0 ? (score / max) * 100 : 0;
+  return (
+    <div className='flex flex-col gap-1 min-w-14'>
+      <div className='flex items-baseline justify-between gap-1'>
+        <span className='text-[10px] text-slate-400 uppercase tracking-wide'>
+          {label}
+        </span>
+        <span className='text-xs font-semibold text-slate-700'>
+          {score}
+          <span className='text-slate-400 font-normal'>/{max}</span>
+        </span>
+      </div>
+      <div className='h-1 bg-slate-100 rounded-full overflow-hidden'>
+        <div
+          className='h-full rounded-full'
+          style={{
+            width: `${Math.min(pct, 100)}%`,
+            backgroundColor: barColor,
+          }}
+        />
+      </div>
     </div>
   );
 }

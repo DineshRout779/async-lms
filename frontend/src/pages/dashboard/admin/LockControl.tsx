@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
+  Building2,
   Calendar,
   ChevronDown,
   ChevronRight,
@@ -10,6 +11,7 @@ import {
   ShieldCheck,
   Unlock,
   Loader2,
+  Users2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -82,7 +84,7 @@ const LockControl = () => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
 
   const [overview, setOverview] = useState<LockOverview | null>(null);
-  const [loadingOverview, setLoadingOverview] = useState(false);
+  const [loadingOverview, setLoadingOverview] = useState(true);
   const [loadingFilters, setLoadingFilters] = useState(true);
   const [topicLoadingIds, setTopicLoadingIds] = useState<string[]>([]);
   const [subtopicLoadingIds, setSubtopicLoadingIds] = useState<string[]>([]);
@@ -316,29 +318,29 @@ const LockControl = () => {
 
       {/* Filters */}
       <Card className='border-none shadow-sm overflow-hidden'>
-        <CardContent className='p-5 flex flex-col gap-4'>
-          <div className='flex flex-col lg:flex-row lg:items-center justify-between gap-4'>
-            <div className='flex items-center gap-3'>
-              <div className='bg-slate-100 p-2 rounded-xl'>
-                <ShieldCheck className='w-4 h-4 text-slate-600' />
-              </div>
-              <div>
-                <h3 className='text-sm font-bold text-slate-900'>
-                  Class Controls
-                </h3>
-                <p className='text-xs text-slate-400'>
-                  Manage topic access by cohort
-                </p>
-              </div>
-            </div>
+        <div className='flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50/60'>
+          <div className='bg-slate-100 p-2 rounded-xl'>
+            <ShieldCheck className='w-4 h-4 text-slate-600' />
+          </div>
+          <div>
+            <h3 className='text-sm font-bold text-slate-900'>Class Controls</h3>
+            <p className='text-xs text-slate-400'>Manage topic access by cohort</p>
+          </div>
+        </div>
 
-            <div className='flex flex-1 flex-wrap items-center gap-3 justify-start lg:justify-end'>
+        <CardContent className='p-5'>
+          <div className='flex flex-wrap items-end gap-4'>
+            <div className='flex flex-col gap-1.5'>
+              <label className='flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider'>
+                <Building2 className='w-3 h-3' />
+                College
+              </label>
               <Select
                 value={selectedCollegeId}
                 onValueChange={setSelectedCollegeId}
                 disabled={loadingFilters}
               >
-                <SelectTrigger className='w-full sm:w-64'>
+                <SelectTrigger className='w-52 bg-white border-slate-200 shadow-xs'>
                   <SelectValue placeholder='Select college' />
                 </SelectTrigger>
                 <SelectContent>
@@ -350,13 +352,19 @@ const LockControl = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
 
+            <div className='flex flex-col gap-1.5'>
+              <label className='flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider'>
+                <Users2 className='w-3 h-3' />
+                Batch
+              </label>
               <Select
                 value={selectedBatch}
                 onValueChange={setSelectedBatch}
                 disabled={loadingFilters}
               >
-                <SelectTrigger className='w-full sm:w-40'>
+                <SelectTrigger className='w-36 bg-white border-slate-200 shadow-xs'>
                   <SelectValue placeholder='Select batch' />
                 </SelectTrigger>
                 <SelectContent>
@@ -368,13 +376,19 @@ const LockControl = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
 
+            <div className='flex flex-col gap-1.5'>
+              <label className='flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider'>
+                <BookOpen className='w-3 h-3' />
+                Subject
+              </label>
               <Select
                 value={selectedSubjectId}
                 onValueChange={setSelectedSubjectId}
                 disabled={loadingFilters}
               >
-                <SelectTrigger className='w-full sm:w-72'>
+                <SelectTrigger className='w-60 bg-white border-slate-200 shadow-xs'>
                   <SelectValue placeholder='Select subject' />
                 </SelectTrigger>
                 <SelectContent>
@@ -387,14 +401,20 @@ const LockControl = () => {
               </Select>
             </div>
 
-            <div className='relative w-full lg:w-64'>
-              <Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400' />
-              <Input
-                placeholder='Find topic...'
-                className='pl-10 bg-white border-slate-200'
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className='flex flex-col gap-1.5 flex-1 min-w-48'>
+              <label className='flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider'>
+                <Search className='w-3 h-3' />
+                Search
+              </label>
+              <div className='relative'>
+                <Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400' />
+                <Input
+                  placeholder='Find topic...'
+                  className='pl-9 bg-white border-slate-200 shadow-xs'
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
           </div>
         </CardContent>
@@ -403,7 +423,7 @@ const LockControl = () => {
       {/* Topics */}
       {loadingOverview ? (
         <div className='flex items-center justify-center h-60'>
-          <Loader2 className='w-8 h-8 animate-spin text-blue-600' />
+          <Loader2 className='w-8 h-8 animate-spin text-[#333D7C]' />
         </div>
       ) : !overview || filteredTopics.length === 0 ? (
         <Card className='border-none shadow-sm'>
@@ -474,7 +494,7 @@ const LockControl = () => {
                           className={
                             fullyUnlocked
                               ? 'border-red-200 text-red-600 hover:bg-red-50'
-                              : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                              : 'border-[#333D7C]/30 text-[#333D7C] hover:bg-[#333D7C]/5'
                           }
                           disabled={topicLoading}
                           onClick={() =>

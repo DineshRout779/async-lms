@@ -70,6 +70,7 @@ const Lesson = () => {
   } = useAppSelector((state) => state.lesson);
 
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const loading = status === 'loading';
 
@@ -183,6 +184,7 @@ const Lesson = () => {
 
   const handleCompleteLesson = async () => {
     const lessonId = data?.lesson?.id;
+    setIsCompleting(true);
     console.log('[Lesson] handleCompleteLesson called', {
       lessonId,
       nextItem,
@@ -201,6 +203,8 @@ const Lesson = () => {
     } catch (error) {
       console.error('Error completing lesson:', error);
       toast.error('Failed to mark lesson complete');
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -230,25 +234,6 @@ const Lesson = () => {
     dispatch(setQuizAnswer({ questionId, value }));
   };
 
-  const calculateQuizScore = (quiz: Quiz): number => {
-    let score = 0;
-    quiz.questions.forEach((question) => {
-      const userAnswer = quizAnswers[question.id];
-      if (question.question_type === 'multiple_choice') {
-        const correctOption = question.options.find((o) => o.is_correct);
-        if (correctOption && userAnswer === correctOption.id) {
-          score += question.points;
-        }
-      } else if (question.question_type === 'true_false') {
-        const correctOption = question.options.find((o) => o.is_correct);
-        if (correctOption && userAnswer === correctOption.option_text) {
-          score += question.points;
-        }
-      }
-    });
-    return score;
-  };
-
   const handleSubmitQuiz = async (quiz: Quiz) => {
     const unanswered = quiz.questions.filter((q) => !quizAnswers[q.id]);
     if (unanswered.length > 0) {
@@ -258,10 +243,12 @@ const Lesson = () => {
       return;
     }
 
-    const score = calculateQuizScore(quiz);
     try {
-      await dispatch(submitQuiz({ quizId: quiz.id, score })).unwrap();
-      const isPassed = score >= quiz.passing_score;
+      const result = await dispatch(
+        submitQuiz({ quizId: quiz.id, answers: quizAnswers }),
+      ).unwrap();
+      const score = result.attempt.score;
+      const isPassed = result.attempt.is_passed;
       if (isPassed) {
         toast.success(`Quiz passed! Score: ${score}/${quiz.max_score} 🎉`);
       } else {
@@ -424,11 +411,11 @@ const Lesson = () => {
               <div className='mt-10 flex justify-center border-t border-slate-100 pt-8'>
                 <Button
                   onClick={handleCompleteLesson}
-                  loading={isNavigating}
+                  loading={isCompleting || isNavigating}
                   size='lg'
-                  className='bg-emerald-600 px-8 py-6 text-lg font-bold shadow-lg hover:bg-emerald-700 transition-all hover:scale-105 active:scale-95'
+                  className='bg-emerald-600 px-8 py-6 text-lg font-bold shadow-lg hover:bg-emerald-700 transition-all'
                 >
-                  {!isNavigating && <CheckCircle2 className='mr-2 h-6 w-6' />}
+                  <CheckCircle2 className='mr-2 h-6 w-6' />
                   Mark as Read & Next
                 </Button>
               </div>
@@ -533,7 +520,15 @@ const Lesson = () => {
                           {question.options.map((option) => {
                             const isSelected =
                               quizAnswers[question.id] === option.id;
-                            const isCorrect = option.is_correct;
+                            const qResult =
+                              quizResults?.question_results?.[question.id];
+                            const isCorrect =
+                              quizSubmitted &&
+                              qResult?.correct_option_id === option.id;
+                            const isWrong =
+                              quizSubmitted &&
+                              isSelected &&
+                              !qResult?.is_correct;
                             return (
                               <label
                                 key={option.id}
@@ -544,7 +539,7 @@ const Lesson = () => {
                                       : 'border-slate-200 hover:bg-slate-50'
                                     : isCorrect
                                       ? 'border-green-500 bg-green-50'
-                                      : isSelected && !isCorrect
+                                      : isWrong
                                         ? 'border-red-500 bg-red-50'
                                         : 'border-slate-200'
                                 }`}
@@ -566,10 +561,10 @@ const Lesson = () => {
                                 <span className='flex-1'>
                                   {option.option_text}
                                 </span>
-                                {quizSubmitted && isCorrect && (
+                                {isCorrect && (
                                   <CheckCircle2 className='h-4 w-4 text-green-600' />
                                 )}
-                                {quizSubmitted && isSelected && !isCorrect && (
+                                {isWrong && (
                                   <XCircle className='h-4 w-4 text-red-600' />
                                 )}
                               </label>
@@ -584,9 +579,15 @@ const Lesson = () => {
                           {['True', 'False'].map((value) => {
                             const isSelected =
                               quizAnswers[question.id] === value;
-                            const isCorrect = question.options.find(
-                              (o) => o.option_text === value,
-                            )?.is_correct;
+                            const qResult =
+                              quizResults?.question_results?.[question.id];
+                            const isCorrect =
+                              quizSubmitted &&
+                              qResult?.correct_option_text === value;
+                            const isWrong =
+                              quizSubmitted &&
+                              isSelected &&
+                              !qResult?.is_correct;
                             return (
                               <label
                                 key={value}
@@ -597,7 +598,7 @@ const Lesson = () => {
                                       : 'border-slate-200 hover:bg-slate-50'
                                     : isCorrect
                                       ? 'border-green-500 bg-green-50'
-                                      : isSelected
+                                      : isWrong
                                         ? 'border-red-500 bg-red-50'
                                         : 'border-slate-200'
                                 }`}
@@ -613,8 +614,11 @@ const Lesson = () => {
                                   disabled={quizSubmitted}
                                 />
                                 {value}
-                                {quizSubmitted && isCorrect && (
+                                {isCorrect && (
                                   <CheckCircle2 className='ml-1 h-4 w-4 text-green-600' />
+                                )}
+                                {isWrong && (
+                                  <XCircle className='ml-1 h-4 w-4 text-red-600' />
                                 )}
                               </label>
                             );
@@ -760,7 +764,9 @@ const Lesson = () => {
 
           {exercises.length === 1 ? (
             <Card className='p-6'>
-              <h3 className='text-lg font-semibold mb-2'>{exercises[0].title}</h3>
+              <h3 className='text-lg font-semibold mb-2'>
+                {exercises[0].title}
+              </h3>
               <div className='prose prose-sm max-w-none text-slate-600 mb-4'>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {exercises[0].instructions}
@@ -779,7 +785,11 @@ const Lesson = () => {
             <Tabs defaultValue={exercises[0].id}>
               <TabsList className='mb-4'>
                 {exercises.map((ex) => (
-                  <TabsTrigger key={ex.id} value={ex.id} className='max-w-40 truncate'>
+                  <TabsTrigger
+                    key={ex.id}
+                    value={ex.id}
+                    className='max-w-40 truncate'
+                  >
                     {ex.title}
                   </TabsTrigger>
                 ))}

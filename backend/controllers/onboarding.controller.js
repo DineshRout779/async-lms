@@ -128,7 +128,7 @@ exports.selectSubjects = async (req, res) => {
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT $1, ss.subtopic_id,
         CASE WHEN ss.unit_rn = 1 THEN true
-             ELSE COALESCE(cu.is_unlocked, false)
+             ELSE COALESCE(cu.is_unlocked, true)
         END
       FROM subject_subtopics ss
       LEFT JOIN cohort_unlock cu ON cu.subtopic_id = ss.subtopic_id

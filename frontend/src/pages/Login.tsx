@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GraduationCap } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 
 // Redux
@@ -111,9 +111,9 @@ export default function Login() {
         await dispatch(loginUser({ email, password })).unwrap();
         toast.success('Login successful!', { id: toastId });
       }
-    } catch (err: any) {
+    } catch (err) {
       const errorMessage =
-        typeof err === 'string' ? err : err?.message || 'Authentication failed';
+        err instanceof Error ? err.message : typeof err === 'string' ? err : 'Authentication failed';
       toast.error(errorMessage, { id: toastId });
     }
   };
@@ -125,16 +125,22 @@ export default function Login() {
           className='w-full h-full object-cover'
           src='https://images.pexels.com/photos/4170628/pexels-photo-4170628.jpeg'
           alt='Auth background'
+          loading='lazy'
         />
       </div>
 
       <div className='flex items-center justify-center px-6'>
         <div className='w-full max-w-md'>
           <div className='flex items-center gap-2 mb-6'>
-            <div className='h-9 w-9 rounded-lg bg-foreground text-background flex items-center justify-center'>
-              <GraduationCap className='h-5 w-5' />
+            <div className='h-12 w-12 rounded-lg bg-foreground text-background flex items-center justify-center'>
+              <GraduationCap className='h-8 w-8' />
             </div>
-            <span className='font-semibold text-lg uppercase'>CodeGuru</span>
+            <div>
+              <p className='font-semibold text-lg uppercase'>CodeGuru</p>
+              <p className='font-semibold text-xs capitalize'>
+                For {userTypeParam}s
+              </p>
+            </div>
           </div>
 
           <Tabs
@@ -225,6 +231,16 @@ export default function Login() {
             </svg>
             Continue with Google
           </a>
+
+          <div className='flex justify-center mt-4 items-center'>
+            <Link
+              className='block text-xs'
+              to={`/login?user_type=${userTypeParam === 'student' ? 'facilitator' : 'student'}`}
+            >
+              Continue as{' '}
+              {userTypeParam === 'student' ? 'facilitator' : 'student'}
+            </Link>
+          </div>
         </div>
       </div>
     </div>

@@ -132,7 +132,7 @@ const CourseIntro = () => {
         <StatCard
           icon={<BookOpen className='text-blue-600' />}
           label='Curriculum'
-          value={`${course?.total_topics} Chapters`}
+          value={`${course?.total_topics} Topics`}
         />
         <StatCard
           icon={<Clock className='text-orange-600' />}

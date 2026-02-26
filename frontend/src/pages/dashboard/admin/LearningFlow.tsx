@@ -1333,9 +1333,9 @@ const LearningFlow: React.FC = () => {
                                                             {sub.title}
                                                           </span>
                                                           {sub.description && (
-                                                            <span className='ml-2 text-xs text-slate-400 truncate'>
+                                                            <p className='text-xs text-slate-400 truncate'>
                                                               {sub.description}
-                                                            </span>
+                                                            </p>
                                                           )}
                                                         </div>
                                                         {((sub.lesson_content

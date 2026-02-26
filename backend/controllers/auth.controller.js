@@ -3,8 +3,6 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/pg');
 const { OAuth2Client } = require('google-auth-library');
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_AUTH_CLIENT_ID);
-
 const oauth2Client = new OAuth2Client(
   process.env.GOOGLE_AUTH_CLIENT_ID,
   process.env.GOOGLE_AUTH_CLIENT_SECRET,

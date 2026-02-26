@@ -37,6 +37,51 @@ async function updateStreak(userId) {
   );
 }
 
+// ── XP-based badge definitions ─────────────────────────────────────────────────
+const XP_BADGES = [
+  { name: 'First Steps',    description: 'Earned your first 10 XP',    icon: '🌱', threshold: 10   },
+  { name: 'Learner',        description: 'Reached 100 XP',             icon: '📚', threshold: 100  },
+  { name: 'Scholar',        description: 'Reached 500 XP',             icon: '🎓', threshold: 500  },
+  { name: 'Expert',         description: 'Reached 1,000 XP',           icon: '⚡', threshold: 1000 },
+  { name: 'Master',         description: 'Reached 2,500 XP',           icon: '🏆', threshold: 2500 },
+  { name: 'Legend',         description: 'Reached 5,000 XP',           icon: '🌟', threshold: 5000 },
+];
+
+async function checkAndAwardBadges(userId) {
+  try {
+    // Ensure all XP badge definitions exist (upsert by name using a safe SELECT-then-INSERT)
+    for (const b of XP_BADGES) {
+      await pool.query(
+        `INSERT INTO badges (name, description, icon)
+         SELECT $1, $2, $3
+         WHERE NOT EXISTS (SELECT 1 FROM badges WHERE name = $1)`,
+        [b.name, b.description, b.icon],
+      );
+    }
+
+    // Get current total XP
+    const xpResult = await pool.query(
+      'SELECT COALESCE(SUM(points), 0)::int AS total FROM points_log WHERE user_id = $1',
+      [userId],
+    );
+    const totalXP = xpResult.rows[0].total;
+
+    // Award every qualifying badge the user doesn't already have
+    for (const b of XP_BADGES) {
+      if (totalXP >= b.threshold) {
+        await pool.query(
+          `INSERT INTO user_badges (user_id, badge_id)
+           SELECT $1, id FROM badges WHERE name = $2
+           ON CONFLICT (user_id, badge_id) DO NOTHING`,
+          [userId, b.name],
+        );
+      }
+    }
+  } catch (err) {
+    console.error('checkAndAwardBadges error:', err.message);
+  }
+}
+
 // ============================================
 // STUDENT PROGRESS
 // ============================================
@@ -197,7 +242,7 @@ exports.getMyProgress = async (req, res) => {
         st.order_index AS subtopic_order,
 
         -- Progress
-        COALESCE(usp.is_unlocked, false) AS is_unlocked,
+        COALESCE(usp.is_unlocked, true) AS is_unlocked,
         COALESCE(usp.is_completed, false) AS is_completed,
         usp.completed_at,
 
@@ -410,7 +455,7 @@ exports.startSubtopic = async (req, res) => {
       [userId, subtopicId],
     );
 
-    if (!lockCheck.rows[0] || lockCheck.rows[0].is_unlocked !== true) {
+    if (lockCheck.rows[0]?.is_unlocked === false) {
       return res.status(200).json({
         success: false,
         message: 'This subtopic is locked by your admin.',
@@ -446,17 +491,20 @@ exports.completeLesson = async (req, res) => {
       VALUES ($1, $2, true)
       ON CONFLICT (user_id, lesson_content_id)
       DO UPDATE SET is_completed = true
-      RETURNING *;
+      RETURNING *, (xmax = 0) AS is_new_row;
     `;
 
     const result = await pool.query(query, [userId, lessonId]);
 
-    // Award points for lesson completion
-    await pool.query(
-      'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
-      [userId, 'lesson_completion', 10],
-    );
-    await updateStreak(userId);
+    // Award points only on first completion
+    if (result.rows[0].is_new_row) {
+      await pool.query(
+        'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
+        [userId, 'lesson_completion', 10],
+      );
+      await updateStreak(userId);
+      await checkAndAwardBadges(userId);
+    }
 
     const subtopicResult = await pool.query(
       'SELECT subtopic_id FROM lesson_content WHERE id = $1 LIMIT 1',
@@ -488,36 +536,99 @@ exports.completeLesson = async (req, res) => {
 /**
  * Submit quiz attempt
  * POST /api/students/quiz/:quizId/submit
+ * Body: { answers: { [question_id]: string } }
+ *   For multiple_choice: value is the selected option UUID
+ *   For true_false:      value is 'True' or 'False'
+ * Score is calculated server-side — client never sends a score.
  */
 exports.submitQuizAttempt = async (req, res) => {
   try {
     const userId = req.user.id;
     const { quizId } = req.params;
-    const { score } = req.body;
+    const { answers } = req.body; // { [question_id]: string }
 
-    // Get quiz details
+    if (!answers || typeof answers !== 'object') {
+      return res.status(400).json({ success: false, message: 'answers object is required' });
+    }
+
+    // Fetch quiz + all questions + correct options in one query
     const quizQuery = await pool.query(
-      'SELECT passing_score, max_score FROM quizzes WHERE id = $1',
+      `SELECT q.passing_score, q.max_score,
+              qq.id AS question_id, qq.question_type, qq.points,
+              qo.id AS option_id, qo.option_text, qo.is_correct
+       FROM quizzes q
+       LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
+       LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id
+       WHERE q.id = $1
+       ORDER BY qq.order_index, qo.order_index`,
       [quizId],
     );
 
     if (quizQuery.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Quiz not found',
-      });
+      return res.status(404).json({ success: false, message: 'Quiz not found' });
     }
 
-    const quiz = quizQuery.rows[0];
-    const isPassed = score >= quiz.passing_score;
+    const { passing_score, max_score } = quizQuery.rows[0];
 
-    const query = `
-      INSERT INTO quiz_attempts (quiz_id, user_id, score, is_passed)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *;
-    `;
+    // Group options by question
+    const questionsMap = new Map();
+    for (const row of quizQuery.rows) {
+      if (!row.question_id) continue;
+      if (!questionsMap.has(row.question_id)) {
+        questionsMap.set(row.question_id, {
+          id: row.question_id,
+          type: row.question_type,
+          points: row.points,
+          options: [],
+        });
+      }
+      if (row.option_id) {
+        questionsMap.get(row.question_id).options.push({
+          id: row.option_id,
+          option_text: row.option_text,
+          is_correct: row.is_correct,
+        });
+      }
+    }
 
-    const result = await pool.query(query, [quizId, userId, score, isPassed]);
+    // Score each answer and build per-question result for feedback
+    let score = 0;
+    const question_results = {};
+    for (const [questionId, question] of questionsMap) {
+      const userAnswer = answers[questionId];
+      let correctOption = null;
+      let userIsCorrect = false;
+
+      if (question.type === 'multiple_choice') {
+        correctOption = question.options.find((o) => o.is_correct);
+        if (correctOption && userAnswer === correctOption.id) {
+          score += question.points;
+          userIsCorrect = true;
+        }
+      } else if (question.type === 'true_false') {
+        correctOption = question.options.find((o) => o.is_correct);
+        if (correctOption && userAnswer === correctOption.option_text) {
+          score += question.points;
+          userIsCorrect = true;
+        }
+      }
+      // short_answer: skipped (manual review, no auto-score)
+
+      question_results[questionId] = {
+        is_correct: userIsCorrect,
+        correct_option_id: correctOption?.id ?? null,
+        correct_option_text: correctOption?.option_text ?? null,
+      };
+    }
+
+    const isPassed = score >= passing_score;
+
+    const result = await pool.query(
+      `INSERT INTO quiz_attempts (quiz_id, user_id, score, is_passed)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *;`,
+      [quizId, userId, score, isPassed],
+    );
 
     // Award flat 15 points for quiz completion
     const pointsAwarded = 15;
@@ -526,6 +637,7 @@ exports.submitQuizAttempt = async (req, res) => {
       [userId, 'quiz_completion', pointsAwarded],
     );
     await updateStreak(userId);
+    await checkAndAwardBadges(userId);
 
     const subtopicResult = await pool.query(
       'SELECT unit_id FROM quizzes WHERE id = $1 LIMIT 1',
@@ -550,6 +662,7 @@ exports.submitQuizAttempt = async (req, res) => {
       data: {
         attempt: result.rows[0],
         points_awarded: pointsAwarded,
+        question_results,
       },
     });
   } catch (error) {
@@ -617,6 +730,8 @@ exports.submitExercise = async (req, res) => {
       'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
       [userId, 'exercise_completion', pointsAwarded],
     );
+    await updateStreak(userId);
+    await checkAndAwardBadges(userId);
 
     if (exercise.subtopic_id) {
       await checkAndCompleteSubtopic(userId, exercise.subtopic_id);
@@ -1369,12 +1484,263 @@ exports.submitCapstone = async (req, res) => {
         [userId, source, 20],
       );
       await updateStreak(userId);
+      await checkAndAwardBadges(userId);
     }
 
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting capstone:', error);
     res.status(500).json({ success: false, message: 'Failed to submit capstone', error: error.message });
+  }
+};
+
+// ── Enroll in Subject ──────────────────────────────────────────────────────────
+
+exports.enrollInSubject = async (req, res) => {
+  const userId = req.user.id;
+  const { subjectId } = req.params;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify subject exists and is published
+    const subjectCheck = await client.query(
+      'SELECT id FROM subjects WHERE id = $1 AND is_published = true',
+      [subjectId],
+    );
+    if (subjectCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res
+        .status(404)
+        .json({ success: false, message: 'Subject not found or not available' });
+    }
+
+    // Insert enrollment (idempotent)
+    await client.query(
+      `INSERT INTO user_subjects (user_id, subject_id, started_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id, subject_id) DO NOTHING`,
+      [userId, subjectId],
+    );
+
+    // Seed subtopic progress (same logic as onboarding)
+    await client.query(
+      `WITH new_student_profile AS (
+        SELECT college_id, year FROM student_profiles WHERE user_id = $1
+      ),
+      subject_subtopics AS (
+        SELECT
+          st.id AS subtopic_id,
+          DENSE_RANK() OVER (
+            PARTITION BY t.subject_id
+            ORDER BY t.order_index, u.order_index
+          ) AS unit_rn
+        FROM topics t
+        INNER JOIN units u ON u.topic_id = t.id
+        INNER JOIN subtopics st ON st.unit_id = u.id
+        WHERE t.subject_id = $2
+      ),
+      cohort_unlock AS (
+        SELECT usp.subtopic_id, bool_and(usp.is_unlocked) AS is_unlocked
+        FROM user_subtopic_progress usp
+        INNER JOIN student_profiles sp ON sp.user_id = usp.user_id
+        CROSS JOIN new_student_profile nsp
+        WHERE sp.college_id = nsp.college_id
+          AND sp.year = nsp.year
+          AND usp.user_id <> $1
+        GROUP BY usp.subtopic_id
+        HAVING COUNT(*) > 0
+      )
+      INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
+      SELECT $1, ss.subtopic_id,
+        CASE WHEN ss.unit_rn = 1 THEN true
+             ELSE COALESCE(cu.is_unlocked, true)
+        END
+      FROM subject_subtopics ss
+      LEFT JOIN cohort_unlock cu ON cu.subtopic_id = ss.subtopic_id
+      ON CONFLICT (user_id, subtopic_id) DO UPDATE
+        SET is_unlocked = (user_subtopic_progress.is_unlocked OR EXCLUDED.is_unlocked)`,
+      [userId, subjectId],
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Enrolled successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error enrolling in subject:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to enroll',
+      error: error.message,
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// ── Scorecard ──────────────────────────────────────────────────────────────────
+// Returns topic-wise weighted scores for all subjects the student is enrolled in.
+// Weights: exercises 20%, quizzes 10%, assignments 30%, projects 40%
+//
+// NOTE: Assignment scoring requires this column (run once on DB):
+//   ALTER TABLE assignment_submissions ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT NULL;
+
+exports.getStudentScorecard = async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const result = await pool.query(
+      `
+      WITH enrolled AS (
+        SELECT s.id AS subject_id, s.name AS subject_name
+        FROM user_subjects us
+        JOIN subjects s ON s.id = us.subject_id
+        WHERE us.user_id = $1
+      ),
+      topic_list AS (
+        SELECT t.id, t.title, t.order_index, t.subject_id
+        FROM topics t
+        WHERE t.subject_id IN (SELECT subject_id FROM enrolled)
+      ),
+      -- Best exercise score per exercise for this user
+      best_exercise AS (
+        SELECT exercise_id, MAX(score) AS best_score
+        FROM exercise_submissions
+        WHERE user_id = $1
+        GROUP BY exercise_id
+      ),
+      -- Map exercises to topics (via unit_id or subtopic -> unit)
+      exercise_topic AS (
+        SELECT e.id AS exercise_id, u.topic_id
+        FROM exercises e
+        JOIN units u ON e.unit_id = u.id
+        WHERE u.topic_id IN (SELECT id FROM topic_list)
+        UNION
+        SELECT e.id AS exercise_id, u.topic_id
+        FROM exercises e
+        JOIN subtopics st ON e.subtopic_id = st.id
+        JOIN units u ON st.unit_id = u.id
+        WHERE u.topic_id IN (SELECT id FROM topic_list)
+      ),
+      exercise_weighted AS (
+        SELECT
+          et.topic_id,
+          ROUND(
+            COALESCE(SUM(be.best_score)::numeric / NULLIF(SUM(e.max_score), 0) * 20, 0),
+            1
+          ) AS weighted
+        FROM exercise_topic et
+        JOIN exercises e ON e.id = et.exercise_id
+        LEFT JOIN best_exercise be ON be.exercise_id = et.exercise_id
+        GROUP BY et.topic_id
+      ),
+      -- Best quiz score per quiz for this user
+      best_quiz AS (
+        SELECT quiz_id, MAX(score) AS best_score
+        FROM quiz_attempts
+        WHERE user_id = $1
+        GROUP BY quiz_id
+      ),
+      quiz_weighted AS (
+        SELECT
+          u.topic_id,
+          ROUND(
+            COALESCE(SUM(bq.best_score)::numeric / NULLIF(SUM(q.max_score), 0) * 10, 0),
+            1
+          ) AS weighted
+        FROM best_quiz bq
+        JOIN quizzes q ON q.id = bq.quiz_id
+        JOIN units u ON q.unit_id = u.id
+        WHERE u.topic_id IN (SELECT id FROM topic_list)
+        GROUP BY u.topic_id
+      ),
+      -- Assignment scores (only graded submissions count)
+      assignment_weighted AS (
+        SELECT
+          u.topic_id,
+          ROUND(
+            COALESCE(SUM(asub.score)::numeric / NULLIF(SUM(a.max_score), 0) * 30, 0),
+            1
+          ) AS weighted
+        FROM assignment_submissions asub
+        JOIN assignments a ON a.id = asub.assignment_id
+        JOIN units u ON a.unit_id = u.id
+        WHERE asub.user_id = $1
+          AND asub.score IS NOT NULL
+          AND u.topic_id IN (SELECT id FROM topic_list)
+        GROUP BY u.topic_id
+      ),
+      -- Project (capstone) scores
+      project_weighted AS (
+        SELECT
+          p.topic_id,
+          ROUND(
+            COALESCE(SUM(ps.score)::numeric / NULLIF(SUM(p.max_score), 0) * 40, 0),
+            1
+          ) AS weighted
+        FROM project_submissions ps
+        JOIN projects p ON p.id = ps.project_id
+        WHERE ps.user_id = $1
+          AND ps.score IS NOT NULL
+          AND p.topic_id IN (SELECT id FROM topic_list)
+        GROUP BY p.topic_id
+      )
+      SELECT
+        e.subject_id,
+        e.subject_name,
+        t.id AS topic_id,
+        t.title AS topic_title,
+        t.order_index,
+        COALESCE(ew.weighted, 0) AS exercise_score,
+        COALESCE(qw.weighted, 0) AS quiz_score,
+        COALESCE(aw.weighted, 0) AS assignment_score,
+        COALESCE(pw.weighted, 0) AS project_score,
+        ROUND(
+          COALESCE(ew.weighted, 0) +
+          COALESCE(qw.weighted, 0) +
+          COALESCE(aw.weighted, 0) +
+          COALESCE(pw.weighted, 0),
+          1
+        ) AS total_score
+      FROM topic_list t
+      JOIN enrolled e ON e.subject_id = t.subject_id
+      LEFT JOIN exercise_weighted ew ON ew.topic_id = t.id
+      LEFT JOIN quiz_weighted qw ON qw.topic_id = t.id
+      LEFT JOIN assignment_weighted aw ON aw.topic_id = t.id
+      LEFT JOIN project_weighted pw ON pw.topic_id = t.id
+      ORDER BY e.subject_name, t.order_index
+      `,
+      [userId],
+    );
+
+    // Group topics by subject
+    const subjectMap = new Map();
+    for (const row of result.rows) {
+      if (!subjectMap.has(row.subject_id)) {
+        subjectMap.set(row.subject_id, {
+          subject_id: row.subject_id,
+          subject_name: row.subject_name,
+          topics: [],
+        });
+      }
+      subjectMap.get(row.subject_id).topics.push({
+        topic_id: row.topic_id,
+        topic_title: row.topic_title,
+        exercise_score: parseFloat(row.exercise_score),
+        quiz_score: parseFloat(row.quiz_score),
+        assignment_score: parseFloat(row.assignment_score),
+        project_score: parseFloat(row.project_score),
+        total_score: parseFloat(row.total_score),
+      });
+    }
+
+    res.json({ success: true, data: Array.from(subjectMap.values()) });
+  } catch (error) {
+    console.error('Error fetching scorecard:', error);
+    res
+      .status(500)
+      .json({ success: false, message: 'Failed to fetch scorecard', error: error.message });
   }
 };
 

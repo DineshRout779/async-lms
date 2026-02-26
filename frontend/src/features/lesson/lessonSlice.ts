@@ -124,13 +124,13 @@ export const fetchQuiz = createAsyncThunk<
 
 export const submitQuiz = createAsyncThunk<
   QuizAttemptResult,
-  { quizId: string; score: number },
+  { quizId: string; answers: Record<string, string> },
   { rejectValue: string }
 >('lesson/submitQuiz', async (payload, { rejectWithValue, dispatch }) => {
   try {
     const res = await apiClient.post<{ data: QuizAttemptResult }>(
       `/students/quiz/${payload.quizId}/submit`,
-      { score: payload.score },
+      { answers: payload.answers },
     );
     dispatch(loadUser());
     return res.data.data;

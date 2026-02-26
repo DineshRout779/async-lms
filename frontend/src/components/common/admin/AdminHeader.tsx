@@ -22,7 +22,9 @@ export default function AdminHeader({
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const title =
-    pathname === '/dashboard/admin' ? 'Home' : pathname.split('/').at(-1);
+    pathname === '/dashboard/admin'
+      ? 'Home'
+      : pathname.split('/').at(-1)?.replace('-', ' ');
 
   const handleLogout = () => {
     dispatch(logout());
