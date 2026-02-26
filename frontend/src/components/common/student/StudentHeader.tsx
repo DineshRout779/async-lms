@@ -64,12 +64,20 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
         {/* Stats Badges - Gamification items */}
         <div className='hidden lg:flex items-center gap-2 bg-orange-50 text-orange-600 px-3 py-1.5 rounded-full border border-orange-100 text-xs font-bold'>
           <Flame className='w-3.5 h-3.5 fill-orange-500' />
+<<<<<<< HEAD
           <span>{user?.current_streak ?? 0} DAY STREAK</span>
+=======
+          <span>1 DAY STREAK</span>
+>>>>>>> 62bc4c7c850bf2a50e3adf1da3eede724dd2ee86
         </div>
 
         <div className='hidden lg:flex items-center gap-2 bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full border border-indigo-100 text-xs font-bold'>
           <Star className='w-3.5 h-3.5 fill-indigo-500' />
+<<<<<<< HEAD
           <span>{(user?.total_points ?? 0).toLocaleString()} XP</span>
+=======
+          <span>10 XP</span>
+>>>>>>> 62bc4c7c850bf2a50e3adf1da3eede724dd2ee86
         </div>
 
         {/* Action Controls */}
