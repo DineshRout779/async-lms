@@ -523,7 +523,6 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-
   // Create quiz instantly with defaults, then open questions modal
   const handleInstantCreateQuiz = async (unit: Unit) => {
     try {
@@ -864,11 +863,16 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  const previewContent = async (content: LessonContent, forceType?: 'markdown' | 'video') => {
+  const previewContent = async (
+    content: LessonContent,
+    forceType?: 'markdown' | 'video',
+  ) => {
     setShowLessonPreview(true);
     setLessonPreviewVideoUrl(undefined);
     setLessonPreviewContent('');
-    const type = forceType ?? (content.video_url && !content.markdown_path ? 'video' : 'markdown');
+    const type =
+      forceType ??
+      (content.video_url && !content.markdown_path ? 'video' : 'markdown');
     if (type === 'video' && content.video_url) {
       setLessonPreviewVideoUrl(content.video_url ?? undefined);
     } else if (content.markdown_path) {
@@ -1124,7 +1128,9 @@ const LearningFlow: React.FC = () => {
                                           )}
                                           {!unit.quizzes?.length && (
                                             <button
-                                              onClick={() => handleInstantCreateQuiz(unit)}
+                                              onClick={() =>
+                                                handleInstantCreateQuiz(unit)
+                                              }
                                               className='flex items-center gap-1 rounded-md border border-slate-100 px-2 py-1 text-xs text-slate-500 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-600 transition-colors'
                                               title='Add Quiz'
                                             >
@@ -1456,14 +1462,26 @@ const LearningFlow: React.FC = () => {
                                                                   <div className='flex items-center gap-2 min-w-0'>
                                                                     <FileText className='h-3.5 w-3.5 text-slate-400 shrink-0' />
                                                                     <div className='min-w-0'>
-                                                                      <div className='font-medium text-slate-700'>Markdown Content</div>
-                                                                      <div className='text-[10px] text-slate-400 max-w-[200px] truncate'>
-                                                                        {content.markdown_path.split('/').pop()}
+                                                                      <div className='font-medium text-slate-700'>
+                                                                        Markdown
+                                                                        Content
+                                                                      </div>
+                                                                      <div className='text-[10px] text-slate-400 max-w-50 truncate'>
+                                                                        {content.markdown_path
+                                                                          .split(
+                                                                            '/',
+                                                                          )
+                                                                          .pop()}
                                                                       </div>
                                                                     </div>
                                                                   </div>
                                                                   <button
-                                                                    onClick={() => previewContent(content, 'markdown')}
+                                                                    onClick={() =>
+                                                                      previewContent(
+                                                                        content,
+                                                                        'markdown',
+                                                                      )
+                                                                    }
                                                                     className='flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 shrink-0 ml-2'
                                                                   >
                                                                     <Eye className='h-3 w-3' />
@@ -1478,14 +1496,24 @@ const LearningFlow: React.FC = () => {
                                                                   <div className='flex items-center gap-2 min-w-0'>
                                                                     <PlayCircle className='h-3.5 w-3.5 text-blue-400 shrink-0' />
                                                                     <div className='min-w-0'>
-                                                                      <div className='font-medium text-slate-700'>Video Lesson</div>
-                                                                      <div className='text-[10px] text-slate-400 max-w-[200px] truncate'>
-                                                                        {content.video_url}
+                                                                      <div className='font-medium text-slate-700'>
+                                                                        Video
+                                                                        Lesson
+                                                                      </div>
+                                                                      <div className='text-[10px] text-slate-400 max-w-50 truncate'>
+                                                                        {
+                                                                          content.video_url
+                                                                        }
                                                                       </div>
                                                                     </div>
                                                                   </div>
                                                                   <button
-                                                                    onClick={() => previewContent(content, 'video')}
+                                                                    onClick={() =>
+                                                                      previewContent(
+                                                                        content,
+                                                                        'video',
+                                                                      )
+                                                                    }
                                                                     className='flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 shrink-0 ml-2'
                                                                   >
                                                                     <Eye className='h-3 w-3' />
@@ -1498,16 +1526,26 @@ const LearningFlow: React.FC = () => {
                                                               <div className='flex items-center justify-end gap-1.5 px-2 py-1.5 bg-slate-50/60'>
                                                                 <button
                                                                   onClick={() => {
-                                                                    setEditingContent(content);
-                                                                    setSelectedSubtopicForContent(sub);
-                                                                    setContentModalOpen(true);
+                                                                    setEditingContent(
+                                                                      content,
+                                                                    );
+                                                                    setSelectedSubtopicForContent(
+                                                                      sub,
+                                                                    );
+                                                                    setContentModalOpen(
+                                                                      true,
+                                                                    );
                                                                   }}
                                                                   className='p-1 text-slate-400 hover:text-indigo-600'
                                                                 >
                                                                   <Edit2 className='h-3 w-3' />
                                                                 </button>
                                                                 <button
-                                                                  onClick={() => handleDeleteContent(content.id)}
+                                                                  onClick={() =>
+                                                                    handleDeleteContent(
+                                                                      content.id,
+                                                                    )
+                                                                  }
                                                                   className='p-1 text-slate-400 hover:text-red-500'
                                                                 >
                                                                   <Trash2 className='h-3 w-3' />

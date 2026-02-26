@@ -189,7 +189,7 @@ export interface ContentModalProps {
   subtopicTitle: string;
   editData?: {
     content_type: 'markdown' | 'video' | 'external';
-    markdown_path: string;
+    markdown_path: string | null;
     estimated_read_time?: number;
     video_url?: string | null;
   };
