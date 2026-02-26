@@ -5,6 +5,12 @@ const { OAuth2Client } = require('google-auth-library');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_AUTH_CLIENT_ID);
 
+const oauth2Client = new OAuth2Client(
+  process.env.GOOGLE_AUTH_CLIENT_ID,
+  process.env.GOOGLE_AUTH_CLIENT_SECRET,
+  process.env.GOOGLE_CALLBACK_URL,
+);
+
 /**
  * SIGNUP (STUDENT ONLY)
  */
@@ -143,19 +149,33 @@ exports.login = async (req, res) => {
 };
 
 /**
- * GOOGLE OAUTH — verify Google ID token, upsert user, return our JWT
+ * GOOGLE OAUTH STEP 1 — redirect browser to Google consent screen
  */
-exports.googleAuth = async (req, res) => {
-  const { credential } = req.body;
+exports.googleRedirect = (req, res) => {
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['openid', 'email', 'profile'],
+    prompt: 'select_account',
+  });
+  res.redirect(url);
+};
 
-  if (!credential) {
-    return res.status(400).json({ message: 'Google credential required' });
+/**
+ * GOOGLE OAUTH STEP 2 — exchange code, upsert user, redirect to frontend with JWT
+ */
+exports.googleCallback = async (req, res) => {
+  const { code } = req.query;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+  if (!code) {
+    return res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
   }
 
   try {
-    // Verify the Google ID token
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
+    const { tokens } = await oauth2Client.getToken(code);
+
+    const ticket = await oauth2Client.verifyIdToken({
+      idToken: tokens.id_token,
       audience: process.env.GOOGLE_AUTH_CLIENT_ID,
     });
 
@@ -163,10 +183,10 @@ exports.googleAuth = async (req, res) => {
     const { sub: googleId, email, name } = payload;
 
     if (!email) {
-      return res.status(400).json({ message: 'Google account has no email' });
+      return res.redirect(`${frontendUrl}/login?error=no_email`);
     }
 
-    // Check if user exists by email
+    // Upsert user
     const existingRes = await pool.query(
       `SELECT u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified, u.google_id,
               sp.college_id, sp.degree, sp.year
@@ -180,7 +200,6 @@ exports.googleAuth = async (req, res) => {
 
     if (existingRes.rowCount) {
       user = existingRes.rows[0];
-      // Link google_id if not already set
       if (!user.google_id) {
         await pool.query('UPDATE users SET google_id = $1 WHERE id = $2', [
           googleId,
@@ -188,7 +207,6 @@ exports.googleAuth = async (req, res) => {
         ]);
       }
     } else {
-      // Create new student account
       const insertRes = await pool.query(
         `INSERT INTO users (full_name, email, google_id, role, onboarding_step, is_verified)
          VALUES ($1, $2, $3, 'student', 'college', true)
@@ -196,14 +214,11 @@ exports.googleAuth = async (req, res) => {
         [name, email, googleId],
       );
       user = insertRes.rows[0];
-
-      // Create student profile
       await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [
         user.id,
       ]);
     }
 
-    // Build token payload (same shape as regular login)
     const tokenPayload = {
       id: user.id,
       role: user.role,
@@ -222,24 +237,10 @@ exports.googleAuth = async (req, res) => {
       expiresIn: '7d',
     });
 
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
-        onboarding_step: user.onboarding_step,
-        is_verified: user.is_verified,
-        college_id: user.college_id ?? null,
-        college_ids: tokenPayload.college_ids ?? [],
-        degree: user.degree ?? null,
-        year: user.year ?? null,
-      },
-    });
+    res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
   } catch (err) {
-    console.error('GOOGLE AUTH ERROR:', err);
-    res.status(401).json({ message: 'Invalid Google credential' });
+    console.error('GOOGLE CALLBACK ERROR:', err);
+    res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
   }
 };
 
@@ -252,10 +253,16 @@ exports.getMe = async (req, res) => {
   try {
     const userRes = await pool.query(
       `SELECT u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified,
-              sp.college_id, sp.degree, sp.year
+              sp.college_id, sp.degree, sp.year,
+              COALESCE(us.current_streak, 0) AS current_streak,
+              COALESCE(SUM(pl.points), 0)::integer AS total_points
        FROM users u
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
-       WHERE u.id = $1`,
+       LEFT JOIN user_streaks us ON us.user_id = u.id
+       LEFT JOIN points_log pl ON pl.user_id = u.id
+       WHERE u.id = $1
+       GROUP BY u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified,
+                sp.college_id, sp.degree, sp.year, us.current_streak`,
       [userID],
     );
 

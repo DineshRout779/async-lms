@@ -6,6 +6,7 @@ import {
 import apiClient from '@/services/api';
 import type { QuizAttemptResult, Quiz, Exercise } from '@/utils/types';
 import type { RootState } from '@/app/store';
+import { loadUser } from '@/features/auth/authThunks';
 
 // Define types based on Lesson.tsx usage
 interface LessonResponse {
@@ -125,12 +126,13 @@ export const submitQuiz = createAsyncThunk<
   QuizAttemptResult,
   { quizId: string; score: number },
   { rejectValue: string }
->('lesson/submitQuiz', async (payload, { rejectWithValue }) => {
+>('lesson/submitQuiz', async (payload, { rejectWithValue, dispatch }) => {
   try {
     const res = await apiClient.post<{ data: QuizAttemptResult }>(
       `/students/quiz/${payload.quizId}/submit`,
       { score: payload.score },
     );
+    dispatch(loadUser());
     return res.data.data;
   } catch (error: any) {
     return rejectWithValue(
@@ -143,9 +145,10 @@ export const completeLesson = createAsyncThunk<
   boolean,
   string,
   { rejectValue: string }
->('lesson/completeLesson', async (lessonId, { rejectWithValue }) => {
+>('lesson/completeLesson', async (lessonId, { rejectWithValue, dispatch }) => {
   try {
     await apiClient.post(`/students/progress/lesson/${lessonId}/complete`);
+    dispatch(loadUser());
     return true;
   } catch (error: any) {
     return rejectWithValue(error.response?.data?.message || 'Failed');
@@ -156,11 +159,12 @@ export const submitExercise = createAsyncThunk<
   { exerciseId: string; score: number | null },
   { exerciseId: string },
   { rejectValue: string }
->('lesson/submitExercise', async (payload, { rejectWithValue }) => {
+>('lesson/submitExercise', async (payload, { rejectWithValue, dispatch }) => {
   try {
     const res = await apiClient.post<{ data: { score?: number } }>(
       `/students/exercise/${payload.exerciseId}/submit`,
     );
+    dispatch(loadUser());
     return { exerciseId: payload.exerciseId, score: res.data.data?.score ?? null };
   } catch (error: any) {
     return rejectWithValue(

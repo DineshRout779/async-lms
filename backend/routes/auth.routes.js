@@ -1,4 +1,4 @@
-const { login, signup, getMe, googleAuth } = require('../controllers/auth.controller');
+const { login, signup, getMe, googleRedirect, googleCallback } = require('../controllers/auth.controller');
 const { validateLogin, validateSignup } = require('../middlewares/validators');
 const verifyToken = require('../middlewares/verfiyToken');
 
@@ -7,7 +7,10 @@ const router = require('express').Router();
 // Public routes
 router.post('/login', validateLogin, login);
 router.post('/signup', validateSignup, signup);
-router.post('/google', googleAuth);
+
+// Google OAuth redirect flow (server-side)
+router.get('/google', googleRedirect);
+router.get('/google/callback', googleCallback);
 
 // Protected routes
 router.get('/me', verifyToken, getMe);

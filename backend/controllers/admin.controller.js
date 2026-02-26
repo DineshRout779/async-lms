@@ -38,6 +38,134 @@ exports.getAdminStats = async (req, res) => {
   }
 };
 
+// ── Analytics ──────────────────────────────────────────────────────────────
+
+exports.getAdminAnalytics = async (req, res) => {
+  try {
+    const [
+      quizStats,
+      exerciseStats,
+      contentInventory,
+      studentsPerCollege,
+      dailyRegistrations,
+      subjectActivity,
+    ] = await Promise.all([
+      // 1. Quiz stats
+      pool.query(`
+        SELECT
+          COUNT(*) AS total_attempts,
+          ROUND(AVG(score)::numeric, 1) AS avg_score,
+          COUNT(*) FILTER (WHERE is_passed = true) AS passed_count
+        FROM quiz_attempts
+      `),
+      // 2. Exercise stats
+      pool.query(`
+        SELECT
+          COUNT(*) AS total_submissions,
+          COUNT(*) FILTER (WHERE is_passed = true) AS passed_count
+        FROM exercise_submissions
+      `),
+      // 3. Content inventory
+      pool.query(`
+        SELECT
+          (SELECT COUNT(*) FROM topics)        AS total_topics,
+          (SELECT COUNT(*) FROM units)         AS total_units,
+          (SELECT COUNT(*) FROM subtopics)     AS total_subtopics,
+          (SELECT COUNT(*) FROM lesson_content)AS total_lessons,
+          (SELECT COUNT(*) FROM quizzes)       AS total_quizzes,
+          (SELECT COUNT(*) FROM exercises)     AS total_exercises
+      `),
+      // 4. Students per college (top 10)
+      pool.query(`
+        SELECT c.name AS college_name, COUNT(sp.user_id) AS student_count
+        FROM colleges c
+        LEFT JOIN student_profiles sp ON sp.college_id = c.id
+        GROUP BY c.id, c.name
+        ORDER BY student_count DESC
+        LIMIT 10
+      `),
+      // 5. Daily new student registrations – last 7 days
+      pool.query(`
+        SELECT TO_CHAR(DATE(created_at), 'Mon DD') AS label, COUNT(*) AS count
+        FROM users
+        WHERE role = 'student'
+          AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY DATE(created_at), label
+        ORDER BY DATE(created_at)
+      `),
+      // 6. Top subjects by quiz activity
+      pool.query(`
+        SELECT
+          sub.name AS subject_name,
+          COUNT(qa.id) AS attempt_count,
+          ROUND(AVG(qa.score)::numeric, 1) AS avg_score,
+          COUNT(DISTINCT qa.user_id) AS unique_students
+        FROM subjects sub
+        LEFT JOIN topics t    ON t.subject_id = sub.id
+        LEFT JOIN units u     ON u.topic_id   = t.id
+        LEFT JOIN quizzes q   ON q.unit_id    = u.id
+        LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id
+        GROUP BY sub.id, sub.name
+        ORDER BY attempt_count DESC
+        LIMIT 6
+      `),
+    ]);
+
+    const qs = quizStats.rows[0];
+    const es = exerciseStats.rows[0];
+    const ci = contentInventory.rows[0];
+
+    res.status(200).json({
+      success: true,
+      data: {
+        quizStats: {
+          totalAttempts: parseInt(qs.total_attempts),
+          avgScore: parseFloat(qs.avg_score) || 0,
+          passedCount: parseInt(qs.passed_count),
+          passRate:
+            qs.total_attempts > 0
+              ? Math.round((qs.passed_count / qs.total_attempts) * 100)
+              : 0,
+        },
+        exerciseStats: {
+          totalSubmissions: parseInt(es.total_submissions),
+          passedCount: parseInt(es.passed_count),
+          passRate:
+            es.total_submissions > 0
+              ? Math.round((es.passed_count / es.total_submissions) * 100)
+              : 0,
+        },
+        contentInventory: {
+          topics: parseInt(ci.total_topics),
+          units: parseInt(ci.total_units),
+          subtopics: parseInt(ci.total_subtopics),
+          lessons: parseInt(ci.total_lessons),
+          quizzes: parseInt(ci.total_quizzes),
+          exercises: parseInt(ci.total_exercises),
+        },
+        studentsPerCollege: studentsPerCollege.rows.map((r) => ({
+          college: r.college_name,
+          count: parseInt(r.student_count),
+        })),
+        dailyRegistrations: dailyRegistrations.rows.map((r) => ({
+          label: r.label,
+          count: parseInt(r.count),
+        })),
+        subjectActivity: subjectActivity.rows.map((r) => ({
+          subject: r.subject_name,
+          attempts: parseInt(r.attempt_count),
+          avgScore: parseFloat(r.avg_score) || 0,
+          uniqueStudents: parseInt(r.unique_students),
+        })),
+      },
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: 'Error fetching analytics', error: error.message });
+  }
+};
+
 // Get all students with their college details
 exports.getAllStudents = async (req, res) => {
   try {
@@ -812,7 +940,6 @@ exports.createLessonContent = async (req, res) => {
       content_type,
       markdown_path,
       estimated_read_time,
-      is_published,
       video_url,
     } = req.body;
 
@@ -879,7 +1006,7 @@ exports.createLessonContent = async (req, res) => {
       content_type,
       markdown_path || '',
       estimated_read_time || null,
-      is_published || false,
+      true,
       video_url || null,
     ];
 

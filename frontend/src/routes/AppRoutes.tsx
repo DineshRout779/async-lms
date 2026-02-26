@@ -13,6 +13,7 @@ const Signup = lazy(() => import('@/pages/Signup'));
 const CodeEditor = lazy(() => import('@/pages/CodeEditor'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const PendingVerification = lazy(() => import('@/pages/PendingVerification'));
+const AuthCallback = lazy(() => import('@/pages/AuthCallback'));
 
 // Onboarding
 const CollegeStep = lazy(() => import('@/pages/onboarding/CollegeStep'));
@@ -31,8 +32,12 @@ const StudentDashboardHome = lazy(
 );
 const MyCourses = lazy(() => import('@/pages/dashboard/student/MyCourses'));
 const LessonView = lazy(() => import('@/pages/dashboard/student/Lesson'));
-const AssignmentView = lazy(() => import('@/pages/dashboard/student/AssignmentView'));
-const CapstoneView = lazy(() => import('@/pages/dashboard/student/CapstoneView'));
+const AssignmentView = lazy(
+  () => import('@/pages/dashboard/student/AssignmentView'),
+);
+const CapstoneView = lazy(
+  () => import('@/pages/dashboard/student/CapstoneView'),
+);
 const CourseIntro = lazy(() => import('@/pages/dashboard/student/CourseIntro'));
 const EditorProfile = lazy(() => import('@/pages/playground/EditorProfile'));
 const Assignments = lazy(() => import('@/pages/dashboard/student/Assignments'));
@@ -73,7 +78,6 @@ const Analytics = lazy(() => import('@/pages/dashboard/admin/Analytics'));
 const AdminSettings = lazy(
   () => import('@/pages/dashboard/admin/AdminSettings'),
 );
-const Evaluations = lazy(() => import('@/pages/dashboard/admin/Evaluations'));
 
 // ---------- Router ----------
 
@@ -85,6 +89,7 @@ const router = createBrowserRouter([
       { index: true, element: <Home /> },
       { path: 'login', element: <Login /> },
       { path: 'signup', element: <Signup /> },
+      { path: 'auth/callback', element: <AuthCallback /> },
       { path: 'code-editor', element: <CodeEditor /> },
       { path: 'pending-verification', element: <PendingVerification /> },
 
@@ -165,7 +170,6 @@ const router = createBrowserRouter([
               { path: 'users', element: <Students /> },
               { path: 'analytics', element: <Analytics /> },
               { path: 'settings', element: <AdminSettings /> },
-              { path: 'evaluations', element: <Evaluations /> },
             ],
           },
         ],

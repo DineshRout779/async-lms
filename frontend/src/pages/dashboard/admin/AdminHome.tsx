@@ -1,14 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Building2,
   Users,
   BookOpen,
   Lock,
-  ClipboardCheck,
+  // ClipboardCheck,
   Loader2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import apiClient from '@/services/api';
 
 /* =======================
@@ -44,9 +43,8 @@ export default function AdminHome() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const result = await apiClient.get<AdminDashboardResponse>(
-          '/admin/stats'
-        );
+        const result =
+          await apiClient.get<AdminDashboardResponse>('/admin/stats');
         setData(result.data);
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
@@ -145,7 +143,7 @@ export default function AdminHome() {
           Pending Actions
         </h3>
 
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mb-8'>
+        {/* <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mb-8'>
           <ActionCard
             icon={Lock}
             title='Unlock Requests'
@@ -160,7 +158,7 @@ export default function AdminHome() {
             color='blue'
             button='Grade'
           />
-        </div>
+        </div> */}
 
         {/* Recent Activity */}
         <div>
@@ -207,44 +205,44 @@ export default function AdminHome() {
    Small Helper Component
 ======================= */
 
-function ActionCard({
-  icon: Icon,
-  title,
-  subtitle,
-  color,
-  button,
-}: {
-  icon: React.ElementType;
-  title: string;
-  subtitle: string;
-  color: 'orange' | 'blue';
-  button: string;
-}) {
-  const styles =
-    color === 'orange'
-      ? 'bg-orange-50/50 border-orange-100 text-orange-600'
-      : 'bg-blue-50/50 border-blue-100 text-blue-600';
+// function ActionCard({
+//   icon: Icon,
+//   title,
+//   subtitle,
+//   color,
+//   button,
+// }: {
+//   icon: React.ElementType;
+//   title: string;
+//   subtitle: string;
+//   color: 'orange' | 'blue';
+//   button: string;
+// }) {
+//   const styles =
+//     color === 'orange'
+//       ? 'bg-orange-50/50 border-orange-100 text-orange-600'
+//       : 'bg-blue-50/50 border-blue-100 text-blue-600';
 
-  return (
-    <div
-      className={`flex items-center justify-between p-4 border rounded-xl ${styles}`}
-    >
-      <div className='flex items-center gap-4'>
-        <div className='bg-white p-2.5 rounded-lg shadow-sm'>
-          <Icon className='w-5 h-5' />
-        </div>
-        <div>
-          <p className='font-bold text-sm text-slate-900'>{title}</p>
-          <p className='text-xs text-slate-500'>{subtitle}</p>
-        </div>
-      </div>
-      <Button
-        variant='outline'
-        size='sm'
-        className='bg-white text-xs font-bold px-5'
-      >
-        {button}
-      </Button>
-    </div>
-  );
-}
+//   return (
+//     <div
+//       className={`flex items-center justify-between p-4 border rounded-xl ${styles}`}
+//     >
+//       <div className='flex items-center gap-4'>
+//         <div className='bg-white p-2.5 rounded-lg shadow-sm'>
+//           <Icon className='w-5 h-5' />
+//         </div>
+//         <div>
+//           <p className='font-bold text-sm text-slate-900'>{title}</p>
+//           <p className='text-xs text-slate-500'>{subtitle}</p>
+//         </div>
+//       </div>
+//       <Button
+//         variant='outline'
+//         size='sm'
+//         className='bg-white text-xs font-bold px-5'
+//       >
+//         {button}
+//       </Button>
+//     </div>
+//   );
+// }

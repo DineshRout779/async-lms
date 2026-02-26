@@ -17,6 +17,7 @@ import {
   XCircle,
   Eye,
   Trophy,
+  PlayCircle,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,9 @@ const LearningFlow: React.FC = () => {
     useState<string>('');
   const [showLessonPreview, setShowLessonPreview] = useState(false);
   const [lessonPreviewContent, setLessonPreviewContent] = useState('');
+  const [lessonPreviewVideoUrl, setLessonPreviewVideoUrl] = useState<
+    string | undefined
+  >(undefined);
   const [modalLoading, setModalLoading] = useState(false);
 
   // 1. Initial Load: Get all subjects
@@ -472,7 +476,7 @@ const LearningFlow: React.FC = () => {
     try {
       let markdownPath = data.markdown_path;
       if (!data.file) {
-        markdownPath = editingContent.markdown_path;
+        markdownPath = editingContent.markdown_path ?? '';
       } else if (data.file) {
         markdownPath = await uploadMarkdown(data.file);
       }
@@ -519,52 +523,24 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  const handleTogglePublishContent = async (content: LessonContent) => {
-    try {
-      const response = await apiClient.put(
-        `/admin/lesson-content/${content.id}/publish`,
-        {
-          is_published: !content.is_published,
-        },
-      );
 
-      if (response.data.success) {
-        toast.success(
-          content.is_published ? 'Content unpublished' : 'Content published',
-        );
-        await refreshStructure();
-      }
-    } catch (error) {
-      console.error('Failed to toggle publish', error);
-      toast.error('Failed to update publish status');
-    }
-  };
-
-  const handleCreateQuiz = async (data: {
-    passing_score: number;
-    max_score: number;
-  }) => {
-    if (!selectedUnitForQuiz) return;
-    setModalLoading(true);
-
+  // Create quiz instantly with defaults, then open questions modal
+  const handleInstantCreateQuiz = async (unit: Unit) => {
     try {
       const response = await apiClient.post('/admin/quizzes', {
-        unit_id: selectedUnitForQuiz.id,
-        passing_score: data.passing_score,
-        max_score: data.max_score,
+        unit_id: unit.id,
+        passing_score: 70,
+        max_score: 100,
       });
-
       if (response.data.success) {
-        toast.success('Quiz created successfully');
-        refreshStructure();
-        setQuizModalOpen(false);
-        setSelectedUnitForQuiz(null);
+        toast.success('Quiz created');
+        await refreshStructure();
+        setSelectedQuizForQuestions(response.data.data);
+        setSelectedUnitTitleForQuestions(unit.title);
+        setQuestionsModalOpen(true);
       }
-    } catch (error) {
-      console.error('Failed to create quiz', error);
+    } catch {
       toast.error('Failed to create quiz');
-    } finally {
-      setModalLoading(false);
     }
   };
 
@@ -888,22 +864,29 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  const previewLesson = async (markdownPath: string) => {
+  const previewContent = async (content: LessonContent, forceType?: 'markdown' | 'video') => {
     setShowLessonPreview(true);
-    try {
-      const res = await apiClient.post('/subjects/markdown-content', {
-        markdownPathURL: markdownPath,
-      });
-      console.log('Markdown content:', res.data);
-      setLessonPreviewContent(res.data.data);
-    } catch (error) {
-      console.error('Failed to load markdown content', error);
+    setLessonPreviewVideoUrl(undefined);
+    setLessonPreviewContent('');
+    const type = forceType ?? (content.video_url && !content.markdown_path ? 'video' : 'markdown');
+    if (type === 'video' && content.video_url) {
+      setLessonPreviewVideoUrl(content.video_url ?? undefined);
+    } else if (content.markdown_path) {
+      try {
+        const res = await apiClient.post('/subjects/markdown-content', {
+          markdownPathURL: content.markdown_path,
+        });
+        setLessonPreviewContent(res.data.data);
+      } catch (error) {
+        console.error('Failed to load markdown content', error);
+      }
     }
   };
 
   const closeLessonPreview = () => {
     setShowLessonPreview(false);
     setLessonPreviewContent('');
+    setLessonPreviewVideoUrl(undefined);
   };
 
   if (loading) {
@@ -1002,7 +985,11 @@ const LearningFlow: React.FC = () => {
                                 setEditingCapstone(topic.capstone ?? null);
                                 setCapstoneModalOpen(true);
                               }}
-                              title={topic.capstone ? 'Edit Capstone' : 'Add Capstone'}
+                              title={
+                                topic.capstone
+                                  ? 'Edit Capstone'
+                                  : 'Add Capstone'
+                              }
                             >
                               <Trophy
                                 className={`h-4 w-4 cursor-pointer ${topic.capstone ? 'text-amber-400 hover:text-amber-600' : 'hover:text-amber-500'}`}
@@ -1075,6 +1062,11 @@ const LearningFlow: React.FC = () => {
                                           onClick={() => toggleUnit(unit.id)}
                                           className='flex cursor-pointer items-center gap-3 flex-1 min-w-0'
                                         >
+                                          {expandedUnits.includes(unit.id) ? (
+                                            <ChevronDown className='h-4 w-4 shrink-0 text-indigo-400' />
+                                          ) : (
+                                            <ChevronRight className='h-4 w-4 shrink-0 text-slate-300' />
+                                          )}
                                           <div
                                             className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold ${expandedUnits.includes(unit.id) ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}
                                           >
@@ -1112,35 +1104,36 @@ const LearningFlow: React.FC = () => {
                                             />
                                           </div>
                                           <div className='w-px h-4 bg-slate-100 mx-1' />
-                                          {/* Add content buttons */}
-                                          <button
-                                            onClick={() => {
-                                              setSelectedUnitForAssignment(
-                                                unit,
-                                              );
-                                              setAssignmentModalOpen(true);
-                                            }}
-                                            className='flex items-center gap-1 rounded-md border border-slate-100 px-2 py-1 text-xs text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 transition-colors'
-                                            title='Add Assignment'
-                                          >
-                                            <FileText className='h-3 w-3' />
-                                            <span className='hidden sm:inline'>
-                                              Assignment
-                                            </span>
-                                          </button>
-                                          <button
-                                            onClick={() => {
-                                              setSelectedUnitForQuiz(unit);
-                                              setQuizModalOpen(true);
-                                            }}
-                                            className='flex items-center gap-1 rounded-md border border-slate-100 px-2 py-1 text-xs text-slate-500 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-600 transition-colors'
-                                            title='Add Quiz'
-                                          >
-                                            <ListChecks className='h-3 w-3' />
-                                            <span className='hidden sm:inline'>
-                                              Quiz
-                                            </span>
-                                          </button>
+                                          {/* Add content buttons — hidden once item exists */}
+                                          {!unit.assignments?.length && (
+                                            <button
+                                              onClick={() => {
+                                                setSelectedUnitForAssignment(
+                                                  unit,
+                                                );
+                                                setAssignmentModalOpen(true);
+                                              }}
+                                              className='flex items-center gap-1 rounded-md border border-slate-100 px-2 py-1 text-xs text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 transition-colors'
+                                              title='Add Assignment'
+                                            >
+                                              <FileText className='h-3 w-3' />
+                                              <span className='hidden sm:inline'>
+                                                Assignment
+                                              </span>
+                                            </button>
+                                          )}
+                                          {!unit.quizzes?.length && (
+                                            <button
+                                              onClick={() => handleInstantCreateQuiz(unit)}
+                                              className='flex items-center gap-1 rounded-md border border-slate-100 px-2 py-1 text-xs text-slate-500 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-600 transition-colors'
+                                              title='Add Quiz'
+                                            >
+                                              <ListChecks className='h-3 w-3' />
+                                              <span className='hidden sm:inline'>
+                                                Quiz
+                                              </span>
+                                            </button>
+                                          )}
                                           <div className='w-px h-4 bg-slate-100 mx-1' />
                                           <button
                                             onClick={() => {
@@ -1339,21 +1332,42 @@ const LearningFlow: React.FC = () => {
                                                             </span>
                                                           )}
                                                         </div>
-                                                        {((sub.lesson_content?.length ?? 0) > 0 ||
-                                                          (sub.exercises?.length ?? 0) > 0) && (
+                                                        {((sub.lesson_content
+                                                          ?.length ?? 0) > 0 ||
+                                                          (sub.exercises
+                                                            ?.length ?? 0) >
+                                                            0) && (
                                                           <div className='flex items-center gap-1.5 shrink-0'>
-                                                            {(sub.lesson_content?.length ?? 0) > 0 && (
+                                                            {(sub.lesson_content
+                                                              ?.length ?? 0) >
+                                                              0 && (
                                                               <span className='rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600'>
-                                                                {sub.lesson_content!.length}{' '}
+                                                                {
+                                                                  sub
+                                                                    .lesson_content!
+                                                                    .length
+                                                                }{' '}
                                                                 lesson
-                                                                {sub.lesson_content!.length > 1 ? 's' : ''}
+                                                                {sub
+                                                                  .lesson_content!
+                                                                  .length > 1
+                                                                  ? 's'
+                                                                  : ''}
                                                               </span>
                                                             )}
-                                                            {(sub.exercises?.length ?? 0) > 0 && (
+                                                            {(sub.exercises
+                                                              ?.length ?? 0) >
+                                                              0 && (
                                                               <span className='rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-medium text-orange-600'>
-                                                                {sub.exercises!.length}{' '}
+                                                                {
+                                                                  sub.exercises!
+                                                                    .length
+                                                                }{' '}
                                                                 exercise
-                                                                {sub.exercises!.length > 1 ? 's' : ''}
+                                                                {sub.exercises!
+                                                                  .length > 1
+                                                                  ? 's'
+                                                                  : ''}
                                                               </span>
                                                             )}
                                                           </div>
@@ -1393,23 +1407,26 @@ const LearningFlow: React.FC = () => {
                                                     ) && (
                                                       <div className='ml-6 space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3'>
                                                         <div className='flex gap-2 mb-2'>
-                                                          <button
-                                                            onClick={() => {
-                                                              setEditingContent(
-                                                                null,
-                                                              );
-                                                              setSelectedSubtopicForContent(
-                                                                sub,
-                                                              );
-                                                              setContentModalOpen(
-                                                                true,
-                                                              );
-                                                            }}
-                                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
-                                                          >
-                                                            <Plus className='h-3 w-3' />
-                                                            Add Content
-                                                          </button>
+                                                          {!sub.lesson_content
+                                                            ?.length && (
+                                                            <button
+                                                              onClick={() => {
+                                                                setEditingContent(
+                                                                  null,
+                                                                );
+                                                                setSelectedSubtopicForContent(
+                                                                  sub,
+                                                                );
+                                                                setContentModalOpen(
+                                                                  true,
+                                                                );
+                                                              }}
+                                                              className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 transition-colors'
+                                                            >
+                                                              <Plus className='h-3 w-3' />
+                                                              Add Content
+                                                            </button>
+                                                          )}
                                                           <button
                                                             onClick={() => {
                                                               setSelectedSubtopicForExercise(
@@ -1419,10 +1436,10 @@ const LearningFlow: React.FC = () => {
                                                                 true,
                                                               );
                                                             }}
-                                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs hover:border-indigo-300 hover:bg-indigo-50'
+                                                            className='flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 transition-colors'
                                                           >
                                                             <Code className='h-3 w-3' />
-                                                            Exercise
+                                                            + Exercise
                                                           </button>
                                                         </div>
 
@@ -1431,90 +1448,70 @@ const LearningFlow: React.FC = () => {
                                                           (content) => (
                                                             <div
                                                               key={content.id}
-                                                              className='flex items-center justify-between rounded-md border bg-white p-2 text-xs'
+                                                              className='rounded-md border bg-white text-xs overflow-hidden'
                                                             >
-                                                              <div className='flex items-center gap-2'>
-                                                                <FileText className='h-3 w-3 text-slate-400' />
-                                                                <div>
-                                                                  <div className='font-medium text-slate-700'>
-                                                                    {content.content_type ===
-                                                                    'markdown'
-                                                                      ? 'Markdown Content'
-                                                                      : content.content_type ===
-                                                                          'video'
-                                                                        ? 'Video Lesson'
-                                                                        : 'External Link'}
+                                                              {/* Markdown row */}
+                                                              {content.markdown_path && (
+                                                                <div className='flex items-center justify-between px-2 py-2 border-b border-slate-100'>
+                                                                  <div className='flex items-center gap-2 min-w-0'>
+                                                                    <FileText className='h-3.5 w-3.5 text-slate-400 shrink-0' />
+                                                                    <div className='min-w-0'>
+                                                                      <div className='font-medium text-slate-700'>Markdown Content</div>
+                                                                      <div className='text-[10px] text-slate-400 max-w-[200px] truncate'>
+                                                                        {content.markdown_path.split('/').pop()}
+                                                                      </div>
+                                                                    </div>
                                                                   </div>
-                                                                  <div className='text-[10px] text-slate-400'>
-                                                                    {content.content_type ===
-                                                                    'markdown'
-                                                                      ? content.markdown_path
-                                                                          ?.split(
-                                                                            '/',
-                                                                          )
-                                                                          .pop()
-                                                                      : content.video_url}
-                                                                  </div>
-                                                                </div>
-                                                              </div>
-                                                              <div className='flex items-center gap-2'>
-                                                                <button
-                                                                  onClick={() =>
-                                                                    previewLesson(
-                                                                      content.markdown_path,
-                                                                    )
-                                                                  }
-                                                                  title='Preview Lesson'
-                                                                  className='flex justify-center items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50'
-                                                                >
-                                                                  <Eye className='h-3 w-3' />
-                                                                  Preview Lesson
-                                                                </button>
-                                                                <button
-                                                                  onClick={() =>
-                                                                    handleTogglePublishContent(
-                                                                      content,
-                                                                    )
-                                                                  }
-                                                                  className='rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50'
-                                                                  title={
-                                                                    content.is_published
-                                                                      ? 'Unpublish content'
-                                                                      : 'Publish content'
-                                                                  }
-                                                                >
-                                                                  {content.is_published
-                                                                    ? 'Unpublish'
-                                                                    : 'Publish'}
-                                                                </button>
-                                                                <div className='flex items-center gap-1'>
                                                                   <button
-                                                                    onClick={() => {
-                                                                      setEditingContent(
-                                                                        content,
-                                                                      );
-                                                                      setSelectedSubtopicForContent(
-                                                                        sub,
-                                                                      );
-                                                                      setContentModalOpen(
-                                                                        true,
-                                                                      );
-                                                                    }}
-                                                                    className='p-1 text-slate-400 hover:text-indigo-600'
+                                                                    onClick={() => previewContent(content, 'markdown')}
+                                                                    className='flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 shrink-0 ml-2'
                                                                   >
-                                                                    <Edit2 className='h-3 w-3' />
-                                                                  </button>
-                                                                  <button
-                                                                    onClick={() =>
-                                                                      handleDeleteContent(
-                                                                        content.id,
-                                                                      )
-                                                                    }
-                                                                    className='p-1 text-slate-400 hover:text-red-500'
-                                                                  >
-                                                                    <Trash2 className='h-3 w-3' />
+                                                                    <Eye className='h-3 w-3' />
+                                                                    Preview
                                                                   </button>
                                                                 </div>
+                                                              )}
+
+                                                              {/* Video row */}
+                                                              {content.video_url && (
+                                                                <div className='flex items-center justify-between px-2 py-2 border-b border-slate-100'>
+                                                                  <div className='flex items-center gap-2 min-w-0'>
+                                                                    <PlayCircle className='h-3.5 w-3.5 text-blue-400 shrink-0' />
+                                                                    <div className='min-w-0'>
+                                                                      <div className='font-medium text-slate-700'>Video Lesson</div>
+                                                                      <div className='text-[10px] text-slate-400 max-w-[200px] truncate'>
+                                                                        {content.video_url}
+                                                                      </div>
+                                                                    </div>
+                                                                  </div>
+                                                                  <button
+                                                                    onClick={() => previewContent(content, 'video')}
+                                                                    className='flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 shrink-0 ml-2'
+                                                                  >
+                                                                    <Eye className='h-3 w-3' />
+                                                                    Preview
+                                                                  </button>
+                                                                </div>
+                                                              )}
+
+                                                              {/* Shared actions */}
+                                                              <div className='flex items-center justify-end gap-1.5 px-2 py-1.5 bg-slate-50/60'>
+                                                                <button
+                                                                  onClick={() => {
+                                                                    setEditingContent(content);
+                                                                    setSelectedSubtopicForContent(sub);
+                                                                    setContentModalOpen(true);
+                                                                  }}
+                                                                  className='p-1 text-slate-400 hover:text-indigo-600'
+                                                                >
+                                                                  <Edit2 className='h-3 w-3' />
+                                                                </button>
+                                                                <button
+                                                                  onClick={() => handleDeleteContent(content.id)}
+                                                                  className='p-1 text-slate-400 hover:text-red-500'
+                                                                >
+                                                                  <Trash2 className='h-3 w-3' />
+                                                                </button>
                                                               </div>
                                                             </div>
                                                           ),
@@ -1872,11 +1869,7 @@ const LearningFlow: React.FC = () => {
         onSave={async (data) => {
           setModalLoading(true);
           try {
-            if (editingQuiz) {
-              await handleUpdateQuiz(data);
-            } else {
-              await handleCreateQuiz(data);
-            }
+            await handleUpdateQuiz(data);
           } finally {
             setModalLoading(false);
           }
@@ -1987,6 +1980,7 @@ const LearningFlow: React.FC = () => {
         isOpen={showLessonPreview}
         onClose={closeLessonPreview}
         content={lessonPreviewContent}
+        videoUrl={lessonPreviewVideoUrl}
       />
 
       {questionsModalOpen && selectedQuizForQuestions && (

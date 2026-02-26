@@ -17,7 +17,7 @@ export interface LessonContent {
   id: string;
   subtopic_id: string;
   content_type: 'markdown' | 'video' | 'external';
-  markdown_path: string;
+  markdown_path: string | null;
   estimated_read_time?: number;
   version: number;
   is_published: boolean;

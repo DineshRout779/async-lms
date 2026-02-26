@@ -5,6 +5,7 @@ const verifyToken = require('../middlewares/verfiyToken');
 
 const {
   getAdminStats,
+  getAdminAnalytics,
   getAllStudents,
   getProjectSubmissions,
   uploadLessonMarkdown,
@@ -65,6 +66,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // ===== EXISTING ROUTES =====
 router.get('/stats', verifyToken, isAdmin, getAdminStats);
+router.get('/analytics', verifyToken, isAdmin, getAdminAnalytics);
 router.get('/all-students', verifyToken, isAdmin, getAllStudents);
 router.get('/project-submissions', verifyToken, isAdmin, getProjectSubmissions);
 router.post(

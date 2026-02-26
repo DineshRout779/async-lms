@@ -9,6 +9,8 @@ export interface User {
   degree?: string;
   year?: number;
   onboarding_step: string;
+  current_streak?: number;
+  total_points?: number;
 }
 
 export interface AuthResponse {

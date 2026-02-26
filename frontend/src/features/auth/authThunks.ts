@@ -35,26 +35,6 @@ export const signupUser = createAsyncThunk<
 });
 
 /**
- * GOOGLE OAUTH
- */
-export const googleAuth = createAsyncThunk<
-  AuthResponse,
-  string,
-  { rejectValue: string }
->('auth/google', async (credential, { rejectWithValue }) => {
-  try {
-    const { data } = await api.post<AuthResponse>('/auth/google', {
-      credential,
-    });
-    return data;
-  } catch (err: any) {
-    return rejectWithValue(
-      err.response?.data?.message || 'Google sign-in failed',
-    );
-  }
-});
-
-/**
  * LOAD CURRENT USER
  */
 export const loadUser = createAsyncThunk<User, void, { rejectValue: string }>(

@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { AuthState } from './authTypes';
-import { loginUser, signupUser, loadUser, googleAuth } from './authThunks';
+import { loginUser, signupUser, loadUser } from './authThunks';
 
 const token = localStorage.getItem('token');
 
@@ -24,6 +24,12 @@ const authSlice = createSlice({
     },
     clearAuthError(state) {
       state.error = null;
+    },
+    loginWithToken(state, action: PayloadAction<string>) {
+      state.token = action.payload;
+      state.isAuthenticated = true;
+      state.status = 'loading';
+      localStorage.setItem('token', action.payload);
     },
   },
   extraReducers: (builder) => {
@@ -62,25 +68,9 @@ const authSlice = createSlice({
         state.error = action.payload ?? null;
       })
 
-      // GOOGLE AUTH
-      .addCase(googleAuth.pending, (state) => {
-        state.status = 'loading';
-      })
-      .addCase(googleAuth.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.isAuthenticated = true;
-        state.error = null;
-        localStorage.setItem('token', action.payload.token);
-      })
-      .addCase(googleAuth.rejected, (state, action) => {
-        state.status = 'failed';
-        state.error = action.payload ?? null;
-      })
-
       // LOAD USER
       .addCase(loadUser.fulfilled, (state, action: PayloadAction<any>) => {
+        state.status = 'succeeded';
         state.user = action.payload;
         state.isAuthenticated = true;
       })
@@ -88,10 +78,11 @@ const authSlice = createSlice({
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
+        state.status = 'failed';
         localStorage.removeItem('token');
       });
   },
 });
 
-export const { logout, clearAuthError } = authSlice.actions;
+export const { logout, clearAuthError, loginWithToken } = authSlice.actions;
 export default authSlice.reducer;
