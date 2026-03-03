@@ -35,6 +35,7 @@ app.use('/api/v1/subjects', require('./routes/subject.routes'));
 app.use('/api/v1/admin', require('./routes/admin.routes'));
 app.use('/api/v1/facilitator', require('./routes/facilitator.routes'));
 app.use('/api/v1/assistant', require('./routes/assistant.routes'));
+app.use('/api/v1/college-assignments', require('./routes/collegeAssignment.routes'));
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 
 //  404 Catch-all (Place this at the very bottom)

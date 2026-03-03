@@ -3,10 +3,15 @@ const pool = require('../config/pg');
 // GET all colleges
 exports.getAllColleges = async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM colleges ORDER BY name ASC');
+    const showVerified = req.query.is_verfied ? true : false;
+    const query = showVerified
+      ? 'SELECT * FROM colleges WHERE is_verified = true ORDER BY name ASC'
+      : 'SELECT * FROM colleges ORDER BY name ASC';
+    const result = await pool.query(query);
     // Standardized response to match frontend expectations
     res.status(200).json({ success: true, data: result.rows });
   } catch (error) {
+    console.log(`Error || getAllColleges: `, error);
     res.status(500).json({
       success: false,
       message: 'Error fetching colleges',

@@ -28,6 +28,19 @@ const pool = new Pool({
     await client.query(`ALTER TABLE exercises ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS instructions text`);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS college_assignments (
+        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        college_id   UUID NOT NULL REFERENCES colleges(id) ON DELETE CASCADE,
+        created_by   UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+        title        TEXT NOT NULL,
+        description  TEXT,
+        due_date     TIMESTAMPTZ,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_college_assignments_college_id ON college_assignments(college_id)`);
+    await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint WHERE conname = 'project_submissions_project_user_unique'

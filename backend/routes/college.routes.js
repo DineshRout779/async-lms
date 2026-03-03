@@ -6,10 +6,10 @@ const {
   assignFacilitator,
   getCollegesBySubject,
   toggleSubjectAccess,
+  getVerifiedColleges,
 } = require('../controllers/college.controller');
 
 const isAdmin = require('../middlewares/isAdmin');
-const isAdminOrFacilitator = require('../middlewares/isAdminOrFacilitator');
 const verifyToken = require('../middlewares/verfiyToken');
 const router = require('express').Router();
 

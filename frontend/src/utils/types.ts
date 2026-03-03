@@ -65,6 +65,15 @@ export interface Exercise {
   test_cases?: TestCase[];
 }
 
+export interface CollegeAssignment {
+  id: string;
+  title: string;
+  description?: string;
+  due_date?: string | null;
+  created_at: string;
+  created_by_name: string;
+}
+
 export interface Assignment {
   id: string;
   title: string;
