@@ -136,7 +136,7 @@ function WorkspaceLoader({
 
   return (
     <div className='absolute inset-0 bg-[#0a0a0f] z-50 flex flex-col items-center justify-center gap-8'>
-      <div className='flex flex-col gap-3 min-w-[260px]'>
+      <div className='flex flex-col gap-3 min-w-65'>
         {steps.map((step) => (
           <div
             key={step.label}
@@ -198,7 +198,6 @@ const CodeEditor = (): JSX.Element => {
 
   // Workspace lifecycle
   const [wsStatus, setWsStatus] = useState<WorkspaceStatus>('idle');
-  const [wsStatusMsg, setWsStatusMsg] = useState('');
   const [wsError, setWsError] = useState<string | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const [env, setEnv] = useState<EditorEnvironment | null>(null);
@@ -255,7 +254,7 @@ const CodeEditor = (): JSX.Element => {
       setTabs((prev) => prev.filter((t) => files.has(t.path)));
       setActiveTab((prev) => (prev && files.has(prev) ? prev : null));
     },
-    [user?.id],
+    [user],
   );
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -273,20 +272,15 @@ const CodeEditor = (): JSX.Element => {
     socket.on('connect', () => setSocketConnected(true));
     socket.on('disconnect', () => setSocketConnected(false));
     // Mark connected immediately if already connected (fast reconnect)
-    if (socket.connected) setSocketConnected(true);
+    if (socket.connected) queueMicrotask(() => setSocketConnected(true));
 
     socket.on('workspace:ready', () => {
       setWsStatus('ready');
-      setWsStatusMsg('');
     });
 
     socket.on('workspace:error', (msg: string) => {
       setWsStatus('error');
       setWsError(msg);
-    });
-
-    socket.on('workspace:status', ({ message }: { message: string }) => {
-      setWsStatusMsg(message);
     });
 
     socket.on('workspace:ports:update', (updatedPorts: PortInfo[]) => {
@@ -303,7 +297,7 @@ const CodeEditor = (): JSX.Element => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ─────────────────────────────────────────────────────────────────────────
      Auth — retry loadUser if the token exists but user hasn't loaded yet.
@@ -349,7 +343,7 @@ const CodeEditor = (): JSX.Element => {
       if (!el) return;
       const { width, height } = el.getBoundingClientRect();
       if (width > 0 && height > 0) {
-        try { fitAddon.fit(); } catch (_) {}
+        try { fitAddon.fit(); } catch { /* ignore resize errors */ }
       }
     };
 
@@ -378,7 +372,7 @@ const CodeEditor = (): JSX.Element => {
       socketRef.current?.off('terminal:output', onOutput);
       terminal.dispose();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ─────────────────────────────────────────────────────────────────────────
      FS watcher — re-subscribe when env changes
@@ -423,7 +417,6 @@ const CodeEditor = (): JSX.Element => {
 
     const boot = async () => {
       setWsStatus('provisioning');
-      setWsStatusMsg('Provisioning workspace…');
 
       const res = await apiClient.post('/editor/start', {
         profile: cp,
@@ -434,7 +427,6 @@ const CodeEditor = (): JSX.Element => {
 
       setEnv(res.data);
       setWsStatus('starting');
-      setWsStatusMsg('Starting container…');
       terminalRef.current?.clear();
 
       // Register BEFORE emit so we never miss workspace:ready
