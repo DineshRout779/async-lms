@@ -15,6 +15,13 @@ const CLEANUP_INTERVAL  = 24 * 60 * 60 * 1000; // run once per day
 // Name of the per-workspace marker file touched on every connect
 const ACCESSED_MARKER = '.ws-accessed';
 
+// ---------- Directories to skip during tree traversal / quota calculation ----------
+const IGNORED_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', '.next', '.nuxt', '.svelte-kit',
+  '__pycache__', '.cache', 'coverage', '.nyc_output', 'vendor', '.venv', 'venv',
+  '.tox', 'target', 'out', '.parcel-cache', '.turbo',
+]);
+
 // ---------- Internal helpers ----------
 
 function getWorkspaceRoot(userId, projectId) {
@@ -43,6 +50,7 @@ function getDirSizeSync(dir, limit = Infinity) {
   }
   for (const entry of entries) {
     if (total >= limit) break; // early abort — already over limit
+    if (entry.isDirectory() && IGNORED_DIRS.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       total += getDirSizeSync(full, limit - total);
@@ -59,6 +67,7 @@ function buildTree(dir, base = '') {
   const items = [];
 
   for (const entry of fs.readdirSync(dir)) {
+    if (IGNORED_DIRS.has(entry)) continue;
     const fullPath = path.join(dir, entry);
     const relPath  = path.join(base, entry).replace(/\\/g, '/');
     const stat     = fs.statSync(fullPath);

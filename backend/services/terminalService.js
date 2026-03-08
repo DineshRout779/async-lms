@@ -6,7 +6,7 @@ function containerExists(name) {
   return res.status === 0;
 }
 
-function createTerminal({ userId, projectId }) {
+function createTerminal({ userId, projectId, cols = 80, rows = 24 }) {
   const name = `workspace-${userId}-${projectId}`;
 
   if (!containerExists(name)) {
@@ -30,8 +30,8 @@ function createTerminal({ userId, projectId }) {
     ],
     {
       name: 'xterm-256color',
-      cols: 80,
-      rows: 30,
+      cols,
+      rows,
       cwd: '/',
       env: {
         ...process.env,

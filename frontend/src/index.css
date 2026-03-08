@@ -1,8 +1,9 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-* {
+
+/* *:not(.code-editor) {
   font-family: 'Inter', 'Sans-serif';
-}
+} */
 
 @plugin "@tailwindcss/typography";
 

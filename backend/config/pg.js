@@ -9,6 +9,7 @@ const pool = new Pool({
   ssl: {
     rejectUnauthorized: false,
   },
+  family: 4,
 });
 
 (async () => {
@@ -22,11 +23,21 @@ const pool = new Pool({
     console.log(`📁 Target database: ${connectedDb}`);
 
     // Idempotent schema migrations
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id text UNIQUE`);
-    await client.query(`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`);
-    await client.query(`ALTER TABLE project_submissions ADD COLUMN IF NOT EXISTS submission_link text`);
-    await client.query(`ALTER TABLE exercises ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb`);
-    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS instructions text`);
+    await client.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id text UNIQUE`,
+    );
+    await client.query(
+      `ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`,
+    );
+    await client.query(
+      `ALTER TABLE project_submissions ADD COLUMN IF NOT EXISTS submission_link text`,
+    );
+    await client.query(
+      `ALTER TABLE exercises ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb`,
+    );
+    await client.query(
+      `ALTER TABLE projects ADD COLUMN IF NOT EXISTS instructions text`,
+    );
     await client.query(`
       CREATE TABLE IF NOT EXISTS college_assignments (
         id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -39,7 +50,9 @@ const pool = new Pool({
         updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_college_assignments_college_id ON college_assignments(college_id)`);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_college_assignments_college_id ON college_assignments(college_id)`,
+    );
     await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (

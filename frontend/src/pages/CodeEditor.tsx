@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, useCallback, type JSX } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -10,14 +10,18 @@ import FileTreeExplorer, { type FileNode } from '../components/common/FileTree';
 import { createPath, deletePath, renamePath } from '@/services/files';
 import { useSearchParams } from 'react-router';
 import apiClient from '@/services/api';
-import { useAppSelector } from '@/app/hooks';
-import { selectUser } from '@/features/auth/authSelectors';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { selectUser, selectAuth } from '@/features/auth/authSelectors';
+import { loadUser } from '@/features/auth/authThunks';
 import EditorTabs from '@/components/common/editor/EditorTabs';
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable';
+import { type ImperativePanelHandle } from 'react-resizable-panels';
+
+// ── Types ──────────────────────────────────────────────────────────────────
 
 type EditorEnvironment = {
   projectId: string;
@@ -37,61 +41,371 @@ type Tab = {
   language: string;
 };
 
-const getLanguageFromPath = (path: string): string => {
-  const parts = path.split('.');
-  if (parts.length < 2) return 'plaintext';
-  return (
-    {
-      js: 'javascript',
-      ts: 'typescript',
-      json: 'json',
-      py: 'python',
-      html: 'html',
-      css: 'css',
-    }[parts.pop()!] ?? 'plaintext'
-  );
+type PortInfo = {
+  port: number;
+  url: string | null;
 };
+
+type WorkspaceStatus = 'idle' | 'provisioning' | 'starting' | 'ready' | 'error';
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const LANG_MAP: Record<string, string> = {
+  js: 'javascript',
+  jsx: 'javascript',
+  ts: 'typescript',
+  tsx: 'typescript',
+  json: 'json',
+  py: 'python',
+  html: 'html',
+  css: 'css',
+  scss: 'scss',
+  md: 'markdown',
+  sh: 'shell',
+};
+
+function getLanguageFromPath(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+  return LANG_MAP[ext] ?? 'plaintext';
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+type StepStatus = 'pending' | 'active' | 'done';
+
+type LoaderStep = {
+  label: string;
+  status: StepStatus;
+};
+
+function StepIcon({ status }: { status: StepStatus }) {
+  if (status === 'done') {
+    return (
+      <svg className='w-4 h-4 text-slate-400 shrink-0' viewBox='0 0 16 16' fill='none'>
+        <path d='M3 8l3.5 3.5L13 4.5' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' />
+      </svg>
+    );
+  }
+  if (status === 'active') {
+    return (
+      <div className='w-4 h-4 shrink-0 flex items-center justify-center'>
+        <div className='w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin' />
+      </div>
+    );
+  }
+  return <div className='w-4 h-4 shrink-0 rounded-full border border-slate-700' />;
+}
+
+function WorkspaceLoader({
+  authReady,
+  socketConnected,
+  wsStatus,
+}: {
+  authReady: boolean;
+  socketConnected: boolean;
+  wsStatus: WorkspaceStatus;
+}) {
+  const steps: LoaderStep[] = [
+    {
+      label: 'Authenticating',
+      status: authReady ? 'done' : 'active',
+    },
+    {
+      label: 'Connecting to server',
+      status: !authReady ? 'pending' : socketConnected ? 'done' : 'active',
+    },
+    {
+      label: 'Preparing your workspace',
+      status:
+        !socketConnected
+          ? 'pending'
+          : wsStatus === 'starting' || wsStatus === 'ready'
+            ? 'done'
+            : 'active',
+    },
+    {
+      label: 'Starting container',
+      status:
+        wsStatus === 'ready'
+          ? 'done'
+          : wsStatus === 'starting'
+            ? 'active'
+            : 'pending',
+    },
+  ];
+
+  return (
+    <div className='absolute inset-0 bg-[#0a0a0f] z-50 flex flex-col items-center justify-center gap-8'>
+      <div className='flex flex-col gap-3 min-w-[260px]'>
+        {steps.map((step) => (
+          <div
+            key={step.label}
+            className={`flex items-center gap-3 transition-opacity duration-300 ${
+              step.status === 'pending' ? 'opacity-30' : 'opacity-100'
+            }`}
+          >
+            <StepIcon status={step.status} />
+            <span
+              className={`text-sm ${
+                step.status === 'active'
+                  ? 'text-white font-medium'
+                  : step.status === 'done'
+                    ? 'text-slate-400'
+                    : 'text-slate-600'
+              }`}
+            >
+              {step.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className='absolute inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center gap-4'>
+      <div className='text-red-400 text-3xl'>⚠</div>
+      <div className='text-center'>
+        <p className='text-slate-200 text-sm font-medium'>Workspace failed to start</p>
+        <p className='text-slate-500 text-xs mt-2 max-w-sm px-4'>{message}</p>
+      </div>
+      <Button variant='outline' size='sm' onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+function FileTreeSkeleton() {
+  return (
+    <div className='p-3 flex flex-col gap-2 animate-pulse'>
+      {[80, 55, 90, 65, 70].map((w, i) => (
+        <div key={i} className='h-3.5 rounded bg-slate-800' style={{ width: `${w}%` }} />
+      ))}
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 
 const CodeEditor = (): JSX.Element => {
   const [searchParams] = useSearchParams();
+  const dispatch = useAppDispatch();
   const user = useAppSelector(selectUser);
+  const { status: authStatus, token } = useAppSelector(selectAuth);
 
+  // Workspace lifecycle
+  const [wsStatus, setWsStatus] = useState<WorkspaceStatus>('idle');
+  const [wsStatusMsg, setWsStatusMsg] = useState('');
+  const [wsError, setWsError] = useState<string | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
   const [env, setEnv] = useState<EditorEnvironment | null>(null);
+
+  // Editor state
   const [tree, setTree] = useState<FileNode[]>([]);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [autoSave, setAutoSave] = useState(true);
 
-  const socketRef = useRef<Socket | null>(null);
+  // Preview
+  const [ports, setPorts] = useState<PortInfo[]>([]);
+  const [activePort, setActivePort] = useState<number | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
 
+  // Refs
+  const socketRef = useRef<Socket | null>(null);
+  const bootedRef = useRef(false);
+  const envRef = useRef<EditorEnvironment | null>(null);
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const previewPanelRef = useRef<ImperativePanelHandle>(null);
+  const fsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // const [ports, setPorts] = useState<number[]>([]);
-  const [activePort, setActivePort] = useState<number | null>(null);
-  const [showPreview, setShowPreview] = useState(true);
+  // Keep envRef in sync for use inside socket event closures
+  useEffect(() => {
+    envRef.current = env;
+  }, [env]);
 
-  const fsRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* ─────────────────────────────────────────────────────────────────────────
+     File System API
+  ───────────────────────────────────────────────────────────────────────── */
 
-  /* =========================
-     Socket lifecycle
-  ========================= */
+  const loadTree = useCallback(
+    async (projectId: string) => {
+      if (!user?.id) return;
+      const res = await apiClient.get('/workspace/tree', {
+        params: { userId: user.id, projectId },
+      });
+      const newTree: FileNode[] = res.data;
+      setTree(newTree);
+
+      const files = new Set<string>();
+      const walk = (nodes: FileNode[]) => {
+        for (const n of nodes) {
+          if (n.type === 'file') files.add(n.path);
+          if (n.children) walk(n.children);
+        }
+      };
+      walk(newTree);
+
+      setTabs((prev) => prev.filter((t) => files.has(t.path)));
+      setActiveTab((prev) => (prev && files.has(prev) ? prev : null));
+    },
+    [user?.id],
+  );
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     Socket lifecycle — connect once on mount, subscribe to all events
+  ───────────────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    socketRef.current = io(import.meta.env.VITE_API_URL);
+    const socket = io(import.meta.env.VITE_API_URL, {
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionAttempts: 5,
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => setSocketConnected(true));
+    socket.on('disconnect', () => setSocketConnected(false));
+    // Mark connected immediately if already connected (fast reconnect)
+    if (socket.connected) setSocketConnected(true);
+
+    socket.on('workspace:ready', () => {
+      setWsStatus('ready');
+      setWsStatusMsg('');
+    });
+
+    socket.on('workspace:error', (msg: string) => {
+      setWsStatus('error');
+      setWsError(msg);
+    });
+
+    socket.on('workspace:status', ({ message }: { message: string }) => {
+      setWsStatusMsg(message);
+    });
+
+    socket.on('workspace:ports:update', (updatedPorts: PortInfo[]) => {
+      if (!updatedPorts.length) return;
+      setPorts(updatedPorts);
+      setActivePort((prev) => prev ?? updatedPorts[0].port);
+    });
+
+    socket.on('terminal:error', (msg: string) => {
+      terminalRef.current?.write(`\r\n\x1b[31mError: ${msg}\x1b[0m\r\n`);
+    });
+
     return () => {
-      socketRef.current?.disconnect();
+      socket.disconnect();
       socketRef.current = null;
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* =========================
-     Workspace Bootstrap
-  ========================= */
+  /* ─────────────────────────────────────────────────────────────────────────
+     Auth — retry loadUser if the token exists but user hasn't loaded yet.
+     This handles the case where the page is opened directly (not via login
+     flow) and loadUser hasn't run or previously failed due to a network error.
+  ───────────────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    if (!user || !socketRef.current) return;
+    if (!token) return;               // no token — can't load user
+    if (user?.id) return;             // already loaded
+    if (authStatus === 'loading') return; // already in-flight
+    dispatch(loadUser());
+  }, [token, user?.id, authStatus, dispatch]);
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     Terminal setup — runs once after mount (after socket effect)
+  ───────────────────────────────────────────────────────────────────────── */
+
+  useEffect(() => {
+    if (!terminalContainerRef.current) return;
+
+    const fitAddon = new FitAddon();
+    const terminal = new Terminal({
+      cursorBlink: true,
+      fontFamily: 'JetBrains Mono, Fira Code, monospace',
+      fontSize: 14,
+      theme: {
+        background: '#020617',
+        foreground: '#e5e7eb',
+        cursor: '#60a5fa',
+        selectionBackground: '#1e40af55',
+      },
+    });
+
+    terminal.loadAddon(fitAddon);
+    terminal.open(terminalContainerRef.current);
+
+    // Guard: only call fit() when the container has real dimensions.
+    // Calling fit() on a zero-size container crashes xterm's internal viewport
+    // (which happens during the loading overlay phase).
+    const safeFit = () => {
+      const el = terminalContainerRef.current;
+      if (!el) return;
+      const { width, height } = el.getBoundingClientRect();
+      if (width > 0 && height > 0) {
+        try { fitAddon.fit(); } catch (_) {}
+      }
+    };
+
+    safeFit();
+
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+
+    terminal.onData((data: string) => {
+      socketRef.current?.emit('terminal:input', data);
+    });
+
+    // Subscribe to terminal output here so we have a direct ref to the terminal
+    const onOutput = (data: string) => terminalRef.current?.write(data);
+    socketRef.current?.on('terminal:output', onOutput);
+
+    const observer = new ResizeObserver(() => {
+      safeFit();
+      const dims = fitAddon.proposeDimensions();
+      if (dims) socketRef.current?.emit('terminal:resize', dims);
+    });
+    observer.observe(terminalContainerRef.current);
+
+    return () => {
+      observer.disconnect();
+      socketRef.current?.off('terminal:output', onOutput);
+      terminal.dispose();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     FS watcher — re-subscribe when env changes
+  ───────────────────────────────────────────────────────────────────────── */
+
+  useEffect(() => {
+    if (!socketRef.current || !env) return;
+
+    const handler = () => {
+      if (fsRefreshTimerRef.current) clearTimeout(fsRefreshTimerRef.current);
+      fsRefreshTimerRef.current = setTimeout(() => loadTree(env.projectId), 500);
+    };
+
+    socketRef.current.on('workspace:fs:update', handler);
+    return () => {
+      socketRef.current?.off('workspace:fs:update', handler);
+    };
+  }, [env, loadTree]);
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     Workspace bootstrap — runs once when user is available
+  ───────────────────────────────────────────────────────────────────────── */
+
+  useEffect(() => {
+    if (!user?.id || !socketRef.current) return;
+    if (bootedRef.current) return;
+    bootedRef.current = true;
 
     const pid = searchParams.get('pid');
     const cp = searchParams.get('cp');
@@ -99,7 +413,18 @@ const CodeEditor = (): JSX.Element => {
 
     let cancelled = false;
 
+    // Hard timeout: if the workspace doesn't become ready in 90 s, show an error
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        setWsStatus('error');
+        setWsError('Workspace startup timed out. The container may be slow to start — please retry.');
+      }
+    }, 90_000);
+
     const boot = async () => {
+      setWsStatus('provisioning');
+      setWsStatusMsg('Provisioning workspace…');
+
       const res = await apiClient.post('/editor/start', {
         profile: cp,
         projectId: pid,
@@ -108,119 +433,115 @@ const CodeEditor = (): JSX.Element => {
       if (cancelled) return;
 
       setEnv(res.data);
+      setWsStatus('starting');
+      setWsStatusMsg('Starting container…');
       terminalRef.current?.clear();
+
+      // Register BEFORE emit so we never miss workspace:ready
+      socketRef.current!.once('workspace:ready', async () => {
+        const dims = fitAddonRef.current?.proposeDimensions();
+        socketRef.current!.emit('terminal:start', {
+          cols: dims?.cols ?? 80,
+          rows: dims?.rows ?? 24,
+        });
+        await loadTree(res.data.projectId);
+      });
 
       socketRef.current!.emit('workspace:start', {
         userId: user.id,
         projectId: res.data.projectId,
         image: res.data.profile.image,
       });
-
-      const onReady = async () => {
-        socketRef.current!.emit('terminal:start');
-        await loadTree(res.data.projectId);
-      };
-
-      socketRef.current!.on('workspace:ready', onReady);
-
-      return () => {
-        socketRef.current?.off('workspace:ready', onReady);
-      };
     };
 
-    boot();
+    boot().catch((err) => {
+      if (!cancelled) {
+        setWsStatus('error');
+        setWsError(err?.message ?? 'Failed to start workspace');
+      }
+    });
+
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
     };
-  }, [user]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* =========================
-     FS Watcher
-  ========================= */
+  /* ─────────────────────────────────────────────────────────────────────────
+     Auto-open preview when a port is first detected
+  ───────────────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    if (!socketRef.current || !env) return;
+    if (!activePort) return;
+    previewPanelRef.current?.expand();
+  }, [activePort]);
 
-    const handler = () => {
-      if (fsRefreshTimer.current) {
-        clearTimeout(fsRefreshTimer.current);
-      }
-      fsRefreshTimer.current = setTimeout(() => {
-        loadTree(env.projectId);
-      }, 500);
-    };
-
-    socketRef.current.on('workspace:fs:update', handler);
-    return () => {
-      socketRef.current?.off('workspace:fs:update', handler);
-    };
-  }, [env]);
-
-  /* =========================
-     Terminal Setup
-  ========================= */
+  /* ─────────────────────────────────────────────────────────────────────────
+     Autosave (debounced 800 ms)
+  ───────────────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    if (!terminalContainerRef.current || !socketRef.current) return;
+    if (!autoSave || !env) return;
 
-    const fitAddon = new FitAddon();
-    const terminal = new Terminal({
-      cursorBlink: true,
-      fontFamily: 'JetBrains Mono, monospace',
-      fontSize: 14,
-      theme: { background: '#020617', foreground: '#e5e7eb' },
-    });
+    const tab = tabs.find((t) => t.path === activeTab);
+    if (!tab?.dirty) return;
 
-    terminal.loadAddon(fitAddon);
-    terminal.open(terminalContainerRef.current);
-    fitAddon.fit();
+    const snapshot = { ...tab };
 
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
+    const timer = setTimeout(async () => {
+      await apiClient.post('/workspace/file', {
+        userId: user!.id,
+        projectId: env.projectId,
+        filePath: snapshot.path,
+        content: snapshot.content,
+      });
 
-    const onData = (data: string) => {
-      socketRef.current!.emit('terminal:input', data);
-    };
+      setTabs((prev) =>
+        prev.map((t) => (t.path === snapshot.path ? { ...t, dirty: false } : t)),
+      );
 
-    terminal.onData(onData);
+      if (activePort) setPreviewKey((k) => k + 1);
+    }, 800);
 
-    const onOutput = (data: string) => terminal.write(data);
-    socketRef.current.on('terminal:output', onOutput);
+    return () => clearTimeout(timer);
+  }, [tabs, activeTab, autoSave, activePort, env, user]);
 
-    const observer = new ResizeObserver(() => fitAddon.fit());
-    observer.observe(terminalContainerRef.current);
+  /* ─────────────────────────────────────────────────────────────────────────
+     Ctrl+S — force-save immediately
+  ───────────────────────────────────────────────────────────────────────── */
 
-    return () => {
-      observer.disconnect();
-      socketRef.current?.off('terminal:output', onOutput);
-      terminal.dispose();
-    };
-  }, []);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (!activeTab || !env || !user) return;
+        const tab = tabs.find((t) => t.path === activeTab);
+        if (!tab?.dirty) return;
 
-  /* =========================
-     File System API
-  ========================= */
-
-  const loadTree = async (projectId: string) => {
-    const res = await apiClient.get('/workspace/tree', {
-      params: { userId: user!.id, projectId },
-    });
-
-    const newTree = res.data;
-    setTree(newTree);
-
-    const files = new Set<string>();
-    const walk = (nodes: FileNode[]) => {
-      for (const n of nodes) {
-        if (n.type === 'file') files.add(n.path);
-        if (n.children) walk(n.children);
+        apiClient
+          .post('/workspace/file', {
+            userId: user.id,
+            projectId: env.projectId,
+            filePath: tab.path,
+            content: tab.content,
+          })
+          .then(() => {
+            setTabs((prev) =>
+              prev.map((t) => (t.path === activeTab ? { ...t, dirty: false } : t)),
+            );
+            if (activePort) setPreviewKey((k) => k + 1);
+          })
+          .catch(console.error);
       }
     };
-    walk(newTree);
 
-    setTabs((prev) => prev.filter((t) => files.has(t.path)));
-    if (activeTab && !files.has(activeTab)) setActiveTab(null);
-  };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeTab, tabs, env, activePort, user]);
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     File operations
+  ───────────────────────────────────────────────────────────────────────── */
 
   const openFile = async (filePath: string) => {
     if (!env) return;
@@ -246,43 +567,9 @@ const CodeEditor = (): JSX.Element => {
 
   const updateActiveTab = (content: string) => {
     setTabs((prev) =>
-      prev.map((t) =>
-        t.path === activeTab ? { ...t, content, dirty: true } : t
-      )
+      prev.map((t) => (t.path === activeTab ? { ...t, content, dirty: true } : t)),
     );
   };
-
-  /* =========================
-     Autosave (SAFE)
-  ========================= */
-
-  useEffect(() => {
-    if (!autoSave || !env) return;
-
-    const tab = tabs.find((t) => t.path === activeTab);
-    if (!tab || !tab.dirty) return;
-
-    const snapshot = { ...tab };
-
-    const timer = setTimeout(async () => {
-      await apiClient.post('/workspace/file', {
-        userId: user!.id,
-        projectId: env.projectId,
-        filePath: snapshot.path,
-        content: snapshot.content,
-      });
-
-      setTabs((prev) =>
-        prev.map((t) => (t.path === snapshot.path ? { ...t, dirty: false } : t))
-      );
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [tabs, activeTab, autoSave]);
-
-  /* =========================
-     Run Button
-  ========================= */
 
   const runCode = () => {
     if (!env) return;
@@ -290,159 +577,262 @@ const CodeEditor = (): JSX.Element => {
     socketRef.current?.emit('terminal:input', env.profile.run + '\n');
   };
 
-  /* ========================
-    PORT DETECTION
-  ========================= */
+  const retryBoot = () => {
+    bootedRef.current = false;
+    setWsStatus('idle');
+    setWsError(null);
+    window.location.reload();
+  };
 
-  useEffect(() => {
-    if (!socketRef.current) return;
-
-    const handler = (ports: any) => {
-      if (!ports.length) return;
-      console.log('found ports', ports);
-      // setPorts(ports.map((p: any) => p.port));
-      setActivePort((prev) => prev ?? ports[0].port);
-    };
-
-    socketRef.current.on('workspace:ports:update', handler);
-    return () => {
-      socketRef.current?.off('workspace:ports:update', handler);
-    };
-  }, []);
+  /* ─────────────────────────────────────────────────────────────────────────
+     Derived values
+  ───────────────────────────────────────────────────────────────────────── */
 
   const active = tabs.find((t) => t.path === activeTab);
+  const activePortInfo = ports.find((p) => p.port === activePort);
+  const iframeSrc =
+    env && activePort
+      ? (activePortInfo?.url ??
+          `${import.meta.env.VITE_API_URL}/api/v1/preview/${user!.id}/${env.projectId}/${activePort}`)
+      : null;
 
-  /* =========================
-     UI
-  ========================= */
+  const togglePreview = () => {
+    if (showPreview) previewPanelRef.current?.collapse();
+    else previewPanelRef.current?.expand();
+  };
+
+  const authReady = !!user?.id;
+  const isLoading =
+    !authReady ||
+    wsStatus === 'idle' ||
+    wsStatus === 'provisioning' ||
+    wsStatus === 'starting';
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     Render
+  ───────────────────────────────────────────────────────────────────────── */
 
   return (
-    <div className='h-screen bg-slate-950 text-white flex flex-col'>
-      <div className='flex p-2 justify-between items-center border-b border-slate-800'>
-        <h1>Editor</h1>
-        <div className='flex items-center gap-4'>
-          <div className='flex items-center gap-2'>
-            <span className='text-xs text-slate-400'>Autosave</span>
+    <div className='code-editor h-screen bg-slate-950 text-white flex flex-col relative'>
+      {/* Loading overlay */}
+      {isLoading && (
+        <WorkspaceLoader authReady={authReady} socketConnected={socketConnected} wsStatus={wsStatus} />
+      )}
+
+      {/* Error overlay */}
+      {wsStatus === 'error' && wsError && (
+        <WorkspaceError message={wsError} onRetry={retryBoot} />
+      )}
+
+      {/* ── Header ── */}
+      <div className='flex px-3 py-2 justify-between items-center border-b border-slate-800 shrink-0'>
+        <div className='flex items-center gap-2'>
+          <span className='text-sm font-semibold text-slate-100'>
+            {env?.profile.name ?? 'Editor'}
+          </span>
+          {wsStatus === 'ready' && (
+            <span className='flex items-center gap-1 text-xs text-green-400'>
+              <span className='w-1.5 h-1.5 rounded-full bg-green-400 inline-block' />
+              ready
+            </span>
+          )}
+        </div>
+
+        <div className='flex items-center gap-3'>
+          <div className='flex items-center gap-1.5'>
+            <span className='text-xs text-slate-500'>Autosave</span>
             <Switch checked={autoSave} onCheckedChange={setAutoSave} />
           </div>
-          <Button onClick={runCode}>Run</Button>
+
+          {ports.length > 0 && (
+            <Button
+              variant={showPreview ? 'default' : 'outline'}
+              size='sm'
+              onClick={togglePreview}
+            >
+              Preview
+              {ports.length > 1 && (
+                <span className='ml-1 text-xs opacity-60'>({ports.length})</span>
+              )}
+            </Button>
+          )}
+
+          <Button size='sm' onClick={runCode} disabled={wsStatus !== 'ready'}>
+            Run
+          </Button>
         </div>
       </div>
 
-      <ResizablePanelGroup
-        direction='horizontal'
-        className='flex-1 overflow-hidden'
-      >
-        <ResizablePanel defaultSize={20} minSize={15}>
-          <FileTreeExplorer
-            nodes={tree}
-            activePath={activeTab}
-            onSelect={openFile}
-            onCreate={async (path, type) => {
-              await createPath({
-                userId: user!.id,
-                projectId: env!.projectId,
-                path,
-                type,
-              });
-              loadTree(env!.projectId);
-            }}
-            onDelete={async (path) => {
-              await deletePath({
-                userId: user!.id,
-                projectId: env!.projectId,
-                path,
-              });
-              loadTree(env!.projectId);
-            }}
-            onRename={async (o, n) => {
-              await renamePath({
-                userId: user!.id,
-                projectId: env!.projectId,
-                oldPath: o,
-                newPath: n,
-              });
-              loadTree(env!.projectId);
-            }}
-            onRefresh={() => loadTree(env!.projectId)}
-          />
+      {/* ── Main layout ── */}
+      <ResizablePanelGroup direction='horizontal' className='flex-1 overflow-hidden'>
+        {/* File tree */}
+        <ResizablePanel defaultSize={15} minSize={8} maxSize={35}>
+          {wsStatus === 'ready' ? (
+            <FileTreeExplorer
+              nodes={tree}
+              activePath={activeTab}
+              onSelect={openFile}
+              onCreate={async (p, type) => {
+                await createPath({ userId: user!.id, projectId: env!.projectId, path: p, type });
+                loadTree(env!.projectId);
+              }}
+              onDelete={async (p) => {
+                await deletePath({ userId: user!.id, projectId: env!.projectId, path: p });
+                loadTree(env!.projectId);
+              }}
+              onRename={async (o, n) => {
+                await renamePath({
+                  userId: user!.id,
+                  projectId: env!.projectId,
+                  oldPath: o,
+                  newPath: n,
+                });
+                loadTree(env!.projectId);
+              }}
+              onRefresh={() => loadTree(env!.projectId)}
+            />
+          ) : (
+            <FileTreeSkeleton />
+          )}
         </ResizablePanel>
 
         <ResizableHandle />
 
-        <ResizablePanel defaultSize={80}>
+        {/* Editor + Terminal */}
+        <ResizablePanel defaultSize={showPreview ? 55 : 85}>
           <ResizablePanelGroup direction='vertical'>
+            {/* Monaco editor */}
             <ResizablePanel defaultSize={65}>
               <EditorTabs
                 tabs={tabs.map((t) => ({ path: t.path, dirty: t.dirty }))}
                 active={activeTab}
                 onSelect={setActiveTab}
-                onClose={(path) => {
-                  const tab = tabs.find((t) => t.path === path);
-                  if (tab?.dirty && !confirm(`Discard changes to ${path}?`))
-                    return;
-                  setTabs((prev) => prev.filter((t) => t.path !== path));
-                  if (activeTab === path) setActiveTab(null);
+                onClose={(p) => {
+                  const tab = tabs.find((t) => t.path === p);
+                  if (tab?.dirty && !confirm(`Discard unsaved changes to ${p}?`)) return;
+                  setTabs((prev) => prev.filter((t) => t.path !== p));
+                  if (activeTab === p) setActiveTab(null);
                 }}
               />
 
-              <Editor
-                height='100%'
-                language={active?.language}
-                value={active?.content ?? ''}
-                onChange={(v) => updateActiveTab(v ?? '')}
-                theme='vs-dark'
-              />
-
-              {activePort && showPreview && (
-                <div className='h-75 border-t border-slate-800 bg-black'>
-                  <div className='flex items-center justify-between px-2 py-1 bg-slate-900'>
-                    <span className='text-xs text-slate-400'>
-                      Preview :{activePort}
-                    </span>
-
-                    <div className='flex gap-2'>
-                      <Button
-                        size='sm'
-                        variant='ghost'
-                        onClick={() =>
-                          window.open(
-                            `/preview/${user!.id}/${
-                              env!.projectId
-                            }/${activePort}`,
-                            '_blank'
-                          )
-                        }
-                      >
-                        Open
-                      </Button>
-
-                      <Button
-                        size='sm'
-                        variant='ghost'
-                        onClick={() => setShowPreview(false)}
-                      >
-                        Hide
-                      </Button>
-                    </div>
-                  </div>
-
-                  <iframe
-                    src={`http://localhost:3001/api/v1/preview/${user!.id}/${
-                      env!.projectId
-                    }/${activePort}`}
-                    className='w-full h-full border-none'
-                  />
+              {active ? (
+                <Editor
+                  height='100%'
+                  language={active.language}
+                  value={active.content}
+                  onChange={(v) => updateActiveTab(v ?? '')}
+                  theme='vs-dark'
+                  options={{
+                    fontSize: 14,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    tabSize: 2,
+                    smoothScrolling: true,
+                    cursorSmoothCaretAnimation: 'on',
+                    bracketPairColorization: { enabled: true },
+                    formatOnPaste: true,
+                  }}
+                />
+              ) : (
+                <div className='h-full flex items-center justify-center text-slate-600 text-sm select-none'>
+                  {wsStatus === 'ready' ? 'Select a file to open' : 'Loading…'}
                 </div>
               )}
             </ResizablePanel>
 
             <ResizableHandle />
 
-            <ResizablePanel defaultSize={35} minSize={15}>
+            {/* Terminal */}
+            <ResizablePanel defaultSize={35} minSize={10}>
               <div ref={terminalContainerRef} className='h-full bg-[#020617]' />
             </ResizablePanel>
           </ResizablePanelGroup>
+        </ResizablePanel>
+
+        <ResizableHandle />
+
+        {/* Preview — starts collapsed, auto-expands on port detection */}
+        <ResizablePanel
+          ref={previewPanelRef}
+          defaultSize={0}
+          minSize={20}
+          collapsible
+          collapsedSize={0}
+          onCollapse={() => setShowPreview(false)}
+          onExpand={() => setShowPreview(true)}
+        >
+          <div className='flex flex-col h-full'>
+            {/* Preview toolbar */}
+            <div className='flex items-center justify-between px-2 py-1 bg-slate-900 border-b border-slate-800 shrink-0'>
+              <div className='flex items-center gap-2'>
+                <span className='text-xs text-slate-400'>Preview</span>
+
+                {ports.length > 1 ? (
+                  <select
+                    value={activePort ?? ''}
+                    onChange={(e) => {
+                      setActivePort(Number(e.target.value));
+                      setPreviewKey((k) => k + 1);
+                    }}
+                    className='text-xs bg-slate-800 text-slate-300 rounded px-1.5 py-0.5 border border-slate-700 outline-none cursor-pointer'
+                  >
+                    {ports.map((p) => (
+                      <option key={p.port} value={p.port}>
+                        :{p.port}
+                      </option>
+                    ))}
+                  </select>
+                ) : activePort ? (
+                  <span className='text-xs text-slate-500'>:{activePort}</span>
+                ) : null}
+
+                {activePortInfo?.url && (
+                  <span className='flex items-center gap-1 text-xs text-green-400'>
+                    <span className='w-1.5 h-1.5 rounded-full bg-green-400 inline-block' />
+                    live
+                  </span>
+                )}
+              </div>
+
+              {iframeSrc && (
+                <div className='flex gap-0.5'>
+                  <Button
+                    size='sm'
+                    variant='ghost'
+                    className='h-6 w-6 p-0 text-slate-400 hover:text-white'
+                    title='Reload preview'
+                    onClick={() => setPreviewKey((k) => k + 1)}
+                  >
+                    ↻
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='ghost'
+                    className='h-6 w-6 p-0 text-slate-400 hover:text-white'
+                    title='Open in new tab'
+                    onClick={() => window.open(iframeSrc, '_blank')}
+                  >
+                    ↗
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Preview iframe or placeholder */}
+            {iframeSrc ? (
+              <iframe
+                key={previewKey}
+                src={iframeSrc}
+                className='w-full flex-1 border-none bg-white'
+                title='App preview'
+              />
+            ) : (
+              <div className='flex items-center justify-center flex-1 text-slate-500 text-sm bg-slate-950 select-none'>
+                {wsStatus === 'ready' ? 'Run your app to see the preview' : 'Starting…'}
+              </div>
+            )}
+          </div>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

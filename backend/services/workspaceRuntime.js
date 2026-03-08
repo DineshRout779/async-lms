@@ -13,6 +13,18 @@ function runDockerAsync(args) {
   });
 }
 
+// Async container existence check — does not block the event loop
+function containerExistsAsync(name) {
+  return new Promise((resolve) => {
+    const proc = spawn('docker', ['inspect', '--format', '{{.State.Status}}', name], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    proc.stdout.on('data', (d) => { out += d; });
+    proc.on('close', (code) => resolve(code === 0 && out.trim() === 'running'));
+    proc.on('error', () => resolve(false));
+  });
+}
+
+// Sync version kept only for terminalService (PTY spawn path, already in sync context)
 function containerExists(name) {
   const res = spawnSync('docker', ['inspect', name], { stdio: 'ignore' });
   return res.status === 0;
@@ -37,7 +49,7 @@ function waitForContainer(name) {
 async function ensureWorkspaceContainer({ userId, projectId, image }) {
   const name = `workspace-${userId}-${projectId}`;
 
-  if (!containerExists(name)) {
+  if (!(await containerExistsAsync(name))) {
     const workspacePath = path.resolve(
       __dirname,
       '..',
@@ -48,31 +60,23 @@ async function ensureWorkspaceContainer({ userId, projectId, image }) {
 
     console.log('Starting container with workspace:', workspacePath);
 
-    const result = spawnSync(
-      'docker',
-      [
-        'run',
-        '-d',
-        '--name',
-        name,
-        '--memory=2g',
-        '--cpus=2',
-        '--pids-limit=256',
-        '--network=bridge',
-        '-v',
-        `${workspacePath}:/workspace`,
-        '-w',
-        '/workspace',
-        image,
-        'sleep',
-        'infinity',
-      ],
-      { stdio: 'inherit' }
-    );
-
-    if (result.status !== 0) {
-      throw new Error('Docker failed to start container');
-    }
+    await runDockerAsync([
+      'run',
+      '-d',
+      '--name',
+      name,
+      '--memory=2g',
+      '--cpus=2',
+      '--pids-limit=256',
+      '--network=bridge',
+      '-v',
+      `${workspacePath}:/workspace`,
+      '-w',
+      '/workspace',
+      image,
+      'sleep',
+      'infinity',
+    ]);
   }
 
   await waitForContainer(name);
