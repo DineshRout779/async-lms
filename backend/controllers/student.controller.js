@@ -1524,7 +1524,8 @@ exports.enrollInSubject = async (req, res) => {
       [userId, subjectId],
     );
 
-    // Seed subtopic progress (same logic as onboarding)
+    // Seed subtopic progress: unit 1 always unlocked; other units inherit
+    // admin-applied lock decisions only (not peer progression state).
     await client.query(
       `WITH new_student_profile AS (
         SELECT college_id, year FROM student_profiles WHERE user_id = $1
@@ -1541,26 +1542,24 @@ exports.enrollInSubject = async (req, res) => {
         INNER JOIN subtopics st ON st.unit_id = u.id
         WHERE t.subject_id = $2
       ),
-      cohort_unlock AS (
-        SELECT usp.subtopic_id, bool_and(usp.is_unlocked) AS is_unlocked
-        FROM user_subtopic_progress usp
-        INNER JOIN student_profiles sp ON sp.user_id = usp.user_id
+      admin_locks AS (
+        SELECT cal.subtopic_id, cal.is_locked
+        FROM cohort_admin_locks cal
         CROSS JOIN new_student_profile nsp
-        WHERE sp.college_id = nsp.college_id
-          AND sp.year = nsp.year
-          AND usp.user_id <> $1
-        GROUP BY usp.subtopic_id
-        HAVING COUNT(*) > 0
+        WHERE cal.college_id = nsp.college_id
+          AND cal.year = nsp.year
       )
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT $1, ss.subtopic_id,
-        CASE WHEN ss.unit_rn = 1 THEN true
-             ELSE COALESCE(cu.is_unlocked, true)
+        CASE
+          WHEN ss.unit_rn = 1       THEN true   -- first unit: always open
+          WHEN al.is_locked = false THEN true    -- admin explicitly unlocked
+          ELSE false                             -- default locked; progression unlocks
         END
       FROM subject_subtopics ss
-      LEFT JOIN cohort_unlock cu ON cu.subtopic_id = ss.subtopic_id
-      ON CONFLICT (user_id, subtopic_id) DO UPDATE
-        SET is_unlocked = (user_subtopic_progress.is_unlocked OR EXCLUDED.is_unlocked)`,
+      LEFT JOIN admin_locks al ON al.subtopic_id = ss.subtopic_id
+      ON CONFLICT (user_id, subtopic_id)
+        DO UPDATE SET is_unlocked = (user_subtopic_progress.is_unlocked OR EXCLUDED.is_unlocked)`,
       [userId, subjectId],
     );
 

@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, Eye } from 'lucide-react';
+import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -28,10 +36,22 @@ interface StudentRow {
   joined_date: string;
 }
 
-const FacilitatorUsers = () => {
+const FacilitatorStudents = () => {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCollege, setSelectedCollege] = useState<string>('all');
+  const [profileId, setProfileId] = useState<string | null>(null);
+
+  const colleges = useMemo(() => {
+    const seen = new Map<string, string>();
+    students.forEach((s) => {
+      if (s.college_name && s.college_short_name) {
+        seen.set(s.college_name, s.college_short_name);
+      }
+    });
+    return Array.from(seen.entries()).map(([name, short]) => ({ name, short }));
+  }, [students]);
 
   const fetchStudents = async () => {
     try {
@@ -54,10 +74,11 @@ const FacilitatorUsers = () => {
     const q = searchQuery.trim().toLowerCase();
     return students.filter(
       (s) =>
-        s.full_name.toLowerCase().includes(q) ||
-        s.email.toLowerCase().includes(q),
+        (selectedCollege === 'all' || s.college_name === selectedCollege) &&
+        (s.full_name.toLowerCase().includes(q) ||
+          s.email.toLowerCase().includes(q)),
     );
-  }, [students, searchQuery]);
+  }, [students, searchQuery, selectedCollege]);
 
   if (loading) {
     return (
@@ -79,14 +100,32 @@ const FacilitatorUsers = () => {
       </div>
 
       <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
-        <div className='relative w-full md:w-96'>
-          <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400' />
-          <Input
-            placeholder='Search students by name or email...'
-            className='border-slate-200 bg-white pl-10'
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
+          <div className='relative w-full sm:w-80'>
+            <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400' />
+            <Input
+              placeholder='Search students by name or email...'
+              className='border-slate-200 bg-white pl-10'
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          {colleges.length > 1 && (
+            <Select value={selectedCollege} onValueChange={setSelectedCollege}>
+              <SelectTrigger className='w-full sm:w-56 border-slate-200 bg-white'>
+                <SelectValue placeholder='All Colleges' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='all'>All Colleges</SelectItem>
+                {colleges.map((c) => (
+                  <SelectItem key={c.name} value={c.name}>
+                    {c.short} — {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         <p className='text-sm font-medium text-slate-500'>
@@ -138,7 +177,7 @@ const FacilitatorUsers = () => {
                     <span className='font-semibold text-slate-700'>
                       {student.college_short_name || 'N/A'}
                     </span>
-                    <span className='text-[10px] text-slate-400 truncate max-w-[150px]'>
+                    <span className='text-[10px] text-slate-400 truncate max-w-37.5'>
                       {student.college_name}
                     </span>
                   </div>
@@ -163,7 +202,7 @@ const FacilitatorUsers = () => {
                     {student.enrolled_courses || 0} subjects
                   </Badge>
                 </TableCell>
-                <TableCell className='min-w-[180px]'>
+                <TableCell className='min-w-45'>
                   <div className='space-y-1.5'>
                     <div className='flex items-center justify-between text-[10px] font-bold uppercase tracking-wider'>
                       <span className='text-slate-400'>Progress</span>
@@ -178,9 +217,17 @@ const FacilitatorUsers = () => {
                   </div>
                 </TableCell>
                 <TableCell className='text-right'>
-                  <p className='text-xs text-slate-500'>
-                    {new Date(student.joined_date).toLocaleDateString('en-GB')}
-                  </p>
+                  <div className='flex items-center justify-end gap-1'>
+                    <button
+                      onClick={() => setProfileId(student.id)}
+                      className='p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors'
+                    >
+                      <Eye className='w-4 h-4' />
+                    </button>
+                    <p className='text-xs text-slate-500'>
+                      {new Date(student.joined_date).toLocaleDateString('en-GB')}
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -198,8 +245,14 @@ const FacilitatorUsers = () => {
           </div>
         )}
       </Card>
+
+      <StudentProfileDialog
+        studentId={profileId}
+        apiPrefix='facilitator'
+        onClose={() => setProfileId(null)}
+      />
     </div>
   );
 };
 
-export default FacilitatorUsers;
+export default FacilitatorStudents;

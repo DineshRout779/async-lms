@@ -2550,9 +2550,11 @@ exports.setLockControlTopic = async (req, res) => {
     const collegeParam = collegeId || null;
     const batchParam = batch ? parseInt(batch, 10) : null;
     const isUnlocked = action === 'unlock';
+    const isLocked = !isUnlocked;
 
-    const query = `
-      WITH cohort AS (
+    // 1. Update existing students' progress rows
+    await pool.query(
+      `WITH cohort AS (
         SELECT u.id
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
@@ -2571,10 +2573,27 @@ exports.setLockControlTopic = async (req, res) => {
       FROM cohort c
       CROSS JOIN topic_subtopics ts
       ON CONFLICT (user_id, subtopic_id)
-      DO UPDATE SET is_unlocked = EXCLUDED.is_unlocked;
-    `;
+      DO UPDATE SET is_unlocked = EXCLUDED.is_unlocked`,
+      [collegeParam, batchParam, topicId, isUnlocked],
+    );
 
-    await pool.query(query, [collegeParam, batchParam, topicId, isUnlocked]);
+    // 2. Record admin intent so future enrollees inherit it correctly
+    await pool.query(
+      `INSERT INTO cohort_admin_locks (subtopic_id, college_id, year, is_locked)
+      SELECT st.id, sp.college_id, sp.year, $4
+      FROM subtopics st
+      INNER JOIN units u ON st.unit_id = u.id
+      CROSS JOIN (
+        SELECT DISTINCT sp2.college_id, sp2.year
+        FROM student_profiles sp2
+        WHERE ($1::uuid IS NULL OR sp2.college_id = $1)
+          AND ($2::int IS NULL OR sp2.year = $2)
+      ) sp
+      WHERE u.topic_id = $3
+      ON CONFLICT (subtopic_id, college_id, year)
+      DO UPDATE SET is_locked = EXCLUDED.is_locked, updated_at = NOW()`,
+      [collegeParam, batchParam, topicId, isLocked],
+    );
 
     res.json({
       success: true,
@@ -2609,9 +2628,11 @@ exports.setLockControlSubtopic = async (req, res) => {
     const collegeParam = collegeId || null;
     const batchParam = batch ? parseInt(batch, 10) : null;
     const isUnlocked = action === 'unlock';
+    const isLocked = !isUnlocked;
 
-    const query = `
-      WITH cohort AS (
+    // 1. Update existing students' progress rows
+    await pool.query(
+      `WITH cohort AS (
         SELECT u.id
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
@@ -2623,10 +2644,24 @@ exports.setLockControlSubtopic = async (req, res) => {
       SELECT c.id, $3, $4
       FROM cohort c
       ON CONFLICT (user_id, subtopic_id)
-      DO UPDATE SET is_unlocked = EXCLUDED.is_unlocked;
-    `;
+      DO UPDATE SET is_unlocked = EXCLUDED.is_unlocked`,
+      [collegeParam, batchParam, subtopicId, isUnlocked],
+    );
 
-    await pool.query(query, [collegeParam, batchParam, subtopicId, isUnlocked]);
+    // 2. Record admin intent so future enrollees inherit it correctly
+    await pool.query(
+      `INSERT INTO cohort_admin_locks (subtopic_id, college_id, year, is_locked)
+      SELECT $3, sp.college_id, sp.year, $4
+      FROM (
+        SELECT DISTINCT sp2.college_id, sp2.year
+        FROM student_profiles sp2
+        WHERE ($1::uuid IS NULL OR sp2.college_id = $1)
+          AND ($2::int IS NULL OR sp2.year = $2)
+      ) sp
+      ON CONFLICT (subtopic_id, college_id, year)
+      DO UPDATE SET is_locked = EXCLUDED.is_locked, updated_at = NOW()`,
+      [collegeParam, batchParam, subtopicId, isLocked],
+    );
 
     res.json({
       success: true,
@@ -2889,6 +2924,83 @@ exports.verifyUser = async (req, res) => {
       message: 'Failed to update verification status',
       error: error.message,
     });
+  }
+};
+
+/**
+ * Get a single student's full profile
+ * GET /api/admin/students/:id
+ */
+exports.getStudentProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [userRes, statsRes, subjectsRes] = await Promise.all([
+      pool.query(
+        `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at,
+                sp.degree, sp.year AS batch,
+                c.name AS college_name, c.short_code AS college_short_name
+         FROM users u
+         LEFT JOIN student_profiles sp ON u.id = sp.user_id
+         LEFT JOIN colleges c ON sp.college_id = c.id
+         WHERE u.id = $1 AND u.role = 'student'`,
+        [id],
+      ),
+      pool.query(
+        `SELECT
+           COUNT(DISTINCT us.subject_id)::int AS enrolled_subjects,
+           COALESCE((SELECT COUNT(*)::int FROM user_subtopic_progress WHERE user_id = $1 AND is_completed = true), 0) AS completed_subtopics,
+           COALESCE((SELECT SUM(points)::int FROM points_log WHERE user_id = $1), 0) AS total_points,
+           COALESCE(MAX(str.current_streak), 0)::int AS current_streak,
+           COALESCE(MAX(str.longest_streak), 0)::int AS longest_streak
+         FROM users u
+         LEFT JOIN user_subjects us ON u.id = us.user_id
+         LEFT JOIN user_streaks str ON u.id = str.user_id
+         WHERE u.id = $1`,
+        [id],
+      ),
+      pool.query(
+        `SELECT s.id, s.name,
+           COALESCE((
+             SELECT COUNT(*)::int FROM user_subtopic_progress usp
+             JOIN subtopics st ON usp.subtopic_id = st.id
+             JOIN units un ON st.unit_id = un.id
+             JOIN topics t ON un.topic_id = t.id
+             WHERE usp.user_id = $1 AND t.subject_id = s.id AND usp.is_completed = true
+           ), 0) AS completed_subtopics,
+           COALESCE((
+             SELECT COUNT(*)::int FROM subtopics st
+             JOIN units un ON st.unit_id = un.id
+             JOIN topics t ON un.topic_id = t.id
+             WHERE t.subject_id = s.id
+           ), 0) AS total_subtopics
+         FROM user_subjects us
+         JOIN subjects s ON us.subject_id = s.id
+         WHERE us.user_id = $1
+         ORDER BY us.enrolled_at DESC`,
+        [id],
+      ),
+    ]);
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const subjects = subjectsRes.rows.map((s) => ({
+      ...s,
+      progress_percent:
+        s.total_subtopics > 0
+          ? Math.round((s.completed_subtopics / s.total_subtopics) * 100)
+          : 0,
+    }));
+
+    res.json({
+      success: true,
+      data: { ...userRes.rows[0], stats: statsRes.rows[0], subjects },
+    });
+  } catch (err) {
+    console.error('Error fetching student profile:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 

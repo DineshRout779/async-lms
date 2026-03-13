@@ -8,6 +8,7 @@ const {
   getAdminAnalytics,
   getAllStudents,
   getProjectSubmissions,
+  getStudentProfile,
   uploadLessonMarkdown,
   createTopic,
   updateTopic,
@@ -226,6 +227,7 @@ router.get(
 router.post('/leaderboard/update', verifyToken, isAdmin, updateLeaderboards);
 
 // ===== USER MANAGEMENT =====
+router.get('/students/:id', verifyToken, isAdmin, getStudentProfile);
 router.patch('/users/:id/verify', verifyToken, isAdmin, verifyUser);
 
 module.exports = router;

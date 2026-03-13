@@ -1,4 +1,13 @@
-import { LayoutDashboard, Users, Settings } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Users,
+  Settings,
+  ClipboardList,
+  CheckSquare,
+  BarChart2,
+  TrendingUp,
+  FileText,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router';
 import { useAppSelector } from '@/app/hooks';
@@ -6,7 +15,28 @@ import { selectUser } from '@/features/auth/authSelectors';
 
 const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/facilitator' },
-  { name: 'Students', icon: Users, path: '/dashboard/facilitator/users' },
+  { name: 'Students', icon: Users, path: '/dashboard/facilitator/students' },
+  {
+    name: 'Assignments',
+    icon: ClipboardList,
+    path: '/dashboard/facilitator/assignments',
+  },
+  {
+    name: 'Evaluations',
+    icon: CheckSquare,
+    path: '/dashboard/facilitator/evaluations',
+  },
+  {
+    name: 'Analytics',
+    icon: BarChart2,
+    path: '/dashboard/facilitator/analytics',
+  },
+  {
+    name: 'Student Growth',
+    icon: TrendingUp,
+    path: '/dashboard/facilitator/student-growth',
+  },
+  { name: 'Reports', icon: FileText, path: '/dashboard/facilitator/reports' },
   { name: 'Settings', icon: Settings, path: '/dashboard/facilitator/settings' },
 ];
 
@@ -21,7 +51,7 @@ export default function FacilitatorSidebar({
   return (
     <aside
       className={cn(
-        'h-full flex flex-col transition-all duration-300 bg-[#1e2653] text-slate-300',
+        'h-full flex flex-col transition-all duration-300 bg-slate-900 text-slate-300',
         isOpen ? 'w-64' : 'w-20',
       )}
     >
@@ -48,8 +78,8 @@ export default function FacilitatorSidebar({
               cn(
                 'flex items-center gap-3 px-3 py-3 rounded-lg transition-all group',
                 isActive
-                  ? 'bg-[#333d7c] text-white shadow-sm'
-                  : 'hover:bg-[#2a3469] hover:text-white',
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'hover:bg-slate-800 hover:text-white',
               )
             }
           >
@@ -78,7 +108,7 @@ export default function FacilitatorSidebar({
       </nav>
 
       {/* User Profile Section - Bottom */}
-      <div className='p-4 border-t border-[#2a3469] bg-[#1a214d]'>
+      <div className='p-4 border-t border-slate-800 bg-slate-900'>
         <div
           className={cn('flex items-center gap-3', !isOpen && 'justify-center')}
         >

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Search, Filter, Eye, MoreHorizontal, Loader2 } from 'lucide-react';
+import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -27,10 +28,10 @@ interface Student {
 }
 
 const Students = () => {
-  // Apply the interface to the state array
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [profileId, setProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -156,6 +157,7 @@ const Students = () => {
                       variant='ghost'
                       size='icon'
                       className='text-slate-400 hover:text-blue-600'
+                      onClick={() => setProfileId(student.id)}
                     >
                       <Eye className='w-4 h-4' />
                     </Button>
@@ -181,6 +183,12 @@ const Students = () => {
           </div>
         )}
       </Card>
+
+      <StudentProfileDialog
+        studentId={profileId}
+        apiPrefix='admin'
+        onClose={() => setProfileId(null)}
+      />
     </div>
   );
 };

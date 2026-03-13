@@ -58,8 +58,23 @@ const FacilitatorDashboardLayout = lazy(
 const FacilitatorHome = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorHome'),
 );
-const FacilitatorUsers = lazy(
+const FacilitatorStudents = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorUsers'),
+);
+const FacilitatorAssignments = lazy(
+  () => import('@/pages/dashboard/facilitator/FacilitatorAssignments'),
+);
+const FacilitatorEvaluations = lazy(
+  () => import('@/pages/dashboard/facilitator/FacilitatorEvaluations'),
+);
+const FacilitatorAnalytics = lazy(
+  () => import('@/pages/dashboard/facilitator/FacilitatorAnalytics'),
+);
+const FacilitatorStudentGrowth = lazy(
+  () => import('@/pages/dashboard/facilitator/FacilitatorStudentGrowth'),
+);
+const FacilitatorReports = lazy(
+  () => import('@/pages/dashboard/facilitator/FacilitatorReports'),
 );
 
 // Admin Dashboard
@@ -153,7 +168,12 @@ const router = createBrowserRouter([
             element: <FacilitatorDashboardLayout />,
             children: [
               { index: true, element: <FacilitatorHome /> },
-              { path: 'users', element: <FacilitatorUsers /> },
+              { path: 'students', element: <FacilitatorStudents /> },
+              { path: 'assignments', element: <FacilitatorAssignments /> },
+              { path: 'evaluations', element: <FacilitatorEvaluations /> },
+              { path: 'analytics', element: <FacilitatorAnalytics /> },
+              { path: 'student-growth', element: <FacilitatorStudentGrowth /> },
+              { path: 'reports', element: <FacilitatorReports /> },
               { path: 'settings', element: <FacilitatorSettings /> },
             ],
           },

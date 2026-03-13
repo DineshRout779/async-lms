@@ -1,9 +1,14 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* *:not(.code-editor) {
-  font-family: 'Inter', 'Sans-serif';
-} */
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+.code-editor,
+.code-editor * {
+  font-family: inherit;
+}
 
 @plugin "@tailwindcss/typography";
 
@@ -128,6 +133,3 @@
   }
 }
 
-* {
-  /* font-family: 'Inter', sans-serif; */
-}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Pencil, Search } from 'lucide-react';
+import { Loader2, Pencil, Eye, Search } from 'lucide-react';
+import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -79,6 +80,7 @@ const Users = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('student');
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [form, setForm] = useState<EditForm>({
     full_name: '',
     degree: '',
@@ -322,6 +324,14 @@ const Users = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className='text-right'>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        className='text-slate-500 hover:text-blue-600'
+                        onClick={() => setProfileId(user.id)}
+                      >
+                        <Eye className='h-4 w-4' />
+                      </Button>
                       <Button
                         variant='ghost'
                         size='icon'
@@ -574,6 +584,12 @@ const Users = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StudentProfileDialog
+        studentId={profileId}
+        apiPrefix='admin'
+        onClose={() => setProfileId(null)}
+      />
     </div>
   );
 };

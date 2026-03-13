@@ -8,5 +8,6 @@ router.use(verifyToken, isFacilitator);
 
 router.get('/stats', facilitatorController.getFacilitatorStats);
 router.get('/students', facilitatorController.getFacilitatorStudents);
+router.get('/students/:id', facilitatorController.getFacilitatorStudentProfile);
 
 module.exports = router;
