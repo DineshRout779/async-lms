@@ -1,6 +1,8 @@
 // socketService.js
 
 const path = require('path');
+const axios = require('axios');
+const { pullWorkspace, pushWorkspace } = require('./s3SyncService');
 const { ensureWorkspaceContainer, stopWorkspaceContainer } = require('./workspaceRuntime');
 const { createTerminal } = require('./terminalService');
 const { watchWorkspace, stopWatchWorkspace } = require('./workspaceWatcher');
@@ -39,9 +41,25 @@ const cleanupTimer = setInterval(() => {
       outputBuffers.delete(key);
       lastActivity.delete(key);
 
-      stopWorkspaceContainer(userId, projectId).catch((err) =>
-        console.error(`[ttl] cleanup failed for ${key}:`, err.message)
-      );
+      // Push files to S3, stop container, then notify orchestrator to release capacity
+      pushWorkspace(userId, projectId)
+        .catch((err) => console.error(`[ttl] s3 push failed for ${key}:`, err.message))
+        .finally(() =>
+          stopWorkspaceContainer(userId, projectId)
+            .catch((err) => console.error(`[ttl] cleanup failed for ${key}:`, err.message))
+            .finally(() => {
+              if (process.env.ORCHESTRATOR_URL) {
+                axios
+                  .post(`${process.env.ORCHESTRATOR_URL}/api/v1/internal/workers/release`, {
+                    userId,
+                    projectId,
+                  })
+                  .catch((err) =>
+                    console.error(`[ttl] release notify failed for ${key}:`, err.message)
+                  );
+              }
+            })
+        );
     }
   }
 }, CLEANUP_INTERVAL_MS);
@@ -54,7 +72,7 @@ module.exports = function setupSocket(io) {
     console.log('Socket connected:', socket.id);
     socket.workspace = null;
 
-    socket.on('workspace:start', async ({ userId, projectId, image }) => {
+    socket.on('workspace:start', async ({ userId, projectId, image, profile }) => {
       try {
         // Quota check before spinning up the container
         const quota = getWorkspaceQuota(userId, projectId);
@@ -78,7 +96,10 @@ module.exports = function setupSocket(io) {
 
         socket.emit('workspace:status', { message: 'Starting container…' });
 
-        await ensureWorkspaceContainer({ userId, projectId, image });
+        // Pull workspace files from S3 (no-op if local files already exist or S3 not configured)
+        await pullWorkspace(userId, projectId);
+
+        await ensureWorkspaceContainer({ userId, projectId, image, profile });
 
         const workspacePath = path.join(
           __dirname,
