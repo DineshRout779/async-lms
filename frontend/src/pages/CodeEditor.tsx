@@ -485,6 +485,7 @@ const CodeEditor = (): JSX.Element => {
 
       // Register BEFORE emit so we never miss workspace:ready
       socketRef.current!.once('workspace:ready', async () => {
+        clearTimeout(timeoutId);
         const dims = fitAddonRef.current?.proposeDimensions();
         socketRef.current!.emit('terminal:start', {
           cols: dims?.cols ?? 80,

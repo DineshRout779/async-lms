@@ -57,8 +57,8 @@ exports.updateBatchDetails = async (req, res) => {
     );
 
     await pool.query(
-      `UPDATE users 
-             SET onboarding_step = 'subject', updated_at = CURRENT_TIMESTAMP 
+      `UPDATE users
+             SET onboarding_step = 'program', updated_at = CURRENT_TIMESTAMP
              WHERE id = $1`,
       [userId],
     );

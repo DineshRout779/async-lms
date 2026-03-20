@@ -123,6 +123,10 @@ export default function CollegeStep() {
               value={customCollegeAddress}
               onChange={(e) => setCustomCollegeAddress(e.target.value)}
             />
+
+            <p className='text-xs text-muted-foreground'>
+              Your college will be reviewed and verified by an admin before appearing in the list.
+            </p>
           </div>
         )}
 
@@ -135,7 +139,7 @@ export default function CollegeStep() {
           }
           onClick={handleContinue}
         >
-          Continue
+          {loading ? 'Saving...' : 'Continue'}
         </Button>
       </div>
     </div>

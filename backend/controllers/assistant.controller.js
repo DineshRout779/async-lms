@@ -1,5 +1,7 @@
 const OpenAI = require('openai');
 
+// console.log('using opennai key: ', process.env.CHATGPT_API_KEY);
+
 const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
 
 const SYSTEM_PROMPT = `You are CodeGuru AI, a coding tutor inside a learning management system for students learning programming.
@@ -39,7 +41,10 @@ exports.chat = async (req, res) => {
 
   // Sanitize: only allow role user/assistant and string content
   const sanitized = messages
-    .filter((m) => ['user', 'assistant'].includes(m.role) && typeof m.content === 'string')
+    .filter(
+      (m) =>
+        ['user', 'assistant'].includes(m.role) && typeof m.content === 'string',
+    )
     .slice(-20); // cap conversation history to last 20 messages
 
   if (sanitized.length === 0) {
@@ -49,10 +54,7 @@ exports.chat = async (req, res) => {
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...sanitized,
-      ],
+      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...sanitized],
       max_tokens: 600,
       temperature: 0.7,
     });
@@ -61,6 +63,8 @@ exports.chat = async (req, res) => {
     res.json({ success: true, data: { reply } });
   } catch (err) {
     console.error('ASSISTANT ERROR:', err);
-    res.status(500).json({ message: 'AI service unavailable. Please try again.' });
+    res
+      .status(500)
+      .json({ message: 'AI service unavailable. Please try again.' });
   }
 };

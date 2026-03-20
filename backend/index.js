@@ -3,6 +3,8 @@ const express = require('express');
 const http = require('http');
 const net = require('net');
 const cors = require('cors');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const setupSocket = require('./services/socketService');
 const path = require('path');
@@ -16,17 +18,20 @@ const app = express();
 app.use(compression());
 app.use(cors());
 app.use(express.json());
+app.use(morgan('combined'));
+
+// Rate limiter for auth routes — 20 requests per 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
 
 const server = http.createServer(app);
 
-app.use((req, res, next) => {
-  console.log(
-    `${new Date().toISOString()}: ${req.method} - ${req.originalUrl}`,
-  );
-  next();
-});
-
-app.use('/api/v1/auth', require('./routes/auth.routes'));
+app.use('/api/v1/auth', authLimiter, require('./routes/auth.routes'));
 app.use('/api/v1/users', require('./routes/user.routes'));
 app.use('/api/v1/students', require('./routes/student.routes'));
 app.use('/api/v1/editor', require('./routes/editor.routes'));

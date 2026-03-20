@@ -56,6 +56,7 @@ const StudentDashboardHome: React.FC = () => {
 
   const [courses, setCourses] = useState<Subject[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [myRank, setMyRank] = useState<number | null>(null);
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [loadingAssignments, setLoadingAssignments] = useState(true);
 
@@ -75,6 +76,13 @@ const StudentDashboardHome: React.FC = () => {
       })
       .catch(() => {})
       .finally(() => setLoadingAssignments(false));
+
+    apiClient
+      .get('/students/leaderboard/overall')
+      .then((res) => {
+        if (res.data.success) setMyRank(res.data.data?.my_rank?.rank ?? null);
+      })
+      .catch(() => {});
   }, []);
 
   const currentCourse = courses[0];
@@ -151,8 +159,8 @@ const StudentDashboardHome: React.FC = () => {
           bgColor='bg-purple-50'
         />
         <StatCard
-          label='Leaderboard'
-          value='View'
+          label='My Rank'
+          value={myRank ? `#${myRank}` : '—'}
           icon={Trophy}
           iconColor='text-emerald-500'
           bgColor='bg-emerald-50'
