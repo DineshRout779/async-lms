@@ -3,19 +3,24 @@ import { Button } from '@/components/ui/button';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
-import { Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Subject {
-  id: number;
+  id: string;
   name: string;
 }
 
-export default function SubjectStep() {
+export default function ProgramStep() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selected, setSelected] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
@@ -24,25 +29,19 @@ export default function SubjectStep() {
   useEffect(() => {
     apiClient
       .get('/subjects/published')
-      .then((res) => setSubjects(res.data.data))
+      .then((res) => setSubjects(res.data.data || res.data))
       .catch(console.error);
   }, []);
 
-  const toggleSubject = (id: number) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
-  };
-
   const handleContinue = async () => {
-    if (selected.length === 0) return;
+    if (!selected) return;
 
     try {
       setLoading(true);
       await apiClient.post('/onboarding/subjects', {
-        subjectIds: selected,
+        subjectIds: [selected],
       });
-      navigate(`/dashboard/${user?.role}`);
+      navigate('/onboarding/confirm');
     } catch (err) {
       console.error(err);
     } finally {
@@ -51,47 +50,70 @@ export default function SubjectStep() {
   };
 
   return (
-    <div className='max-w-md mx-auto h-screen flex justify-center items-center px-6'>
-      <div className='w-full space-y-6'>
-        <Stepper current='subject' />
+    <div 
+      className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
+      style={{ fontFamily: "'Noto Sans', sans-serif" }}
+    >
+      <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
+        
+        <div className="flex-1">
+          <Stepper current='program' />
 
-        <div className='text-center'>
-          <h2 className='text-xl font-semibold'>What do you want to learn?</h2>
-          <p className='text-sm text-muted-foreground'>
-            Select at least one subject
-          </p>
+          <div className="mb-8 mt-6">
+            <h2 className='text-2xl font-bold text-[#344499]'>Select your program</h2>
+            <p className="text-[13px] text-slate-400 font-medium mt-1.5 leading-relaxed tracking-wide">Choose your learning track</p>
+          </div>
+
+          <div className='space-y-5 w-full'>
+            <div className='w-full'>
+              <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
+                Program / Course
+              </label>
+              <Select value={selected} onValueChange={setSelected}>
+                <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
+                  <SelectValue placeholder='Select your program' />
+                </SelectTrigger>
+                <SelectContent className='w-full'>
+                  {subjects.length > 0 ? (
+                    subjects.map(sub => (
+                       <SelectItem key={sub.id} value={sub.id.toString()}>{sub.name}</SelectItem>
+                    ))
+                  ) : (
+                    <>
+                       <SelectItem value='a5f1dc34-297c-47b2-841f-fd1ecf3303d8'>Full Stack Web Development</SelectItem>
+                       <SelectItem value='b5f1dc34-297c-47b2-841f-fd1ecf3303d9'>Data Science & Machine Learning</SelectItem>
+                       <SelectItem value='c5f1dc34-297c-47b2-841f-fd1ecf3303d0'>Cloud Computing & DevOps</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="bg-[#fffbeb] border-l-[3px] border-[#f59e0b] p-3.5 rounded-r-md mt-8 shadow-sm">
+              <p className="text-[11px] font-bold text-slate-800 tracking-wide">You can change this after onboarding</p>
+            </div>
+          </div>
         </div>
 
-        <div className='grid grid-cols-1 gap-3'>
-          {subjects.map((subject) => {
-            const isSelected = selected.includes(subject.id);
-
-            return (
-              <button
-                key={subject.id}
-                onClick={() => toggleSubject(subject.id)}
-                className={cn(
-                  'flex items-center justify-between p-4 rounded-xl border-2 transition-all text-left',
-                  isSelected
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                    : 'border-border hover:border-muted-foreground'
-                )}
-              >
-                <span className='font-medium'>{subject.name}</span>
-                {isSelected && <Check className='h-5 w-5 text-primary' />}
-              </button>
-            );
-          })}
+        <div className="flex justify-between items-center mt-10 pt-4">
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate(-1)}
+            type="button"
+            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg transition-colors"
+          >
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg shadow-md transition-colors"
+            disabled={loading || !selected}
+            onClick={handleContinue}
+          >
+            Continue
+          </Button>
         </div>
 
-        <Button
-          className='w-full'
-          size='lg'
-          onClick={handleContinue}
-          disabled={loading || selected.length === 0}
-        >
-          {loading ? 'Finalizing...' : 'Finish Onboarding'}
-        </Button>
       </div>
     </div>
   );

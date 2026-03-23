@@ -19,6 +19,8 @@ const AuthCallback = lazy(() => import('@/pages/AuthCallback'));
 const CollegeStep = lazy(() => import('@/pages/onboarding/CollegeStep'));
 const BatchStep = lazy(() => import('@/pages/onboarding/BatchStep'));
 const ProgramStep = lazy(() => import('@/pages/onboarding/ProgramStep'));
+const ConfirmStep = lazy(() => import('@/pages/onboarding/ConfirmStep'));
+const SuccessStep = lazy(() => import('@/pages/onboarding/SuccessStep'));
 const FacilitatorOnboarding = lazy(
   () => import('@/pages/onboarding/FacilitatorOnboarding'),
 );
@@ -93,6 +95,15 @@ const Analytics = lazy(() => import('@/pages/dashboard/admin/Analytics'));
 const AdminSettings = lazy(
   () => import('@/pages/dashboard/admin/AdminSettings'),
 );
+const AssignmentManagement = lazy(
+  () => import('@/pages/dashboard/admin/AssignmentManagement'),
+);
+const CreateAssignment = lazy(
+  () => import('@/pages/dashboard/admin/CreateAssignment'),
+);
+const AssignmentSuccess = lazy(
+  () => import('@/pages/dashboard/admin/AssignmentSuccess'),
+);
 
 // ---------- Router ----------
 
@@ -117,6 +128,8 @@ const router = createBrowserRouter([
               { path: 'college', element: <CollegeStep /> },
               { path: 'batch', element: <BatchStep /> },
               { path: 'program', element: <ProgramStep /> },
+              { path: 'confirm', element: <ConfirmStep /> },
+              { path: 'success', element: <SuccessStep /> },
               { path: 'facilitator', element: <FacilitatorOnboarding /> },
             ],
           },
@@ -188,6 +201,9 @@ const router = createBrowserRouter([
               { path: 'learning-flow', element: <LearningFlow /> },
               { path: 'lock-control', element: <LockControl /> },
               { path: 'users', element: <Students /> },
+              { path: 'assignment-management', element: <AssignmentManagement /> },
+              { path: 'create-assignment', element: <CreateAssignment /> },
+              { path: 'assignment-success', element: <AssignmentSuccess /> },
               { path: 'analytics', element: <Analytics /> },
               { path: 'settings', element: <AdminSettings /> },
             ],

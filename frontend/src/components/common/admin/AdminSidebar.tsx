@@ -5,7 +5,7 @@ import {
   GitBranch,
   Lock,
   Users,
-  // ClipboardCheck,
+  ClipboardList,
   BarChart3,
   Settings,
 } from 'lucide-react';
@@ -23,6 +23,11 @@ const menuItems = [
   },
   { name: 'Lock Control', icon: Lock, path: '/dashboard/admin/lock-control' },
   { name: 'Users', icon: Users, path: '/dashboard/admin/users' },
+  {
+    name: 'Assignment Management',
+    icon: ClipboardList,
+    path: '/dashboard/admin/assignment-management',
+  },
   { name: 'Analytics', icon: BarChart3, path: '/dashboard/admin/analytics' },
   { name: 'Settings', icon: Settings, path: '/dashboard/admin/settings' },
 ];
