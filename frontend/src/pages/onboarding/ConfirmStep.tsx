@@ -2,8 +2,9 @@ import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Stepper } from './Stepper';
 import { Home } from 'lucide-react';
-import { useAppSelector } from '@/app/hooks';
+import { useAppSelector, useAppDispatch } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import { loadUser } from '@/features/auth/authThunks';
 import { useState, useEffect } from 'react';
 import apiClient from '@/services/api';
 
@@ -19,6 +20,7 @@ interface Subject {
 export default function ConfirmStep() {
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
+  const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -52,8 +54,8 @@ export default function ConfirmStep() {
   const handleConfirm = async () => {
     try {
       setLoading(true);
-      // Wait for 600ms to mock saving to DB
-      await new Promise(r => setTimeout(r, 600));
+      // Refresh user from backend so onboarding_step = 'done' is in Redux
+      await dispatch(loadUser()).unwrap();
       navigate('/onboarding/success');
     } catch (err) {
       console.error(err);

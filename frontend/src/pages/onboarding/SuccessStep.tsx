@@ -1,12 +1,20 @@
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Check, FileText, Home, Users } from 'lucide-react';
-import { useAppSelector } from '@/app/hooks';
+import { useAppSelector, useAppDispatch } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import { loadUser } from '@/features/auth/authThunks';
+import { useEffect } from 'react';
 
 export default function SuccessStep() {
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
+  const dispatch = useAppDispatch();
+
+  // Refresh user state so onboarding_step = 'done' is guaranteed in Redux
+  useEffect(() => {
+    dispatch(loadUser());
+  }, [dispatch]);
 
   const handleDashboard = () => {
     navigate(`/dashboard/${user?.role || 'student'}`);
