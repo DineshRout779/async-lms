@@ -3,8 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
-import { useAppSelector } from '@/app/hooks';
-import { selectUser } from '@/features/auth/authSelectors';
 import { usePublishedSubjects } from '@/hooks/queries/useOnboarding';
 import {
   Select,
@@ -19,7 +17,6 @@ export default function ProgramStep() {
   const [submitting, setSubmitting] = useState(false);
 
   const navigate = useNavigate();
-  const user = useAppSelector(selectUser);
 
   // React Query — cached, shared with MyCourses if already fetched
   const { data: subjects = [], isLoading } = usePublishedSubjects();

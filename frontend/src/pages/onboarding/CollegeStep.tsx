@@ -68,8 +68,9 @@ export default function CollegeStep() {
       if (res.status === 200 || res.status === 201) {
         navigate(`/onboarding/${res.data.next_step}`);
       }
-    } catch (error: any) {
-      console.error('Selection failed:', error.response?.data?.message || error.message);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Selection failed:', msg);
     } finally {
       setSubmitting(false);
     }

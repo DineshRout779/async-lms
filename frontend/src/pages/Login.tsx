@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,6 +16,7 @@ import { loginSchema, signupSchema } from '@/lib/validations';
 const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL}/api/v1/auth/google`;
 
 export default function Login() {
+  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
   const [searchParams] = useSearchParams();
   const userTypeParam = searchParams.get('user_type');
   const navigate = useNavigate();
@@ -72,15 +73,12 @@ export default function Login() {
     },
   });
 
-  const handleTabChange = (_v: string) => {
+  const handleTabChange = (v: string) => {
+    setActiveTab(v as 'login' | 'signup');
     dispatch(clearAuthError());
     loginForm.resetForm();
     signupForm.resetForm();
   };
-
-  const activeForm = loginForm.values.email !== '' || signupForm.values.email !== ''
-    ? (loginForm.dirty ? 'login' : 'signup')
-    : 'login';
 
   return (
     <>
@@ -90,7 +88,7 @@ export default function Login() {
         style={{ fontFamily: "'Noto Sans', sans-serif" }}
       >
         <div className='w-full max-w-md bg-white px-8 py-6 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)]'>
-            <Tabs defaultValue='login' onValueChange={handleTabChange} className='mb-4 w-full'>
+            <Tabs value={activeTab} onValueChange={handleTabChange} className='mb-4 w-full'>
               <TabsList className='grid w-full grid-cols-2 bg-slate-100 p-1 rounded-xl h-auto'>
                 <TabsTrigger 
                   value='login' 
@@ -110,7 +108,7 @@ export default function Login() {
             {/* LOGIN FORM */}
             <form
               onSubmit={loginForm.handleSubmit}
-              className={`space-y-3.5 ${activeForm !== 'login' ? 'hidden' : ''}`}
+              className={`space-y-3.5 ${activeTab !== 'login' ? 'hidden' : ''}`}
             >
               <div className="space-y-1">
                 <label className='text-[13px] font-semibold text-slate-800 tracking-wide'>Email</label>
@@ -152,7 +150,7 @@ export default function Login() {
             {/* SIGNUP FORM */}
             <form
               onSubmit={signupForm.handleSubmit}
-              className={`space-y-3.5 ${activeForm === 'login' ? 'hidden' : ''}`}
+              className={`space-y-3.5 ${activeTab === 'login' ? 'hidden' : ''}`}
             >
               <div className="space-y-1">
                 <label className='text-[13px] font-semibold text-slate-800 tracking-wide'>Full Name</label>
