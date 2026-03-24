@@ -6,16 +6,14 @@ import {
   User,
   Settings,
   MessageSquare,
-  LogOut,
   Code,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLocation, Link, useNavigate } from 'react-router';
-import { logout } from '@/features/auth/authSlice';
-import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import toast from 'react-hot-toast';
+import { useLocation, Link } from 'react-router';
+import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import Logo from '../Logo';
 
 interface StudentSidebarProps {
   isOpen: boolean; // Added isOpen to match Admin layout state
@@ -54,15 +52,7 @@ const menuItems: MenuItem[] = [
 
 export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
   const { pathname } = useLocation();
-  const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const user = useAppSelector(selectUser);
-
-  const handleLogout = () => {
-    dispatch(logout());
-    toast.success('Logged out successfully');
-    navigate('/');
-  };
 
   return (
     <aside
@@ -72,17 +62,13 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
       )}
     >
       {/* Brand Header matching Admin */}
-      <div className='h-16 flex items-center justify-between px-6 shrink-0'>
-        <div className='flex items-center gap-3'>
-          <div className='h-8 w-8 rounded-lg bg-[#facc15] flex items-center justify-center text-slate-900 font-bold shrink-0'>
-            C
-          </div>
-          {isOpen && (
-            <span className='font-bold text-xl text-[#1e2653] tracking-tight'>
-              CodeGuru
-            </span>
-          )}
-        </div>
+      <div className='h-16 flex items-center gap-3 px-6 shrink-0 mt-4'>
+        <Logo className={'h-12 w-12'} />
+        {isOpen && (
+          <span className='font-bold text-xl text-blue-800 tracking-tight'>
+            CodeGuru
+          </span>
+        )}
 
         {/* <button
           onClick={onToggle}
@@ -154,19 +140,10 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
               <p className='text-sm font-bold text-[#1e2653] truncate leading-tight'>
                 {user?.full_name}
               </p>
-              <p className='text-[11px] text-slate-400 font-medium truncate'>
+              <p className='text-[11px] text-slate-400 font-medium truncate capitalize'>
                 {user?.role}
               </p>
             </div>
-          )}
-          {isOpen && (
-            <button
-              onClick={handleLogout}
-              className='p-1.5 text-slate-400 hover:text-red-400 transition-colors'
-              title='Logout'
-            >
-              <LogOut size={16} />
-            </button>
           )}
         </div>
       </div>

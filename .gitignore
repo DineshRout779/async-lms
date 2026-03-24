@@ -8,3 +8,5 @@ Code Guru PRD (2).pdf
 settings.local.json
 neondb-latest-schema.dump
 *.dump
+*.pem
+.claude

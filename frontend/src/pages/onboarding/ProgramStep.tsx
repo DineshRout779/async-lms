@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import { usePublishedSubjects } from '@/hooks/queries/useOnboarding';
 import {
   Select,
   SelectContent,
@@ -13,31 +14,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-interface Subject {
-  id: string;
-  name: string;
-}
-
 export default function ProgramStep() {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selected, setSelected] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
 
-  useEffect(() => {
-    apiClient
-      .get('/subjects/published')
-      .then((res) => setSubjects(res.data.data || res.data))
-      .catch(console.error);
-  }, []);
+  // React Query — cached, shared with MyCourses if already fetched
+  const { data: subjects = [], isLoading } = usePublishedSubjects();
 
   const handleContinue = async () => {
     if (!selected) return;
 
     try {
-      setLoading(true);
+      setSubmitting(true);
       await apiClient.post('/onboarding/subjects', {
         subjectIds: [selected],
       });
@@ -45,7 +36,7 @@ export default function ProgramStep() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -69,20 +60,20 @@ export default function ProgramStep() {
               <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
                 Program / Course
               </label>
-              <Select value={selected} onValueChange={setSelected}>
+              <Select value={selected} onValueChange={setSelected} disabled={isLoading}>
                 <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
-                  <SelectValue placeholder='Select your program' />
+                  <SelectValue placeholder={isLoading ? 'Loading programs...' : 'Select your program'} />
                 </SelectTrigger>
                 <SelectContent className='w-full'>
                   {subjects.length > 0 ? (
-                    subjects.map(sub => (
+                    subjects.map((sub: { id: number; name: string }) => (
                        <SelectItem key={sub.id} value={sub.id.toString()}>{sub.name}</SelectItem>
                     ))
                   ) : (
                     <>
                        <SelectItem value='a5f1dc34-297c-47b2-841f-fd1ecf3303d8'>Full Stack Web Development</SelectItem>
-                       <SelectItem value='b5f1dc34-297c-47b2-841f-fd1ecf3303d9'>Data Science & Machine Learning</SelectItem>
-                       <SelectItem value='c5f1dc34-297c-47b2-841f-fd1ecf3303d0'>Cloud Computing & DevOps</SelectItem>
+                       <SelectItem value='b5f1dc34-297c-47b2-841f-fd1ecf3303d9'>Data Science &amp; Machine Learning</SelectItem>
+                       <SelectItem value='c5f1dc34-297c-47b2-841f-fd1ecf3303d0'>Cloud Computing &amp; DevOps</SelectItem>
                     </>
                   )}
                 </SelectContent>
@@ -107,10 +98,10 @@ export default function ProgramStep() {
           <Button
             type="button"
             className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg shadow-md transition-colors"
-            disabled={loading || !selected}
+            disabled={submitting || !selected}
             onClick={handleContinue}
           >
-            Continue
+            {submitting ? 'Saving...' : 'Continue'}
           </Button>
         </div>
 

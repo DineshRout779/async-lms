@@ -15,7 +15,7 @@ const router = require('express').Router();
 
 // General CRUD
 router.get('/', verifyToken, getAllColleges);
-router.post('/', verifyToken, isAdmin, createCollege);
+router.post('/', verifyToken, createCollege);
 router.put('/:id', verifyToken, isAdmin, updateCollege);
 router.delete('/:id', verifyToken, isAdmin, deleteCollege);
 

@@ -1,5 +1,6 @@
 // editorController.js
 const { provisionWorkspace } = require('../services/workspaceService');
+const { assignWorker } = require('../services/workerRegistry');
 const editorProfiles = require('../config/editorProfiles.json');
 
 exports.startEditor = (req, res) => {
@@ -12,10 +13,15 @@ exports.startEditor = (req, res) => {
 
     const workspacePath = provisionWorkspace(userId, projectId, profile);
 
+    // Assign to a worker node. Returns null in local/single-machine mode —
+    // the frontend falls back to VITE_API_URL when workerUrl is null.
+    const workerUrl = assignWorker(userId, projectId);
+
     res.json({
       projectId,
       workspacePath,
       profile: config,
+      workerUrl,
     });
   } catch (err) {
     console.error('Editor start error:', err);

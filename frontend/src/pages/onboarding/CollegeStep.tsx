@@ -5,7 +5,9 @@ import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
 import { Info } from 'lucide-react';
-
+import { useAppDispatch } from '@/app/hooks';
+import { loadUser } from '@/features/auth/authThunks';
+import { useColleges } from '@/hooks/queries/useOnboarding';
 import {
   Select,
   SelectContent,
@@ -14,42 +16,39 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-interface College {
-  id: number | string;
-  name: string;
-}
-
 export default function CollegeStep() {
-  const [collegeList, setCollegeList] = useState<College[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [collegeId, setCollegeId] = useState<string | null>(null);
   const [customCollegeName, setCustomCollegeName] = useState('');
   const [customCollegeAddress, setCustomCollegeAddress] = useState('');
 
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const isOtherSelected = collegeId === 'OTHER';
 
-  useEffect(() => {
-    const fetchColleges = async () => {
-      try {
-        setLoading(true);
-        const res = await apiClient.get('/colleges');
-        setCollegeList(res.data.data || res.data);
-      } catch (error) {
-        console.error('Failed to fetch colleges:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // React Query — cached, no manual loading state needed
+  const { data: collegeList = [], isLoading } = useColleges();
 
-    fetchColleges();
-  }, []);
+  // Pre-fill previously selected college once list is loaded
+  useEffect(() => {
+    if (!collegeList.length) return;
+    dispatch(loadUser())
+      .unwrap()
+      .then((freshUser) => {
+        if (freshUser?.college_id) {
+          const existing = collegeList.find(
+            (c) => c.id.toString() === freshUser.college_id!.toString(),
+          );
+          if (existing) setCollegeId(existing.id.toString());
+        }
+      })
+      .catch(() => {});
+  }, [collegeList, dispatch]);
 
   const handleContinue = async () => {
     if (!collegeId) return;
-
     try {
-      setLoading(true);
+      setSubmitting(true);
       let finalCollegeId = collegeId;
 
       if (collegeId === 'OTHER') {
@@ -70,12 +69,9 @@ export default function CollegeStep() {
         navigate(`/onboarding/${res.data.next_step}`);
       }
     } catch (error: any) {
-      console.error(
-        'Selection failed:',
-        error.response?.data?.message || error.message
-      );
+      console.error('Selection failed:', error.response?.data?.message || error.message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -96,10 +92,10 @@ export default function CollegeStep() {
 
           <div className="space-y-2 mb-6">
             <label className="text-xs font-bold text-[#344499] tracking-wide">College name</label>
-            <Select onValueChange={setCollegeId} disabled={loading}>
+            <Select onValueChange={setCollegeId} disabled={isLoading || submitting}>
               <SelectTrigger className='w-full h-11 text-[13px] text-slate-500 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                 <SelectValue
-                  placeholder={loading ? 'Loading colleges...' : 'Search or select your college'}
+                  placeholder={isLoading ? 'Loading colleges...' : 'Search or select your college'}
                 />
               </SelectTrigger>
               <SelectContent>
@@ -159,13 +155,14 @@ export default function CollegeStep() {
             type="button"
             className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg shadow-md transition-colors"
             disabled={
-              loading ||
+              isLoading ||
+              submitting ||
               !collegeId ||
               (isOtherSelected && (!customCollegeName || !customCollegeAddress))
             }
             onClick={handleContinue}
           >
-            Continue
+            {submitting ? 'Saving...' : 'Continue'}
           </Button>
         </div>
 

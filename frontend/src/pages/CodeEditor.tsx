@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type JSX } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import axios, { type AxiosInstance } from 'axios';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -7,7 +8,6 @@ import Editor from '@monaco-editor/react';
 import { Button } from '../components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import FileTreeExplorer, { type FileNode } from '../components/common/FileTree';
-import { createPath, deletePath, renamePath } from '@/services/files';
 import { useSearchParams } from 'react-router';
 import apiClient from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -26,6 +26,7 @@ import { type ImperativePanelHandle } from 'react-resizable-panels';
 type EditorEnvironment = {
   projectId: string;
   workspacePath: string;
+  workerUrl: string | null;
   profile: {
     name: string;
     entry: string;
@@ -218,6 +219,9 @@ const CodeEditor = (): JSX.Element => {
   const socketRef = useRef<Socket | null>(null);
   const bootedRef = useRef(false);
   const envRef = useRef<EditorEnvironment | null>(null);
+  // workerClient — axios instance pointing to the assigned worker node.
+  // Falls back to apiClient when workerUrl is null (local / single-machine mode).
+  const workerClientRef = useRef<AxiosInstance>(apiClient);
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -236,7 +240,7 @@ const CodeEditor = (): JSX.Element => {
   const loadTree = useCallback(
     async (projectId: string) => {
       if (!user?.id) return;
-      const res = await apiClient.get('/workspace/tree', {
+      const res = await workerClientRef.current.get('/workspace/tree', {
         params: { userId: user.id, projectId },
       });
       const newTree: FileNode[] = res.data;
@@ -425,12 +429,63 @@ const CodeEditor = (): JSX.Element => {
 
       if (cancelled) return;
 
+      // If the API server assigned a dedicated worker node, reconnect the socket
+      // to that worker and create an axios instance for workspace API calls.
+      const { workerUrl } = res.data as EditorEnvironment;
+      const targetUrl = workerUrl ?? import.meta.env.VITE_API_URL;
+
+      if (workerUrl && workerUrl !== import.meta.env.VITE_API_URL) {
+        // Disconnect from API server socket, connect to worker socket
+        socketRef.current?.disconnect();
+        const workerSocket = io(workerUrl, {
+          reconnection: true,
+          reconnectionDelay: 2000,
+          reconnectionAttempts: 5,
+        });
+        socketRef.current = workerSocket;
+
+        // Re-register socket event listeners on the new socket
+        workerSocket.on('connect', () => setSocketConnected(true));
+        workerSocket.on('disconnect', () => setSocketConnected(false));
+        workerSocket.on('workspace:ready', () => setWsStatus('ready'));
+        workerSocket.on('workspace:error', (msg: string) => {
+          setWsStatus('error');
+          setWsError(msg);
+        });
+        workerSocket.on('workspace:ports:update', (updatedPorts: PortInfo[]) => {
+          if (!updatedPorts.length) return;
+          setPorts(updatedPorts);
+          setActivePort((prev) => prev ?? updatedPorts[0].port);
+        });
+        workerSocket.on('terminal:error', (msg: string) => {
+          terminalRef.current?.write(`\r\n\x1b[31mError: ${msg}\x1b[0m\r\n`);
+        });
+        workerSocket.on('terminal:output', (data: string) =>
+          terminalRef.current?.write(data)
+        );
+        workerSocket.on('workspace:fs:update', () => {
+          if (fsRefreshTimerRef.current) clearTimeout(fsRefreshTimerRef.current);
+          fsRefreshTimerRef.current = setTimeout(() => loadTree(res.data.projectId), 500);
+        });
+      }
+
+      // Point workspace API calls at the worker (or API server if no worker).
+      // Use an interceptor — not a static header — so the token is always fresh.
+      const client = axios.create({ baseURL: `${targetUrl}/api/v1` });
+      client.interceptors.request.use((config) => {
+        const token = localStorage.getItem('token');
+        if (token) config.headers.Authorization = `Bearer ${token}`;
+        return config;
+      });
+      workerClientRef.current = client;
+
       setEnv(res.data);
       setWsStatus('starting');
       terminalRef.current?.clear();
 
       // Register BEFORE emit so we never miss workspace:ready
       socketRef.current!.once('workspace:ready', async () => {
+        clearTimeout(timeoutId);
         const dims = fitAddonRef.current?.proposeDimensions();
         socketRef.current!.emit('terminal:start', {
           cols: dims?.cols ?? 80,
@@ -443,6 +498,7 @@ const CodeEditor = (): JSX.Element => {
         userId: user.id,
         projectId: res.data.projectId,
         image: res.data.profile.image,
+        profile: cp,
       });
     };
 
@@ -481,7 +537,7 @@ const CodeEditor = (): JSX.Element => {
     const snapshot = { ...tab };
 
     const timer = setTimeout(async () => {
-      await apiClient.post('/workspace/file', {
+      await workerClientRef.current.post('/workspace/file', {
         userId: user!.id,
         projectId: env.projectId,
         filePath: snapshot.path,
@@ -510,7 +566,7 @@ const CodeEditor = (): JSX.Element => {
         const tab = tabs.find((t) => t.path === activeTab);
         if (!tab?.dirty) return;
 
-        apiClient
+        workerClientRef.current
           .post('/workspace/file', {
             userId: user.id,
             projectId: env.projectId,
@@ -541,7 +597,7 @@ const CodeEditor = (): JSX.Element => {
     const existing = tabs.find((t) => t.path === filePath);
     if (existing) return setActiveTab(filePath);
 
-    const res = await apiClient.get('/workspace/file', {
+    const res = await workerClientRef.current.get('/workspace/file', {
       params: { userId: user!.id, projectId: env.projectId, filePath },
     });
 
@@ -582,10 +638,11 @@ const CodeEditor = (): JSX.Element => {
 
   const active = tabs.find((t) => t.path === activeTab);
   const activePortInfo = ports.find((p) => p.port === activePort);
+  const previewBase = env?.workerUrl ?? import.meta.env.VITE_API_URL;
   const iframeSrc =
     env && activePort
       ? (activePortInfo?.url ??
-          `${import.meta.env.VITE_API_URL}/api/v1/preview/${user!.id}/${env.projectId}/${activePort}`)
+          `${previewBase}/api/v1/preview/${user!.id}/${env.projectId}/${activePort}`)
       : null;
 
   const togglePreview = () => {
@@ -665,15 +722,15 @@ const CodeEditor = (): JSX.Element => {
               activePath={activeTab}
               onSelect={openFile}
               onCreate={async (p, type) => {
-                await createPath({ userId: user!.id, projectId: env!.projectId, path: p, type });
+                await workerClientRef.current.post('/workspace/create', { userId: user!.id, projectId: env!.projectId, path: p, type });
                 loadTree(env!.projectId);
               }}
               onDelete={async (p) => {
-                await deletePath({ userId: user!.id, projectId: env!.projectId, path: p });
+                await workerClientRef.current.post('/workspace/delete', { userId: user!.id, projectId: env!.projectId, path: p });
                 loadTree(env!.projectId);
               }}
               onRename={async (o, n) => {
-                await renamePath({
+                await workerClientRef.current.post('/workspace/rename', {
                   userId: user!.id,
                   projectId: env!.projectId,
                   oldPath: o,

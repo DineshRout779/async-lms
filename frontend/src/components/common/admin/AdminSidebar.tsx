@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router'; // Switched to NavLink
+import Logo from '../Logo';
 
 const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/admin' },
@@ -46,10 +47,8 @@ export default function AdminSidebar({
       )}
     >
       {/* Brand Header */}
-      <div className='h-16 flex items-center gap-3 px-6 shrink-0'>
-        <div className='h-8 w-8 rounded-lg bg-[#facc15] flex items-center justify-center text-slate-900 font-bold'>
-          C
-        </div>
+      <div className='h-16 flex items-center gap-3 px-6 shrink-0 mt-4'>
+        <Logo className={'h-12 w-12'} />
         {isOpen && (
           <span className='font-bold text-xl text-white tracking-tight'>
             CodeGuru

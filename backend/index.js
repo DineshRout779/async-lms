@@ -3,10 +3,13 @@ const express = require('express');
 const http = require('http');
 const net = require('net');
 const cors = require('cors');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const setupSocket = require('./services/socketService');
 const path = require('path');
 const { getContainerIP } = require('./services/dockerService');
+const { registerWorker, heartbeat, deregisterWorker, releaseWorkspace, getStatus } = require('./services/workerRegistry');
 require('./config/pg');
 
 const compression = require('compression');
@@ -15,17 +18,20 @@ const app = express();
 app.use(compression());
 app.use(cors());
 app.use(express.json());
+app.use(morgan('combined'));
+
+// Rate limiter for auth routes — 20 requests per 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
 
 const server = http.createServer(app);
 
-app.use((req, res, next) => {
-  console.log(
-    `${new Date().toISOString()}: ${req.method} - ${req.originalUrl}`,
-  );
-  next();
-});
-
-app.use('/api/v1/auth', require('./routes/auth.routes'));
+app.use('/api/v1/auth', authLimiter, require('./routes/auth.routes'));
 app.use('/api/v1/users', require('./routes/user.routes'));
 app.use('/api/v1/students', require('./routes/student.routes'));
 app.use('/api/v1/editor', require('./routes/editor.routes'));
@@ -39,6 +45,37 @@ app.use('/api/v1/facilitator', require('./routes/facilitator.routes'));
 app.use('/api/v1/assistant', require('./routes/assistant.routes'));
 app.use('/api/v1/college-assignments', require('./routes/collegeAssignment.routes'));
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
+
+// ── Internal worker registry endpoints (no auth — internal network only) ────
+app.post('/api/v1/internal/workers/register', (req, res) => {
+  const { id, url, capacity } = req.body;
+  if (!id || !url) return res.status(400).json({ error: 'id and url required' });
+  registerWorker(id, url, capacity);
+  res.json({ ok: true });
+});
+
+app.post('/api/v1/internal/workers/heartbeat', (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'id required' });
+  heartbeat(id);
+  res.json({ ok: true });
+});
+
+app.post('/api/v1/internal/workers/deregister', (req, res) => {
+  const { id } = req.body;
+  if (id) deregisterWorker(id);
+  res.json({ ok: true });
+});
+
+app.post('/api/v1/internal/workers/release', (req, res) => {
+  const { userId, projectId } = req.body;
+  if (userId && projectId) releaseWorkspace(userId, projectId);
+  res.json({ ok: true });
+});
+
+app.get('/api/v1/internal/workers/status', (req, res) => {
+  res.json(getStatus());
+});
 
 //  404 Catch-all (Place this at the very bottom)
 app.use((req, res) => {

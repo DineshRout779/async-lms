@@ -53,7 +53,10 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
 
         {/* Welcome Message */}
         <h1 className='font-bold text-lg text-[#1e2653] hidden sm:block tracking-tight'>
-          Good Morning,{' '}
+          {(() => {
+            const h = new Date().getHours();
+            return h < 12 ? 'Good Morning,' : h < 17 ? 'Good Afternoon,' : 'Good Evening,';
+          })()}{' '}
           <span className='text-blue-600 capitalize'>
             {user?.full_name?.split(' ')[0] || 'Student'}!
           </span>
@@ -114,7 +117,7 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
               <DropdownMenuSeparator className='bg-slate-100' />
 
               <DropdownMenuItem
-                className='cursor-pointer py-2.5 rounded-md focus:bg-slate-50 gap-2'
+                className='cursor-pointer py-2.5 rounded-md focus:text-blue-700 focus:bg-red-50 gap-2'
                 onClick={() => navigate('/dashboard/student/profile')}
               >
                 <User className='h-4 w-4 text-slate-400' />
@@ -122,7 +125,7 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
               </DropdownMenuItem>
 
               <DropdownMenuItem
-                className='cursor-pointer py-2.5 rounded-md focus:bg-slate-50 gap-2'
+                className='cursor-pointer py-2.5 rounded-md focus:text-blue-700 focus:bg-red-50 gap-2'
                 onClick={() => navigate('/dashboard/student/settings')}
               >
                 <Settings className='h-4 w-4 text-slate-400' />
@@ -144,8 +147,9 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
           {/* Primary CTA */}
           <Button
             size='sm'
+            variant={'accent'}
             onClick={() => navigate('/dashboard/student/courses')}
-            className='bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm shadow-blue-100 hidden sm:flex'
+            className='cursor-pointer text-white font-bold rounded-lg shadow-sm shadow-blue-100 hidden sm:flex'
           >
             Continue Learning
           </Button>
