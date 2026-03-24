@@ -9,3 +9,4 @@ settings.local.json
 neondb-latest-schema.dump
 *.dump
 *.pem
+.claude

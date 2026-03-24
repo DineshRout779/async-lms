@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'; // Added useEffect
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
-
+import { useAppDispatch } from '@/app/hooks';
+import { loadUser } from '@/features/auth/authThunks';
+import { useColleges } from '@/hooks/queries/useOnboarding';
 import {
   Select,
   SelectContent,
@@ -13,61 +15,51 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// Define a type for the college data
-interface College {
-  id: number | string;
-  name: string;
-}
-
 export default function CollegeStep() {
-  const [collegeList, setCollegeList] = useState<College[]>([]); // State for API data
-  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [collegeId, setCollegeId] = useState<string | null>(null);
   const [customCollegeName, setCustomCollegeName] = useState('');
   const [customCollegeAddress, setCustomCollegeAddress] = useState('');
 
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const isOtherSelected = collegeId === 'OTHER';
 
-  // Fetch colleges from the backend
-  useEffect(() => {
-    const fetchColleges = async () => {
-      try {
-        setLoading(true);
-        // Assuming your controller returns { data: [...] }
-        const res = await apiClient.get('/colleges');
-        setCollegeList(res.data.data || res.data);
-      } catch (error) {
-        console.error('Failed to fetch colleges:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // React Query — cached, no manual loading state needed
+  const { data: collegeList = [], isLoading } = useColleges();
 
-    fetchColleges();
-  }, []);
+  // Pre-fill previously selected college once list is loaded
+  useEffect(() => {
+    if (!collegeList.length) return;
+    dispatch(loadUser())
+      .unwrap()
+      .then((freshUser) => {
+        if (freshUser?.college_id) {
+          const existing = collegeList.find(
+            (c) => c.id.toString() === freshUser.college_id!.toString(),
+          );
+          if (existing) setCollegeId(existing.id.toString());
+        }
+      })
+      .catch(() => {});
+  }, [collegeList, dispatch]);
 
   const handleContinue = async () => {
     if (!collegeId) return;
-
     try {
-      setLoading(true);
+      setSubmitting(true);
       let finalCollegeId = collegeId;
 
-      // Scenario: User is adding a new college
       if (collegeId === 'OTHER') {
         const createRes = await apiClient.post('/colleges', {
           name: customCollegeName,
-          city: customCollegeAddress, // mapping address to city for now
-          short_code: customCollegeName.substring(0, 5).toUpperCase(), // placeholder
+          city: customCollegeAddress,
+          short_code: customCollegeName.substring(0, 5).toUpperCase(),
           state: 'Unknown',
         });
-
-        // The backend returns the new college object including the generated UUID
         finalCollegeId = createRes.data.id;
       }
 
-      // Final Step: Update the User's onboarding progress with the college ID [cite: 9]
       const res = await apiClient.post('/onboarding/college', {
         college_id: finalCollegeId,
       });
@@ -76,71 +68,70 @@ export default function CollegeStep() {
         navigate(`/onboarding/${res.data.next_step}`);
       }
     } catch (error: any) {
-      console.error(
-        'Selection failed:',
-        error.response?.data?.message || error.message
-      );
+      console.error('Selection failed:', error.response?.data?.message || error.message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className='max-w-md mx-auto h-screen flex justify-center items-center'>
-      <div className='w-full space-y-4'>
-        <Stepper current='college' />
+    <div className='bg-accent'>
+      <div className='max-w-120 mx-auto h-screen flex justify-center items-center'>
+        <div className='w-full space-y-4 bg-white p-10 rounded-md'>
+          <Stepper current='college' />
 
-        <h2 className='text-xl font-semibold'>Select your college</h2>
+          <h2 className='text-xl font-semibold'>Select your college</h2>
 
-        <Select onValueChange={setCollegeId} disabled={loading}>
-          <SelectTrigger className='w-full'>
-            <SelectValue
-              placeholder={loading ? 'Loading colleges...' : 'Select college'}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {collegeList.map((college) => (
-              <SelectItem key={college.id} value={college.id.toString()}>
-                {college.name}
-              </SelectItem>
-            ))}
+          <Select
+            value={collegeId ?? ''}
+            onValueChange={setCollegeId}
+            disabled={isLoading || submitting}
+          >
+            <SelectTrigger className='w-full'>
+              <SelectValue placeholder={isLoading ? 'Loading colleges...' : 'Select college'} />
+            </SelectTrigger>
+            <SelectContent>
+              {collegeList.map((college) => (
+                <SelectItem key={college.id} value={college.id.toString()}>
+                  {college.name}
+                </SelectItem>
+              ))}
+              <SelectItem value='OTHER'>Other</SelectItem>
+            </SelectContent>
+          </Select>
 
-            <SelectItem value='OTHER'>Other</SelectItem>
-          </SelectContent>
-        </Select>
+          {isOtherSelected && (
+            <div className='space-y-3'>
+              <Input
+                placeholder='Enter college name'
+                value={customCollegeName}
+                onChange={(e) => setCustomCollegeName(e.target.value)}
+              />
+              <Input
+                placeholder='Enter college address'
+                value={customCollegeAddress}
+                onChange={(e) => setCustomCollegeAddress(e.target.value)}
+              />
+              <p className='text-xs text-muted-foreground'>
+                Your college will be reviewed and verified by an admin before appearing in the list.
+              </p>
+            </div>
+          )}
 
-        {/* Show when "Other" is selected */}
-        {isOtherSelected && (
-          <div className='space-y-3'>
-            <Input
-              placeholder='Enter college name'
-              value={customCollegeName}
-              onChange={(e) => setCustomCollegeName(e.target.value)}
-            />
-
-            <Input
-              placeholder='Enter college address'
-              value={customCollegeAddress}
-              onChange={(e) => setCustomCollegeAddress(e.target.value)}
-            />
-
-            <p className='text-xs text-muted-foreground'>
-              Your college will be reviewed and verified by an admin before appearing in the list.
-            </p>
-          </div>
-        )}
-
-        <Button
-          className='mt-4 w-full'
-          disabled={
-            loading ||
-            !collegeId ||
-            (isOtherSelected && (!customCollegeName || !customCollegeAddress))
-          }
-          onClick={handleContinue}
-        >
-          {loading ? 'Saving...' : 'Continue'}
-        </Button>
+          <Button
+            variant='accent'
+            className='mt-4 w-full'
+            disabled={
+              isLoading ||
+              submitting ||
+              !collegeId ||
+              (isOtherSelected && (!customCollegeName || !customCollegeAddress))
+            }
+            onClick={handleContinue}
+          >
+            {submitting ? 'Saving...' : 'Continue'}
+          </Button>
+        </div>
       </div>
     </div>
   );

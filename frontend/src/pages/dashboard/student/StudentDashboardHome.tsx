@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Play,
   FileText,
@@ -17,7 +17,11 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
-import apiClient from '@/services/api';
+import {
+  useMySubjects,
+  useMyAssignments,
+  useMyOverallRank,
+} from '@/hooks/queries/useStudentDashboard';
 import type { Assignment, Subject } from '@/utils/types';
 
 interface StatCardProps {
@@ -54,36 +58,15 @@ const StudentDashboardHome: React.FC = () => {
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
 
-  const [courses, setCourses] = useState<Subject[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [myRank, setMyRank] = useState<number | null>(null);
-  const [loadingCourses, setLoadingCourses] = useState(true);
-  const [loadingAssignments, setLoadingAssignments] = useState(true);
+  const { data: courses = [], isLoading: loadingCourses } = useMySubjects();
+  const { data: assignments = [], isLoading: loadingAssignments } = useMyAssignments();
+  const { data: myRank } = useMyOverallRank();
 
-  useEffect(() => {
-    apiClient
-      .get('/users/subjects')
-      .then((res) => {
-        if (res.data.success) setCourses(res.data.data || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingCourses(false));
-
-    apiClient
-      .get('/students/assignments')
-      .then((res) => {
-        if (res.data.success) setAssignments(res.data.data || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingAssignments(false));
-
-    apiClient
-      .get('/students/leaderboard/overall')
-      .then((res) => {
-        if (res.data.success) setMyRank(res.data.data?.my_rank?.rank ?? null);
-      })
-      .catch(() => {});
-  }, []);
+  const avgProgress = useMemo(() => {
+    if (!courses.length) return null;
+    const sum = courses.reduce((s, c: Subject) => s + (c.progress_percent || 0), 0);
+    return Math.round(sum / courses.length);
+  }, [courses]);
 
   const currentCourse = courses[0];
   const pendingCount = assignments.length;
@@ -149,11 +132,7 @@ const StudentDashboardHome: React.FC = () => {
         />
         <StatCard
           label='Avg. Progress'
-          value={
-            loadingCourses || courses.length === 0
-              ? '—'
-              : `${Math.round(courses.reduce((s, c) => s + (c.progress_percent || 0), 0) / courses.length)}%`
-          }
+          value={loadingCourses || avgProgress === null ? '—' : `${avgProgress}%`}
           icon={Activity}
           iconColor='text-purple-500'
           bgColor='bg-purple-50'
@@ -268,7 +247,7 @@ const StudentDashboardHome: React.FC = () => {
                 No pending assignments.
               </p>
             ) : (
-              assignments.slice(0, 3).map((item) => (
+              (assignments as Assignment[]).slice(0, 3).map((item) => (
                 <div
                   key={item.id}
                   onClick={() => navigate('/dashboard/student/assignments')}
@@ -316,7 +295,7 @@ const StudentDashboardHome: React.FC = () => {
                 No enrolled courses yet.
               </p>
             ) : (
-              courses.slice(0, 3).map((course) => (
+              (courses as Subject[]).slice(0, 3).map((course) => (
                 <div
                   key={course.id}
                   onClick={() =>

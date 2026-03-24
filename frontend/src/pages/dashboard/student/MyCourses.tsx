@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import apiClient from '@/services/api';
+import { useState } from 'react';
 import { Loader2, Code2, Layout, Boxes, Zap, BookOpen, PlusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -15,6 +14,7 @@ import {
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import type { Subject } from '@/utils/types';
+import { useEnrolledCourses, useAllCourses, useEnrollMutation } from '@/hooks/queries/useCourses';
 
 const getCourseTheme = (slug: string) => {
   if (slug.includes('frontend') || slug.includes('react'))
@@ -29,41 +29,24 @@ const getCourseTheme = (slug: string) => {
 type Tab = 'enrolled' | 'all';
 
 const MyCourses = () => {
-  const [enrolled, setEnrolled] = useState<Subject[]>([]);
-  const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('enrolled');
   const [enrollTarget, setEnrollTarget] = useState<Subject | null>(null);
-  const [enrolling, setEnrolling] = useState(false);
   const navigate = useNavigate();
 
-  const fetchCourses = async () => {
-    const [enrolledRes, allRes] = await Promise.allSettled([
-      apiClient.get<{ success: boolean; data: Subject[] }>('/users/subjects'),
-      apiClient.get<{ success: boolean; data: Subject[] }>('/subjects/published'),
-    ]);
-    if (enrolledRes.status === 'fulfilled' && enrolledRes.value.data.success)
-      setEnrolled(enrolledRes.value.data.data);
-    if (allRes.status === 'fulfilled' && allRes.value.data.success)
-      setAllSubjects(allRes.value.data.data);
-  };
+  const { data: enrolled = [], isLoading: loadingEnrolled } = useEnrolledCourses();
+  const { data: allSubjects = [], isLoading: loadingAll } = useAllCourses();
+  const enrollMutation = useEnrollMutation();
 
-  useEffect(() => {
-    fetchCourses().finally(() => setLoading(false));
-  }, []);
+  const loading = loadingEnrolled || loadingAll;
 
   const handleEnroll = async () => {
     if (!enrollTarget) return;
-    setEnrolling(true);
     try {
-      await apiClient.post(`/students/subjects/${enrollTarget.id}/enroll`);
+      await enrollMutation.mutateAsync(enrollTarget.id);
       toast.success(`Enrolled in ${enrollTarget.name}!`);
       setEnrollTarget(null);
-      await fetchCourses();
     } catch {
       toast.error('Enrollment failed. Please try again.');
-    } finally {
-      setEnrolling(false);
     }
   };
 
@@ -85,13 +68,11 @@ const MyCourses = () => {
 
   return (
     <div className='p-8 max-w-7xl mx-auto space-y-8'>
-      {/* Header */}
       <div>
         <h1 className='text-3xl font-bold text-[#1e293b]'>Courses</h1>
         <p className='text-slate-500 mt-1'>Browse and continue your learning</p>
       </div>
 
-      {/* Tabs */}
       <div className='flex items-center gap-1 border-b border-slate-200'>
         {tabs.map((tab) => (
           <button
@@ -117,7 +98,6 @@ const MyCourses = () => {
         ))}
       </div>
 
-      {/* Grid */}
       {displayCourses.length === 0 ? (
         <div className='flex flex-col items-center justify-center h-60 text-slate-400 gap-3'>
           <BookOpen className='w-10 h-10 text-slate-300' />
@@ -143,20 +123,13 @@ const MyCourses = () => {
                     : undefined
                 }
                 className={`bg-white rounded-[2rem] border border-slate-100 shadow-sm transition-all duration-300 overflow-hidden group ${
-                  isEnrolled
-                    ? 'hover:shadow-xl cursor-pointer'
-                    : 'cursor-default'
+                  isEnrolled ? 'hover:shadow-xl cursor-pointer' : 'cursor-default'
                 }`}
               >
-                {/* Header */}
-                <div
-                  className={`${isEnrolled ? color : 'bg-slate-200'} h-44 flex items-center justify-center relative`}
-                >
+                <div className={`${isEnrolled ? color : 'bg-slate-200'} h-44 flex items-center justify-center relative`}>
                   <Icon
                     className={`w-16 h-16 transition-transform ${
-                      isEnrolled
-                        ? 'text-white/90 group-hover:scale-110'
-                        : 'text-slate-400'
+                      isEnrolled ? 'text-white/90 group-hover:scale-110' : 'text-slate-400'
                     }`}
                   />
                   {activeTab === 'all' && isEnrolled && (
@@ -166,13 +139,9 @@ const MyCourses = () => {
                   )}
                 </div>
 
-                {/* Content */}
                 <div className='p-8 space-y-5'>
                   <div className='flex gap-2 flex-wrap'>
-                    <Badge
-                      variant='secondary'
-                      className='bg-slate-50 text-slate-500 border-none px-3 py-0.5 text-[10px] font-bold uppercase'
-                    >
+                    <Badge variant='secondary' className='bg-slate-50 text-slate-500 border-none px-3 py-0.5 text-[10px] font-bold uppercase'>
                       {course.level || 'General'}
                     </Badge>
                     {isEnrolled && progress > 0 && progress < 100 && (
@@ -183,12 +152,9 @@ const MyCourses = () => {
                   </div>
 
                   <div>
-                    <h3 className='text-2xl font-bold text-[#1e293b] leading-tight'>
-                      {course.name}
-                    </h3>
+                    <h3 className='text-2xl font-bold text-[#1e293b] leading-tight'>{course.name}</h3>
                     <p className='text-slate-400 text-sm mt-2'>
-                      {course.level || 'Beginner'} •{' '}
-                      {course.total_lessons ?? '—'} Lessons
+                      {course.level || 'Beginner'} • {course.total_lessons ?? '—'} Lessons
                     </p>
                   </div>
 
@@ -198,19 +164,13 @@ const MyCourses = () => {
                         <span>Progress</span>
                         <span>{progress}%</span>
                       </div>
-                      <Progress
-                        value={progress}
-                        className='h-2 bg-slate-100 rounded-full'
-                      />
+                      <Progress value={progress} className='h-2 bg-slate-100 rounded-full' />
                     </div>
                   ) : (
                     <Button
                       size='sm'
                       className='w-full gap-2 bg-[#333D7C] hover:bg-[#2a3268] text-white'
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEnrollTarget(course);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); setEnrollTarget(course); }}
                     >
                       <PlusCircle className='w-4 h-4' />
                       Enroll Now
@@ -223,36 +183,27 @@ const MyCourses = () => {
         </div>
       )}
 
-      {/* Enroll Confirmation Dialog */}
-      <Dialog
-        open={!!enrollTarget}
-        onOpenChange={(open) => !open && setEnrollTarget(null)}
-      >
+      <Dialog open={!!enrollTarget} onOpenChange={(open) => !open && setEnrollTarget(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Enroll in {enrollTarget?.name}?</DialogTitle>
             <DialogDescription>
               You're about to enroll in{' '}
-              <span className='font-semibold text-slate-700'>
-                {enrollTarget?.name}
-              </span>
-              . This will add the course to your learning path and unlock the
-              first module.
+              <span className='font-semibold text-slate-700'>{enrollTarget?.name}</span>.
+              This will add the course to your learning path and unlock the first module.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant='outline'
-              onClick={() => setEnrollTarget(null)}
-              disabled={enrolling}
-            >
+            <Button variant='outline' onClick={() => setEnrollTarget(null)} disabled={enrollMutation.isPending}>
               Cancel
             </Button>
-            <Button onClick={handleEnroll} disabled={enrolling} className='bg-[#333D7C] hover:bg-[#2a3268] text-white'>
-              {enrolling ? (
-                <Loader2 className='w-4 h-4 animate-spin mr-2' />
-              ) : null}
-              {enrolling ? 'Enrolling...' : 'Confirm Enroll'}
+            <Button
+              onClick={handleEnroll}
+              disabled={enrollMutation.isPending}
+              className='bg-[#333D7C] hover:bg-[#2a3268] text-white'
+            >
+              {enrollMutation.isPending && <Loader2 className='w-4 h-4 animate-spin mr-2' />}
+              {enrollMutation.isPending ? 'Enrolling...' : 'Confirm Enroll'}
             </Button>
           </DialogFooter>
         </DialogContent>

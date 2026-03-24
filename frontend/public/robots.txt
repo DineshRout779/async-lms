@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /$
+Allow: /login
+Disallow: /dashboard/
+Disallow: /onboarding/
+Disallow: /api/
+
+Sitemap: https://codeguru.app/sitemap.xml
