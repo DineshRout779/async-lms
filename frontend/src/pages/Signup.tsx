@@ -62,11 +62,21 @@ export default function Login() {
               setAuthMode(v as AuthMode);
               navigate(`/${v}`);
             }}
-            className='mb-6'
+            className='mb-8 w-full'
           >
-            <TabsList className='grid grid-cols-2'>
-              <TabsTrigger value='signup'>Sign Up</TabsTrigger>
-              <TabsTrigger value='login'>Sign In</TabsTrigger>
+            <TabsList className='grid w-full grid-cols-2 bg-slate-100 p-1.5 rounded-xl h-auto'>
+              <TabsTrigger 
+                value='signup' 
+                className='data-[state=active]:bg-[#344499] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg py-3 text-base font-medium transition-all text-slate-500'
+              >
+                Sign Up
+              </TabsTrigger>
+              <TabsTrigger 
+                value='login' 
+                className='data-[state=active]:bg-[#344499] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg py-3 text-base font-medium transition-all text-slate-500'
+              >
+                Sign In
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 

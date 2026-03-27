@@ -1,61 +1,112 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { CollegeAssignmentCard } from '@/components/common/student/CollegeAssignmentCard';
-import { CollegeAssignmentModal } from '@/components/common/student/CollegeAssignmentModal';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FileText } from 'lucide-react';
 import apiClient from '@/services/api';
 import type { CollegeAssignment } from '@/utils/types';
 
-export default function Assignments() {
-  const [assignments, setAssignments] = useState<CollegeAssignment[]>([]);
-  const [selected, setSelected] = useState<CollegeAssignment | null>(null);
-  const [loading, setLoading] = useState(true);
+type TabType = 'All' | 'Pending' | 'Completed';
 
-  useEffect(() => {
+export default function Assignments() {
+  const navigate = useNavigate();
+  const [assignments, setAssignments] = useState<CollegeAssignment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabType>('All');
+  const [searchQuery, ] = useState('');
+
+  const fetchAssignments = () => {
+    setLoading(true);
     apiClient
       .get<{ success: boolean; data: CollegeAssignment[] }>('/college-assignments')
-      .then((res) => setAssignments(res.data?.data || []))
-      .catch((err) => console.error('Failed to fetch assignments:', err))
+      .then((res) => setAssignments(res.data.data))
+      .catch((err) => console.error('Failed to load assignments', err))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchAssignments();
   }, []);
 
+  const filteredAssignments = assignments.filter((item) => {
+    // Tab filtering
+    if (activeTab === 'Pending' && item.submission_link) return false;
+    if (activeTab === 'Completed' && !item.submission_link) return false;
+
+    // Search filtering
+    if (searchQuery && !item.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const tabs: TabType[] = ['All', 'Pending', 'Completed'];
+
   return (
-    <div className='min-h-screen bg-slate-50/50 p-6 md:p-12 animate-in fade-in duration-500'>
-      <div className='max-w-7xl mx-auto space-y-8'>
-        <div className='space-y-1'>
-          <h1 className='text-3xl font-extrabold text-slate-900 tracking-tight'>
-            Assignments
-          </h1>
-          <p className='text-slate-500'>Assignments posted by your college</p>
+    <div className='min-h-screen bg-[#F8FAFC] p-6 md:p-12 animate-in fade-in duration-500'>
+      <div className='max-w-7xl mx-auto space-y-10'>
+        {/* Header Section */}
+        <div className='flex flex-col md:flex-row md:items-start justify-between gap-6'>
+          <div className='space-y-1'>
+            <h1 className='text-3xl font-bold text-[#1E293B]'>
+              Assignments
+            </h1>
+            <p className='text-[#64748B] text-sm'>
+              Track and submit your projects
+            </p>
+          </div>
+
+          <div className='flex items-center p-1 bg-[#F1F5F9] rounded-xl'>
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  activeTab === tab
+                    ? 'bg-[#1E293B] text-white shadow-sm'
+                    : 'text-[#64748B] hover:text-[#1E293B]'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* Content Section */}
         {loading ? (
-          <div className='flex flex-col items-center justify-center h-64 space-y-4'>
-            <Loader2 className='w-10 h-10 animate-spin text-indigo-600' />
-            <p className='text-slate-400 font-medium'>Loading assignments...</p>
+          <div className='flex flex-col items-center justify-center h-80 space-y-4'>
+            <div className="p-4 bg-white rounded-3xl shadow-sm border border-slate-100">
+               <Loader2 className='w-10 h-10 animate-spin text-indigo-600' />
+            </div>
+            <p className='text-slate-400 font-bold tracking-wide uppercase text-xs'>Loading assignments...</p>
           </div>
-        ) : assignments.length > 0 ? (
-          <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'>
-            {assignments.map((item) => (
+        ) : filteredAssignments.length > 0 ? (
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
+            {filteredAssignments.map((item) => (
               <CollegeAssignmentCard
                 key={item.id}
                 assignment={item}
-                onClick={() => setSelected(item)}
+                onClick={() => navigate(`/dashboard/student/assignments/${item.id}`)}
               />
             ))}
           </div>
         ) : (
-          <div className='bg-white border border-dashed border-slate-200 rounded-3xl p-12 text-center'>
-            <p className='text-slate-500'>
-              No assignments from your college yet.
-            </p>
+          <div className='bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem] py-24 text-center space-y-4'>
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
+               <FileText className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <p className='text-slate-900 font-bold text-xl'>
+                No assignments found
+              </p>
+              <p className="text-slate-500 max-w-xs mx-auto text-sm">
+                Try adjusting your search or filters to find what you're looking for.
+              </p>
+            </div>
           </div>
         )}
       </div>
-
-      <CollegeAssignmentModal
-        assignment={selected}
-        onClose={() => setSelected(null)}
-      />
     </div>
   );
 }

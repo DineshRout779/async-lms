@@ -50,9 +50,38 @@ const pool = new Pool({
         updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(
-      `CREATE INDEX IF NOT EXISTS idx_college_assignments_college_id ON college_assignments(college_id)`,
-    );
+    await client.query(`
+      ALTER TABLE college_assignments 
+      ADD COLUMN IF NOT EXISTS instruction_file_url TEXT,
+      ADD COLUMN IF NOT EXISTS instruction_file_name TEXT,
+      ADD COLUMN IF NOT EXISTS course TEXT DEFAULT 'General'
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS college_assignment_submissions (
+        id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        assignment_id         UUID NOT NULL REFERENCES college_assignments(id) ON DELETE CASCADE,
+        student_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        submission_link       TEXT,
+        submission_file_url   TEXT,
+        submission_file_name  TEXT,
+        submitted_at          TIMESTAMPTZ DEFAULT NOW(),
+        updated_at            TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Add unique constraint separately to be safe from existing tables
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'unique_assignment_student'
+        ) THEN
+          ALTER TABLE college_assignment_submissions
+            ADD CONSTRAINT unique_assignment_student UNIQUE (assignment_id, student_id);
+        END IF;
+      END $$
+    `);
+
     await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (

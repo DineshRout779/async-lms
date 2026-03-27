@@ -22,6 +22,8 @@ const ProgramStep = lazy(() => import('@/pages/onboarding/ProgramStep'));
 const FacilitatorOnboarding = lazy(
   () => import('@/pages/onboarding/FacilitatorOnboarding'),
 );
+const ConfirmStep = lazy(() => import('@/pages/onboarding/ConfirmStep'));
+const SuccessStep = lazy(() => import('@/pages/onboarding/SuccessStep'));
 
 // Student Dashboard
 const StudentDashboardLayout = lazy(
@@ -39,6 +41,7 @@ const CapstoneView = lazy(
   () => import('@/pages/dashboard/student/CapstoneView'),
 );
 const CourseIntro = lazy(() => import('@/pages/dashboard/student/CourseIntro'));
+const CollegeAssignmentView = lazy(() => import('@/pages/dashboard/student/CollegeAssignmentView'));
 const EditorProfile = lazy(() => import('@/pages/playground/EditorProfile'));
 const Assignments = lazy(() => import('@/pages/dashboard/student/Assignments'));
 const Assistant = lazy(() => import('@/pages/dashboard/student/Assistant'));
@@ -61,9 +64,9 @@ const FacilitatorHome = lazy(
 const FacilitatorStudents = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorUsers'),
 );
-const FacilitatorAssignments = lazy(
-  () => import('@/pages/dashboard/facilitator/FacilitatorAssignments'),
-);
+// const FacilitatorAssignments = lazy(
+//   () => import('@/pages/dashboard/facilitator/FacilitatorAssignments'),
+// );
 const FacilitatorEvaluations = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorEvaluations'),
 );
@@ -93,6 +96,15 @@ const Analytics = lazy(() => import('@/pages/dashboard/admin/Analytics'));
 const AdminSettings = lazy(
   () => import('@/pages/dashboard/admin/AdminSettings'),
 );
+const AssignmentManagement = lazy(
+  () => import('@/pages/dashboard/admin/AssignmentManagement'),
+);
+const CreateAssignment = lazy(
+  () => import('@/pages/dashboard/admin/CreateAssignment'),
+);
+const AssignmentSuccess = lazy(
+  () => import('@/pages/dashboard/admin/AssignmentSuccess'),
+);
 
 // ---------- Router ----------
 
@@ -118,6 +130,8 @@ const router = createBrowserRouter([
               { path: 'batch', element: <BatchStep /> },
               { path: 'program', element: <ProgramStep /> },
               { path: 'facilitator', element: <FacilitatorOnboarding /> },
+              { path: 'confirm', element: <ConfirmStep /> },
+              { path: 'success', element: <SuccessStep /> },
             ],
           },
 
@@ -128,6 +142,7 @@ const router = createBrowserRouter([
               { index: true, element: <StudentDashboardHome /> },
               { path: 'editor-profile', element: <EditorProfile /> },
               { path: 'assignments', element: <Assignments /> },
+              { path: 'assignments/:id', element: <CollegeAssignmentView /> },
               { path: 'ai-assistant', element: <Assistant /> },
               { path: 'leaderboard', element: <Leaderboard /> },
               { path: 'profile', element: <StudentProfile /> },
@@ -169,7 +184,9 @@ const router = createBrowserRouter([
             children: [
               { index: true, element: <FacilitatorHome /> },
               { path: 'students', element: <FacilitatorStudents /> },
-              { path: 'assignments', element: <FacilitatorAssignments /> },
+              { path: 'assignments', element: <AssignmentManagement /> },
+              { path: 'create-assignment', element: <CreateAssignment /> },
+              { path: 'assignment-success', element: <AssignmentSuccess /> },
               { path: 'evaluations', element: <FacilitatorEvaluations /> },
               { path: 'analytics', element: <FacilitatorAnalytics /> },
               { path: 'student-growth', element: <FacilitatorStudentGrowth /> },
@@ -190,6 +207,18 @@ const router = createBrowserRouter([
               { path: 'users', element: <Students /> },
               { path: 'analytics', element: <Analytics /> },
               { path: 'settings', element: <AdminSettings /> },
+              {
+                path: 'assignment-management',
+                element: <AssignmentManagement />,
+              },
+              {
+                path: 'create-assignment',
+                element: <CreateAssignment />,
+              },
+              {
+                path: 'assignment-success',
+                element: <AssignmentSuccess />,
+              },
             ],
           },
         ],
