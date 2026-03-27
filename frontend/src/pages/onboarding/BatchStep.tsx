@@ -35,23 +35,30 @@ export default function BatchStep() {
   };
 
   return (
-    <div className='bg-accent'>
-      <div className='max-w-120 mx-auto h-screen flex justify-center items-center'>
-        <div className='w-full space-y-4 bg-white p-10 rounded-md'>
+    <div 
+      className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
+      style={{ fontFamily: "'Noto Sans', sans-serif" }}
+    >
+      <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
+        
+        <div className="flex-1">
           <Stepper current='batch' />
 
-          <h2 className='text-xl font-semibold'>Academic Details</h2>
+          <div className="mb-8 mt-6">
+            <h2 className='text-2xl font-bold text-[#344499]'>Select your batch</h2>
+            <p className="text-[13px] text-slate-400 font-medium mt-1.5 leading-relaxed tracking-wide">Used for cohort tracking and leaderboard ranking</p>
+          </div>
 
-          <div className='space-y-4 w-full'>
+          <div className='space-y-5 w-full'>
             <div className='w-full'>
-              <label className='text-sm font-medium mb-1.5 block'>
+              <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
                 Degree Program
               </label>
               <Select value={degree} onValueChange={setDegree}>
-                <SelectTrigger className='w-full'>
+                <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                   <SelectValue placeholder='Select Degree' />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className='w-full'>
                   <SelectItem value='B.Tech'>B.Tech</SelectItem>
                   <SelectItem value='BCA'>BCA</SelectItem>
                   <SelectItem value='M.Tech'>M.Tech</SelectItem>
@@ -61,42 +68,43 @@ export default function BatchStep() {
             </div>
 
             <div className='w-full'>
-              <label className='text-sm font-medium mb-1.5 block'>
-                Current Year
+              <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
+                Academic year
               </label>
               <Select value={year} onValueChange={setYear}>
-                <SelectTrigger className='w-full'>
+                <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                   <SelectValue placeholder='Select Year' />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='1'>1st Year</SelectItem>
-                  <SelectItem value='2'>2nd Year</SelectItem>
-                  <SelectItem value='3'>3rd Year</SelectItem>
-                  <SelectItem value='4'>4th Year</SelectItem>
+                <SelectContent className='w-full'>
+                  <SelectItem value='1'>2024-2025 (1st Year)</SelectItem>
+                  <SelectItem value='2'>2023-2024 (2nd Year)</SelectItem>
+                  <SelectItem value='3'>2022-2023 (3rd Year)</SelectItem>
+                  <SelectItem value='4'>2021-2022 (4th Year)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-
-          <div className='flex gap-2 mt-4'>
-            <Button
-              variant='ghost'
-              className='flex-1'
-              onClick={() => navigate('/onboarding/college')}
-              disabled={loading}
-            >
-              Back
-            </Button>
-            <Button
-              variant='accent'
-              className='flex-1'
-              onClick={handleContinue}
-              disabled={loading}
-            >
-              {loading ? 'Saving...' : 'Continue'}
-            </Button>
-          </div>
         </div>
+
+        <div className="flex justify-between items-center mt-10 pt-4">
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate(-1)}
+            type="button"
+            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg transition-colors"
+          >
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg shadow-md transition-colors"
+            disabled={loading}
+            onClick={handleContinue}
+          >
+            Continue
+          </Button>
+        </div>
+
       </div>
     </div>
   );

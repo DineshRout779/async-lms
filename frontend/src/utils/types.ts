@@ -72,6 +72,8 @@ export interface CollegeAssignment {
   due_date?: string | null;
   created_at: string;
   created_by_name: string;
+  submission_link?: string | null;
+  course?: string | null;
 }
 
 export interface Assignment {

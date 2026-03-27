@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
+import { Info } from 'lucide-react';
 import { useAppDispatch } from '@/app/hooks';
 import { loadUser } from '@/features/auth/authThunks';
 import { useColleges } from '@/hooks/queries/useOnboarding';
@@ -67,60 +68,93 @@ export default function CollegeStep() {
       if (res.status === 200 || res.status === 201) {
         navigate(`/onboarding/${res.data.next_step}`);
       }
-    } catch (error: any) {
-      console.error('Selection failed:', error.response?.data?.message || error.message);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Selection failed:', msg);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className='bg-accent'>
-      <div className='max-w-120 mx-auto h-screen flex justify-center items-center'>
-        <div className='w-full space-y-4 bg-white p-10 rounded-md'>
+    <div 
+      className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
+      style={{ fontFamily: "'Noto Sans', sans-serif" }}
+    >
+      <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
+        
+        <div className="flex-1">
           <Stepper current='college' />
 
-          <h2 className='text-xl font-semibold'>Select your college</h2>
+          <div className="mb-8 mt-6">
+            <h2 className='text-2xl font-bold text-[#344499]'>Select your college</h2>
+            <p className="text-[13px] text-slate-400 font-medium mt-1.5 leading-relaxed tracking-wide">Required for mapping batches and cohorts</p>
+          </div>
 
-          <Select
-            value={collegeId ?? ''}
-            onValueChange={setCollegeId}
-            disabled={isLoading || submitting}
-          >
-            <SelectTrigger className='w-full'>
-              <SelectValue placeholder={isLoading ? 'Loading colleges...' : 'Select college'} />
-            </SelectTrigger>
-            <SelectContent>
-              {collegeList.map((college) => (
-                <SelectItem key={college.id} value={college.id.toString()}>
-                  {college.name}
-                </SelectItem>
-              ))}
-              <SelectItem value='OTHER'>Other</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="space-y-2 mb-6">
+            <label className="text-xs font-bold text-[#344499] tracking-wide">College name</label>
+            <Select onValueChange={setCollegeId} disabled={isLoading || submitting}>
+              <SelectTrigger className='w-full h-11 text-[13px] text-slate-500 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
+                <SelectValue
+                  placeholder={isLoading ? 'Loading colleges...' : 'Search or select your college'}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {collegeList?.map((college) => (
+                  <SelectItem key={college.id} value={college.id.toString()}>
+                    {college.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value='OTHER'>Other</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-1.5 mt-2.5">
+               <Info className="h-3.5 w-3.5 text-[#344499]" />
+               <button type="button" onClick={() => setCollegeId('OTHER')} className="text-[11px] font-bold tracking-wide text-[#344499] hover:underline">
+                 My college is not listed
+               </button>
+            </div>
+          </div>
 
+          {/* Show when "Other" is selected */}
           {isOtherSelected && (
-            <div className='space-y-3'>
-              <Input
-                placeholder='Enter college name'
-                value={customCollegeName}
-                onChange={(e) => setCustomCollegeName(e.target.value)}
-              />
-              <Input
-                placeholder='Enter college address'
-                value={customCollegeAddress}
-                onChange={(e) => setCustomCollegeAddress(e.target.value)}
-              />
-              <p className='text-xs text-muted-foreground'>
-                Your college will be reviewed and verified by an admin before appearing in the list.
-              </p>
+             <div className='space-y-4 mb-6 border-t border-slate-100 pt-6 mt-6'>
+              <div className="space-y-1.5">
+                 <label className="text-xs font-bold text-[#344499] tracking-wide">Enter college name</label>
+                 <Input
+                   className="h-11 border-slate-200 text-sm shadow-sm"
+                   placeholder='e.g. Stanford University'
+                   value={customCollegeName}
+                   onChange={(e) => setCustomCollegeName(e.target.value)}
+                 />
+              </div>
+
+              <div className="space-y-1.5">
+                 <label className="text-xs font-bold text-[#344499] tracking-wide">Enter college address (City)</label>
+                 <Input
+                   className="h-11 border-slate-200 text-sm shadow-sm"
+                   placeholder='e.g. Stanford, California'
+                   value={customCollegeAddress}
+                   onChange={(e) => setCustomCollegeAddress(e.target.value)}
+                 />
+              </div>
             </div>
           )}
+        </div>
 
+        {/* Footer buttons */}
+        <div className="flex justify-between items-center mt-8 pt-4">
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate(-1)}
+            type="button"
+            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg transition-colors"
+          >
+            Back
+          </Button>
           <Button
-            variant='accent'
-            className='mt-4 w-full'
+            type="button"
+            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg shadow-md transition-colors"
             disabled={
               isLoading ||
               submitting ||
@@ -132,6 +166,7 @@ export default function CollegeStep() {
             {submitting ? 'Saving...' : 'Continue'}
           </Button>
         </div>
+
       </div>
     </div>
   );
