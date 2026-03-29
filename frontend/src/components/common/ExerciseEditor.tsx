@@ -101,7 +101,6 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
   const [testPanelOpen, setTestPanelOpen] = useState(false);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const monacoRef = useRef<any>(null);
 
   // ── Init workspace for single-task (legacy) ──────────────────────────────────
 
@@ -304,6 +303,10 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
     );
   }
 
+  const currentInstructions = isMultiTask
+    ? (tasks.find(t => t.id === activeTaskId)?.instructions ?? exercise.instructions)
+    : exercise.instructions;
+
   return (
     <div className='rounded-xl border border-slate-200 overflow-hidden bg-[#1e1e1e]'>
 
@@ -331,174 +334,211 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
         </div>
       )}
 
-      {/* ── File tabs ── */}
-      <div className='flex items-center gap-0 border-b border-slate-700 bg-[#252526] overflow-x-auto'>
-        {isCurrentTaskLoading ? (
-          <div className='flex items-center gap-2 px-4 py-2 text-xs text-slate-400'>
-            <Loader2 className='w-3 h-3 animate-spin' />
-            Loading task…
-          </div>
-        ) : (
-          currentFiles.map((f) => (
-            <button
-              key={f.name}
-              onClick={() => setCurrentActiveFile(f.name)}
-              className={`px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-r border-slate-700 ${
-                currentActiveFile === f.name
-                  ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#2d2d2d]'
-              }`}
-            >
-              {f.name}
-            </button>
-          ))
-        )}
+      {/* ── Instructions / Code tab bar ── */}
+      <div className='flex border-b border-slate-700 bg-[#252526]'>
+        <button
+          onClick={() => setActiveTab('instructions')}
+          className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors ${
+            activeTab === 'instructions'
+              ? 'text-white border-b-2 border-indigo-500'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <BookOpen className='w-3.5 h-3.5' />
+          Instructions
+        </button>
+        <button
+          onClick={() => setActiveTab('code')}
+          className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors ${
+            activeTab === 'code'
+              ? 'text-white border-b-2 border-indigo-500'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Code2 className='w-3.5 h-3.5' />
+          Code
+        </button>
+      </div>
 
-              <div className='ml-auto px-3 flex items-center'>
-                <Badge variant='secondary' className='text-[10px] uppercase font-medium bg-slate-700 text-slate-300 border-0'>
-                  {language}
-                </Badge>
-              </div>
-            </div>
-
-      {/* ── Monaco editor ── */}
-      {isCurrentTaskLoading ? (
-        <div className='flex items-center justify-center h-80 bg-[#1e1e1e]'>
-          <Loader2 className='w-6 h-6 animate-spin text-indigo-400' />
+      {/* ── Instructions panel ── */}
+      {activeTab === 'instructions' && (
+        <div className='p-5 bg-[#1e1e1e] min-h-80'>
+          {currentInstructions
+            ? <p className='text-sm text-slate-300 leading-relaxed whitespace-pre-wrap'>{currentInstructions}</p>
+            : <p className='text-sm text-slate-500 italic'>No instructions provided.</p>
+          }
         </div>
-      ) : (
-        <Editor
-          height='320px'
-          language={monacoLang(currentActiveFile)}
-          value={activeContent}
-          onChange={handleContentChange}
-          theme='vs-dark'
-          options={{
-            fontSize: 13,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            lineNumbers: 'on',
-            wordWrap: 'on',
-            padding: { top: 12, bottom: 12 },
-            fontFamily: "'Fira Code', 'Cascadia Code', monospace",
-            fontLigatures: true,
-          }}
-        />
       )}
 
-            {/* ── Output panel ── */}
-            {output !== null && (
-              <div className='border-t border-slate-700'>
-                <button
-                  onClick={() => setOutputOpen((o) => !o)}
-                  className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
-                >
-                  <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
-                    Output
-                    {exitCode !== null && (
-                      <span className={`font-mono ${exitCode === 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        (exit {exitCode})
-                      </span>
-                    )}
-                  </span>
-                  {outputOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
-                </button>
-                {outputOpen && (
-                  <pre className='px-4 py-3 text-xs font-mono text-slate-200 bg-[#1e1e1e] whitespace-pre-wrap max-h-48 overflow-y-auto'>
-                    {output}
-                  </pre>
-                )}
+      {/* ── Code panel ── */}
+      {activeTab === 'code' && (
+        <>
+          {/* File tabs */}
+          <div className='flex items-center gap-0 border-b border-slate-700 bg-[#252526] overflow-x-auto'>
+            {isCurrentTaskLoading ? (
+              <div className='flex items-center gap-2 px-4 py-2 text-xs text-slate-400'>
+                <Loader2 className='w-3 h-3 animate-spin' />
+                Loading task…
               </div>
-            )}
-
-            {/* ── Test results panel ── */}
-            {(testResults !== null || testRunning) && (
-              <div className='border-t border-slate-700'>
+            ) : (
+              currentFiles.map((f) => (
                 <button
-                  onClick={() => setTestPanelOpen((o) => !o)}
-                  className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
+                  key={f.name}
+                  onClick={() => setCurrentActiveFile(f.name)}
+                  className={`px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-r border-slate-700 ${
+                    currentActiveFile === f.name
+                      ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#2d2d2d]'
+                  }`}
                 >
-                  <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
-                    Test Results
-                    {testResults && (
-                      <span className={testResults.failed === 0 ? 'text-emerald-400' : 'text-red-400'}>
-                        {testResults.passed}/{testResults.total} passed
-                      </span>
-                    )}
-                    {testRunning && <Loader2 className='w-3 h-3 animate-spin text-indigo-400' />}
-                  </span>
-                  {testPanelOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
+                  {f.name}
                 </button>
-                {testPanelOpen && testResults && (
-                  <div className='bg-[#1e1e1e] max-h-64 overflow-y-auto divide-y divide-slate-800'>
-                    {testResults.results.map((r, i) => (
-                      <div key={i} className='flex items-start gap-3 px-4 py-2.5'>
-                        {r.passed
-                          ? <CheckCircle2 className='w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5' />
-                          : <XCircle className='w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5' />
-                        }
-                        <div className='min-w-0'>
-                          <p className='text-xs text-slate-200'>{r.description}</p>
-                          {r.error && (
-                            <p className='text-xs font-mono text-red-400 mt-0.5 break-all'>{r.error}</p>
-                          )}
-                        </div>
+              ))
+            )}
+            <div className='ml-auto px-3 flex items-center'>
+              <Badge variant='secondary' className='text-[10px] uppercase font-medium bg-slate-700 text-slate-300 border-0'>
+                {language}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Monaco editor */}
+          {isCurrentTaskLoading ? (
+            <div className='flex items-center justify-center h-80 bg-[#1e1e1e]'>
+              <Loader2 className='w-6 h-6 animate-spin text-indigo-400' />
+            </div>
+          ) : (
+            <Editor
+              height='320px'
+              language={monacoLang(currentActiveFile)}
+              value={activeContent}
+              onChange={handleContentChange}
+              theme='vs-dark'
+              options={{
+                fontSize: 13,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                lineNumbers: 'on',
+                wordWrap: 'on',
+                padding: { top: 12, bottom: 12 },
+                fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+                fontLigatures: true,
+              }}
+            />
+          )}
+
+          {/* Output panel */}
+          {output !== null && (
+            <div className='border-t border-slate-700'>
+              <button
+                onClick={() => setOutputOpen((o) => !o)}
+                className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
+              >
+                <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
+                  Output
+                  {exitCode !== null && (
+                    <span className={`font-mono ${exitCode === 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      (exit {exitCode})
+                    </span>
+                  )}
+                </span>
+                {outputOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
+              </button>
+              {outputOpen && (
+                <pre className='px-4 py-3 text-xs font-mono text-slate-200 bg-[#1e1e1e] whitespace-pre-wrap max-h-48 overflow-y-auto'>
+                  {output}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {/* Test results panel */}
+          {(testResults !== null || testRunning) && (
+            <div className='border-t border-slate-700'>
+              <button
+                onClick={() => setTestPanelOpen((o) => !o)}
+                className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
+              >
+                <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
+                  Test Results
+                  {testResults && (
+                    <span className={testResults.failed === 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {testResults.passed}/{testResults.total} passed
+                    </span>
+                  )}
+                  {testRunning && <Loader2 className='w-3 h-3 animate-spin text-indigo-400' />}
+                </span>
+                {testPanelOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
+              </button>
+              {testPanelOpen && testResults && (
+                <div className='bg-[#1e1e1e] max-h-64 overflow-y-auto divide-y divide-slate-800'>
+                  {testResults.results.map((r, i) => (
+                    <div key={i} className='flex items-start gap-3 px-4 py-2.5'>
+                      {r.passed
+                        ? <CheckCircle2 className='w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5' />
+                        : <XCircle className='w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5' />
+                      }
+                      <div className='min-w-0'>
+                        <p className='text-xs text-slate-200'>{r.description}</p>
+                        {r.error && (
+                          <p className='text-xs font-mono text-red-400 mt-0.5 break-all'>{r.error}</p>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-      {/* ── Action bar ── */}
-      <div className='flex items-center gap-3 px-4 py-3 bg-[#252526] border-t border-slate-700'>
-        <Button
-          size='sm'
-          variant='outline'
-          onClick={handleRun}
-          disabled={running || testRunning || isCurrentTaskLoading}
-          className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
-        >
-          {running
-            ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Running…</>
-            : <><Play className='w-3.5 h-3.5 mr-1.5' />Run</>
-          }
-        </Button>
+          {/* Action bar */}
+          <div className='flex items-center gap-3 px-4 py-3 bg-[#252526] border-t border-slate-700'>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={handleRun}
+              disabled={running || testRunning || isCurrentTaskLoading}
+              className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
+            >
+              {running
+                ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Running…</>
+                : <><Play className='w-3.5 h-3.5 mr-1.5' />Run</>
+              }
+            </Button>
 
-        {hasTestCases && (
-          <Button
-            size='sm'
-            variant='outline'
-            onClick={handleRunTests}
-            disabled={running || testRunning || isCurrentTaskLoading}
-            className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
-          >
-            {testRunning
-              ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Testing…</>
-              : <><FlaskConical className='w-3.5 h-3.5 mr-1.5' />Run Tests</>
-            }
-          </Button>
-        )}
-
+            {hasTestCases && (
               <Button
                 size='sm'
-                onClick={() => onSubmit(exercise.id)}
-                disabled={submitting}
-                className='bg-indigo-600 hover:bg-indigo-700 text-white'
+                variant='outline'
+                onClick={handleRunTests}
+                disabled={running || testRunning || isCurrentTaskLoading}
+                className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
               >
-                {submitting
-                  ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Submitting…</>
-                  : <><CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />Submit</>
+                {testRunning
+                  ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Testing…</>
+                  : <><FlaskConical className='w-3.5 h-3.5 mr-1.5' />Run Tests</>
                 }
               </Button>
+            )}
 
-              <span className='ml-auto text-[10px] text-slate-500 font-mono'>
-                Auto-save enabled
-              </span>
-            </div>
-          </>
-        )}
-      </div>
+            <Button
+              size='sm'
+              onClick={() => onSubmit(exercise.id)}
+              disabled={submitting}
+              className='bg-indigo-600 hover:bg-indigo-700 text-white'
+            >
+              {submitting
+                ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Submitting…</>
+                : <><CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />Submit</>
+              }
+            </Button>
+
+            <span className='ml-auto text-[10px] text-slate-500 font-mono'>
+              Auto-save enabled
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 };
