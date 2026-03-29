@@ -685,7 +685,7 @@ exports.submitExercise = async (req, res) => {
     const { exerciseId } = req.params;
 
     const exerciseQuery = await pool.query(
-      'SELECT max_score, language, test_cases, subtopic_id FROM exercises WHERE id = $1',
+      'SELECT max_score, language, test_cases, tasks, subtopic_id FROM exercises WHERE id = $1',
       [exerciseId],
     );
 
@@ -697,8 +697,36 @@ exports.submitExercise = async (req, res) => {
     let score;
     let testResults = null;
 
-    if (exercise.test_cases && exercise.test_cases.length > 0) {
-      // Run test cases and auto-calculate score
+    const hasTasks = Array.isArray(exercise.tasks) && exercise.tasks.length > 0;
+
+    if (hasTasks) {
+      // Multi-task exercise: run tests for each task and aggregate
+      let totalPassed = 0;
+      let totalTests = 0;
+      const taskResults = [];
+
+      for (const task of exercise.tasks) {
+        if (!task.test_cases || task.test_cases.length === 0) continue;
+        const taskWorkspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}-task-${task.id}`);
+        if (!fs.existsSync(taskWorkspaceDir)) continue;
+        try {
+          const result = await runTestFile(taskWorkspaceDir, exercise.language, task.test_cases);
+          totalPassed += result.passed;
+          totalTests += result.total;
+          taskResults.push({ taskId: task.id, taskTitle: task.title, ...result });
+        } catch (err) {
+          // count all tests in this task as failed
+          totalTests += task.test_cases.length;
+          taskResults.push({ taskId: task.id, taskTitle: task.title, passed: 0, failed: task.test_cases.length, total: task.test_cases.length, error: err.message });
+        }
+      }
+
+      score = totalTests > 0
+        ? Math.round((totalPassed / totalTests) * exercise.max_score)
+        : exercise.max_score;
+      testResults = { totalPassed, totalTests, taskResults };
+    } else if (exercise.test_cases && exercise.test_cases.length > 0) {
+      // Legacy: single workspace test cases
       const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}`);
       if (!fs.existsSync(workspaceDir)) {
         return res.status(400).json({ success: false, message: 'Workspace not initialised. Open the exercise first.' });
@@ -867,9 +895,10 @@ exports.initExerciseWorkspace = async (req, res) => {
   try {
     const userId = req.user.id;
     const { exerciseId } = req.params;
+    const { taskId } = req.body;
 
     const exerciseResult = await pool.query(
-      'SELECT language, initial_files FROM exercises WHERE id = $1',
+      'SELECT language, initial_files, tasks FROM exercises WHERE id = $1',
       [exerciseId],
     );
 
@@ -877,8 +906,19 @@ exports.initExerciseWorkspace = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Exercise not found' });
     }
 
-    const { language, initial_files } = exerciseResult.rows[0];
-    const projectId = `exercise-${exerciseId}`;
+    const { language, initial_files, tasks } = exerciseResult.rows[0];
+
+    // Determine which files to seed: task-specific or exercise-level
+    let filesToSeedFromDb = null;
+    if (taskId && Array.isArray(tasks) && tasks.length > 0) {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+      filesToSeedFromDb = task.initial_files;
+    } else {
+      filesToSeedFromDb = initial_files;
+    }
+
+    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
     const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
 
     fs.mkdirSync(workspaceDir, { recursive: true });
@@ -886,8 +926,8 @@ exports.initExerciseWorkspace = async (req, res) => {
     const existing = fs.readdirSync(workspaceDir);
     if (existing.length === 0) {
       const filesToSeed =
-        (Array.isArray(initial_files) && initial_files.length > 0)
-          ? initial_files
+        (Array.isArray(filesToSeedFromDb) && filesToSeedFromDb.length > 0)
+          ? filesToSeedFromDb
           : (DEFAULT_INITIAL_FILES[language] ?? DEFAULT_INITIAL_FILES.javascript);
 
       for (const file of filesToSeed) {
@@ -920,6 +960,7 @@ exports.runExercise = async (req, res) => {
   try {
     const userId = req.user.id;
     const { exerciseId } = req.params;
+    const { taskId } = req.body;
 
     const exerciseResult = await pool.query(
       'SELECT language FROM exercises WHERE id = $1',
@@ -932,7 +973,8 @@ exports.runExercise = async (req, res) => {
 
     const { language } = exerciseResult.rows[0];
     const runner = EXERCISE_RUNNER[language] ?? EXERCISE_RUNNER.javascript;
-    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}`);
+    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
+    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
 
     if (!fs.existsSync(workspaceDir)) {
       return res.status(400).json({ success: false, message: 'Workspace not initialised' });
@@ -992,26 +1034,37 @@ exports.runExerciseTests = async (req, res) => {
   try {
     const userId = req.user.id;
     const { exerciseId } = req.params;
+    const { taskId } = req.body;
 
     const result = await pool.query(
-      'SELECT language, test_cases FROM exercises WHERE id = $1',
+      'SELECT language, test_cases, tasks FROM exercises WHERE id = $1',
       [exerciseId],
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Exercise not found' });
     }
 
-    const { language, test_cases } = result.rows[0];
-    if (!test_cases || test_cases.length === 0) {
-      return res.json({ success: true, data: { message: 'No test cases defined for this exercise' } });
+    const { language, test_cases, tasks } = result.rows[0];
+
+    // Resolve which test cases to run
+    let testCasesToRun = test_cases;
+    if (taskId && Array.isArray(tasks) && tasks.length > 0) {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+      testCasesToRun = task.test_cases;
     }
 
-    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}`);
+    if (!testCasesToRun || testCasesToRun.length === 0) {
+      return res.json({ success: true, data: { message: 'No test cases defined for this task' } });
+    }
+
+    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
+    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
     if (!fs.existsSync(workspaceDir)) {
       return res.status(400).json({ success: false, message: 'Workspace not initialised' });
     }
 
-    const testResult = await runTestFile(workspaceDir, language, test_cases);
+    const testResult = await runTestFile(workspaceDir, language, testCasesToRun);
     res.json({ success: true, data: testResult });
   } catch (error) {
     console.error('Error running exercise tests:', error);

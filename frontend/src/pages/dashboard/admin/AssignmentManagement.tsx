@@ -59,8 +59,6 @@ export default function AssignmentManagement() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [collegeFilter, setCollegeFilter] = useState('all');
-  const [domainFilter, setDomainFilter] = useState('all');
-  const [batchFilter, setBatchFilter] = useState('all');
   const [activeTab, setActiveTab] = useState<Tab>('Active');
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -82,7 +80,7 @@ export default function AssignmentManagement() {
           submissionsTotal: 0,
           dueDate: item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Due Date',
           rawDueDate: item.due_date ? item.due_date.split('T')[0] : '',
-          status: 'Active' as const, // Placeholder default to match 'Active' tab
+          status: (item.due_date && new Date(item.due_date) < new Date() ? 'Overdue' : 'Active') as Assignment['status'],
         }));
         setAssignments(mapped);
       })
@@ -101,12 +99,17 @@ export default function AssignmentManagement() {
     new Map(assignments.map((a) => [a.collegeId, a.college])).entries()
   );
 
-  // Simple client-side filter
+  // Client-side filter
   const filtered = assignments.filter((a) => {
     const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCollege = collegeFilter === 'all' || a.collegeId === collegeFilter;
-    // Add batch/domain filters here when implemented in DB
-    return matchesSearch && matchesCollege;
+    const matchesTab =
+      activeTab === 'Active'
+        ? a.status === 'Active'
+        : activeTab === 'Completed'
+          ? a.status === 'Overdue' || a.status === 'Completed'
+          : a.status === 'Submitted';
+    return matchesSearch && matchesCollege && matchesTab;
   });
 
   const getStatusBadge = (status: Assignment['status']) => {
@@ -192,28 +195,6 @@ export default function AssignmentManagement() {
           </SelectContent>
         </Select>
 
-        <Select value={domainFilter} onValueChange={setDomainFilter}>
-          <SelectTrigger className='w-[150px]'>
-            <SelectValue placeholder='All Domains' />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value='all'>All Domains</SelectItem>
-            <SelectItem value='frontend'>Frontend</SelectItem>
-            <SelectItem value='backend'>Backend</SelectItem>
-            <SelectItem value='fullstack'>Full Stack</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={batchFilter} onValueChange={setBatchFilter}>
-          <SelectTrigger className='w-[140px]'>
-            <SelectValue placeholder='All Batches' />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value='all'>All Batches</SelectItem>
-            <SelectItem value='a'>Batch A</SelectItem>
-            <SelectItem value='b'>Batch B</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Tabs */}

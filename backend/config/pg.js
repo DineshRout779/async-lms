@@ -36,6 +36,9 @@ const pool = new Pool({
       `ALTER TABLE exercises ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb`,
     );
     await client.query(
+      `ALTER TABLE exercises ADD COLUMN IF NOT EXISTS tasks JSONB DEFAULT '[]'::jsonb`,
+    );
+    await client.query(
       `ALTER TABLE projects ADD COLUMN IF NOT EXISTS instructions text`,
     );
     await client.query(`
@@ -81,6 +84,9 @@ const pool = new Pool({
         END IF;
       END $$
     `);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_college_assignments_college_id ON college_assignments(college_id)`,
+    );
 
     await client.query(`
       DO $$ BEGIN

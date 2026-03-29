@@ -12,7 +12,6 @@ export default function Assignments() {
   const [assignments, setAssignments] = useState<CollegeAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('All');
-  const [searchQuery, ] = useState('');
 
   const fetchAssignments = () => {
     setLoading(true);
@@ -28,15 +27,9 @@ export default function Assignments() {
   }, []);
 
   const filteredAssignments = assignments.filter((item) => {
-    // Tab filtering
-    if (activeTab === 'Pending' && item.submission_link) return false;
-    if (activeTab === 'Completed' && !item.submission_link) return false;
-
-    // Search filtering
-    if (searchQuery && !item.title.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
-
+    const isSubmitted = Boolean(item.submission_link || item.submission_file_url);
+    if (activeTab === 'Pending' && isSubmitted) return false;
+    if (activeTab === 'Completed' && !isSubmitted) return false;
     return true;
   });
 

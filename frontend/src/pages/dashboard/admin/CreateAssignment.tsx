@@ -46,7 +46,7 @@ export default function CreateAssignment() {
   const basePath = `/dashboard/${dashboardType}`;
 
   // ── Basic Information ──
-  const [editId, ] = useState(editData.editId || null);
+  const editId = editData.editId || null;
   const [title, setTitle] = useState(editData.title || '');
   const [description, setDescription] = useState(editData.description || '');
   const [course, setCourse] = useState(editData.course || '');

@@ -550,6 +550,8 @@ const LearningFlow: React.FC = () => {
     max_score: number;
     language: string;
     initial_files: { name: string; content: string }[];
+    test_cases: import('@/utils/types').TestCase[];
+    tasks: import('@/utils/types').ExerciseTask[];
   }) => {
     if (!selectedSubtopicForExercise) return;
 
@@ -561,6 +563,7 @@ const LearningFlow: React.FC = () => {
         max_score: data.max_score,
         language: data.language,
         initial_files: data.initial_files,
+        tasks: data.tasks,
       });
 
       if (response.data.success) {
@@ -638,6 +641,8 @@ const LearningFlow: React.FC = () => {
     max_score: number;
     language: string;
     initial_files: { name: string; content: string }[];
+    test_cases: import('@/utils/types').TestCase[];
+    tasks: import('@/utils/types').ExerciseTask[];
   }) => {
     if (!editingExercise) return;
 
@@ -648,6 +653,7 @@ const LearningFlow: React.FC = () => {
         max_score: data.max_score,
         language: data.language,
         initial_files: data.initial_files,
+        tasks: data.tasks,
       });
       toast.success('Exercise updated');
       refreshStructure();
@@ -1588,11 +1594,13 @@ const LearningFlow: React.FC = () => {
                                                                         {
                                                                           ...exercise,
                                                                           instructions:
-                                                                            res
-                                                                              .data
-                                                                              .data
-                                                                              .instructions ??
-                                                                            '',
+                                                                            res.data.data.instructions ?? '',
+                                                                          initial_files:
+                                                                            res.data.data.initial_files ?? [],
+                                                                          test_cases:
+                                                                            res.data.data.test_cases ?? [],
+                                                                          tasks:
+                                                                            res.data.data.tasks ?? [],
                                                                         },
                                                                       );
                                                                     } catch {
@@ -1944,6 +1952,8 @@ const LearningFlow: React.FC = () => {
                 max_score: editingExercise.max_score,
                 language: editingExercise.language || 'javascript',
                 initial_files: editingExercise.initial_files || [],
+                test_cases: editingExercise.test_cases || [],
+                tasks: editingExercise.tasks || [],
               }
             : undefined
         }

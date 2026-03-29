@@ -6,7 +6,69 @@ const { promisify } = require('util');
 const writeFileAsync = promisify(fs.writeFile);
 const mkdirAsync = promisify(fs.mkdir);
 
-// ─── Upload Instruction Document to S3 ───────────────────────────────────────
+// ─── S3 singleton (reused across requests) ───────────────────────────────────
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const s3Configured = () =>
+  !!(
+    process.env.AWS_S3_BUCKET &&
+    process.env.AWS_REGION &&
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY
+  );
+
+// ─── Shared file upload helper (S3 → local fallback) ─────────────────────────
+// s3KeyPrefix  : e.g. 'assignment-instructions'
+// localSubPath : subfolder under public/uploads, e.g. '' or 'submissions'
+async function storeFile(file, { s3KeyPrefix, localSubPath }) {
+  const safeName = file.originalname
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]/g, '');
+  const filename = `${Date.now()}-${safeName}`;
+
+  if (s3Configured()) {
+    try {
+      const key = `${s3KeyPrefix}/${filename}`;
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }),
+      );
+      const url = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      console.log('S3 upload success:', url);
+      return { url, name: file.originalname };
+    } catch (s3Error) {
+      console.error('S3 upload failed, using local fallback:', s3Error);
+    }
+  } else {
+    console.log('S3 not configured, using local storage fallback');
+  }
+
+  // Local fallback
+  const uploadDir = localSubPath
+    ? path.join(__dirname, '..', 'public', 'uploads', localSubPath)
+    : path.join(__dirname, '..', 'public', 'uploads');
+  await mkdirAsync(uploadDir, { recursive: true });
+  await writeFileAsync(path.join(uploadDir, filename), file.buffer);
+  const base = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
+  const urlPath = localSubPath
+    ? `uploads/${localSubPath}/${filename}`
+    : `uploads/${filename}`;
+  const url = `${base}/${urlPath}`;
+  console.log('Local upload success:', url);
+  return { url, name: file.originalname };
+}
+
+// ─── Upload Instruction Document ─────────────────────────────────────────────
 
 // POST /api/v1/college-assignments/upload-instruction
 exports.uploadInstructionDoc = async (req, res) => {
@@ -15,63 +77,12 @@ exports.uploadInstructionDoc = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const bucket = process.env.AWS_S3_BUCKET;
-    const region = process.env.AWS_REGION;
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+    const { url, name } = await storeFile(req.file, {
+      s3KeyPrefix: 'assignment-instructions',
+      localSubPath: '',
+    });
 
-    const ext = path.extname(req.file.originalname) || '';
-    const safeName = req.file.originalname
-      .replace(/\s+/g, '-')
-      .replace(/[^a-zA-Z0-9._-]/g, '');
-    const filename = `${Date.now()}-${safeName}`;
-    const key = `assignment-instructions/${filename}`;
-
-    // Try S3 if configured
-    if (bucket && region && accessKeyId && secretAccessKey) {
-      try {
-        const s3 = new S3Client({
-          region,
-          credentials: {
-            accessKeyId,
-            secretAccessKey,
-          },
-        });
-
-        await s3.send(
-          new PutObjectCommand({
-            Bucket: bucket,
-            Key: key,
-            Body: req.file.buffer,
-            ContentType: req.file.mimetype,
-          }),
-        );
-
-        const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
-        console.log('S3 upload success:', url);
-        return res.json({ success: true, url, filename: req.file.originalname });
-      } catch (s3Error) {
-        console.error('S3 upload failed, falling back to local storage:', s3Error);
-      }
-    } else {
-      console.log('S3 not fully configured, using local storage fallback');
-    }
-
-    // Local storage fallback
-    const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      await mkdirAsync(uploadDir, { recursive: true });
-    }
-
-    const localPath = path.join(uploadDir, filename);
-    await writeFileAsync(localPath, req.file.buffer);
-
-    // Generate local URL
-    const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
-    const url = `${baseUrl}/uploads/${filename}`;
-
-    console.log('Local upload success:', url);
-    res.json({ success: true, url, filename: req.file.originalname });
+    res.json({ success: true, url, filename: name });
   } catch (error) {
     console.error('uploadInstructionDoc error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -115,7 +126,7 @@ exports.getMyCollegeAssignments = async (req, res) => {
 
 // GET /api/v1/college-assignments/manage
 // Admin → all assignments across all colleges.
-// Facilitator → only assignments for their managed colleges.
+// Facilitator → only assignments they created.
 exports.manageAssignments = async (req, res) => {
   try {
     let query, values;
@@ -308,73 +319,33 @@ exports.submitCollegeAssignment = async (req, res) => {
 
     // 2. Handle file upload if present
     if (req.file) {
-      const bucket = process.env.AWS_S3_BUCKET;
-      const region = process.env.AWS_REGION;
-      const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-      const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-
-      const safeName = req.file.originalname.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]/g, '');
-      const filename = `sub-${Date.now()}-${safeName}`;
-      const key = `college-submissions/${filename}`;
-
-      if (bucket && region && accessKeyId && secretAccessKey) {
-        try {
-          const s3 = new S3Client({
-            region,
-            credentials: { accessKeyId, secretAccessKey },
-          });
-          await s3.send(
-            new PutObjectCommand({
-              Bucket: bucket,
-              Key: key,
-              Body: req.file.buffer,
-              ContentType: req.file.mimetype,
-            }),
-          );
-          file_url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
-          file_name = req.file.originalname;
-        } catch (s3Error) {
-          console.error('S3 upload fallback for submission:', s3Error);
-        }
-      }
-
-      if (!file_url) {
-        // Local fallback
-        const uploadDir = path.join(__dirname, '..', 'public', 'uploads', 'submissions');
-        if (!fs.existsSync(uploadDir)) {
-          await mkdirAsync(uploadDir, { recursive: true });
-        }
-        const localPath = path.join(uploadDir, filename);
-        await writeFileAsync(localPath, req.file.buffer);
-        const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
-        file_url = `${baseUrl}/uploads/submissions/${filename}`;
-        file_name = req.file.originalname;
-      }
+      const { url, name } = await storeFile(req.file, {
+        s3KeyPrefix: 'college-submissions',
+        localSubPath: 'submissions',
+      });
+      file_url = url;
+      file_name = name;
     }
 
     // 3. Upsert submission
     const { rows } = await pool.query(
-      `INSERT INTO college_assignment_submissions 
+      `INSERT INTO college_assignment_submissions
        (assignment_id, student_id, submission_link, submission_file_url, submission_file_name, updated_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
        ON CONFLICT (assignment_id, student_id)
-       DO UPDATE SET 
+       DO UPDATE SET
          submission_link = COALESCE(EXCLUDED.submission_link, college_assignment_submissions.submission_link),
          submission_file_url = COALESCE(EXCLUDED.submission_file_url, college_assignment_submissions.submission_file_url),
          submission_file_name = COALESCE(EXCLUDED.submission_file_name, college_assignment_submissions.submission_file_name),
          updated_at = NOW()
        RETURNING *`,
-      [id, student_id, submission_link || null, file_url, file_name]
+      [id, student_id, submission_link || null, file_url, file_name],
     );
 
     res.json({ success: true, data: rows[0], message: 'Assignment submitted successfully' });
   } catch (error) {
     console.error('submitCollegeAssignment ERROR:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message,
-      detail: error.detail || null // Postgres might provide more detail
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -394,7 +365,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
        LEFT JOIN users u ON u.id = ca.created_by
        LEFT JOIN college_assignment_submissions cas ON cas.assignment_id = ca.id AND cas.student_id = $2
        WHERE ca.id = $1`,
-      [id, student_id]
+      [id, student_id],
     );
 
     if (!rows.length) {

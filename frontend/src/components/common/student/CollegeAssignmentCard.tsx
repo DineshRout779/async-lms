@@ -1,4 +1,4 @@
-import { FileText, CheckCircle2, ChevronRight } from 'lucide-react';
+import { FileText, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -22,7 +22,7 @@ interface Props {
 
 export const CollegeAssignmentCard = ({ assignment, onClick }: Props) => {
   const due = assignment.due_date ? formatDueDate(assignment.due_date) : null;
-  const isSubmitted = Boolean(assignment.submission_link || (assignment as any).submission_file_url);
+  const isSubmitted = Boolean(assignment.submission_link || assignment.submission_file_url);
 
   return (
     <div
@@ -86,13 +86,9 @@ export const CollegeAssignmentCard = ({ assignment, onClick }: Props) => {
       {/* Action Button */}
       <div className='mt-8 pt-4'>
         {isSubmitted ? (
-          <div className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-               <span className="text-emerald-700 font-black text-sm">Score: 92/100</span>
-            </div>
-            <span className="text-indigo-600 font-bold text-xs hover:underline cursor-pointer flex items-center gap-1">
-              View Feedback <ChevronRight className="w-3 h-3" />
-            </span>
+          <div className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span className="text-emerald-700 font-black text-sm">Submitted</span>
           </div>
         ) : (
           <Button

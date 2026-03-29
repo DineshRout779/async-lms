@@ -43,7 +43,7 @@ export default function CollegeAssignmentView() {
       if (data.submission_link) {
         setSolution(data.submission_link);
         setActiveTab('link');
-      } else if ((data as any).submission_file_url) {
+      } else if (data.submission_file_url) {
         setActiveTab('upload');
       }
     } catch {
@@ -124,8 +124,7 @@ export default function CollegeAssignmentView() {
     );
   }
 
-  const isSubmitted = Boolean(assignment.submission_link || (assignment as any).submission_file_url);
-  const assignmentData = assignment as any;
+  const isSubmitted = Boolean(assignment.submission_link || assignment.submission_file_url);
 
   return (
     <div className='min-h-screen bg-[#F8FAFC] p-6 md:p-12 animate-in fade-in duration-500'>
@@ -164,9 +163,17 @@ export default function CollegeAssignmentView() {
               <span>Due: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No Deadline'}</span>
             </div>
           </div>
-          <button className='p-4 rounded-full bg-slate-50 text-slate-400 hover:text-slate-900 transition-all hover:bg-slate-100'>
-            <Download className='w-5 h-5' />
-          </button>
+          {assignment.instruction_file_url && (
+            <a
+              href={assignment.instruction_file_url}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='p-4 rounded-full bg-slate-50 text-slate-400 hover:text-slate-900 transition-all hover:bg-slate-100'
+              title='Download instruction document'
+            >
+              <Download className='w-5 h-5' />
+            </a>
+          )}
         </Card>
 
         {/* Two Column Section */}
@@ -185,15 +192,15 @@ export default function CollegeAssignmentView() {
                 </div>
 
                 <div className='pt-8 border-t border-slate-50'>
-                  {assignmentData.instruction_file_url ? (
-                    <a 
-                      href={assignmentData.instruction_file_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
+                  {assignment.instruction_file_url ? (
+                    <a
+                      href={assignment.instruction_file_url}
+                      target='_blank'
+                      rel='noopener noreferrer'
                       className='flex items-center gap-3 text-[#6366F1] font-black text-sm hover:underline hover:gap-4 transition-all'
                     >
                       <FileText className='w-5 h-5' />
-                      Download Requirements {assignmentData.instruction_file_name?.toLowerCase().includes('pdf') ? 'PDF' : 'Document'}
+                      Download Requirements {assignment.instruction_file_name?.toLowerCase().includes('pdf') ? 'PDF' : 'Document'}
                     </a>
                   ) : (
                     <button 

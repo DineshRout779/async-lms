@@ -64,9 +64,6 @@ const FacilitatorHome = lazy(
 const FacilitatorStudents = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorUsers'),
 );
-// const FacilitatorAssignments = lazy(
-//   () => import('@/pages/dashboard/facilitator/FacilitatorAssignments'),
-// );
 const FacilitatorEvaluations = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorEvaluations'),
 );
