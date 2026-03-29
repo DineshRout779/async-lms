@@ -10,11 +10,15 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
+  BookOpen,
+  Code2,
 } from 'lucide-react';
 import apiClient from '@/services/api';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 import type { Exercise } from '@/utils/types';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +68,8 @@ function monacoLang(filename: string): string {
 const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps) => {
   const user = useAppSelector(selectUser);
 
+  const [activeTab, setActiveTab] = useState<'instructions' | 'code'>('instructions');
+
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [activeFile, setActiveFile] = useState<string>('');
@@ -80,6 +86,7 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
   const [testPanelOpen, setTestPanelOpen] = useState(false);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const monacoRef = useRef<any>(null);
 
   const hasTestCases = (exercise.test_cases?.length ?? 0) > 0;
 
@@ -112,6 +119,14 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
     init();
     return () => { cancelled = true; };
   }, [exercise.id]);
+
+  // ── Re-layout Monaco when code tab becomes visible ───────────────────────────
+
+  useEffect(() => {
+    if (activeTab === 'code' && monacoRef.current) {
+      setTimeout(() => monacoRef.current?.layout(), 0);
+    }
+  }, [activeTab]);
 
   // ── Auto-save on content change (debounced 800ms) ───────────────────────────
 
@@ -187,170 +202,224 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  if (loading) {
-    return (
-      <div className='flex items-center gap-2 text-slate-400 text-sm py-6'>
-        <Loader2 className='w-4 h-4 animate-spin' />
-        Setting up editor…
-      </div>
-    );
-  }
-
   return (
-    <div className='rounded-xl border border-slate-200 overflow-hidden bg-[#1e1e1e]'>
+    <div className='rounded-xl border border-slate-200 overflow-hidden'>
 
-      {/* ── File tabs ── */}
-      <div className='flex items-center gap-0 border-b border-slate-700 bg-[#252526] overflow-x-auto'>
-        {files.map((f) => (
-          <button
-            key={f.name}
-            onClick={() => setActiveFile(f.name)}
-            className={`px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-r border-slate-700 ${
-              activeFile === f.name
-                ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#2d2d2d]'
-            }`}
-          >
-            {f.name}
-          </button>
-        ))}
+      {/* ── Top-level tab bar ── */}
+      <div className='flex items-center border-b border-slate-200 bg-white'>
+        <button
+          onClick={() => setActiveTab('instructions')}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'instructions'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <BookOpen className='w-3.5 h-3.5' />
+          Instructions
+        </button>
+        <button
+          onClick={() => setActiveTab('code')}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'code'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Code2 className='w-3.5 h-3.5' />
+          Code
+        </button>
 
-        {/* Language badge pushed to the right */}
-        <div className='ml-auto px-3 flex items-center'>
-          <Badge variant='secondary' className='text-[10px] uppercase font-medium bg-slate-700 text-slate-300 border-0'>
-            {language}
+        <div className='ml-auto px-4'>
+          <Badge variant='secondary' className='text-[10px]'>
+            {exercise.max_score} pts
           </Badge>
         </div>
       </div>
 
-      {/* ── Monaco editor ── */}
-      <Editor
-        height='320px'
-        language={monacoLang(activeFile)}
-        value={activeContent}
-        onChange={handleContentChange}
-        theme='vs-dark'
-        options={{
-          fontSize: 13,
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          lineNumbers: 'on',
-          wordWrap: 'on',
-          padding: { top: 12, bottom: 12 },
-          fontFamily: "'Fira Code', 'Cascadia Code', monospace",
-          fontLigatures: true,
-        }}
-      />
-
-      {/* ── Output panel ── */}
-      {output !== null && (
-        <div className='border-t border-slate-700'>
-          <button
-            onClick={() => setOutputOpen((o) => !o)}
-            className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
-          >
-            <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
-              Output
-              {exitCode !== null && (
-                <span className={`font-mono ${exitCode === 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  (exit {exitCode})
-                </span>
-              )}
-            </span>
-            {outputOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
-          </button>
-          {outputOpen && (
-            <pre className='px-4 py-3 text-xs font-mono text-slate-200 bg-[#1e1e1e] whitespace-pre-wrap max-h-48 overflow-y-auto'>
-              {output}
-            </pre>
-          )}
+      {/* ── Instructions panel ── */}
+      <div className={`${activeTab !== 'instructions' ? 'hidden' : ''} p-6 bg-white`}>
+        <h3 className='text-lg font-semibold text-slate-900 mb-3'>{exercise.title}</h3>
+        <div className='prose prose-sm max-w-none text-slate-600 mb-6'>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {exercise.instructions ?? ''}
+          </ReactMarkdown>
         </div>
-      )}
-
-      {/* ── Test results panel ── */}
-      {(testResults !== null || testRunning) && (
-        <div className='border-t border-slate-700'>
-          <button
-            onClick={() => setTestPanelOpen((o) => !o)}
-            className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
-          >
-            <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
-              Test Results
-              {testResults && (
-                <span className={testResults.failed === 0 ? 'text-emerald-400' : 'text-red-400'}>
-                  {testResults.passed}/{testResults.total} passed
-                </span>
-              )}
-              {testRunning && <Loader2 className='w-3 h-3 animate-spin text-indigo-400' />}
-            </span>
-            {testPanelOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
-          </button>
-          {testPanelOpen && testResults && (
-            <div className='bg-[#1e1e1e] max-h-64 overflow-y-auto divide-y divide-slate-800'>
-              {testResults.results.map((r, i) => (
-                <div key={i} className='flex items-start gap-3 px-4 py-2.5'>
-                  {r.passed
-                    ? <CheckCircle2 className='w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5' />
-                    : <XCircle className='w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5' />
-                  }
-                  <div className='min-w-0'>
-                    <p className='text-xs text-slate-200'>{r.description}</p>
-                    {r.error && (
-                      <p className='text-xs font-mono text-red-400 mt-0.5 break-all'>{r.error}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Action bar ── */}
-      <div className='flex items-center gap-3 px-4 py-3 bg-[#252526] border-t border-slate-700'>
         <Button
           size='sm'
-          variant='outline'
-          onClick={handleRun}
-          disabled={running || testRunning}
-          className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
-        >
-          {running
-            ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Running…</>
-            : <><Play className='w-3.5 h-3.5 mr-1.5' />Run</>
-          }
-        </Button>
-
-        {hasTestCases && (
-          <Button
-            size='sm'
-            variant='outline'
-            onClick={handleRunTests}
-            disabled={running || testRunning}
-            className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
-          >
-            {testRunning
-              ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Testing…</>
-              : <><FlaskConical className='w-3.5 h-3.5 mr-1.5' />Run Tests</>
-            }
-          </Button>
-        )}
-
-        <Button
-          size='sm'
-          onClick={() => onSubmit(exercise.id)}
-          disabled={submitting}
+          onClick={() => setActiveTab('code')}
           className='bg-indigo-600 hover:bg-indigo-700 text-white'
         >
-          {submitting
-            ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Submitting…</>
-            : <><CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />Submit</>
-          }
+          <Code2 className='w-3.5 h-3.5 mr-1.5' />
+          Start Coding
         </Button>
+      </div>
 
-        <span className='ml-auto text-[10px] text-slate-500 font-mono'>
-          Auto-save enabled
-        </span>
+      {/* ── Code panel ── */}
+      <div className={`${activeTab !== 'code' ? 'hidden' : ''} bg-[#1e1e1e]`}>
+
+        {loading ? (
+          <div className='flex items-center gap-2 text-slate-400 text-sm px-4 py-8'>
+            <Loader2 className='w-4 h-4 animate-spin' />
+            Setting up editor…
+          </div>
+        ) : (
+          <>
+            {/* ── File tabs ── */}
+            <div className='flex items-center gap-0 border-b border-slate-700 bg-[#252526] overflow-x-auto'>
+              {files.map((f) => (
+                <button
+                  key={f.name}
+                  onClick={() => setActiveFile(f.name)}
+                  className={`px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-r border-slate-700 ${
+                    activeFile === f.name
+                      ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#2d2d2d]'
+                  }`}
+                >
+                  {f.name}
+                </button>
+              ))}
+
+              <div className='ml-auto px-3 flex items-center'>
+                <Badge variant='secondary' className='text-[10px] uppercase font-medium bg-slate-700 text-slate-300 border-0'>
+                  {language}
+                </Badge>
+              </div>
+            </div>
+
+            {/* ── Monaco editor ── */}
+            <Editor
+              height='320px'
+              language={monacoLang(activeFile)}
+              value={activeContent}
+              onChange={handleContentChange}
+              onMount={(editor) => { monacoRef.current = editor; }}
+              theme='vs-dark'
+              options={{
+                fontSize: 13,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                lineNumbers: 'on',
+                wordWrap: 'on',
+                padding: { top: 12, bottom: 12 },
+                fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+                fontLigatures: true,
+              }}
+            />
+
+            {/* ── Output panel ── */}
+            {output !== null && (
+              <div className='border-t border-slate-700'>
+                <button
+                  onClick={() => setOutputOpen((o) => !o)}
+                  className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
+                >
+                  <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
+                    Output
+                    {exitCode !== null && (
+                      <span className={`font-mono ${exitCode === 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        (exit {exitCode})
+                      </span>
+                    )}
+                  </span>
+                  {outputOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
+                </button>
+                {outputOpen && (
+                  <pre className='px-4 py-3 text-xs font-mono text-slate-200 bg-[#1e1e1e] whitespace-pre-wrap max-h-48 overflow-y-auto'>
+                    {output}
+                  </pre>
+                )}
+              </div>
+            )}
+
+            {/* ── Test results panel ── */}
+            {(testResults !== null || testRunning) && (
+              <div className='border-t border-slate-700'>
+                <button
+                  onClick={() => setTestPanelOpen((o) => !o)}
+                  className='w-full flex items-center justify-between px-4 py-2 bg-[#252526] text-xs text-slate-300 hover:bg-[#2d2d2d] transition-colors'
+                >
+                  <span className='font-semibold uppercase tracking-wider flex items-center gap-2'>
+                    Test Results
+                    {testResults && (
+                      <span className={testResults.failed === 0 ? 'text-emerald-400' : 'text-red-400'}>
+                        {testResults.passed}/{testResults.total} passed
+                      </span>
+                    )}
+                    {testRunning && <Loader2 className='w-3 h-3 animate-spin text-indigo-400' />}
+                  </span>
+                  {testPanelOpen ? <ChevronUp className='w-3 h-3' /> : <ChevronDown className='w-3 h-3' />}
+                </button>
+                {testPanelOpen && testResults && (
+                  <div className='bg-[#1e1e1e] max-h-64 overflow-y-auto divide-y divide-slate-800'>
+                    {testResults.results.map((r, i) => (
+                      <div key={i} className='flex items-start gap-3 px-4 py-2.5'>
+                        {r.passed
+                          ? <CheckCircle2 className='w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5' />
+                          : <XCircle className='w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5' />
+                        }
+                        <div className='min-w-0'>
+                          <p className='text-xs text-slate-200'>{r.description}</p>
+                          {r.error && (
+                            <p className='text-xs font-mono text-red-400 mt-0.5 break-all'>{r.error}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Action bar ── */}
+            <div className='flex items-center gap-3 px-4 py-3 bg-[#252526] border-t border-slate-700'>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={handleRun}
+                disabled={running || testRunning}
+                className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
+              >
+                {running
+                  ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Running…</>
+                  : <><Play className='w-3.5 h-3.5 mr-1.5' />Run</>
+                }
+              </Button>
+
+              {hasTestCases && (
+                <Button
+                  size='sm'
+                  variant='outline'
+                  onClick={handleRunTests}
+                  disabled={running || testRunning}
+                  className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
+                >
+                  {testRunning
+                    ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Testing…</>
+                    : <><FlaskConical className='w-3.5 h-3.5 mr-1.5' />Run Tests</>
+                  }
+                </Button>
+              )}
+
+              <Button
+                size='sm'
+                onClick={() => onSubmit(exercise.id)}
+                disabled={submitting}
+                className='bg-indigo-600 hover:bg-indigo-700 text-white'
+              >
+                {submitting
+                  ? <><Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' />Submitting…</>
+                  : <><CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />Submit</>
+                }
+              </Button>
+
+              <span className='ml-auto text-[10px] text-slate-500 font-mono'>
+                Auto-save enabled
+              </span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

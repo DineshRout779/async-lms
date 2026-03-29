@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -73,15 +73,14 @@ export default function Login() {
     },
   });
 
-  const handleTabChange = (_v: string) => {
+  const [activeForm, setActiveForm] = useState<'login' | 'signup'>('login');
+
+  const handleTabChange = (v: string) => {
+    setActiveForm(v as 'login' | 'signup');
     dispatch(clearAuthError());
     loginForm.resetForm();
     signupForm.resetForm();
   };
-
-  const activeForm = loginForm.values.email !== '' || signupForm.values.email !== ''
-    ? (loginForm.dirty ? 'login' : 'signup')
-    : 'login';
 
   return (
     <>

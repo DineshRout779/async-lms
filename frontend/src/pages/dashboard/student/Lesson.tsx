@@ -432,7 +432,7 @@ const Lesson = () => {
                 {nextItem && slug && (
                   <Button
                     variant='outline'
-                    className='mt-4 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                    className='mt-4 border-emerald-300 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700'
                     onClick={() => {
                       const nextUrl =
                         nextItem.type === 'subtopic'
@@ -720,8 +720,8 @@ const Lesson = () => {
                         onClick={handleRetakeQuiz}
                         className={`flex-1 ${
                           isPassed
-                            ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-100'
-                            : 'border-orange-300 text-orange-700 hover:bg-orange-100'
+                            ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700'
+                            : 'border-orange-300 text-orange-700 hover:bg-orange-100 hover:text-orange-700'
                         }`}
                       >
                         Retake Quiz
@@ -763,24 +763,11 @@ const Lesson = () => {
           </div>
 
           {exercises.length === 1 ? (
-            <Card className='p-6'>
-              <h3 className='text-lg font-semibold mb-2'>
-                {exercises[0].title}
-              </h3>
-              <div className='prose prose-sm max-w-none text-slate-600 mb-4'>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {exercises[0].instructions}
-                </ReactMarkdown>
-              </div>
-              <p className='text-xs text-slate-500 mb-4'>
-                Max Score: {exercises[0].max_score} points
-              </p>
-              <ExerciseEditor
-                exercise={exercises[0]}
-                submitting={!!submittingExercise[exercises[0].id]}
-                onSubmit={handleSubmitExercise}
-              />
-            </Card>
+            <ExerciseEditor
+              exercise={exercises[0]}
+              submitting={!!submittingExercise[exercises[0].id]}
+              onSubmit={handleSubmitExercise}
+            />
           ) : (
             <Tabs defaultValue={exercises[0].id}>
               <TabsList className='mb-4'>
@@ -796,22 +783,11 @@ const Lesson = () => {
               </TabsList>
               {exercises.map((ex) => (
                 <TabsContent key={ex.id} value={ex.id}>
-                  <Card className='p-6'>
-                    <h3 className='text-lg font-semibold mb-2'>{ex.title}</h3>
-                    <div className='prose prose-sm max-w-none text-slate-600 mb-4'>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {ex.instructions}
-                      </ReactMarkdown>
-                    </div>
-                    <p className='text-xs text-slate-500 mb-4'>
-                      Max Score: {ex.max_score} points
-                    </p>
-                    <ExerciseEditor
-                      exercise={ex}
-                      submitting={!!submittingExercise[ex.id]}
-                      onSubmit={handleSubmitExercise}
-                    />
-                  </Card>
+                  <ExerciseEditor
+                    exercise={ex}
+                    submitting={!!submittingExercise[ex.id]}
+                    onSubmit={handleSubmitExercise}
+                  />
                 </TabsContent>
               ))}
             </Tabs>

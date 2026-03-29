@@ -8,7 +8,7 @@ const Logo = ({ className, ...props }: LogoProps) => {
   return (
     <img
       src={logoImg}
-      className={clsx('', className)}
+      className={clsx('aspect-square h-6 w-6', className)}
       alt='Barabari Logo'
       {...props}
     />
