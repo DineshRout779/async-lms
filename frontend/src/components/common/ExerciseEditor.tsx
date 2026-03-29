@@ -14,13 +14,20 @@ import {
 import apiClient from '@/services/api';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
-import type { Exercise } from '@/utils/types';
+import type { Exercise, ExerciseTask } from '@/utils/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface WorkspaceFile {
   name: string;
   content: string;
+}
+
+interface TaskWorkspace {
+  files: WorkspaceFile[];
+  activeFile: string;
+  projectId: string;
+  initialized: boolean;
 }
 
 interface TestResult {
@@ -64,12 +71,22 @@ function monacoLang(filename: string): string {
 const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps) => {
   const user = useAppSelector(selectUser);
 
+  const tasks: ExerciseTask[] = exercise.tasks && exercise.tasks.length > 0 ? exercise.tasks : [];
+  const isMultiTask = tasks.length > 0;
+
+  // ── Single-task (legacy) state ───────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [activeFile, setActiveFile] = useState<string>('');
   const [language, setLanguage] = useState('javascript');
   const [projectId, setProjectId] = useState('');
 
+  // ── Multi-task state ─────────────────────────────────────────────────────────
+  const [activeTaskId, setActiveTaskId] = useState<string>(tasks[0]?.id ?? '');
+  const [taskWorkspaces, setTaskWorkspaces] = useState<Record<string, TaskWorkspace>>({});
+  const [taskLoading, setTaskLoading] = useState<Record<string, boolean>>({});
+
+  // ── Shared run/test state ────────────────────────────────────────────────────
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
   const [outputOpen, setOutputOpen] = useState(false);
@@ -81,13 +98,12 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const hasTestCases = (exercise.test_cases?.length ?? 0) > 0;
-
-  // ── Bootstrap workspace on mount ────────────────────────────────────────────
+  // ── Init workspace for single-task (legacy) ──────────────────────────────────
 
   useEffect(() => {
-    let cancelled = false;
+    if (isMultiTask) return;
 
+    let cancelled = false;
     const init = async () => {
       try {
         const res = await apiClient.post<{
@@ -96,7 +112,6 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
         }>(`/students/exercise/${exercise.id}/workspace/init`);
 
         if (cancelled) return;
-
         const { language: lang, files: initialFiles, projectId: pid } = res.data.data;
         setLanguage(lang);
         setFiles(initialFiles);
@@ -111,29 +126,113 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
 
     init();
     return () => { cancelled = true; };
-  }, [exercise.id]);
+  }, [exercise.id, isMultiTask]);
+
+  // ── Init workspace for a specific task (lazy) ────────────────────────────────
+
+  const initTaskWorkspace = useCallback(async (taskId: string) => {
+    if (taskWorkspaces[taskId]?.initialized) return;
+
+    setTaskLoading(prev => ({ ...prev, [taskId]: true }));
+    try {
+      const res = await apiClient.post<{
+        success: boolean;
+        data: { language: string; files: WorkspaceFile[]; projectId: string };
+      }>(`/students/exercise/${exercise.id}/workspace/init`, { taskId });
+
+      const { language: lang, files: initialFiles, projectId: pid } = res.data.data;
+      setLanguage(lang);
+      setTaskWorkspaces(prev => ({
+        ...prev,
+        [taskId]: {
+          files: initialFiles,
+          activeFile: initialFiles[0]?.name ?? '',
+          projectId: pid,
+          initialized: true,
+        },
+      }));
+    } catch (err) {
+      console.error(`Failed to init workspace for task ${taskId}:`, err);
+    } finally {
+      setTaskLoading(prev => ({ ...prev, [taskId]: false }));
+    }
+  }, [exercise.id, taskWorkspaces]);
+
+  // ── Bootstrap first task on mount (multi-task) ───────────────────────────────
+
+  useEffect(() => {
+    if (!isMultiTask) return;
+    if (tasks[0]) {
+      initTaskWorkspace(tasks[0].id).finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMultiTask]);
+
+  // ── Switch task tab ──────────────────────────────────────────────────────────
+
+  const handleTaskSwitch = (taskId: string) => {
+    if (taskId === activeTaskId) return;
+    setActiveTaskId(taskId);
+    setOutput(null);
+    setTestResults(null);
+    setOutputOpen(false);
+    setTestPanelOpen(false);
+    initTaskWorkspace(taskId);
+  };
+
+  // ── Derived workspace values ─────────────────────────────────────────────────
+
+  const currentFiles = isMultiTask ? (taskWorkspaces[activeTaskId]?.files ?? []) : files;
+  const currentActiveFile = isMultiTask ? (taskWorkspaces[activeTaskId]?.activeFile ?? '') : activeFile;
+  const currentProjectId = isMultiTask ? (taskWorkspaces[activeTaskId]?.projectId ?? '') : projectId;
+  const isCurrentTaskLoading = isMultiTask ? (taskLoading[activeTaskId] ?? !taskWorkspaces[activeTaskId]?.initialized) : loading;
+
+  const setCurrentActiveFile = (name: string) => {
+    if (isMultiTask) {
+      setTaskWorkspaces(prev => ({
+        ...prev,
+        [activeTaskId]: { ...prev[activeTaskId], activeFile: name },
+      }));
+    } else {
+      setActiveFile(name);
+    }
+  };
+
+  const activeContent = currentFiles.find(f => f.name === currentActiveFile)?.content ?? '';
 
   // ── Auto-save on content change (debounced 800ms) ───────────────────────────
 
   const handleContentChange = useCallback(
     (content: string | undefined) => {
-      if (!content === undefined || !activeFile || !user || !projectId) return;
+      if (content === undefined || !currentActiveFile || !user || !currentProjectId) return;
 
-      setFiles((prev) =>
-        prev.map((f) => (f.name === activeFile ? { ...f, content: content ?? '' } : f)),
-      );
+      if (isMultiTask) {
+        setTaskWorkspaces(prev => ({
+          ...prev,
+          [activeTaskId]: {
+            ...prev[activeTaskId],
+            files: prev[activeTaskId].files.map(f =>
+              f.name === currentActiveFile ? { ...f, content } : f,
+            ),
+          },
+        }));
+      } else {
+        setFiles(prev => prev.map(f => f.name === currentActiveFile ? { ...f, content } : f));
+      }
 
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
         apiClient.post('/workspace/file', {
           userId: user.id,
-          projectId,
-          filePath: activeFile,
-          content: content ?? '',
+          projectId: currentProjectId,
+          filePath: currentActiveFile,
+          content,
         }).catch(console.error);
       }, 800);
     },
-    [activeFile, user, projectId],
+    [isMultiTask, activeTaskId, currentActiveFile, user, currentProjectId],
   );
 
   // ── Run code ────────────────────────────────────────────────────────────────
@@ -143,10 +242,11 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
     setOutput(null);
     setOutputOpen(true);
     try {
+      const body = isMultiTask ? { taskId: activeTaskId } : {};
       const res = await apiClient.post<{
         success: boolean;
         data: { output: string; exitCode: number };
-      }>(`/students/exercise/${exercise.id}/run`);
+      }>(`/students/exercise/${exercise.id}/run`, body);
       setOutput(res.data.data.output || '(no output)');
       setExitCode(res.data.data.exitCode);
     } catch (err: any) {
@@ -164,10 +264,11 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
     setTestResults(null);
     setTestPanelOpen(true);
     try {
+      const body = isMultiTask ? { taskId: activeTaskId } : {};
       const res = await apiClient.post<{
         success: boolean;
         data: TestRunResult;
-      }>(`/students/exercise/${exercise.id}/run-tests`);
+      }>(`/students/exercise/${exercise.id}/run-tests`, body);
       setTestResults(res.data.data);
     } catch (err: any) {
       setTestResults({
@@ -181,13 +282,15 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
     }
   };
 
-  // ── Active file content ──────────────────────────────────────────────────────
+  // ── Determine if current task/exercise has test cases ───────────────────────
 
-  const activeContent = files.find((f) => f.name === activeFile)?.content ?? '';
+  const hasTestCases = isMultiTask
+    ? (tasks.find(t => t.id === activeTaskId)?.test_cases?.length ?? 0) > 0
+    : (exercise.test_cases?.length ?? 0) > 0;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  if (loading) {
+  if (loading && !isMultiTask) {
     return (
       <div className='flex items-center gap-2 text-slate-400 text-sm py-6'>
         <Loader2 className='w-4 h-4 animate-spin' />
@@ -199,21 +302,52 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
   return (
     <div className='rounded-xl border border-slate-200 overflow-hidden bg-[#1e1e1e]'>
 
+      {/* ── Task tabs (multi-task only) ── */}
+      {isMultiTask && (
+        <div className='flex items-center border-b border-slate-600 bg-[#1a1a2e] overflow-x-auto'>
+          {tasks.map((task, idx) => (
+            <button
+              key={task.id}
+              onClick={() => handleTaskSwitch(task.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold whitespace-nowrap transition-colors border-r border-slate-600 ${
+                activeTaskId === task.id
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#2d2d2d]'
+              }`}
+            >
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                activeTaskId === task.id ? 'bg-white/20 text-white' : 'bg-slate-600 text-slate-300'
+              }`}>
+                {idx + 1}
+              </span>
+              {task.title}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── File tabs ── */}
       <div className='flex items-center gap-0 border-b border-slate-700 bg-[#252526] overflow-x-auto'>
-        {files.map((f) => (
-          <button
-            key={f.name}
-            onClick={() => setActiveFile(f.name)}
-            className={`px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-r border-slate-700 ${
-              activeFile === f.name
-                ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#2d2d2d]'
-            }`}
-          >
-            {f.name}
-          </button>
-        ))}
+        {isCurrentTaskLoading ? (
+          <div className='flex items-center gap-2 px-4 py-2 text-xs text-slate-400'>
+            <Loader2 className='w-3 h-3 animate-spin' />
+            Loading task…
+          </div>
+        ) : (
+          currentFiles.map((f) => (
+            <button
+              key={f.name}
+              onClick={() => setCurrentActiveFile(f.name)}
+              className={`px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-r border-slate-700 ${
+                currentActiveFile === f.name
+                  ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#2d2d2d]'
+              }`}
+            >
+              {f.name}
+            </button>
+          ))
+        )}
 
         {/* Language badge pushed to the right */}
         <div className='ml-auto px-3 flex items-center'>
@@ -224,23 +358,29 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
       </div>
 
       {/* ── Monaco editor ── */}
-      <Editor
-        height='320px'
-        language={monacoLang(activeFile)}
-        value={activeContent}
-        onChange={handleContentChange}
-        theme='vs-dark'
-        options={{
-          fontSize: 13,
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          lineNumbers: 'on',
-          wordWrap: 'on',
-          padding: { top: 12, bottom: 12 },
-          fontFamily: "'Fira Code', 'Cascadia Code', monospace",
-          fontLigatures: true,
-        }}
-      />
+      {isCurrentTaskLoading ? (
+        <div className='flex items-center justify-center h-80 bg-[#1e1e1e]'>
+          <Loader2 className='w-6 h-6 animate-spin text-indigo-400' />
+        </div>
+      ) : (
+        <Editor
+          height='320px'
+          language={monacoLang(currentActiveFile)}
+          value={activeContent}
+          onChange={handleContentChange}
+          theme='vs-dark'
+          options={{
+            fontSize: 13,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            lineNumbers: 'on',
+            wordWrap: 'on',
+            padding: { top: 12, bottom: 12 },
+            fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+            fontLigatures: true,
+          }}
+        />
+      )}
 
       {/* ── Output panel ── */}
       {output !== null && (
@@ -312,7 +452,7 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
           size='sm'
           variant='outline'
           onClick={handleRun}
-          disabled={running || testRunning}
+          disabled={running || testRunning || isCurrentTaskLoading}
           className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
         >
           {running
@@ -326,7 +466,7 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
             size='sm'
             variant='outline'
             onClick={handleRunTests}
-            disabled={running || testRunning}
+            disabled={running || testRunning || isCurrentTaskLoading}
             className='border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white'
           >
             {testRunning

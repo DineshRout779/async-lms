@@ -54,6 +54,14 @@ export interface TestCase {
   is_hidden: boolean;
 }
 
+export interface ExerciseTask {
+  id: string;
+  title: string;
+  instructions?: string;
+  initial_files: { name: string; content: string }[];
+  test_cases?: TestCase[];
+}
+
 export interface Exercise {
   id: string;
   subtopic_id: string;
@@ -63,6 +71,7 @@ export interface Exercise {
   language?: string;
   initial_files?: { name: string; content: string }[];
   test_cases?: TestCase[];
+  tasks?: ExerciseTask[];
 }
 
 export interface CollegeAssignment {
@@ -72,6 +81,13 @@ export interface CollegeAssignment {
   due_date?: string | null;
   created_at: string;
   created_by_name: string;
+  course?: string | null;
+  instruction_file_url?: string | null;
+  instruction_file_name?: string | null;
+  submission_link?: string | null;
+  submission_file_url?: string | null;
+  submission_file_name?: string | null;
+  submitted_at?: string | null;
 }
 
 export interface Assignment {
@@ -229,6 +245,7 @@ export interface ExerciseModalProps {
     language: string;
     initial_files: { name: string; content: string }[];
     test_cases: TestCase[];
+    tasks: ExerciseTask[];
   }) => void;
   editData?: {
     title: string;
@@ -237,6 +254,7 @@ export interface ExerciseModalProps {
     language?: string;
     initial_files?: { name: string; content: string }[];
     test_cases?: TestCase[];
+    tasks?: ExerciseTask[];
   };
   subtopicTitle: string;
   loading?: boolean;

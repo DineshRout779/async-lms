@@ -1304,7 +1304,7 @@ exports.getExercise = async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      'SELECT id, title, instructions, max_score, subtopic_id, language, initial_files, test_cases FROM exercises WHERE id = $1',
+      'SELECT id, title, instructions, max_score, subtopic_id, language, initial_files, test_cases, tasks FROM exercises WHERE id = $1',
       [id],
     );
     if (!result.rowCount) return res.status(404).json({ message: 'Exercise not found' });
@@ -1316,7 +1316,7 @@ exports.getExercise = async (req, res) => {
 
 exports.createExercise = async (req, res) => {
   try {
-    const { subtopic_id, title, instructions, max_score, language, initial_files, test_cases } = req.body;
+    const { subtopic_id, title, instructions, max_score, language, initial_files, test_cases, tasks } = req.body;
 
     if (!subtopic_id || !title || !max_score) {
       return res.status(400).json({
@@ -1326,8 +1326,8 @@ exports.createExercise = async (req, res) => {
     }
 
     const query = `
-      INSERT INTO exercises (subtopic_id, title, instructions, max_score, language, initial_files, test_cases)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO exercises (subtopic_id, title, instructions, max_score, language, initial_files, test_cases, tasks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *;
     `;
 
@@ -1339,6 +1339,7 @@ exports.createExercise = async (req, res) => {
       language || 'javascript',
       JSON.stringify(initial_files || []),
       JSON.stringify(test_cases || []),
+      JSON.stringify(tasks || []),
     ]);
 
     res.status(201).json({
@@ -1359,7 +1360,7 @@ exports.createExercise = async (req, res) => {
 exports.updateExercise = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score, language, initial_files, test_cases } = req.body;
+    const { title, instructions, max_score, language, initial_files, test_cases, tasks } = req.body;
 
     const updates = [];
     const values = [];
@@ -1388,6 +1389,10 @@ exports.updateExercise = async (req, res) => {
     if (test_cases !== undefined) {
       updates.push(`test_cases = $${paramCount++}`);
       values.push(JSON.stringify(test_cases));
+    }
+    if (tasks !== undefined) {
+      updates.push(`tasks = $${paramCount++}`);
+      values.push(JSON.stringify(tasks));
     }
 
     if (updates.length === 0) {

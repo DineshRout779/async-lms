@@ -434,7 +434,11 @@ exports.getSubtopicContent = async (req, res) => {
         e.id AS exercise_id,
         e.title AS exercise_title,
         e.instructions,
-        e.max_score AS exercise_max_score
+        e.max_score AS exercise_max_score,
+        e.language AS exercise_language,
+        e.initial_files AS exercise_initial_files,
+        e.test_cases AS exercise_test_cases,
+        e.tasks AS exercise_tasks
 
       FROM subtopics st
       LEFT JOIN lesson_content lc
@@ -529,6 +533,10 @@ exports.getSubtopicContent = async (req, res) => {
           title: row.exercise_title,
           instructions: row.instructions,
           max_score: row.exercise_max_score,
+          language: row.exercise_language,
+          initial_files: row.exercise_initial_files,
+          test_cases: row.exercise_test_cases,
+          tasks: row.exercise_tasks,
         });
       }
     });
@@ -659,11 +667,15 @@ exports.getExerciseContent = async (req, res) => {
     const { exerciseId } = req.params;
 
     const query = `
-      SELECT 
+      SELECT
         e.id AS exercise_id,
         e.title AS exercise_title,
         e.instructions,
         e.max_score AS exercise_max_score,
+        e.language AS exercise_language,
+        e.initial_files AS exercise_initial_files,
+        e.test_cases AS exercise_test_cases,
+        e.tasks AS exercise_tasks,
         e.subtopic_id,
         e.unit_id,
         st.title AS subtopic_title,
@@ -702,6 +714,10 @@ exports.getExerciseContent = async (req, res) => {
             title: row.exercise_title,
             instructions: row.instructions,
             max_score: row.exercise_max_score,
+            language: row.exercise_language,
+            initial_files: row.exercise_initial_files,
+            test_cases: row.exercise_test_cases,
+            tasks: row.exercise_tasks,
           },
         ],
       },
