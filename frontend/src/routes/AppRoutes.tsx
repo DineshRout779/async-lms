@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 import App from '@/App';
 import PrivateRoute from './PrivateRoute';
 import FacilitatorSettings from '@/pages/dashboard/facilitator/FacilitatorSettings';
+// import ResultsPage from '@/pages/dashboard/facilitator/ResultsPage';
 
 // ---------- Lazy Imports ----------
 
@@ -66,6 +67,9 @@ const FacilitatorAssignments = lazy(
 );
 const FacilitatorEvaluations = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorEvaluations'),
+);
+const ResultsPage = lazy(
+  () => import('@/pages/dashboard/facilitator/ResultsPage')
 );
 const FacilitatorAnalytics = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorAnalytics'),
@@ -171,6 +175,7 @@ const router = createBrowserRouter([
               { path: 'students', element: <FacilitatorStudents /> },
               { path: 'assignments', element: <FacilitatorAssignments /> },
               { path: 'evaluations', element: <FacilitatorEvaluations /> },
+              { path: 'results', element: <ResultsPage /> },
               { path: 'analytics', element: <FacilitatorAnalytics /> },
               { path: 'student-growth', element: <FacilitatorStudentGrowth /> },
               { path: 'reports', element: <FacilitatorReports /> },
