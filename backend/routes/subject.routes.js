@@ -26,6 +26,8 @@ router.get('/published', verifyToken, getAllPublishedSubjects);
 // Fetch all subjects
 router.get('/', verifyToken, isAdmin, getAllSubjects);
 
+// GET subjects (for dropdown) 
+router.get('/dropdown', verifyToken, getAllSubjects);
 // Create a new subject
 router.post('/', verifyToken, isAdmin, createSubject);
 

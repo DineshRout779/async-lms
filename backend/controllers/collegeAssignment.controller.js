@@ -8,7 +8,7 @@ exports.getMyCollegeAssignments = async (req, res) => {
   const college_id = req.user.college_id;
 
   if (!college_id) {
-    return res
+    return res 
       .status(400)
       .json({ success: false, message: 'No college linked to your account' });
   }
@@ -185,6 +185,103 @@ exports.deleteAssignment = async (req, res) => {
     res.json({ success: true, message: 'Assignment deleted' });
   } catch (error) {
     console.error('deleteAssignment:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+// GET /api/v1/college-assignments/evaluation-filters
+exports.getFilteredAssignments = async (req, res) => {
+  try {
+    console.log("🔥 evaluation-filters API hit");
+    const { collegeId, domain, search } = req.query;
+
+    // let query = `
+    //   SELECT 
+    //     ca.id, 
+    //     ca.title, 
+    //     ca.description, 
+    //     ca.due_date,
+    //     ca.created_at,
+    //     ca.college_id,
+    //     c.name AS college_name,
+    //     u.full_name AS created_by_name,
+    //     ca.course
+    //   FROM college_assignments ca
+    //   JOIN colleges c ON c.id = ca.college_id
+    //   JOIN users u ON u.id = ca.created_by
+    //   WHERE 1=1
+    // `;
+    let query = `
+    SELECT 
+  ca.id, 
+  ca.title, 
+  ca.description, 
+  ca.due_date,
+  ca.created_at,
+  ca.college_id,
+  c.name AS college_name,
+  u.full_name AS created_by_name,
+  ca.course,
+
+  CASE 
+    WHEN e.status = 'completed' THEN 'evaluated'
+    ELSE 'pending'
+  END AS status
+
+FROM college_assignments ca
+JOIN colleges c ON c.id = ca.college_id
+JOIN users u ON u.id = ca.created_by
+LEFT JOIN evaluations e ON e.assignment_id = ca.id
+
+WHERE 1=1`
+    const values = [];
+    let index = 1;
+
+    // 🔒 Role-based restriction (facilitator)
+    if (req.user.role !== "admin") {
+      const college_ids = req.user.college_ids || [];
+
+      if (!college_ids.length) {
+        return res.json({ success: true, data: [] });
+      }
+
+      query += ` AND ca.college_id = ANY($${index}::uuid[])`;
+      values.push(college_ids);
+      index++;
+    }
+
+    // 🎯 College filter
+    if (collegeId) {
+      query += ` AND ca.college_id = $${index}`;
+      values.push(collegeId);
+      index++;
+    }
+
+    // 🎯 Domain filter (course column)
+    if (domain) {
+      query += ` AND LOWER(ca.course) LIKE LOWER($${index})`;
+      values.push(`%${domain}%`);
+      index++;
+    }
+
+    // 🔍 Search filter
+    if (search) {
+      query += ` AND LOWER(ca.title) LIKE LOWER($${index})`;
+      values.push(`%${search}%`);
+      index++;
+    }
+
+    query += ` ORDER BY c.name ASC, ca.due_date ASC NULLS LAST`;
+
+    const { rows } = await pool.query(query, values);
+
+    console.log("DOMAIN RECEIVED:", domain);
+
+    res.json({ success: true, data: rows });
+
+  } catch (error) {
+    console.error("getFilteredAssignments:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
