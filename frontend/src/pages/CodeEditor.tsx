@@ -47,7 +47,7 @@ type PortInfo = {
   url: string | null;
 };
 
-type WorkspaceStatus = 'idle' | 'provisioning' | 'starting' | 'ready' | 'error';
+type WorkspaceStatus = 'idle' | 'provisioning' | 'starting' | 'ready' | 'error' | 'queued';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -164,6 +164,25 @@ function WorkspaceLoader({
   );
 }
 
+function WorkspaceQueued({ position, total }: { position: number; total: number }) {
+  const estMinutes = Math.max(1, Math.ceil(position * 2));
+  return (
+    <div className='absolute inset-0 bg-[#0a0a0f] z-50 flex flex-col items-center justify-center gap-6'>
+      <div className='flex flex-col items-center gap-3 text-center'>
+        <div className='w-14 h-14 rounded-full border-2 border-slate-600 flex items-center justify-center text-2xl font-bold text-white'>
+          {position}
+        </div>
+        <p className='text-white text-base font-semibold'>You're #{position} in queue</p>
+        <p className='text-slate-400 text-sm'>Estimated wait: ~{estMinutes} min</p>
+        <p className='text-slate-600 text-xs'>{total} workspace{total !== 1 ? 's' : ''} currently active</p>
+      </div>
+      <p className='text-slate-600 text-xs max-w-xs text-center'>
+        Your workspace will start automatically when a slot opens up.
+      </p>
+    </div>
+  );
+}
+
 function WorkspaceError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className='absolute inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center gap-4'>
@@ -200,6 +219,8 @@ const CodeEditor = (): JSX.Element => {
   // Workspace lifecycle
   const [wsStatus, setWsStatus] = useState<WorkspaceStatus>('idle');
   const [wsError, setWsError] = useState<string | null>(null);
+  const [queuePosition, setQueuePosition] = useState(0);
+  const [queueTotal, setQueueTotal] = useState(0);
   const [socketConnected, setSocketConnected] = useState(false);
   const [env, setEnv] = useState<EditorEnvironment | null>(null);
 
@@ -280,6 +301,12 @@ const CodeEditor = (): JSX.Element => {
 
     socket.on('workspace:ready', () => {
       setWsStatus('ready');
+    });
+
+    socket.on('workspace:queued', ({ position, total }: { position: number; total: number }) => {
+      setWsStatus('queued');
+      setQueuePosition(position);
+      setQueueTotal(total);
     });
 
     socket.on('workspace:error', (msg: string) => {
@@ -448,6 +475,11 @@ const CodeEditor = (): JSX.Element => {
         workerSocket.on('connect', () => setSocketConnected(true));
         workerSocket.on('disconnect', () => setSocketConnected(false));
         workerSocket.on('workspace:ready', () => setWsStatus('ready'));
+        workerSocket.on('workspace:queued', ({ position, total }: { position: number; total: number }) => {
+          setWsStatus('queued');
+          setQueuePosition(position);
+          setQueueTotal(total);
+        });
         workerSocket.on('workspace:error', (msg: string) => {
           setWsStatus('error');
           setWsError(msg);
@@ -656,6 +688,7 @@ const CodeEditor = (): JSX.Element => {
     wsStatus === 'idle' ||
     wsStatus === 'provisioning' ||
     wsStatus === 'starting';
+  const isQueued = wsStatus === 'queued';
 
   /* ─────────────────────────────────────────────────────────────────────────
      Render
@@ -666,6 +699,11 @@ const CodeEditor = (): JSX.Element => {
       {/* Loading overlay */}
       {isLoading && (
         <WorkspaceLoader authReady={authReady} socketConnected={socketConnected} wsStatus={wsStatus} />
+      )}
+
+      {/* Queue overlay */}
+      {isQueued && (
+        <WorkspaceQueued position={queuePosition} total={queueTotal} />
       )}
 
       {/* Error overlay */}

@@ -1,14 +1,14 @@
 const { spawnSync, spawn } = require('child_process');
 const path = require('path');
 
-// Resource limits per profile — sized for worker nodes (t3.large)
+// Resource limits per profile
 const PROFILE_LIMITS = {
-  mern:       { memory: '1g',   cpus: '1'    },
-  javascript: { memory: '512m', cpus: '0.5'  },
-  python:     { memory: '512m', cpus: '0.5'  },
-  java:       { memory: '768m', cpus: '0.5'  },
-  sql:        { memory: '256m', cpus: '0.25' },
-  default:    { memory: '512m', cpus: '0.5'  },
+  mern: { memory: '512m', cpus: '0.5' },
+  javascript: { memory: '192m', cpus: '0.2' },
+  python: { memory: '192m', cpus: '0.2' },
+  java: { memory: '512m', cpus: '0.5' },
+  sql: { memory: '192m', cpus: '0.2' },
+  default: { memory: '192m', cpus: '0.2' },
 };
 
 // Async wrapper for one-shot docker commands (stop, rm, etc.)
@@ -26,9 +26,15 @@ function runDockerAsync(args) {
 // Async container existence check — does not block the event loop
 function containerExistsAsync(name) {
   return new Promise((resolve) => {
-    const proc = spawn('docker', ['inspect', '--format', '{{.State.Status}}', name], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const proc = spawn(
+      'docker',
+      ['inspect', '--format', '{{.State.Status}}', name],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    );
     let out = '';
-    proc.stdout.on('data', (d) => { out += d; });
+    proc.stdout.on('data', (d) => {
+      out += d;
+    });
     proc.on('close', (code) => resolve(code === 0 && out.trim() === 'running'));
     proc.on('error', () => resolve(false));
   });
@@ -42,8 +48,8 @@ function containerExists(name) {
 
 function waitForContainer(name) {
   return new Promise((resolve, reject) => {
-    const interval = setInterval(() => {
-      if (containerExists(name)) {
+    const interval = setInterval(async () => {
+      if (await containerExistsAsync(name)) {
         clearInterval(interval);
         resolve();
       }
@@ -65,11 +71,13 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
       '..',
       'workspaces',
       String(userId),
-      String(projectId)
+      String(projectId),
     );
 
     const limits = PROFILE_LIMITS[profile] ?? PROFILE_LIMITS.default;
-    console.log(`Starting container ${name} [${profile ?? 'default'}] memory=${limits.memory} cpus=${limits.cpus}`);
+    console.log(
+      `Starting container ${name} [${profile ?? 'default'}] memory=${limits.memory} cpus=${limits.cpus}`,
+    );
 
     await runDockerAsync([
       'run',

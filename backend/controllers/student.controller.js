@@ -710,7 +710,7 @@ exports.submitExercise = async (req, res) => {
         const taskWorkspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}-task-${task.id}`);
         if (!fs.existsSync(taskWorkspaceDir)) continue;
         try {
-          const result = await runTestFile(taskWorkspaceDir, exercise.language, task.test_cases);
+          const result = await runTestCases(taskWorkspaceDir, exercise.language, task.test_cases);
           totalPassed += result.passed;
           totalTests += result.total;
           taskResults.push({ taskId: task.id, taskTitle: task.title, ...result });
@@ -732,7 +732,7 @@ exports.submitExercise = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Workspace not initialised. Open the exercise first.' });
       }
       try {
-        testResults = await runTestFile(workspaceDir, exercise.language, exercise.test_cases);
+        testResults = await runTestCases(workspaceDir, exercise.language, exercise.test_cases);
         score = testResults.total > 0
           ? Math.round((testResults.passed / testResults.total) * exercise.max_score)
           : 0;
@@ -786,7 +786,7 @@ exports.submitExercise = async (req, res) => {
 
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const runnerService = require('../services/runnerService');
 
 const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
@@ -817,68 +817,27 @@ const PY_TEST_HEADER = `import json,sys\n_p,_f,_r=0,0,[]\ndef __test(d,fn):\n  g
 const PY_TEST_FOOTER = `\nprint(json.dumps({"passed":_p,"failed":_f,"total":_p+_f,"results":_r}))\nsys.exit(1 if _f>0 else 0)\n`;
 
 /**
- * Build + write the test runner file and return the run result.
- * Returns { passed, failed, total, results } or throws on docker error.
+ * Write the test runner file to disk, execute it via the container pool,
+ * and return { passed, failed, total, results }.
  */
-function runTestFile(workspaceDir, language, testCases) {
-  return new Promise((resolve, reject) => {
-    const isJs = language !== 'python';
-    const header  = isJs ? JS_TEST_HEADER  : PY_TEST_HEADER;
-    const footer  = isJs ? JS_TEST_FOOTER  : PY_TEST_FOOTER;
-    const testCode = testCases.map((tc) => tc.test_code).join('\n');
-    const fileContent = header + testCode + footer;
-    const testFile = path.join(workspaceDir, isJs ? '__tests__.js' : '__tests__.py');
+async function runTestCases(workspaceDir, language, testCases) {
+  const isJs = language !== 'python';
+  const header   = isJs ? JS_TEST_HEADER : PY_TEST_HEADER;
+  const footer   = isJs ? JS_TEST_FOOTER : PY_TEST_FOOTER;
+  const testCode = testCases.map((tc) => tc.test_code).join('\n');
+  const testFile = path.join(workspaceDir, isJs ? '__tests__.js' : '__tests__.py');
+  fs.writeFileSync(testFile, header + testCode + footer, 'utf-8');
 
-    fs.writeFileSync(testFile, fileContent, 'utf-8');
+  const { output } = await runnerService.executeTests(workspaceDir, language);
 
-    const runner = TEST_RUNNER_CMD[language] ?? TEST_RUNNER_CMD.javascript;
-    const child = spawn('docker', [
-      'run', '--rm',
-      '--memory=256m', '--cpus=0.5',
-      '--network=none', '--pids-limit=64',
-      '--read-only', '--tmpfs', '/tmp',
-      '-v', `${workspaceDir}:/workspace`,
-      '-w', '/workspace',
-      runner.image,
-      ...runner.cmd,
-    ]);
-
-    let stdout = '';
-    let stderr = '';
-    let finished = false;
-
-    const timeout = setTimeout(() => {
-      if (!finished) {
-        finished = true;
-        child.kill();
-        reject(new Error('Test runner timed out after 15 seconds'));
-      }
-    }, 15000);
-
-    child.stdout.on('data', (d) => { stdout += d.toString(); });
-    child.stderr.on('data', (d) => { stderr += d.toString(); });
-
-    child.on('close', () => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeout);
-
-      // Find the last JSON line in stdout
-      const lines = stdout.trim().split('\n');
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-          const parsed = JSON.parse(lines[i]);
-          if (typeof parsed.passed === 'number') return resolve(parsed);
-        } catch {}
-      }
-      // If we can't parse results, return raw output as error
-      reject(new Error(`Test runner produced no parseable output.\n${stderr || stdout}`));
-    });
-
-    child.on('error', (err) => {
-      if (!finished) { finished = true; clearTimeout(timeout); reject(err); }
-    });
-  });
+  const lines = output.trim().split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const parsed = JSON.parse(lines[i]);
+      if (typeof parsed.passed === 'number') return parsed;
+    } catch {}
+  }
+  throw new Error(`Test runner produced no parseable output.\n${output}`);
 }
 
 const DEFAULT_INITIAL_FILES = {
@@ -980,46 +939,8 @@ exports.runExercise = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Workspace not initialised' });
     }
 
-    const child = spawn('docker', [
-      'run', '--rm',
-      '--memory=256m', '--cpus=0.5',
-      '--network=none', '--pids-limit=64',
-      '--read-only', '--tmpfs', '/tmp',
-      '-v', `${workspaceDir}:/workspace`,
-      '-w', '/workspace',
-      runner.image,
-      ...runner.cmd,
-    ]);
-
-    let output = '';
-    let finished = false;
-
-    const timeout = setTimeout(() => {
-      if (!finished) {
-        child.kill();
-        finished = true;
-        res.json({ success: true, data: { output: output + '\n[Timed out after 10 seconds]', exitCode: -1 } });
-      }
-    }, 10000);
-
-    child.stdout.on('data', (d) => { output += d.toString(); });
-    child.stderr.on('data', (d) => { output += d.toString(); });
-
-    child.on('close', (code) => {
-      if (!finished) {
-        finished = true;
-        clearTimeout(timeout);
-        res.json({ success: true, data: { output, exitCode: code } });
-      }
-    });
-
-    child.on('error', (err) => {
-      if (!finished) {
-        finished = true;
-        clearTimeout(timeout);
-        res.status(500).json({ success: false, message: err.message });
-      }
-    });
+    const { output, exitCode } = await runnerService.execute(workspaceDir, language);
+    res.json({ success: true, data: { output, exitCode } });
   } catch (error) {
     console.error('Error running exercise:', error);
     res.status(500).json({ success: false, message: 'Failed to run exercise', error: error.message });
@@ -1064,7 +985,7 @@ exports.runExerciseTests = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Workspace not initialised' });
     }
 
-    const testResult = await runTestFile(workspaceDir, language, testCasesToRun);
+    const testResult = await runTestCases(workspaceDir, language, testCasesToRun);
     res.json({ success: true, data: testResult });
   } catch (error) {
     console.error('Error running exercise tests:', error);

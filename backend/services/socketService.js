@@ -22,8 +22,15 @@ const outputBuffers = new Map();      // key → last 8 KB of terminal output
 // This allows the browser to refresh / reconnect without losing the session.
 const lastActivity = new Map();       // key → Date.now()
 
-const CONTAINER_TTL_MS    = 30 * 60 * 1000; // 30 minutes of inactivity
+const CONTAINER_TTL_MS    =  5 * 60 * 1000; // 5 minutes of inactivity
 const CLEANUP_INTERVAL_MS =  5 * 60 * 1000; // check every 5 minutes
+
+// ---------- Capacity & queue ----------
+// Hard cap on concurrent live workspace containers.
+// Adjust MAX_WORKSPACES env var to match available RAM on the host.
+const MAX_CONCURRENT_WORKSPACES = parseInt(process.env.MAX_WORKSPACES || '10', 10);
+// Array of waiting requests: { socketId, socket, userId, projectId, image, profile }
+const workspaceQueue = [];
 
 const cleanupTimer = setInterval(() => {
   const now = Date.now();
@@ -40,6 +47,9 @@ const cleanupTimer = setInterval(() => {
       activePorts.delete(key);
       outputBuffers.delete(key);
       lastActivity.delete(key);
+
+      // Slot freed — promote next queued user immediately (before async teardown)
+      promoteFromQueue();
 
       // Push files to S3, stop container, then notify orchestrator to release capacity
       pushWorkspace(userId, projectId)
@@ -66,6 +76,62 @@ const cleanupTimer = setInterval(() => {
 
 cleanupTimer.unref();
 
+// ---------- Workspace start helper & queue ----------
+
+async function startWorkspace(socket, { userId, projectId, image, profile }) {
+  try {
+    socket.workspace = { userId, projectId };
+    const key = `${userId}:${projectId}`;
+
+    const knownPorts = activePorts.get(key);
+    if (knownPorts?.size > 0) {
+      socket.emit(
+        'workspace:ports:update',
+        [...knownPorts].map((port) => ({ port, process: 'user-app', url: null }))
+      );
+    }
+
+    socket.emit('workspace:status', { message: 'Starting container…' });
+
+    await pullWorkspace(userId, projectId);
+    await ensureWorkspaceContainer({ userId, projectId, image, profile });
+
+    const workspacePath = path.join(
+      __dirname, '..', 'workspaces', String(userId), String(projectId)
+    );
+
+    watchWorkspace({ userId, projectId, workspacePath, socket });
+
+    if (!activePorts.has(key)) activePorts.set(key, new Set());
+    lastActivity.set(key, Date.now());
+    touchWorkspace(userId, projectId);
+
+    socket.emit('workspace:ready');
+  } catch (error) {
+    console.error('[workspace:start]', error);
+    socket.emit('workspace:error', error.message);
+    // Release the slot so the queue can advance
+    promoteFromQueue();
+  }
+}
+
+function promoteFromQueue() {
+  // Skip any entries whose socket has already disconnected
+  while (workspaceQueue.length) {
+    const next = workspaceQueue.shift();
+    if (next.socket.disconnected) continue;
+
+    // Notify remaining queue members of their new positions
+    workspaceQueue.forEach((item, i) => {
+      item.socket.emit('workspace:queued', { position: i + 1, total: workspaceQueue.length });
+    });
+
+    console.log(`[queue] Promoting ${next.userId}:${next.projectId} — ${workspaceQueue.length} still waiting`);
+    startWorkspace(next.socket, next);
+    return;
+  }
+}
+
 // ---------- Socket handler ----------
 module.exports = function setupSocket(io) {
   io.on('connection', (socket) => {
@@ -73,53 +139,35 @@ module.exports = function setupSocket(io) {
     socket.workspace = null;
 
     socket.on('workspace:start', async ({ userId, projectId, image, profile }) => {
-      try {
-        // Quota check before spinning up the container
-        const quota = getWorkspaceQuota(userId, projectId);
-        if (quota.overQuota) {
-          socket.emit('workspace:error', `Disk quota exceeded: ${quota.usedMB} MB used (limit: ${quota.limitMB} MB). Please delete files to continue.`);
-          return;
-        }
-
-        socket.workspace = { userId, projectId };
-        const key = `${userId}:${projectId}`;
-
-        // If reconnecting and ports are already known, emit them immediately
-        // so the frontend can restore the preview without waiting
-        const knownPorts = activePorts.get(key);
-        if (knownPorts?.size > 0) {
-          socket.emit(
-            'workspace:ports:update',
-            [...knownPorts].map((port) => ({ port, process: 'user-app', url: null }))
-          );
-        }
-
-        socket.emit('workspace:status', { message: 'Starting container…' });
-
-        // Pull workspace files from S3 (no-op if local files already exist or S3 not configured)
-        await pullWorkspace(userId, projectId);
-
-        await ensureWorkspaceContainer({ userId, projectId, image, profile });
-
-        const workspacePath = path.join(
-          __dirname,
-          '..',
-          'workspaces',
-          String(userId),
-          String(projectId)
-        );
-
-        watchWorkspace({ userId, projectId, workspacePath, socket });
-
-        if (!activePorts.has(key)) activePorts.set(key, new Set());
-        lastActivity.set(key, Date.now());
-        touchWorkspace(userId, projectId);
-
-        socket.emit('workspace:ready');
-      } catch (error) {
-        console.error('[workspace:start]', error);
-        socket.emit('workspace:error', error.message);
+      // Quota check before anything else
+      const quota = getWorkspaceQuota(userId, projectId);
+      if (quota.overQuota) {
+        socket.emit('workspace:error', `Disk quota exceeded: ${quota.usedMB} MB used (limit: ${quota.limitMB} MB). Please delete files to continue.`);
+        return;
       }
+
+      const key = `${userId}:${projectId}`;
+
+      // Reconnecting users already have a running container — skip the queue
+      const isReconnect = lastActivity.has(key);
+
+      if (!isReconnect && lastActivity.size >= MAX_CONCURRENT_WORKSPACES) {
+        // Server at capacity — enqueue, or update position if already waiting
+        let idx = workspaceQueue.findIndex(q => q.userId === userId && q.projectId === projectId);
+        if (idx === -1) {
+          workspaceQueue.push({ socketId: socket.id, socket, userId, projectId, image, profile });
+          idx = workspaceQueue.length - 1;
+        } else {
+          // Update the socket ref in case user reconnected while queued
+          workspaceQueue[idx].socket = socket;
+          workspaceQueue[idx].socketId = socket.id;
+        }
+        socket.emit('workspace:queued', { position: idx + 1, total: workspaceQueue.length });
+        console.log(`[queue] ${key} queued at position ${idx + 1}/${workspaceQueue.length} (active: ${lastActivity.size})`);
+        return;
+      }
+
+      await startWorkspace(socket, { userId, projectId, image, profile });
     });
 
     socket.on('terminal:start', ({ cols, rows } = {}) => {
@@ -227,10 +275,20 @@ module.exports = function setupSocket(io) {
       if (term) { try { term.kill(); } catch (_) {} }
       terminals.delete(socket.id);
 
+      // 2. Remove from queue if this socket was waiting
+      const qIdx = workspaceQueue.findIndex(q => q.socketId === socket.id);
+      if (qIdx !== -1) {
+        workspaceQueue.splice(qIdx, 1);
+        // Update positions for remaining queue members
+        workspaceQueue.forEach((item, i) => {
+          item.socket.emit('workspace:queued', { position: i + 1, total: workspaceQueue.length });
+        });
+      }
+
       if (socket.workspace) {
         const { userId, projectId } = socket.workspace;
 
-        // 2. Stop the file-system watcher
+        // 3. Stop the file-system watcher
         stopWatchWorkspace(userId, projectId);
 
         // Container stays running — TTL cleanup handles full teardown.

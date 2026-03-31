@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const setupSocket = require('./services/socketService');
+const { initPools } = require('./services/runnerService');
 const path = require('path');
 const { getContainerIP } = require('./services/dockerService');
 const { registerWorker, heartbeat, deregisterWorker, releaseWorkspace, getStatus } = require('./services/workerRegistry');
@@ -175,3 +176,7 @@ server.listen(3001, () => {
   const ct = new Date().toLocaleTimeString();
   console.log('Backend running on http://localhost:3001', ct);
 });
+
+// Warm up exercise runner pool after server is up.
+// Requests that arrive before pools are ready will queue internally.
+initPools().catch(err => console.error('[pool] Failed to initialize runner pools:', err));
