@@ -1,50 +1,47 @@
 {
   "javascript": {
-    "name": "JavaScript",
+    "name": "JavaScript (Node.js)",
+    "engine": "webcontainer",
     "image": "workspace-node",
     "language": "javascript",
     "entry": "index.js",
     "run": "node index.js",
-    "template": [
-      "index.js"
-    ]
+    "template": ["index.js"]
+  },
+  "mern": {
+    "name": "React (Vite)",
+    "engine": "webcontainer",
+    "image": "workspace-node",
+    "language": "javascript",
+    "entry": "src/App.jsx",
+    "run": "npm run dev",
+    "template": []
   },
   "python": {
     "name": "Python",
+    "engine": "docker",
     "image": "workspace-python",
     "language": "python",
     "entry": "main.py",
     "run": "python main.py",
-    "template": [
-      "main.py"
-    ]
+    "template": ["main.py"]
   },
   "java": {
     "name": "Java",
+    "engine": "docker",
     "image": "workspace-java",
     "language": "java",
     "entry": "Main.java",
     "run": "javac Main.java && java Main",
-    "template": [
-      "Main.java"
-    ]
+    "template": ["Main.java"]
   },
   "sql": {
     "name": "SQL",
+    "engine": "docker",
     "image": "workspace-sql",
     "language": "sql",
     "entry": "queries.sql",
     "run": "psql",
-    "template": [
-      "queries.sql"
-    ]
-  },
-  "mern": {
-    "name": "MERN Stack",
-    "image": "workspace-node",
-    "language": "javascript",
-    "entry": "",
-    "run": "custom",
-    "template": []
+    "template": ["queries.sql"]
   }
 }

@@ -20,6 +20,7 @@ import {
   ResizableHandle,
 } from '@/components/ui/resizable';
 import { type ImperativePanelHandle } from 'react-resizable-panels';
+import { buildWCFiles, readWCTree } from '@/lib/wcUtils';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -27,11 +28,13 @@ type EditorEnvironment = {
   projectId: string;
   workspacePath: string;
   workerUrl: string | null;
+  engine: 'webcontainer' | 'docker';
   profile: {
     name: string;
     entry: string;
     run: string;
     image: string;
+    language: string;
   };
 };
 
@@ -47,7 +50,7 @@ type PortInfo = {
   url: string | null;
 };
 
-type WorkspaceStatus = 'idle' | 'provisioning' | 'starting' | 'ready' | 'error' | 'queued';
+type WorkspaceStatus = 'idle' | 'provisioning' | 'starting' | 'ready' | 'error' | 'queued' | 'stopped';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -101,39 +104,25 @@ function WorkspaceLoader({
   authReady,
   socketConnected,
   wsStatus,
+  engine,
 }: {
   authReady: boolean;
   socketConnected: boolean;
   wsStatus: WorkspaceStatus;
+  engine: 'webcontainer' | 'docker' | null;
 }) {
-  const steps: LoaderStep[] = [
-    {
-      label: 'Authenticating',
-      status: authReady ? 'done' : 'active',
-    },
-    {
-      label: 'Connecting to server',
-      status: !authReady ? 'pending' : socketConnected ? 'done' : 'active',
-    },
-    {
-      label: 'Preparing your workspace',
-      status:
-        !socketConnected
-          ? 'pending'
-          : wsStatus === 'starting' || wsStatus === 'ready'
-            ? 'done'
-            : 'active',
-    },
-    {
-      label: 'Starting container',
-      status:
-        wsStatus === 'ready'
-          ? 'done'
-          : wsStatus === 'starting'
-            ? 'active'
-            : 'pending',
-    },
-  ];
+  const steps: LoaderStep[] = engine === 'webcontainer'
+    ? [
+        { label: 'Authenticating',           status: authReady ? 'done' : 'active' },
+        { label: 'Loading workspace files',  status: !authReady ? 'pending' : wsStatus === 'starting' || wsStatus === 'ready' ? 'done' : 'active' },
+        { label: 'Booting WebContainer',     status: wsStatus !== 'starting' && wsStatus !== 'ready' ? 'pending' : wsStatus === 'ready' ? 'done' : 'active' },
+      ]
+    : [
+        { label: 'Authenticating',           status: authReady ? 'done' : 'active' },
+        { label: 'Connecting to server',     status: !authReady ? 'pending' : socketConnected ? 'done' : 'active' },
+        { label: 'Preparing your workspace', status: !socketConnected ? 'pending' : wsStatus === 'starting' || wsStatus === 'ready' ? 'done' : 'active' },
+        { label: 'Starting container',       status: wsStatus === 'ready' ? 'done' : wsStatus === 'starting' ? 'active' : 'pending' },
+      ];
 
   return (
     <div className='absolute inset-0 bg-[#0a0a0f] z-50 flex flex-col items-center justify-center gap-8'>
@@ -179,6 +168,22 @@ function WorkspaceQueued({ position, total }: { position: number; total: number 
       <p className='text-slate-600 text-xs max-w-xs text-center'>
         Your workspace will start automatically when a slot opens up.
       </p>
+    </div>
+  );
+}
+
+function WorkspaceStopped({ onReconnect }: { onReconnect: () => void }) {
+  return (
+    <div className='absolute inset-0 bg-[#0a0a0f] z-50 flex flex-col items-center justify-center gap-4'>
+      <div className='text-center'>
+        <p className='text-slate-200 text-sm font-medium'>Workspace stopped</p>
+        <p className='text-slate-500 text-xs mt-2 max-w-sm px-4'>
+          Your workspace was stopped due to inactivity.
+        </p>
+      </div>
+      <Button variant='outline' size='sm' onClick={onReconnect}>
+        Reconnect
+      </Button>
     </div>
   );
 }
@@ -235,19 +240,29 @@ const CodeEditor = (): JSX.Element => {
   const [activePort, setActivePort] = useState<number | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  // For WebContainer, server-ready gives us a direct URL
+  const [wcPreviewUrl, setWcPreviewUrl] = useState<string | null>(null);
 
   // Refs
   const socketRef = useRef<Socket | null>(null);
   const bootedRef = useRef(false);
   const envRef = useRef<EditorEnvironment | null>(null);
-  // workerClient — axios instance pointing to the assigned worker node.
-  // Falls back to apiClient when workerUrl is null (local / single-machine mode).
   const workerClientRef = useRef<AxiosInstance>(apiClient);
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
   const fsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Swappable terminal I/O handlers — set to Docker (socket) by default,
+  // overridden to WebContainer shell when booting a WC workspace.
+  const terminalInputRef = useRef<((data: string) => void) | null>(null);
+  const terminalResizeRef = useRef<((cols: number, rows: number) => void) | null>(null);
+
+  // WebContainer refs
+  const wcRef = useRef<import('@webcontainer/api').WebContainer | null>(null);
+  const wcShellProcessRef = useRef<import('@webcontainer/api').WebContainerProcess | null>(null);
+  const wcShellWriterRef = useRef<WritableStreamDefaultWriter<string> | null>(null);
 
   // Keep envRef in sync for use inside socket event closures
   useEffect(() => {
@@ -261,21 +276,24 @@ const CodeEditor = (): JSX.Element => {
   const loadTree = useCallback(
     async (projectId: string) => {
       if (!user?.id) return;
+
+      if (envRef.current?.engine === 'webcontainer') {
+        if (!wcRef.current) return;
+        const newTree = await readWCTree(wcRef.current);
+        setTree(newTree);
+        const files = new Set(flattenPaths(newTree));
+        setTabs((prev) => prev.filter((t) => files.has(t.path)));
+        setActiveTab((prev) => (prev && files.has(prev) ? prev : null));
+        return;
+      }
+
       const res = await workerClientRef.current.get('/workspace/tree', {
         params: { userId: user.id, projectId },
       });
       const newTree: FileNode[] = res.data;
       setTree(newTree);
 
-      const files = new Set<string>();
-      const walk = (nodes: FileNode[]) => {
-        for (const n of nodes) {
-          if (n.type === 'file') files.add(n.path);
-          if (n.children) walk(n.children);
-        }
-      };
-      walk(newTree);
-
+      const files = new Set(flattenPaths(newTree));
       setTabs((prev) => prev.filter((t) => files.has(t.path)));
       setActiveTab((prev) => (prev && files.has(prev) ? prev : null));
     },
@@ -294,20 +312,24 @@ const CodeEditor = (): JSX.Element => {
     });
     socketRef.current = socket;
 
+    // Default terminal I/O routes to this socket (Docker mode).
+    // bootWebContainer() will override these refs for WC profiles.
+    terminalInputRef.current = (data) => socket.emit('terminal:input', data);
+    terminalResizeRef.current = (cols, rows) => socket.emit('terminal:resize', { cols, rows });
+
     socket.on('connect', () => setSocketConnected(true));
     socket.on('disconnect', () => setSocketConnected(false));
-    // Mark connected immediately if already connected (fast reconnect)
     if (socket.connected) queueMicrotask(() => setSocketConnected(true));
 
-    socket.on('workspace:ready', () => {
-      setWsStatus('ready');
-    });
+    socket.on('workspace:ready', () => setWsStatus('ready'));
 
     socket.on('workspace:queued', ({ position, total }: { position: number; total: number }) => {
       setWsStatus('queued');
       setQueuePosition(position);
       setQueueTotal(total);
     });
+
+    socket.on('workspace:stopped', () => setWsStatus('stopped'));
 
     socket.on('workspace:error', (msg: string) => {
       setWsStatus('error');
@@ -331,20 +353,18 @@ const CodeEditor = (): JSX.Element => {
   }, []);
 
   /* ─────────────────────────────────────────────────────────────────────────
-     Auth — retry loadUser if the token exists but user hasn't loaded yet.
-     This handles the case where the page is opened directly (not via login
-     flow) and loadUser hasn't run or previously failed due to a network error.
+     Auth — retry loadUser if token exists but user hasn't loaded yet
   ───────────────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    if (!token) return;               // no token — can't load user
-    if (user?.id) return;             // already loaded
-    if (authStatus === 'loading') return; // already in-flight
+    if (!token) return;
+    if (user?.id) return;
+    if (authStatus === 'loading') return;
     dispatch(loadUser());
   }, [token, user?.id, authStatus, dispatch]);
 
   /* ─────────────────────────────────────────────────────────────────────────
-     Terminal setup — runs once after mount (after socket effect)
+     Terminal setup — runs once after mount
   ───────────────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
@@ -366,9 +386,6 @@ const CodeEditor = (): JSX.Element => {
     terminal.loadAddon(fitAddon);
     terminal.open(terminalContainerRef.current);
 
-    // Guard: only call fit() when the container has real dimensions.
-    // Calling fit() on a zero-size container crashes xterm's internal viewport
-    // (which happens during the loading overlay phase).
     const safeFit = () => {
       const el = terminalContainerRef.current;
       if (!el) return;
@@ -383,18 +400,21 @@ const CodeEditor = (): JSX.Element => {
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    // Route input through the swappable ref — set to socket by default,
+    // overridden to WC shell writer by bootWebContainer().
     terminal.onData((data: string) => {
-      socketRef.current?.emit('terminal:input', data);
+      terminalInputRef.current?.(data);
     });
 
-    // Subscribe to terminal output here so we have a direct ref to the terminal
+    // Subscribe to Docker terminal output (no-op in WC mode since WC pipes
+    // directly to terminalRef without going through the socket).
     const onOutput = (data: string) => terminalRef.current?.write(data);
     socketRef.current?.on('terminal:output', onOutput);
 
     const observer = new ResizeObserver(() => {
       safeFit();
       const dims = fitAddon.proposeDimensions();
-      if (dims) socketRef.current?.emit('terminal:resize', dims);
+      if (dims) terminalResizeRef.current?.(dims.cols, dims.rows);
     });
     observer.observe(terminalContainerRef.current);
 
@@ -406,11 +426,11 @@ const CodeEditor = (): JSX.Element => {
   }, []);
 
   /* ─────────────────────────────────────────────────────────────────────────
-     FS watcher — re-subscribe when env changes
+     FS watcher — Docker only (WC uses wc.fs.watch inside bootWebContainer)
   ───────────────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    if (!socketRef.current || !env) return;
+    if (!socketRef.current || !env || env.engine === 'webcontainer') return;
 
     const handler = () => {
       if (fsRefreshTimerRef.current) clearTimeout(fsRefreshTimerRef.current);
@@ -438,11 +458,10 @@ const CodeEditor = (): JSX.Element => {
 
     let cancelled = false;
 
-    // Hard timeout: if the workspace doesn't become ready in 90 s, show an error
     const timeoutId = setTimeout(() => {
       if (!cancelled) {
         setWsStatus('error');
-        setWsError('Workspace startup timed out. The container may be slow to start — please retry.');
+        setWsError('Workspace startup timed out. Please retry.');
       }
     }, 90_000);
 
@@ -456,13 +475,24 @@ const CodeEditor = (): JSX.Element => {
 
       if (cancelled) return;
 
-      // If the API server assigned a dedicated worker node, reconnect the socket
-      // to that worker and create an axios instance for workspace API calls.
-      const { workerUrl } = res.data as EditorEnvironment;
+      const envData = res.data as EditorEnvironment;
+      setEnv(envData);
+      envRef.current = envData;
+
+      if (envData.engine === 'webcontainer') {
+        clearTimeout(timeoutId);
+        // Don't pass `cancelled` — bootedRef.current already prevents double-boot.
+        // Passing cancelled breaks StrictMode (cleanup sets cancelled=true between
+        // the two effect invocations, so the boot never runs in local dev).
+        await bootWebContainer(envData, pid);
+        return;
+      }
+
+      // ── Docker path ────────────────────────────────────────────────────
+      const { workerUrl } = envData;
       const targetUrl = workerUrl ?? import.meta.env.VITE_API_URL;
 
       if (workerUrl && workerUrl !== import.meta.env.VITE_API_URL) {
-        // Disconnect from API server socket, connect to worker socket
         socketRef.current?.disconnect();
         const workerSocket = io(workerUrl, {
           reconnection: true,
@@ -470,8 +500,9 @@ const CodeEditor = (): JSX.Element => {
           reconnectionAttempts: 5,
         });
         socketRef.current = workerSocket;
+        terminalInputRef.current = (data) => workerSocket.emit('terminal:input', data);
+        terminalResizeRef.current = (cols, rows) => workerSocket.emit('terminal:resize', { cols, rows });
 
-        // Re-register socket event listeners on the new socket
         workerSocket.on('connect', () => setSocketConnected(true));
         workerSocket.on('disconnect', () => setSocketConnected(false));
         workerSocket.on('workspace:ready', () => setWsStatus('ready'));
@@ -480,6 +511,7 @@ const CodeEditor = (): JSX.Element => {
           setQueuePosition(position);
           setQueueTotal(total);
         });
+        workerSocket.on('workspace:stopped', () => setWsStatus('stopped'));
         workerSocket.on('workspace:error', (msg: string) => {
           setWsStatus('error');
           setWsError(msg);
@@ -501,21 +533,17 @@ const CodeEditor = (): JSX.Element => {
         });
       }
 
-      // Point workspace API calls at the worker (or API server if no worker).
-      // Use an interceptor — not a static header — so the token is always fresh.
       const client = axios.create({ baseURL: `${targetUrl}/api/v1` });
       client.interceptors.request.use((config) => {
-        const token = localStorage.getItem('token');
-        if (token) config.headers.Authorization = `Bearer ${token}`;
+        const t = localStorage.getItem('token');
+        if (t) config.headers.Authorization = `Bearer ${t}`;
         return config;
       });
       workerClientRef.current = client;
 
-      setEnv(res.data);
       setWsStatus('starting');
       terminalRef.current?.clear();
 
-      // Register BEFORE emit so we never miss workspace:ready
       socketRef.current!.once('workspace:ready', async () => {
         clearTimeout(timeoutId);
         const dims = fitAddonRef.current?.proposeDimensions();
@@ -548,6 +576,110 @@ const CodeEditor = (): JSX.Element => {
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ─────────────────────────────────────────────────────────────────────────
+     WebContainer boot
+  ───────────────────────────────────────────────────────────────────────── */
+
+  const bootWebContainer = async (
+    _envData: EditorEnvironment,
+    projectId: string,
+  ) => {
+    setWsStatus('starting');
+    terminalRef.current?.clear();
+    terminalRef.current?.write('\r\nLoading workspace files...\r\n');
+
+    // 1. Load existing files from server (persisted across sessions via S3/disk)
+    const treeRes = await apiClient.get('/workspace/tree', {
+      params: { userId: user!.id, projectId },
+    });
+    const fileEntries: { path: string; content: string }[] = [];
+    await walkAndLoad(treeRes.data, projectId, fileEntries);
+
+    // 2. Boot WebContainer (dynamic import — only loaded for WC profiles)
+    terminalRef.current?.write('\r\nBooting WebContainer...\r\n');
+    const { WebContainer } = await import('@webcontainer/api');
+    const wc = await WebContainer.boot();
+    wcRef.current = wc;
+
+    // 3. Mount files
+    await wc.mount(buildWCFiles(fileEntries));
+
+    // 4. Install dependencies if package.json is present
+    try {
+      await wc.fs.readFile('/package.json', 'utf-8');
+      terminalRef.current?.write('\r\nInstalling dependencies...\r\n');
+      const install = await wc.spawn('npm', ['install']);
+      install.output.pipeTo(
+        new WritableStream({ write(data) { terminalRef.current?.write(data); } })
+      );
+      const installExit = await install.exit;
+      if (installExit !== 0) {
+        terminalRef.current?.write('\r\n\x1b[33mWarning: npm install exited with code ' + installExit + '\x1b[0m\r\n');
+      }
+    } catch {
+      // No package.json — plain Node.js script, skip install
+    }
+
+    // 5. Start interactive shell (jsh is WebContainer's built-in shell)
+    const dims = fitAddonRef.current?.proposeDimensions();
+    const shellProcess = await wc.spawn('jsh', {
+      terminal: { cols: dims?.cols ?? 80, rows: dims?.rows ?? 24 },
+    });
+    wcShellProcessRef.current = shellProcess;
+
+    shellProcess.output.pipeTo(
+      new WritableStream({ write(data) { terminalRef.current?.write(data); } })
+    );
+
+    const writer = shellProcess.input.getWriter();
+    wcShellWriterRef.current = writer;
+
+    // Override terminal I/O to go to the WC shell instead of the Docker socket
+    terminalInputRef.current = (data) => writer.write(data);
+    terminalResizeRef.current = (cols, rows) => shellProcess.resize({ cols, rows });
+
+    // 6. Listen for dev server (Vite, etc.)
+    wc.on('server-ready', (port, url) => {
+      setPorts([{ port, url }]);
+      setActivePort(port);
+      setWcPreviewUrl(url);
+    });
+
+    // 7. Watch FS for tree updates (debounced)
+    wc.fs.watch('/', { recursive: true }, () => {
+      if (fsRefreshTimerRef.current) clearTimeout(fsRefreshTimerRef.current);
+      fsRefreshTimerRef.current = setTimeout(async () => {
+        if (wcRef.current) {
+          const newTree = await readWCTree(wcRef.current);
+          setTree(newTree);
+        }
+      }, 500);
+    });
+
+    // 8. Load initial file tree from WC FS
+    const initialTree = await readWCTree(wc);
+    setTree(initialTree);
+
+    setWsStatus('ready');
+  };
+
+  // Recursively walk the server file tree and fetch each file's content
+  const walkAndLoad = async (
+    nodes: FileNode[],
+    projectId: string,
+    out: { path: string; content: string }[],
+  ) => {
+    for (const node of nodes) {
+      if (node.type === 'file') {
+        const res = await apiClient.get('/workspace/file', {
+          params: { userId: user!.id, projectId, filePath: node.path },
+        });
+        out.push({ path: node.path, content: res.data.content });
+      }
+      if (node.children) await walkAndLoad(node.children, projectId, out);
+    }
+  };
+
+  /* ─────────────────────────────────────────────────────────────────────────
      Auto-open preview when a port is first detected
   ───────────────────────────────────────────────────────────────────────── */
 
@@ -569,6 +701,12 @@ const CodeEditor = (): JSX.Element => {
     const snapshot = { ...tab };
 
     const timer = setTimeout(async () => {
+      // For WC: also write to the in-memory WC FS so the dev server hot-reloads
+      if (env.engine === 'webcontainer' && wcRef.current) {
+        await wcRef.current.fs.writeFile(snapshot.path, snapshot.content);
+      }
+
+      // Always persist to server (survives page reloads)
       await workerClientRef.current.post('/workspace/file', {
         userId: user!.id,
         projectId: env.projectId,
@@ -580,7 +718,7 @@ const CodeEditor = (): JSX.Element => {
         prev.map((t) => (t.path === snapshot.path ? { ...t, dirty: false } : t)),
       );
 
-      if (activePort) setPreviewKey((k) => k + 1);
+      if (env.engine === 'docker' && activePort) setPreviewKey((k) => k + 1);
     }, 800);
 
     return () => clearTimeout(timer);
@@ -591,12 +729,16 @@ const CodeEditor = (): JSX.Element => {
   ───────────────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
+    const onKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         if (!activeTab || !env || !user) return;
         const tab = tabs.find((t) => t.path === activeTab);
         if (!tab?.dirty) return;
+
+        if (env.engine === 'webcontainer' && wcRef.current) {
+          await wcRef.current.fs.writeFile(tab.path, tab.content);
+        }
 
         workerClientRef.current
           .post('/workspace/file', {
@@ -609,7 +751,7 @@ const CodeEditor = (): JSX.Element => {
             setTabs((prev) =>
               prev.map((t) => (t.path === activeTab ? { ...t, dirty: false } : t)),
             );
-            if (activePort) setPreviewKey((k) => k + 1);
+            if (env.engine === 'docker' && activePort) setPreviewKey((k) => k + 1);
           })
           .catch(console.error);
       }
@@ -629,18 +771,19 @@ const CodeEditor = (): JSX.Element => {
     const existing = tabs.find((t) => t.path === filePath);
     if (existing) return setActiveTab(filePath);
 
-    const res = await workerClientRef.current.get('/workspace/file', {
-      params: { userId: user!.id, projectId: env.projectId, filePath },
-    });
+    let content: string;
+    if (env.engine === 'webcontainer' && wcRef.current) {
+      content = await wcRef.current.fs.readFile(filePath, 'utf-8');
+    } else {
+      const res = await workerClientRef.current.get('/workspace/file', {
+        params: { userId: user!.id, projectId: env.projectId, filePath },
+      });
+      content = res.data.content;
+    }
 
     setTabs((prev) => [
       ...prev,
-      {
-        path: filePath,
-        content: res.data.content,
-        dirty: false,
-        language: getLanguageFromPath(filePath),
-      },
+      { path: filePath, content, dirty: false, language: getLanguageFromPath(filePath) },
     ]);
     setActiveTab(filePath);
   };
@@ -651,10 +794,56 @@ const CodeEditor = (): JSX.Element => {
     );
   };
 
+  const createEntry = async (p: string, type: 'file' | 'folder') => {
+    if (!env) return;
+    if (env.engine === 'webcontainer' && wcRef.current) {
+      if (type === 'folder') {
+        await wcRef.current.fs.mkdir(p, { recursive: true });
+      } else {
+        const dir = p.split('/').slice(0, -1).join('/');
+        if (dir) await wcRef.current.fs.mkdir(dir, { recursive: true });
+        await wcRef.current.fs.writeFile(p, '');
+      }
+    }
+    await workerClientRef.current.post('/workspace/create', {
+      userId: user!.id, projectId: env.projectId, path: p, type,
+    });
+    loadTree(env.projectId);
+  };
+
+  const deleteEntry = async (p: string) => {
+    if (!env) return;
+    if (env.engine === 'webcontainer' && wcRef.current) {
+      await wcRef.current.fs.rm(p, { recursive: true });
+    }
+    await workerClientRef.current.post('/workspace/delete', {
+      userId: user!.id, projectId: env.projectId, path: p,
+    });
+    loadTree(env.projectId);
+  };
+
+  const renameEntry = async (oldPath: string, newPath: string) => {
+    if (!env) return;
+    if (env.engine === 'webcontainer' && wcRef.current) {
+      // WC doesn't have rename — copy + delete
+      const content = await wcRef.current.fs.readFile(oldPath, 'utf-8');
+      await wcRef.current.fs.writeFile(newPath, content);
+      await wcRef.current.fs.rm(oldPath);
+    }
+    await workerClientRef.current.post('/workspace/rename', {
+      userId: user!.id, projectId: env.projectId, oldPath, newPath,
+    });
+    loadTree(env.projectId);
+  };
+
   const runCode = () => {
     if (!env) return;
     terminalRef.current?.clear();
-    socketRef.current?.emit('terminal:input', env.profile.run + '\n');
+    if (env.engine === 'webcontainer') {
+      wcShellWriterRef.current?.write(env.profile.run + '\n');
+    } else {
+      socketRef.current?.emit('terminal:input', env.profile.run + '\n');
+    }
   };
 
   const retryBoot = () => {
@@ -671,11 +860,13 @@ const CodeEditor = (): JSX.Element => {
   const active = tabs.find((t) => t.path === activeTab);
   const activePortInfo = ports.find((p) => p.port === activePort);
   const previewBase = env?.workerUrl ?? import.meta.env.VITE_API_URL;
-  const iframeSrc =
-    env && activePort
-      ? (activePortInfo?.url ??
-          `${previewBase}/api/v1/preview/${user!.id}/${env.projectId}/${activePort}`)
-      : null;
+
+  // WC provides a direct URL from server-ready; Docker uses the proxy route
+  const iframeSrc = env?.engine === 'webcontainer'
+    ? (wcPreviewUrl ?? null)
+    : (env && activePort
+        ? (activePortInfo?.url ?? `${previewBase}/api/v1/preview/${user!.id}/${env.projectId}/${activePort}`)
+        : null);
 
   const togglePreview = () => {
     if (showPreview) previewPanelRef.current?.collapse();
@@ -698,12 +889,22 @@ const CodeEditor = (): JSX.Element => {
     <div className='code-editor h-screen bg-slate-950 text-white flex flex-col relative'>
       {/* Loading overlay */}
       {isLoading && (
-        <WorkspaceLoader authReady={authReady} socketConnected={socketConnected} wsStatus={wsStatus} />
+        <WorkspaceLoader
+          authReady={authReady}
+          socketConnected={socketConnected}
+          wsStatus={wsStatus}
+          engine={env?.engine ?? null}
+        />
       )}
 
       {/* Queue overlay */}
       {isQueued && (
         <WorkspaceQueued position={queuePosition} total={queueTotal} />
+      )}
+
+      {/* Stopped overlay */}
+      {wsStatus === 'stopped' && (
+        <WorkspaceStopped onReconnect={retryBoot} />
       )}
 
       {/* Error overlay */}
@@ -722,6 +923,9 @@ const CodeEditor = (): JSX.Element => {
               <span className='w-1.5 h-1.5 rounded-full bg-green-400 inline-block' />
               ready
             </span>
+          )}
+          {env?.engine === 'webcontainer' && wsStatus === 'ready' && (
+            <span className='text-xs text-slate-600'>· in-browser</span>
           )}
         </div>
 
@@ -759,23 +963,9 @@ const CodeEditor = (): JSX.Element => {
               nodes={tree}
               activePath={activeTab}
               onSelect={openFile}
-              onCreate={async (p, type) => {
-                await workerClientRef.current.post('/workspace/create', { userId: user!.id, projectId: env!.projectId, path: p, type });
-                loadTree(env!.projectId);
-              }}
-              onDelete={async (p) => {
-                await workerClientRef.current.post('/workspace/delete', { userId: user!.id, projectId: env!.projectId, path: p });
-                loadTree(env!.projectId);
-              }}
-              onRename={async (o, n) => {
-                await workerClientRef.current.post('/workspace/rename', {
-                  userId: user!.id,
-                  projectId: env!.projectId,
-                  oldPath: o,
-                  newPath: n,
-                });
-                loadTree(env!.projectId);
-              }}
+              onCreate={async (p, type) => createEntry(p, type)}
+              onDelete={async (p) => deleteEntry(p)}
+              onRename={async (o, n) => renameEntry(o, n)}
               onRefresh={() => loadTree(env!.projectId)}
             />
           ) : (
@@ -839,7 +1029,7 @@ const CodeEditor = (): JSX.Element => {
 
         <ResizableHandle />
 
-        {/* Preview — starts collapsed, auto-expands on port detection */}
+        {/* Preview — starts collapsed, auto-expands on port/server-ready detection */}
         <ResizablePanel
           ref={previewPanelRef}
           defaultSize={0}
@@ -874,7 +1064,7 @@ const CodeEditor = (): JSX.Element => {
                   <span className='text-xs text-slate-500'>:{activePort}</span>
                 ) : null}
 
-                {activePortInfo?.url && (
+                {(activePortInfo?.url || wcPreviewUrl) && (
                   <span className='flex items-center gap-1 text-xs text-green-400'>
                     <span className='w-1.5 h-1.5 rounded-full bg-green-400 inline-block' />
                     live
@@ -927,3 +1117,17 @@ const CodeEditor = (): JSX.Element => {
 };
 
 export default CodeEditor;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function flattenPaths(nodes: FileNode[]): string[] {
+  const paths: string[] = [];
+  const walk = (ns: FileNode[]) => {
+    for (const n of ns) {
+      if (n.type === 'file') paths.push(n.path);
+      if (n.children) walk(n.children);
+    }
+  };
+  walk(nodes);
+  return paths;
+}

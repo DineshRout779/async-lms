@@ -16,6 +16,8 @@ const terminals = new Map();          // socketId → PTY
 const activePorts = new Map();        // `${userId}:${projectId}` → Set<number>
 const outputBuffers = new Map();      // key → last 8 KB of terminal output
 
+let _io = null; // set once setupSocket is called, used by TTL timer
+
 // ---------- Container TTL tracking ----------
 // Containers idle for CONTAINER_TTL_MS are stopped automatically.
 // On disconnect we do NOT stop the container — the TTL handles it.
@@ -39,6 +41,9 @@ const cleanupTimer = setInterval(() => {
       const [userId, projectId] = key.split(':');
       console.log(`[ttl] Workspace ${key} idle >${CONTAINER_TTL_MS / 60000} min — stopping`);
       const cname = `workspace-${userId}-${projectId}`;
+
+      // Notify any connected sockets for this workspace
+      if (_io) _io.to(`ws:${key}`).emit('workspace:stopped');
 
       // Full teardown
       clearContainerIP(cname);
@@ -82,6 +87,7 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
   try {
     socket.workspace = { userId, projectId };
     const key = `${userId}:${projectId}`;
+    socket.join(`ws:${key}`);
 
     const knownPorts = activePorts.get(key);
     if (knownPorts?.size > 0) {
@@ -134,6 +140,7 @@ function promoteFromQueue() {
 
 // ---------- Socket handler ----------
 module.exports = function setupSocket(io) {
+  _io = io;
   io.on('connection', (socket) => {
     console.log('Socket connected:', socket.id);
     socket.workspace = null;
