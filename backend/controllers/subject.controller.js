@@ -119,23 +119,10 @@ exports.getCourseStructure = async (req, res) => {
         lc.version AS lesson_version,
         lc.video_url AS lesson_video_url,
 
-        -- Quiz
+        -- Quiz (presence only — questions/options fetched on demand via /subjects/quiz/:id)
         q.id AS quiz_id,
         q.passing_score AS quiz_passing_score,
         q.max_score AS quiz_max_score,
-
-        -- Quiz Question
-        qq.id AS question_id,
-        qq.question_text,
-        qq.question_type,
-        qq.points,
-        qq.order_index AS question_order,
-        qq.explanation,
-
-        -- Quiz Options (is_correct intentionally omitted — scoring is server-side)
-        qo.id AS option_id,
-        qo.option_text,
-        qo.order_index AS option_order,
 
         -- Exercise (subtopic-level)
         e.id AS exercise_id,
@@ -162,18 +149,14 @@ exports.getCourseStructure = async (req, res) => {
       LEFT JOIN lesson_content lc 
         ON st.id = lc.subtopic_id AND lc.is_published = true
       LEFT JOIN quizzes q ON u.id = q.unit_id
-      LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
-      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
       LEFT JOIN exercises e ON st.id = e.subtopic_id
       LEFT JOIN assignments a ON u.id = a.unit_id
 
       WHERE t.subject_id = $1
-      ORDER BY 
+      ORDER BY
         t.order_index,
         u.order_index,
-        st.order_index,
-        qq.order_index,
-        qo.order_index;
+        st.order_index;
     `;
 
     const { rows } = await pool.query(query, [subject.id]);
@@ -243,45 +226,14 @@ exports.getCourseStructure = async (req, res) => {
         }
       }
 
-      // Quiz
+      // Quiz (presence only)
       if (row.quiz_id && unit) {
         if (!unit.quizzes.has(row.quiz_id)) {
           unit.quizzes.set(row.quiz_id, {
             id: row.quiz_id,
             passing_score: row.quiz_passing_score,
             max_score: row.quiz_max_score,
-            questions: new Map(),
           });
-        }
-
-        const quiz = unit.quizzes.get(row.quiz_id);
-
-        // Question
-        if (row.question_id && quiz) {
-          if (!quiz.questions.has(row.question_id)) {
-            quiz.questions.set(row.question_id, {
-              id: row.question_id,
-              question_text: row.question_text,
-              question_type: row.question_type,
-              points: row.points,
-              order_index: row.question_order,
-              explanation: row.explanation,
-              options: [],
-            });
-          }
-
-          const question = quiz.questions.get(row.question_id);
-
-          // Options
-          if (row.option_id && question) {
-            if (!question.options.some((o) => o.id === row.option_id)) {
-              question.options.push({
-                id: row.option_id,
-                option_text: row.option_text,
-                order_index: row.option_order,
-              });
-            }
-          }
         }
       }
 
@@ -324,10 +276,7 @@ exports.getCourseStructure = async (req, res) => {
         description: unit.description,
         order_index: unit.order_index,
         assignments: unit.assignments || [],
-        quizzes: Array.from(unit.quizzes.values()).map((q) => ({
-          ...q,
-          questions: Array.from(q.questions.values()),
-        })),
+        quizzes: Array.from(unit.quizzes.values()),
         subtopics: Array.from(unit.subtopics.values()).map((sub) => ({
           ...sub,
         })),

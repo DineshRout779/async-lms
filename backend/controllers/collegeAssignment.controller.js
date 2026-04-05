@@ -59,7 +59,8 @@ async function storeFile(file, { s3KeyPrefix, localSubPath }) {
     : path.join(__dirname, '..', 'public', 'uploads');
   await mkdirAsync(uploadDir, { recursive: true });
   await writeFileAsync(path.join(uploadDir, filename), file.buffer);
-  const base = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
+  const base =
+    process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
   const urlPath = localSubPath
     ? `uploads/${localSubPath}/${filename}`
     : `uploads/${filename}`;
@@ -74,7 +75,9 @@ async function storeFile(file, { s3KeyPrefix, localSubPath }) {
 exports.uploadInstructionDoc = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'No file uploaded' });
     }
 
     const { url, name } = await storeFile(req.file, {
@@ -309,9 +312,14 @@ exports.submitCollegeAssignment = async (req, res) => {
 
   try {
     // 1. Verify existence
-    const assignment = await pool.query('SELECT id FROM college_assignments WHERE id = $1', [id]);
+    const assignment = await pool.query(
+      'SELECT id FROM college_assignments WHERE id = $1',
+      [id],
+    );
     if (!assignment.rowCount) {
-      return res.status(404).json({ success: false, message: 'Assignment not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
     }
 
     let file_url = null;
@@ -342,7 +350,11 @@ exports.submitCollegeAssignment = async (req, res) => {
       [id, student_id, submission_link || null, file_url, file_name],
     );
 
-    res.json({ success: true, data: rows[0], message: 'Assignment submitted successfully' });
+    res.json({
+      success: true,
+      data: rows[0],
+      message: 'Assignment submitted successfully',
+    });
   } catch (error) {
     console.error('submitCollegeAssignment ERROR:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -369,7 +381,9 @@ exports.getCollegeAssignmentById = async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ success: false, message: 'Assignment not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
     }
 
     res.json({ success: true, data: rows[0] });
