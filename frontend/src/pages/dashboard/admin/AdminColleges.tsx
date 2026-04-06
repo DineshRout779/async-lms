@@ -64,7 +64,7 @@ export default function AdminColleges() {
       if (isMounted) {
         setColleges(res.data.data);
       }
-    } catch {
+    } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to load colleges'));
     } finally {
       if (isMounted) {
@@ -93,7 +93,7 @@ export default function AdminColleges() {
         .join('')
         .slice(0, 2)
         .toUpperCase(),
-    []
+    [],
   );
 
   /* ======================
