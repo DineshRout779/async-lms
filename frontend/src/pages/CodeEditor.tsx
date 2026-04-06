@@ -473,22 +473,24 @@ const CodeEditor = (): JSX.Element => {
         projectId: pid,
       });
 
-      if (cancelled) return;
-
       const envData = res.data as EditorEnvironment;
       setEnv(envData);
       envRef.current = envData;
 
       if (envData.engine === 'webcontainer') {
         clearTimeout(timeoutId);
-        // Don't pass `cancelled` — bootedRef.current already prevents double-boot.
-        // Passing cancelled breaks StrictMode (cleanup sets cancelled=true between
-        // the two effect invocations, so the boot never runs in local dev).
+        // Do NOT check `cancelled` here — bootedRef.current already prevents
+        // double-boot. Checking `cancelled` breaks React StrictMode in local dev:
+        // StrictMode's cleanup sets cancelled=true between the two effect
+        // invocations, so the post resolves after cleanup and the early-return
+        // fires, leaving wsStatus stuck at 'provisioning' forever.
         await bootWebContainer(envData, pid);
         return;
       }
 
-      // ── Docker path ────────────────────────────────────────────────────
+      // ── Docker path — check cancelled before setting up persistent state ──
+      if (cancelled) return;
+
       const { workerUrl } = envData;
       const targetUrl = workerUrl ?? import.meta.env.VITE_API_URL;
 
