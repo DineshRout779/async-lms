@@ -574,6 +574,15 @@ const CodeEditor = (): JSX.Element => {
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
+      // Tear down the WebContainer instance so the next boot() call succeeds.
+      // WebContainers only allows one instance per page — without this, navigating
+      // away and back throws "Unable to create more instances".
+      try { wcShellWriterRef.current?.releaseLock(); } catch { /* already released */ }
+      wcShellProcessRef.current?.kill();
+      wcRef.current?.teardown();
+      wcRef.current = null;
+      wcShellProcessRef.current = null;
+      wcShellWriterRef.current = null;
     };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -598,6 +607,12 @@ const CodeEditor = (): JSX.Element => {
 
     // 2. Boot WebContainer (dynamic import — only loaded for WC profiles)
     terminalRef.current?.write('\r\nBooting WebContainer...\r\n');
+    if (!self.crossOriginIsolated) {
+      throw new Error(
+        'WebContainers require cross-origin isolation. ' +
+        'Please hard-reload this page (Ctrl+Shift+R on Windows/Linux, Cmd+Shift+R on Mac) and try again.',
+      );
+    }
     const { WebContainer } = await import('@webcontainer/api');
     const wc = await WebContainer.boot();
     wcRef.current = wc;
