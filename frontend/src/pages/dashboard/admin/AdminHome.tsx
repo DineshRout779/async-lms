@@ -46,8 +46,8 @@ export default function AdminHome() {
         const result =
           await apiClient.get<AdminDashboardResponse>('/admin/stats');
         setData(result.data);
-      } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
+      } catch {
+        // data remains null — the null check below shows a fallback UI
       } finally {
         setLoading(false);
       }

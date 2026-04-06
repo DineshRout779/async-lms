@@ -78,8 +78,8 @@ const CourseIntro = () => {
           total_subtopics: totalSubtopics,
           first_lesson_slug: firstLesson,
         });
-      } catch (err) {
-        console.error('Failed to fetch course details:', err);
+      } catch {
+        // course remains null — the null check below shows a fallback UI
       } finally {
         setLoading(false);
       }

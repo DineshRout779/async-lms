@@ -1,7 +1,9 @@
 import { Suspense, lazy } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router';
+import { Loader2 } from 'lucide-react';
 import App from '@/App';
 import PrivateRoute from './PrivateRoute';
+import ErrorBoundary from '@/components/common/ErrorBoundary';
 import FacilitatorSettings from '@/pages/dashboard/facilitator/FacilitatorSettings';
 
 // ---------- Lazy Imports ----------
@@ -226,19 +228,21 @@ const router = createBrowserRouter([
   },
 ]);
 
+const PageLoader = () => (
+  <div className='flex h-screen items-center justify-center'>
+    <Loader2 className='h-8 w-8 animate-spin text-indigo-600' />
+  </div>
+);
+
 // ---------- App Routes ----------
 
 const AppRoutes = () => {
   return (
-    <Suspense
-      fallback={
-        <div className='h-screen flex items-center justify-center text-sm text-muted-foreground'>
-          Loading...
-        </div>
-      }
-    >
-      <RouterProvider router={router} />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <RouterProvider router={router} />
+      </Suspense>
+    </ErrorBoundary>
   );
 };
 

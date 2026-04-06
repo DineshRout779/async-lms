@@ -755,7 +755,9 @@ const CodeEditor = (): JSX.Element => {
             );
             if (env.engine === 'docker' && activePort) setPreviewKey((k) => k + 1);
           })
-          .catch(console.error);
+          .catch(() => {
+            // auto-save silently fails — file marked dirty stays dirty
+          });
       }
     };
 

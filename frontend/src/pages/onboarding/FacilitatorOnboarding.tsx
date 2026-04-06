@@ -7,6 +7,7 @@ import { GraduationCap, Landmark, Rocket } from 'lucide-react';
 import { useAppDispatch } from '@/app/hooks';
 import { loadUser } from '@/features/auth/authThunks';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 interface College {
   id: string;
@@ -27,7 +28,7 @@ export default function FacilitatorOnboarding() {
         const res = await apiClient.get('/colleges');
         setColleges(res.data.data || res.data);
       } catch (err) {
-        toast.error('Failed to load colleges');
+        toast.error(getErrorMessage(err, 'Failed to load colleges'));
       } finally {
         setLoading(false);
       }
@@ -55,8 +56,8 @@ export default function FacilitatorOnboarding() {
       toast.success('Onboarding complete!');
       await dispatch(loadUser());
       navigate('/pending-verification');
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Submission failed');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Submission failed'));
     } finally {
       setIsSubmitting(false);
     }

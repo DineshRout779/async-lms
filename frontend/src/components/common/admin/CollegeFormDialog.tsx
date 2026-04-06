@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import toast from 'react-hot-toast';
 import apiClient from '@/services/api';
 import type { College } from '@/utils/types';
-import { isAxiosError } from 'axios';
+import { getErrorMessage } from '@/lib/utils';
 
 interface Props {
   open: boolean;
@@ -71,15 +71,8 @@ export default function CollegeFormDialog({
 
       onSuccess();
       onClose();
-    } catch (err: unknown) {
-      if (isAxiosError(err)) {
-        const serverMessage = err.response?.data?.message || 'Action failed';
-        toast.error(serverMessage);
-      } else if (err instanceof Error) {
-        toast.error(err.message);
-      } else {
-        toast.error('An unexpected error occurred');
-      }
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to save college'));
     } finally {
       setLoading(false);
     }

@@ -17,6 +17,7 @@ import apiClient from '@/services/api';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 import type { Exercise, ExerciseTask } from '@/utils/types';
+import { getErrorMessage } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -121,8 +122,8 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
         setFiles(initialFiles);
         setProjectId(pid);
         setActiveFile(initialFiles[0]?.name ?? '');
-      } catch (err) {
-        console.error('Failed to init exercise workspace:', err);
+      } catch {
+        // loading will be set to false below
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -155,8 +156,8 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
           initialized: true,
         },
       }));
-    } catch (err) {
-      console.error(`Failed to init workspace for task ${taskId}:`, err);
+    } catch {
+      // task workspace init failed — taskLoading will be cleared below
     } finally {
       setTaskLoading(prev => ({ ...prev, [taskId]: false }));
     }
@@ -233,7 +234,9 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
           projectId: currentProjectId,
           filePath: currentActiveFile,
           content,
-        }).catch(console.error);
+        }).catch(() => {
+          // auto-save silently fails — user can retry manually
+        });
       }, 800);
     },
     [isMultiTask, activeTaskId, currentActiveFile, user, currentProjectId],
@@ -253,8 +256,8 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
       }>(`/students/exercise/${exercise.id}/run`, body);
       setOutput(res.data.data.output || '(no output)');
       setExitCode(res.data.data.exitCode);
-    } catch (err: any) {
-      setOutput(err?.response?.data?.message ?? 'Failed to run code');
+    } catch (err) {
+      setOutput(getErrorMessage(err, 'Failed to run code'));
       setExitCode(-1);
     } finally {
       setRunning(false);
@@ -274,12 +277,12 @@ const ExerciseEditor = ({ exercise, submitting, onSubmit }: ExerciseEditorProps)
         data: TestRunResult;
       }>(`/students/exercise/${exercise.id}/run-tests`, body);
       setTestResults(res.data.data);
-    } catch (err: any) {
+    } catch (err) {
       setTestResults({
         passed: 0,
         failed: 1,
         total: 1,
-        results: [{ description: 'Test runner', passed: false, error: err?.response?.data?.message ?? 'Failed to run tests' }],
+        results: [{ description: 'Test runner', passed: false, error: getErrorMessage(err, 'Failed to run tests') }],
       });
     } finally {
       setTestRunning(false);

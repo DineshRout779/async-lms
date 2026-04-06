@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 interface CapstoneDetail {
   id: string;
@@ -81,8 +82,8 @@ export default function CapstoneView() {
       });
       setCapstone((prev) => (prev ? { ...prev, ...res.data.data } : prev));
       toast.success('Capstone submitted! +20 XP');
-    } catch {
-      toast.error('Failed to submit capstone');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to submit capstone'));
     } finally {
       setSubmitting(false);
     }

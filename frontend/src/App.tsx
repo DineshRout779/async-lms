@@ -10,16 +10,8 @@ const App = () => {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        dispatch(loadUser());
-      } catch (error) {
-        console.log('Error while fetching user data');
-      }
-    };
-
     if (token) {
-      fetchUser();
+      dispatch(loadUser());
     }
   }, [token, dispatch]);
 

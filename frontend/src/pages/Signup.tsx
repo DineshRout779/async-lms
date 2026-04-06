@@ -4,8 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Github, GraduationCap } from 'lucide-react';
 import { loginService } from '@/services/auth';
-import { isAxiosError } from 'axios';
 import { useNavigate } from 'react-router';
+import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 type AuthMode = 'login' | 'signup';
 
@@ -16,18 +17,9 @@ export default function Login() {
   const navigate = useNavigate();
   const handleSubmit = async () => {
     try {
-      const res = await loginService({ email, password });
-      console.log('login res: ', res.data);
+      await loginService({ email, password });
     } catch (error) {
-      if (isAxiosError(error)) {
-        if (error.request) {
-          console.log('Error login req: ', error.request.message);
-        } else if (error.response) {
-          console.log('Error login res: ', error.response.data.message);
-        } else {
-          console.log('Login Error: ', error.message);
-        }
-      }
+      toast.error(getErrorMessage(error, 'Login failed. Please try again.'));
     }
   };
 
@@ -39,7 +31,7 @@ export default function Login() {
           <img
             className='w-full block object-cover h-full'
             src='https://images.pexels.com/photos/4170628/pexels-photo-4170628.jpeg'
-            alt=''
+            alt='Students learning to code'
           />
         </div>
       </div>

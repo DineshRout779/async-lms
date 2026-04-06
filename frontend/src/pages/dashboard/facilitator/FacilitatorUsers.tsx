@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Search, Eye } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -59,8 +60,7 @@ const FacilitatorStudents = () => {
       const res = await apiClient.get<StudentRow[]>('/facilitator/students');
       setStudents(res.data);
     } catch (error) {
-      console.error('Error fetching students:', error);
-      toast.error('Failed to load students');
+      toast.error(getErrorMessage(error, 'Failed to load students'));
     } finally {
       setLoading(false);
     }

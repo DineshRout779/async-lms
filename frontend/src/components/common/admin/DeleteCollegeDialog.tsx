@@ -7,6 +7,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 import apiClient from '@/services/api';
 
 export default function DeleteCollegeDialog({
@@ -25,14 +26,12 @@ export default function DeleteCollegeDialog({
       await apiClient.delete(`/colleges/${collegeId}`);
       toast.success('College deleted');
       onSuccess();
-    } catch {
-      toast.error('Failed to delete college');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to delete college'));
     } finally {
       onClose();
     }
   };
-
-  console.log('delete dialog rendered');
 
   return (
     <AlertDialog open={open} onOpenChange={onClose}>

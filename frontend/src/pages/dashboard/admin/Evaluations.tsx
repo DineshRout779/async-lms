@@ -37,8 +37,8 @@ const Evaluations = () => {
           '/admin/project-submissions'
         );
         setSubmissions(response.data);
-      } catch (error) {
-        console.error('Error fetching submissions:', error);
+      } catch {
+        // submissions remains empty — empty state is shown below
       } finally {
         setLoading(false);
       }

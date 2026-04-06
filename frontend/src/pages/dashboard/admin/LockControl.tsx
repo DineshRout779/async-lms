@@ -14,6 +14,7 @@ import {
   Users2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -114,8 +115,7 @@ const LockControl = () => {
         setSelectedSubjectId(subjectRes.data.data[0].id);
       }
     } catch (error) {
-      console.error('Failed to load filter data:', error);
-      toast.error('Failed to load lock control filters');
+      toast.error(getErrorMessage(error, 'Failed to load lock control filters'));
     } finally {
       setLoadingFilters(false);
     }
@@ -138,8 +138,7 @@ const LockControl = () => {
         setSelectedBatch('all');
       }
     } catch (error) {
-      console.error('Failed to load batches:', error);
-      toast.error('Failed to load batches');
+      toast.error(getErrorMessage(error, 'Failed to load batches'));
     }
   }, [selectedCollegeId, selectedBatch]);
 
@@ -161,8 +160,7 @@ const LockControl = () => {
       }));
       setOverview({ ...data, topics: transformedTopics });
     } catch (error) {
-      console.error('Failed to load lock overview:', error);
-      toast.error('Failed to load lock overview');
+      toast.error(getErrorMessage(error, 'Failed to load lock overview'));
     } finally {
       setLoadingOverview(false);
     }
@@ -235,8 +233,7 @@ const LockControl = () => {
       toast.success(unlock ? 'Topic unlocked' : 'Topic locked');
       await fetchOverview();
     } catch (error) {
-      console.error('Failed to update topic lock:', error);
-      toast.error('Failed to update topic lock');
+      toast.error(getErrorMessage(error, 'Failed to update topic lock'));
     } finally {
       setTopicLoadingIds((prev) => prev.filter((id) => id !== topicId));
     }
@@ -253,8 +250,7 @@ const LockControl = () => {
       toast.success(unlock ? 'Subtopic unlocked' : 'Subtopic locked');
       await fetchOverview();
     } catch (error) {
-      console.error('Failed to update subtopic lock:', error);
-      toast.error('Failed to update subtopic lock');
+      toast.error(getErrorMessage(error, 'Failed to update subtopic lock'));
     } finally {
       setSubtopicLoadingIds((prev) => prev.filter((id) => id !== subtopicId));
     }

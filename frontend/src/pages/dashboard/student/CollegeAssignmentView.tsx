@@ -16,6 +16,7 @@ import apiClient from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 import type { CollegeAssignment } from '@/utils/types';
 
 export default function CollegeAssignmentView() {
@@ -46,8 +47,8 @@ export default function CollegeAssignmentView() {
       } else if (data.submission_file_url) {
         setActiveTab('upload');
       }
-    } catch {
-      toast.error('Failed to load assignment details');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to load assignment details'));
     } finally {
       setLoading(false);
     }
@@ -96,10 +97,8 @@ export default function CollegeAssignmentView() {
       toast.success('Assignment submitted successfully!');
       setSelectedFile(null);
       fetchAssignment();
-    } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to submit assignment';
-      toast.error(msg);
-      console.error(error);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to submit assignment'));
     } finally {
       setSubmitting(false);
     }

@@ -21,8 +21,8 @@ export const SubjectSidebar = () => {
         setLoading(true);
         const { data } = await apiClient.get(`/subjects/${slug}`);
         setStructure(data.data);
-      } catch (err) {
-        console.error('Sidebar fetch error', err);
+      } catch {
+        // structure remains null — sidebar renders empty gracefully
       } finally {
         setLoading(false);
       }

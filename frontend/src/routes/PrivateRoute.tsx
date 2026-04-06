@@ -1,6 +1,7 @@
 import { useAppSelector } from '@/app/hooks';
 import { selectAuth } from '@/features/auth/authSelectors';
 import { Navigate, Outlet, useLocation } from 'react-router';
+import { Loader2 } from 'lucide-react';
 
 const PrivateRoute = () => {
   const { token, user, status } = useAppSelector(selectAuth);
@@ -10,9 +11,12 @@ const PrivateRoute = () => {
     return <Navigate to='/' state={{ from: location }} replace />;
   }
 
-  // Wait for loadUser to finish before making onboarding decisions
   if (!user && (status === 'idle' || status === 'loading')) {
-    return null;
+    return (
+      <div className='flex h-screen items-center justify-center'>
+        <Loader2 className='h-8 w-8 animate-spin text-indigo-600' />
+      </div>
+    );
   }
 
   const isOnOnboarding = location.pathname.startsWith('/onboarding');

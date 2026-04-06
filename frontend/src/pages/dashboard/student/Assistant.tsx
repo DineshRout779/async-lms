@@ -5,7 +5,7 @@ import { Send, Loader2, Bot, User, TriangleAlert } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import apiClient from '@/services/api';
-import { isAxiosError } from 'axios';
+import { getErrorMessage } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,15 +66,8 @@ export default function AIAssistant() {
         ...prev,
         { role: 'assistant', content: res.data.data.reply },
       ]);
-    } catch (err: unknown) {
-      if (isAxiosError(err)) {
-        const serverMessage = err.response?.data?.message || 'Action failed';
-        setError(serverMessage);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An unexpected error occurred');
-      }
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to get a response'));
     } finally {
       setLoading(false);
     }

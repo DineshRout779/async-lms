@@ -34,8 +34,8 @@ export default function ConfirmStep() {
         ]);
         setProfile(profRes.data.data);
         setSubjects(subRes.data.data);
-      } catch (err) {
-        console.error('Failed to load profile for confirmation', err);
+      } catch {
+        // profile/subjects remain null — page renders with fallback values
       }
     };
     fetchData();
@@ -57,8 +57,8 @@ export default function ConfirmStep() {
       // Refresh user from backend so onboarding_step = 'done' is in Redux
       await dispatch(loadUser()).unwrap();
       navigate('/onboarding/success');
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // loadUser rejected — PrivateRoute will redirect based on token state
     } finally {
       setLoading(false);
     }

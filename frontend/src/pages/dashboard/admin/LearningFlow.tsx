@@ -23,6 +23,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 import type {
   Exercise,
   Quiz,
@@ -43,7 +44,6 @@ import AssignmentModal from '@/components/common/admin/AssignmentModal';
 import CapstoneModal from '@/components/common/admin/CapstoneModal';
 import { QuizQuestionsList } from '@/components/common/admin/QuizQuestions';
 import ContentModal from '@/components/common/admin/ContentModal';
-import { isAxiosError } from 'axios';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { fetchSubjects } from '@/features/subjects/subjectSlice';
 import {
@@ -190,8 +190,7 @@ const LearningFlow: React.FC = () => {
         setTopicModalOpen(false);
       }
     } catch (error) {
-      console.error('Failed to create topic', error);
-      toast.error('Failed to create topic');
+      toast.error(getErrorMessage(error, 'Failed to create topic'));
     } finally {
       setModalLoading(false);
     }
@@ -222,8 +221,7 @@ const LearningFlow: React.FC = () => {
         setSelectedTopicForUnit(null);
       }
     } catch (error) {
-      console.error('Failed to create unit', error);
-      toast.error('Failed to create unit');
+      toast.error(getErrorMessage(error, 'Failed to create unit'));
     } finally {
       setModalLoading(false);
     }
@@ -252,8 +250,7 @@ const LearningFlow: React.FC = () => {
         setEditingUnit(null);
       }
     } catch (error) {
-      console.error('Failed to update unit', error);
-      toast.error('Failed to update unit');
+      toast.error(getErrorMessage(error, 'Failed to update unit'));
     } finally {
       setModalLoading(false);
     }
@@ -270,8 +267,7 @@ const LearningFlow: React.FC = () => {
         refreshStructure();
       }
     } catch (error) {
-      console.error('Failed to delete unit', error);
-      toast.error('Failed to delete unit');
+      toast.error(getErrorMessage(error, 'Failed to delete unit'));
     }
   };
 
@@ -296,8 +292,7 @@ const LearningFlow: React.FC = () => {
         setEditingTopic(null);
       }
     } catch (error) {
-      console.error('Failed to update topic', error);
-      toast.error('Failed to update topic');
+      toast.error(getErrorMessage(error, 'Failed to update topic'));
     } finally {
       setModalLoading(false);
     }
@@ -314,8 +309,7 @@ const LearningFlow: React.FC = () => {
         refreshStructure();
       }
     } catch (error) {
-      console.error('Failed to delete topic', error);
-      toast.error('Failed to delete topic');
+      toast.error(getErrorMessage(error, 'Failed to delete topic'));
     }
   };
 
@@ -343,13 +337,8 @@ const LearningFlow: React.FC = () => {
         setSubtopicModalOpen(false);
         setSelectedUnitForSubtopic(null);
       }
-    } catch (error: unknown) {
-      console.error('Failed to create subtopic', error);
-      if (isAxiosError(error) && error.response?.status === 409) {
-        toast.error('A subtopic with this slug already exists');
-      } else {
-        toast.error('Failed to create subtopic');
-      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to create subtopic'));
     } finally {
       setModalLoading(false);
     }
@@ -381,8 +370,7 @@ const LearningFlow: React.FC = () => {
         setEditingSubtopic(null);
       }
     } catch (error) {
-      console.error('Failed to update subtopic', error);
-      toast.error('Failed to update subtopic');
+      toast.error(getErrorMessage(error, 'Failed to update subtopic'));
     } finally {
       setModalLoading(false);
     }
@@ -399,8 +387,7 @@ const LearningFlow: React.FC = () => {
         refreshStructure();
       }
     } catch (error) {
-      console.error('Failed to delete subtopic', error);
-      toast.error('Failed to delete subtopic');
+      toast.error(getErrorMessage(error, 'Failed to delete subtopic'));
     }
   };
 
@@ -455,8 +442,7 @@ const LearningFlow: React.FC = () => {
         setEditingContent(null);
       }
     } catch (error) {
-      console.error('Failed to create content', error);
-      toast.error('Failed to create lesson content');
+      toast.error(getErrorMessage(error, 'Failed to create lesson content'));
     } finally {
       setModalLoading(false);
     }
@@ -499,8 +485,7 @@ const LearningFlow: React.FC = () => {
         setEditingContent(null);
       }
     } catch (error) {
-      console.error('Failed to update content', error);
-      toast.error('Failed to update lesson content');
+      toast.error(getErrorMessage(error, 'Failed to update lesson content'));
     } finally {
       setModalLoading(false);
     }
@@ -518,8 +503,7 @@ const LearningFlow: React.FC = () => {
         await refreshStructure();
       }
     } catch (error) {
-      console.error('Failed to delete content', error);
-      toast.error('Failed to delete lesson content');
+      toast.error(getErrorMessage(error, 'Failed to delete lesson content'));
     }
   };
 
@@ -538,8 +522,8 @@ const LearningFlow: React.FC = () => {
         setSelectedUnitTitleForQuestions(unit.title);
         setQuestionsModalOpen(true);
       }
-    } catch {
-      toast.error('Failed to create quiz');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to create quiz'));
     }
   };
 
@@ -573,8 +557,7 @@ const LearningFlow: React.FC = () => {
         setSelectedSubtopicForExercise(null);
       }
     } catch (error) {
-      console.error('Failed to create exercise', error);
-      toast.error('Failed to create exercise');
+      toast.error(getErrorMessage(error, 'Failed to create exercise'));
     }
   };
 
@@ -601,8 +584,7 @@ const LearningFlow: React.FC = () => {
         setSelectedUnitForAssignment(null);
       }
     } catch (error) {
-      console.error('Failed to create assignment', error);
-      toast.error('Failed to create assignment');
+      toast.error(getErrorMessage(error, 'Failed to create assignment'));
     }
   };
 
@@ -618,8 +600,8 @@ const LearningFlow: React.FC = () => {
       refreshStructure();
       setEditingQuiz(null);
       setQuizModalOpen(false);
-    } catch {
-      toast.error('Failed to update quiz');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to update quiz'));
     }
   };
 
@@ -630,8 +612,8 @@ const LearningFlow: React.FC = () => {
       await apiClient.delete(`/admin/quizzes/${id}`);
       toast.success('Quiz deleted');
       refreshStructure();
-    } catch {
-      toast.error('Failed to delete quiz');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to delete quiz'));
     }
   };
 
@@ -659,8 +641,8 @@ const LearningFlow: React.FC = () => {
       refreshStructure();
       setEditingExercise(null);
       setExerciseModalOpen(false);
-    } catch {
-      toast.error('Failed to update exercise');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to update exercise'));
     }
   };
 
@@ -671,8 +653,8 @@ const LearningFlow: React.FC = () => {
       await apiClient.delete(`/admin/exercises/${id}`);
       toast.success('Exercise deleted');
       refreshStructure();
-    } catch {
-      toast.error('Failed to delete exercise');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to delete exercise'));
     }
   };
 
@@ -689,8 +671,8 @@ const LearningFlow: React.FC = () => {
       refreshStructure();
       setEditingAssignment(null);
       setAssignmentModalOpen(false);
-    } catch {
-      toast.error('Failed to update assignment');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to update assignment'));
     }
   };
 
@@ -701,8 +683,8 @@ const LearningFlow: React.FC = () => {
       await apiClient.delete(`/admin/assignments/${id}`);
       toast.success('Assignment deleted');
       refreshStructure();
-    } catch {
-      toast.error('Failed to delete assignment');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to delete assignment'));
     }
   };
 
@@ -723,8 +705,8 @@ const LearningFlow: React.FC = () => {
       refreshStructure();
       setCapstoneModalOpen(false);
       setSelectedTopicForCapstone(null);
-    } catch {
-      toast.error('Failed to create capstone');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to create capstone'));
     } finally {
       setModalLoading(false);
     }
@@ -745,8 +727,8 @@ const LearningFlow: React.FC = () => {
       refreshStructure();
       setEditingCapstone(null);
       setCapstoneModalOpen(false);
-    } catch {
-      toast.error('Failed to update capstone');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to update capstone'));
     } finally {
       setModalLoading(false);
     }
@@ -758,8 +740,8 @@ const LearningFlow: React.FC = () => {
       await apiClient.delete(`/admin/projects/${id}`);
       toast.success('Capstone deleted');
       refreshStructure();
-    } catch {
-      toast.error('Failed to delete capstone');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to delete capstone'));
     }
   };
 
@@ -786,8 +768,7 @@ const LearningFlow: React.FC = () => {
       dispatch(setStructure(newStructure));
       toast.success('Topic order updated');
     } catch (error) {
-      console.error('Failed to reorder', error);
-      toast.error('Failed to update order');
+      toast.error(getErrorMessage(error, 'Failed to update order'));
     }
   };
 
@@ -813,8 +794,7 @@ const LearningFlow: React.FC = () => {
       dispatch(setStructure(newStructure));
       toast.success('Topic order updated');
     } catch (error) {
-      console.error('Failed to reorder', error);
-      toast.error('Failed to update order');
+      toast.error(getErrorMessage(error, 'Failed to update order'));
     }
   };
 
@@ -841,8 +821,7 @@ const LearningFlow: React.FC = () => {
       toast.success('Unit order updated');
       refreshStructure();
     } catch (error) {
-      console.error('Failed to reorder', error);
-      toast.error('Failed to update order');
+      toast.error(getErrorMessage(error, 'Failed to update order'));
     }
   };
 
@@ -864,8 +843,7 @@ const LearningFlow: React.FC = () => {
       toast.success('Unit order updated');
       refreshStructure();
     } catch (error) {
-      console.error('Failed to reorder', error);
-      toast.error('Failed to update order');
+      toast.error(getErrorMessage(error, 'Failed to update order'));
     }
   };
 
@@ -888,7 +866,6 @@ const LearningFlow: React.FC = () => {
         });
         setLessonPreviewContent(res.data.data);
       } catch (error) {
-        console.error('Failed to load markdown content', error);
       }
     }
   };
@@ -1203,7 +1180,7 @@ const LearningFlow: React.FC = () => {
                                                                 .instructions ??
                                                               '',
                                                           });
-                                                        } catch {
+                                                        } catch (error) {
                                                           setEditingAssignment(
                                                             a,
                                                           );
@@ -1603,7 +1580,7 @@ const LearningFlow: React.FC = () => {
                                                                             res.data.data.tasks ?? [],
                                                                         },
                                                                       );
-                                                                    } catch {
+                                                                    } catch (error) {
                                                                       setEditingExercise(
                                                                         exercise,
                                                                       );

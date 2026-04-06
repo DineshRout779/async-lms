@@ -18,7 +18,9 @@ export default function Assignments() {
     apiClient
       .get<{ success: boolean; data: CollegeAssignment[] }>('/college-assignments')
       .then((res) => setAssignments(res.data.data))
-      .catch((err) => console.error('Failed to load assignments', err))
+      .catch(() => {
+        // assignments remains empty — empty state is shown below
+      })
       .finally(() => setLoading(false));
   };
 

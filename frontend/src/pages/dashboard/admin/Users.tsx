@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Pencil, Eye, Search } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -100,8 +101,7 @@ const Users = () => {
       setUsers(usersRes.data.filter((u) => String(u.id) !== currentId));
       setColleges(collegesRes.data?.data || []);
     } catch (error) {
-      console.error('Error fetching users:', error);
-      toast.error('Failed to load users');
+      toast.error(getErrorMessage(error, 'Failed to load users'));
     } finally {
       setLoading(false);
     }
@@ -189,8 +189,7 @@ const Users = () => {
       closeEditModal();
       await fetchUsers();
     } catch (error) {
-      console.error('Error saving user:', error);
-      toast.error('Failed to save user');
+      toast.error(getErrorMessage(error, 'Failed to save user'));
     } finally {
       setSaving(false);
     }
@@ -206,8 +205,7 @@ const Users = () => {
       );
       await fetchUsers();
     } catch (error) {
-      console.error('Error verifying user:', error);
-      toast.error('Failed to update verification status');
+      toast.error(getErrorMessage(error, 'Failed to update verification status'));
     }
   };
 

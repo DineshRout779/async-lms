@@ -30,6 +30,7 @@ import {
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -129,8 +130,8 @@ const EditorProfile = () => {
         '/students/projects',
       );
       setProjects(res.data.data);
-    } catch {
-      toast.error('Failed to load projects');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to load projects'));
     } finally {
       setLoadingProjects(false);
     }
@@ -156,8 +157,8 @@ const EditorProfile = () => {
       );
       const project = res.data.data;
       navigate(`/code-editor?pid=${project.id}&cp=${project.profile}`);
-    } catch {
-      toast.error('Failed to create project');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to create project'));
       setCreating(false);
     }
   };
@@ -177,8 +178,8 @@ const EditorProfile = () => {
       await apiClient.delete(`/students/projects/${projectId}`);
       setProjects((prev) => prev.filter((p) => p.id !== projectId));
       toast.success('Project deleted');
-    } catch {
-      toast.error('Failed to delete project');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to delete project'));
     } finally {
       setDeletingId(null);
     }

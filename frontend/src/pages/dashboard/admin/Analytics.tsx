@@ -100,7 +100,9 @@ export default function Analytics() {
     apiClient
       .get<{ success: boolean; data: AnalyticsData }>('/admin/analytics')
       .then((res) => setData(res.data.data))
-      .catch(console.error)
+      .catch(() => {
+        // data remains null — the null check below shows a fallback UI
+      })
       .finally(() => setLoading(false));
   }, []);
 

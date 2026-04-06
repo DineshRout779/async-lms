@@ -9,6 +9,7 @@ import {
 import { Input } from '@/components/ui/input';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 export const CreateCourseModal = ({
   open,
@@ -31,9 +32,8 @@ export const CreateCourseModal = ({
         onOpenChange(false);
         toast.success(editData ? 'Subject Updated!' : 'Subject Created!');
       }
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to save subject');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to save subject'));
     }
   };
 

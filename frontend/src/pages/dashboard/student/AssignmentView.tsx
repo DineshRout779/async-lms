@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 interface AssignmentDetail {
   id: string;
@@ -82,8 +83,8 @@ export default function AssignmentView() {
       });
       setAssignment((prev) => (prev ? { ...prev, ...res.data.data } : prev));
       toast.success('Assignment submitted successfully!');
-    } catch {
-      toast.error('Failed to submit assignment');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to submit assignment'));
     } finally {
       setSubmitting(false);
     }

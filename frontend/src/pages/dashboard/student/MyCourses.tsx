@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 import type { Subject } from '@/utils/types';
 import { useEnrolledCourses, useAllCourses, useEnrollMutation } from '@/hooks/queries/useCourses';
 
@@ -45,8 +46,8 @@ const MyCourses = () => {
       await enrollMutation.mutateAsync(enrollTarget.id);
       toast.success(`Enrolled in ${enrollTarget.name}!`);
       setEnrollTarget(null);
-    } catch {
-      toast.error('Enrollment failed. Please try again.');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Enrollment failed. Please try again.'));
     }
   };
 

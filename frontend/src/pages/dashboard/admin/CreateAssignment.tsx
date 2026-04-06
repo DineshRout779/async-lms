@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { ArrowLeft, Upload, Plus, Trash2, Loader2, FileText, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import apiClient from '@/services/api';
+import { getErrorMessage } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,9 +87,8 @@ export default function CreateAssignment() {
       setInstructionUrl(res.data.url);
       setInstructionName(file.name);
       toast.success('Instruction document uploaded!');
-    } catch (error: any) {
-      const msg = error?.response?.data?.message || 'Failed to upload document';
-      toast.error(msg);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to upload document'));
       setInstructionFile(null);
     } finally {
       setUploading(false);
@@ -99,7 +99,7 @@ export default function CreateAssignment() {
     apiClient
       .get<{ data: College[] }>('/colleges')
       .then((res) => setColleges(res.data.data))
-      .catch(() => toast.error('Failed to load colleges'));
+      .catch((error) => toast.error(getErrorMessage(error, 'Failed to load colleges')));
   }, []);
 
   // ── Evaluation Setup ──
@@ -213,10 +213,8 @@ export default function CreateAssignment() {
           })),
         },
       });
-    } catch (error: any) {
-      const msg =
-        error?.response?.data?.message || 'Failed to create assignment';
-      toast.error(msg);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to create assignment'));
     } finally {
       setSubmitting(false);
     }

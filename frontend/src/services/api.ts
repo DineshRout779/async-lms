@@ -25,13 +25,16 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response Interceptor: Useful for handling 401 (Unauthorized) errors globally
+// Response Interceptor: Handles 401 (Unauthorized) by clearing session and redirecting
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Optional: Redirect to login or clear localStorage
-      console.error("Token expired or invalid");
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      // Only redirect if not already on the home/login page
+      if (window.location.pathname !== "/") {
+        window.location.href = "/";
+      }
     }
     return Promise.reject(error);
   }

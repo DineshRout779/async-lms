@@ -30,8 +30,8 @@ export default function ProgramStep() {
         subjectIds: [selected],
       });
       navigate('/onboarding/confirm');
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // navigation does not occur — user stays on step
     } finally {
       setSubmitting(false);
     }

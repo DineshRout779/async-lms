@@ -38,8 +38,8 @@ const Students = () => {
       try {
         const response = await apiClient.get<Student[]>('/admin/all-students');
         setStudents(response.data);
-      } catch (error) {
-        console.error('Error fetching students:', error);
+      } catch {
+        // students remains empty — empty state is shown below
       } finally {
         setLoading(false);
       }

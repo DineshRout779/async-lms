@@ -84,7 +84,9 @@ export default function AssignmentManagement() {
         }));
         setAssignments(mapped);
       })
-      .catch((err) => console.error('Failed to load assignments', err))
+      .catch(() => {
+        // assignments remains empty — empty state is shown below
+      })
       .finally(() => setLoading(false));
   }, []);
 

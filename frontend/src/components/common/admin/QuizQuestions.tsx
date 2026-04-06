@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 // ============================================
 // TYPES
@@ -124,7 +125,6 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
         }
       }
     } catch (error) {
-      console.error('Error fetching options:', error);
     }
   };
 
@@ -262,10 +262,8 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
       } else {
         resetForm();
       }
-    } catch (error: unknown) {
-      console.error('Error saving question:', error);
-      const err = error as { response?: { data?: { message?: string } } };
-      toast.error(err.response?.data?.message || 'Failed to save question');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to save question'));
     } finally {
       setLoading(false);
     }
@@ -612,7 +610,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
           ]);
         }
         success++;
-      } catch {
+      } catch (error) {
         // continue with next question
       }
       setProgress(success);
@@ -763,8 +761,7 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
         setQuestions(res.data.data);
       }
     } catch (error) {
-      console.error('Error fetching questions:', error);
-      toast.error('Failed to load questions');
+      toast.error(getErrorMessage(error, 'Failed to load questions'));
     } finally {
       setLoading(false);
     }
@@ -782,8 +779,7 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
       toast.success('Question deleted');
       fetchQuestions();
     } catch (error) {
-      console.error('Error deleting question:', error);
-      toast.error('Failed to delete question');
+      toast.error(getErrorMessage(error, 'Failed to delete question'));
     }
   };
 

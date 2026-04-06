@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
@@ -96,7 +97,7 @@ const Lesson = () => {
         );
         setCourseStructure(response.data?.data || []);
       } catch (error) {
-        console.error('Failed to load course structure:', error);
+        // Non-critical: course structure is used for navigation only
       }
     };
 
@@ -114,8 +115,8 @@ const Lesson = () => {
         const id = u.pathname.replace('/', '');
         if (id) return `https://www.youtube.com/embed/${id}`;
       }
-    } catch {
-      console.log('Error embedding video');
+    } catch (error) {
+      // Return original URL if parsing fails
     }
     return url;
   };
@@ -185,11 +186,6 @@ const Lesson = () => {
   const handleCompleteLesson = async () => {
     const lessonId = data?.lesson?.id;
     setIsCompleting(true);
-    console.log('[Lesson] handleCompleteLesson called', {
-      lessonId,
-      nextItem,
-      slug,
-    });
 
     if (!lessonId) {
       toast.success('Lesson completed! 🎉');
@@ -201,8 +197,7 @@ const Lesson = () => {
       toast.success('Lesson completed! +10 points 🎉');
       setIsNavigating(true);
     } catch (error) {
-      console.error('Error completing lesson:', error);
-      toast.error('Failed to mark lesson complete');
+      toast.error(getErrorMessage(error, 'Failed to mark lesson complete'));
     } finally {
       setIsCompleting(false);
     }
@@ -217,7 +212,6 @@ const Lesson = () => {
             ? `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`
             : `/dashboard/student/courses/${slug}/quiz/${nextItem.id}`;
 
-      console.log('[Lesson] Auto-navigating to', nextUrl);
       const timer = setTimeout(() => {
         navigate(nextUrl);
         setIsNavigating(false);
@@ -257,8 +251,7 @@ const Lesson = () => {
         );
       }
     } catch (error) {
-      console.error('Error submitting quiz:', error);
-      toast.error('Failed to submit quiz');
+      toast.error(getErrorMessage(error, 'Failed to submit quiz'));
     }
   };
 
@@ -283,8 +276,7 @@ const Lesson = () => {
         setIsNavigating(true);
       }
     } catch (error) {
-      console.error('Error submitting exercise:', error);
-      toast.error('Failed to submit exercise');
+      toast.error(getErrorMessage(error, 'Failed to submit exercise'));
     }
   };
 

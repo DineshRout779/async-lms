@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Plus, MapPin, MoreHorizontal, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -64,7 +65,7 @@ export default function AdminColleges() {
         setColleges(res.data.data);
       }
     } catch {
-      toast.error('Failed to load colleges');
+      toast.error(getErrorMessage(error, 'Failed to load colleges'));
     } finally {
       if (isMounted) {
         setLoading(false);

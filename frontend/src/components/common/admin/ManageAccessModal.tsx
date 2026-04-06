@@ -40,8 +40,8 @@ export const ManageAccessModal = ({
           c.id === collegeId ? { ...c, assigned: !c.assigned } : c
         )
       );
-    } catch (err) {
-      console.error('Failed to toggle access', err);
+    } catch {
+      // optimistic toggle already applied — no UI revert needed
     }
   };
 

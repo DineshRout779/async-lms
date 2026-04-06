@@ -27,8 +27,8 @@ export default function BatchStep() {
       });
 
       navigate('/onboarding/program');
-    } catch (error) {
-      console.error('Batch update failed:', error);
+    } catch {
+      // navigation does not occur — user stays on step
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 import type { Subject } from '@/utils/types';
 import {
   Search,
@@ -45,8 +47,9 @@ export default function AdminCourses() {
     if (!window.confirm('Are you sure you want to delete this course?')) return;
     try {
       await dispatch(deleteSubject(id)).unwrap();
-    } catch (err) {
-      console.error('Delete failed', err);
+      toast.success('Course deleted');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to delete course. Please try again.'));
     }
   };
 

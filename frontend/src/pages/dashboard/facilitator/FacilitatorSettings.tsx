@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, BookOpen, KeyRound, User } from 'lucide-react';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 interface UserProfile {
   id: string;
@@ -39,7 +40,9 @@ const FacilitatorSettings = () => {
     apiClient
       .get<{ success: boolean; data: UserProfile }>('/users/profile')
       .then((res) => setProfile(res.data.data))
-      .catch(console.error)
+      .catch(() => {
+        // profile remains null — the null check below shows a fallback UI
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -66,8 +69,8 @@ const FacilitatorSettings = () => {
       setCurrentPw('');
       setNewPw('');
       setConfirmPw('');
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to update password');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update password'));
     } finally {
       setChangingPw(false);
     }
