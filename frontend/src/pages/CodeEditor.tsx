@@ -1,3 +1,4 @@
+import '@/lib/monacoSetup';
 import { useEffect, useRef, useState, useCallback, type JSX } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import axios, { type AxiosInstance } from 'axios';

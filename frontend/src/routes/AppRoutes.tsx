@@ -4,7 +4,6 @@ import { Loader2 } from 'lucide-react';
 import App from '@/App';
 import PrivateRoute from './PrivateRoute';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
-import FacilitatorSettings from '@/pages/dashboard/facilitator/FacilitatorSettings';
 
 // ---------- Lazy Imports ----------
 
@@ -77,6 +76,9 @@ const FacilitatorStudentGrowth = lazy(
 );
 const FacilitatorReports = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorReports'),
+);
+const FacilitatorSettings = lazy(
+  () => import('@/pages/dashboard/facilitator/FacilitatorSettings'),
 );
 
 // Admin Dashboard
