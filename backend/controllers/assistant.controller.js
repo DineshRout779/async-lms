@@ -33,7 +33,7 @@ Your role is to EDUCATE students — not to solve their problems for them.
 - End with a question or prompt that encourages the student to try next.`;
 
 exports.chat = async (req, res) => {
-  const { messages } = req.body;
+  const { messages, lessonContext } = req.body;
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ message: 'messages array is required' });
@@ -51,10 +51,22 @@ exports.chat = async (req, res) => {
     return res.status(400).json({ message: 'No valid messages provided' });
   }
 
+  let systemPrompt = SYSTEM_PROMPT;
+  if (lessonContext?.title) {
+    systemPrompt +=
+      `\n\n## Current Lesson Context\n` +
+      `**Title:** ${lessonContext.title}\n` +
+      `**Type:** ${lessonContext.contentType || 'lesson'}\n` +
+      (lessonContext.content
+        ? `**Content excerpt:**\n${lessonContext.content}\n`
+        : '') +
+      `\nThe student is currently studying this lesson. Tailor your guidance to this specific topic.`;
+  }
+
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...sanitized],
+      messages: [{ role: 'system', content: systemPrompt }, ...sanitized],
       max_tokens: 600,
       temperature: 0.7,
     });

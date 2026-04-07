@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
 
+import LessonAssistant from '@/components/common/LessonAssistant';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   fetchLesson,
@@ -31,6 +32,7 @@ import {
 } from '@/features/lesson/lessonSlice';
 import type { Quiz, Topic, SubjectDetailResponse } from '@/utils/types';
 import apiClient from '@/services/api';
+import { isAxiosError } from 'axios';
 
 /* =======================
    Types
@@ -97,7 +99,15 @@ const Lesson = () => {
         );
         setCourseStructure(response.data?.data || []);
       } catch (error) {
-        // Non-critical: course structure is used for navigation only
+        if (isAxiosError(error)) {
+          toast.error(
+            error.response?.data.error || error.response?.data.message,
+          );
+        } else if (error instanceof Error) {
+          toast.error(error.message);
+        } else {
+          toast.error('Something went wrong');
+        }
       }
     };
 
@@ -116,7 +126,13 @@ const Lesson = () => {
         if (id) return `https://www.youtube.com/embed/${id}`;
       }
     } catch (error) {
-      // Return original URL if parsing fails
+      if (isAxiosError(error)) {
+        toast.error(error.response?.data.error || error.response?.data.message);
+      } else if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error('Something went wrong');
+      }
     }
     return url;
   };
@@ -786,6 +802,14 @@ const Lesson = () => {
           )}
         </section>
       )}
+
+      <LessonAssistant
+        lessonContext={{
+          title: subtopic.title,
+          contentType: lesson.content_type || 'lesson',
+          content: lesson.markdown_content?.slice(0, 1500) ?? '',
+        }}
+      />
     </div>
   );
 };
