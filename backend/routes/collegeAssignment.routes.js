@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 const verifyToken = require('../middlewares/verfiyToken');
 const isStudent = require('../middlewares/isStudent');
 const isFacilitator = require('../middlewares/isFacilitator');
@@ -20,12 +23,24 @@ const {
 router.get('/manage', verifyToken, isFacilitator, manageAssignments);
 
 // Admin / Facilitator: upload instruction document to S3
-router.post('/upload-instruction', verifyToken, isFacilitator, upload.single('file'), uploadInstructionDoc);
+router.post(
+  '/upload-instruction',
+  verifyToken,
+  isFacilitator,
+  upload.single('file'),
+  uploadInstructionDoc,
+);
 
 // Student: fetch and submit assignments
 router.get('/', verifyToken, isStudent, getMyCollegeAssignments);
 router.get('/:id', verifyToken, isStudent, getCollegeAssignmentById);
-router.post('/:id/submit', verifyToken, isStudent, upload.single('submission_file'), submitCollegeAssignment);
+router.post(
+  '/:id/submit',
+  verifyToken,
+  isStudent,
+  upload.single('submission_file'),
+  submitCollegeAssignment,
+);
 
 // Admin / Facilitator: create, update, delete
 router.post('/', verifyToken, isFacilitator, createAssignment);

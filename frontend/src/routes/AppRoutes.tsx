@@ -42,7 +42,9 @@ const CapstoneView = lazy(
   () => import('@/pages/dashboard/student/CapstoneView'),
 );
 const CourseIntro = lazy(() => import('@/pages/dashboard/student/CourseIntro'));
-const CollegeAssignmentView = lazy(() => import('@/pages/dashboard/student/CollegeAssignmentView'));
+const CollegeAssignmentView = lazy(
+  () => import('@/pages/dashboard/student/CollegeAssignmentView'),
+);
 const EditorProfile = lazy(() => import('@/pages/playground/EditorProfile'));
 const Assignments = lazy(() => import('@/pages/dashboard/student/Assignments'));
 const Assistant = lazy(() => import('@/pages/dashboard/student/Assistant'));
@@ -67,6 +69,9 @@ const FacilitatorStudents = lazy(
 );
 const FacilitatorEvaluations = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorEvaluations'),
+);
+const ResultsPage = lazy(
+  () => import('@/pages/dashboard/facilitator/ResultsPage'),
 );
 const FacilitatorAnalytics = lazy(
   () => import('@/pages/dashboard/facilitator/FacilitatorAnalytics'),
@@ -189,6 +194,7 @@ const router = createBrowserRouter([
               { path: 'create-assignment', element: <CreateAssignment /> },
               { path: 'assignment-success', element: <AssignmentSuccess /> },
               { path: 'evaluations', element: <FacilitatorEvaluations /> },
+              { path: 'results', element: <ResultsPage /> },
               { path: 'analytics', element: <FacilitatorAnalytics /> },
               { path: 'student-growth', element: <FacilitatorStudentGrowth /> },
               { path: 'reports', element: <FacilitatorReports /> },

@@ -392,3 +392,189 @@ exports.getCollegeAssignmentById = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ─── Submission ─────────────────────────────────────────────────────────────
+
+// POST /api/v1/college-assignments/:id/submit
+exports.submitCollegeAssignment = async (req, res) => {
+  const { id } = req.params;
+  const { submission_link } = req.body;
+  const student_id = req.user.id;
+
+  try {
+    // 1. Verify existence
+    const assignment = await pool.query(
+      'SELECT id FROM college_assignments WHERE id = $1',
+      [id],
+    );
+    if (!assignment.rowCount) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
+    }
+
+    let file_url = null;
+    let file_name = null;
+
+    // 2. Handle file upload if present
+    if (req.file) {
+      const { url, name } = await storeFile(req.file, {
+        s3KeyPrefix: 'college-submissions',
+        localSubPath: 'submissions',
+      });
+      file_url = url;
+      file_name = name;
+    }
+
+    // 3. Upsert submission
+    const { rows } = await pool.query(
+      `INSERT INTO college_assignment_submissions
+       (assignment_id, student_id, submission_link, submission_file_url, submission_file_name, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (assignment_id, student_id)
+       DO UPDATE SET
+         submission_link = COALESCE(EXCLUDED.submission_link, college_assignment_submissions.submission_link),
+         submission_file_url = COALESCE(EXCLUDED.submission_file_url, college_assignment_submissions.submission_file_url),
+         submission_file_name = COALESCE(EXCLUDED.submission_file_name, college_assignment_submissions.submission_file_name),
+         updated_at = NOW()
+       RETURNING *`,
+      [id, student_id, submission_link || null, file_url, file_name],
+    );
+
+    res.json({
+      success: true,
+      data: rows[0],
+      message: 'Assignment submitted successfully',
+    });
+  } catch (error) {
+    console.error('submitCollegeAssignment ERROR:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/v1/college-assignments/:id
+// Returns a single assignment with student's specific submission
+exports.getCollegeAssignmentById = async (req, res) => {
+  const { id } = req.params;
+  const student_id = req.user.id;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT ca.id, ca.title, ca.description, ca.due_date, ca.created_at, ca.course,
+              ca.instruction_file_url, ca.instruction_file_name,
+              u.full_name AS created_by_name,
+              cas.submission_link, cas.submission_file_url, cas.submission_file_name, cas.submitted_at
+       FROM college_assignments ca
+       LEFT JOIN users u ON u.id = ca.created_by
+       LEFT JOIN college_assignment_submissions cas ON cas.assignment_id = ca.id AND cas.student_id = $2
+       WHERE ca.id = $1`,
+      [id, student_id],
+    );
+
+    if (!rows.length) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
+    }
+
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    console.error('getCollegeAssignmentById:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/v1/college-assignments/evaluation-filters
+exports.getFilteredAssignments = async (req, res) => {
+  try {
+    console.log('🔥 evaluation-filters API hit');
+    const { collegeId, domain, search } = req.query;
+
+    // let query = `
+    //   SELECT
+    //     ca.id,
+    //     ca.title,
+    //     ca.description,
+    //     ca.due_date,
+    //     ca.created_at,
+    //     ca.college_id,
+    //     c.name AS college_name,
+    //     u.full_name AS created_by_name,
+    //     ca.course
+    //   FROM college_assignments ca
+    //   JOIN colleges c ON c.id = ca.college_id
+    //   JOIN users u ON u.id = ca.created_by
+    //   WHERE 1=1
+    // `;
+    let query = `
+    SELECT 
+  ca.id, 
+  ca.title, 
+  ca.description, 
+  ca.due_date,
+  ca.created_at,
+  ca.college_id,
+  c.name AS college_name,
+  u.full_name AS created_by_name,
+  ca.course,
+
+  CASE 
+    WHEN e.status = 'completed' THEN 'evaluated'
+    ELSE 'pending'
+  END AS status
+
+FROM college_assignments ca
+JOIN colleges c ON c.id = ca.college_id
+JOIN users u ON u.id = ca.created_by
+LEFT JOIN evaluations e ON e.assignment_id = ca.id
+
+WHERE 1=1`;
+    const values = [];
+    let index = 1;
+
+    // 🔒 Role-based restriction (facilitator)
+    if (req.user.role !== 'admin') {
+      const college_ids = req.user.college_ids || [];
+
+      if (!college_ids.length) {
+        return res.json({ success: true, data: [] });
+      }
+
+      query += ` AND ca.college_id = ANY($${index}::uuid[])`;
+      values.push(college_ids);
+      index++;
+    }
+
+    // 🎯 College filter
+    if (collegeId) {
+      query += ` AND ca.college_id = $${index}`;
+      values.push(collegeId);
+      index++;
+    }
+
+    // 🎯 Domain filter (course column)
+    if (domain) {
+      query += ` AND LOWER(ca.course) LIKE LOWER($${index})`;
+      values.push(`%${domain}%`);
+      index++;
+    }
+
+    // 🔍 Search filter
+    if (search) {
+      query += ` AND LOWER(ca.title) LIKE LOWER($${index})`;
+      values.push(`%${search}%`);
+      index++;
+    }
+
+    query += ` ORDER BY c.name ASC, ca.due_date ASC NULLS LAST`;
+
+    const { rows } = await pool.query(query, values);
+
+    console.log('DOMAIN RECEIVED:', domain);
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('getFilteredAssignments:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
