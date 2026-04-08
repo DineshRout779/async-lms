@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 const verifyToken = require('../middlewares/verfiyToken');
 const isStudent = require('../middlewares/isStudent');
 const isFacilitator = require('../middlewares/isFacilitator');
@@ -14,22 +17,30 @@ const {
   updateAssignment,
   deleteAssignment,
   submitCollegeAssignment,
-  getFilteredAssignments,
 } = require('../controllers/collegeAssignment.controller');
 
 // Admin / Facilitator: manage assignments (MUST COME BEFORE /:id)
 router.get('/manage', verifyToken, isFacilitator, manageAssignments);
 
 // Admin / Facilitator: upload instruction document to S3
-router.post('/upload-instruction', verifyToken, isFacilitator, upload.single('file'), uploadInstructionDoc);
-
-// Facilitator: evaluation filters
-router.get('/evaluation-filters', verifyToken, isFacilitator, getFilteredAssignments);
+router.post(
+  '/upload-instruction',
+  verifyToken,
+  isFacilitator,
+  upload.single('file'),
+  uploadInstructionDoc,
+);
 
 // Student: fetch and submit assignments
 router.get('/', verifyToken, isStudent, getMyCollegeAssignments);
 router.get('/:id', verifyToken, isStudent, getCollegeAssignmentById);
-router.post('/:id/submit', verifyToken, isStudent, upload.single('submission_file'), submitCollegeAssignment);
+router.post(
+  '/:id/submit',
+  verifyToken,
+  isStudent,
+  upload.single('submission_file'),
+  submitCollegeAssignment,
+);
 
 // Admin / Facilitator: create, update, delete
 router.post('/', verifyToken, isFacilitator, createAssignment);
