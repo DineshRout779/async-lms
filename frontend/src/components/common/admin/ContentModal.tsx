@@ -26,16 +26,15 @@ const ContentModal: React.FC<ContentModalProps> = ({
   }, [editData, isOpen]);
 
   const handleSave = () => {
-    if (!file && !markdownPath.trim() && !editData?.markdown_path) {
-      toast.error('Upload a markdown file or provide a markdown URL/path');
+    const hasMarkdown = !!(file || markdownPath.trim() || editData?.markdown_path);
+    const hasVideo = !!(videoUrl.trim() || editData?.video_url);
+    if (!hasMarkdown && !hasVideo) {
+      toast.error('Provide at least a markdown file or a video URL');
       return;
     }
-    if (!videoUrl.trim() && !editData?.video_url) {
-      toast.error('Video URL is required');
-      return;
-    }
+    const contentType = hasMarkdown ? 'markdown' : 'video';
     onSave({
-      content_type: 'markdown',
+      content_type: contentType,
       markdown_path: markdownPath.trim(),
       estimated_read_time: readTime,
       video_url: videoUrl.trim(),
