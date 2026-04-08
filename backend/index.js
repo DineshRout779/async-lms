@@ -12,6 +12,7 @@ const path = require('path');
 const { getContainerIP } = require('./services/dockerService');
 const { registerWorker, heartbeat, deregisterWorker, releaseWorkspace, getStatus } = require('./services/workerRegistry');
 require('./config/pg');
+const evaluationRoutes = require("./routes/evaluationRoutes");
 
 const compression = require('compression');
 
@@ -45,6 +46,7 @@ app.use('/api/v1/admin', require('./routes/admin.routes'));
 app.use('/api/v1/facilitator', require('./routes/facilitator.routes'));
 app.use('/api/v1/assistant', require('./routes/assistant.routes'));
 app.use('/api/v1/college-assignments', require('./routes/collegeAssignment.routes'));
+app.use("/api/v1/evaluations", evaluationRoutes);
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 const verifyToken = require('./middlewares/verfiyToken');
 app.use('/uploads', verifyToken, express.static(path.join(__dirname, 'public', 'uploads')));
