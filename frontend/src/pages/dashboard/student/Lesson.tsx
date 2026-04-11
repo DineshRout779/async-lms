@@ -97,16 +97,9 @@ const Lesson = () => {
           `/subjects/${slug}`,
         );
         setCourseStructure(response.data?.data || []);
-      } catch (error) {
-        if (isAxiosError(error)) {
-          toast.error(
-            error.response?.data.error || error.response?.data.message,
-          );
-        } else if (error instanceof Error) {
-          toast.error(error.message);
-        } else {
-          toast.error('Something went wrong');
-        }
+      } catch {
+        // Non-critical — course structure drives prev/next navigation only.
+        // If it fails the lesson still loads normally.
       }
     };
 
@@ -391,8 +384,7 @@ const Lesson = () => {
                     title='Lesson video'
                     allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen'
                     allowFullScreen
-                    // @ts-expect-error — credentialless is a newer HTML attribute not yet in React's JSX types
-                    credentialless='true'
+                    credentialless
                   />
                 </div>
               </div>
