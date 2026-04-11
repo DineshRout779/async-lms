@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Pencil, Eye, Search } from 'lucide-react';
+import { Pencil, Eye, Search } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -211,8 +212,40 @@ const Users = () => {
 
   if (loading) {
     return (
-      <div className='flex h-96 items-center justify-center'>
-        <Loader2 className='h-8 w-8 animate-spin text-blue-600' />
+      <div className='space-y-6 p-6'>
+        <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
+          <Skeleton className='h-10 w-96' />
+          <Skeleton className='h-4 w-36' />
+        </div>
+        <div className='flex gap-2 mb-2'>
+          <Skeleton className='h-9 w-36 rounded-md' />
+          <Skeleton className='h-9 w-36 rounded-md' />
+        </div>
+        <Card className='border-none shadow-sm overflow-hidden'>
+          <div className='bg-slate-50/50 px-4 py-3 grid grid-cols-7 gap-4'>
+            {[...Array(7)].map((_, i) => <Skeleton key={i} className='h-3 w-full' />)}
+          </div>
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className='px-4 py-4 border-t border-slate-100 grid grid-cols-7 gap-4 items-center'>
+              <div className='space-y-1.5'>
+                <Skeleton className='h-3.5 w-full' />
+                <Skeleton className='h-3 w-3/4' />
+              </div>
+              <div className='space-y-1.5'>
+                <Skeleton className='h-3.5 w-16' />
+                <Skeleton className='h-3 w-full' />
+              </div>
+              <Skeleton className='h-6 w-20 rounded-full' />
+              <Skeleton className='h-4 w-full col-span-2' />
+              <Skeleton className='h-6 w-16 rounded-full' />
+              <Skeleton className='h-6 w-20 rounded-full' />
+              <div className='flex justify-end gap-1'>
+                <Skeleton className='h-8 w-8 rounded' />
+                <Skeleton className='h-8 w-8 rounded' />
+              </div>
+            </div>
+          ))}
+        </Card>
       </div>
     );
   }

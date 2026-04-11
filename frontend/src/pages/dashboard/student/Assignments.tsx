@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CollegeAssignmentCard } from '@/components/common/student/CollegeAssignmentCard';
-import { Loader2, FileText } from 'lucide-react';
+import { FileText } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import apiClient from '@/services/api';
 import type { CollegeAssignment } from '@/utils/types';
 
@@ -70,11 +71,18 @@ export default function Assignments() {
 
         {/* Content Section */}
         {loading ? (
-          <div className='flex flex-col items-center justify-center h-80 space-y-4'>
-            <div className="p-4 bg-white rounded-3xl shadow-sm border border-slate-100">
-               <Loader2 className='w-10 h-10 animate-spin text-indigo-600' />
-            </div>
-            <p className='text-slate-400 font-bold tracking-wide uppercase text-xs'>Loading assignments...</p>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className='bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-4'>
+                <div className='flex items-start justify-between'>
+                  <Skeleton className='h-5 w-2/3' />
+                  <Skeleton className='h-6 w-16 rounded-full' />
+                </div>
+                <Skeleton className='h-4 w-1/2' />
+                <Skeleton className='h-4 w-3/4' />
+                <Skeleton className='h-10 w-full rounded-xl mt-2' />
+              </div>
+            ))}
           </div>
         ) : filteredAssignments.length > 0 ? (
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>

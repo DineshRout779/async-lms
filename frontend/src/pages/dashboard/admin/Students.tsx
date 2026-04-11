@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Search, Filter, Eye, MoreHorizontal, Loader2 } from 'lucide-react';
+import { Search, Filter, Eye, MoreHorizontal } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,8 +57,37 @@ const Students = () => {
 
   if (loading)
     return (
-      <div className='flex h-96 items-center justify-center'>
-        <Loader2 className='w-8 h-8 animate-spin text-blue-600' />
+      <div className='p-6 space-y-6'>
+        <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4'>
+          <Skeleton className='h-10 w-96' />
+          <Skeleton className='h-10 w-32' />
+        </div>
+        <Card className='border-none shadow-sm overflow-hidden'>
+          <div className='bg-slate-50/50 px-4 py-3 grid grid-cols-5 gap-4'>
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className='h-3 w-full' />)}
+          </div>
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className='px-4 py-4 border-t border-slate-100 grid grid-cols-5 gap-4 items-center'>
+              <div className='flex items-center gap-3'>
+                <Skeleton className='h-9 w-9 rounded-full shrink-0' />
+                <div className='space-y-1.5 flex-1'>
+                  <Skeleton className='h-3.5 w-full' />
+                  <Skeleton className='h-3 w-3/4' />
+                </div>
+              </div>
+              <div className='space-y-1.5'>
+                <Skeleton className='h-3.5 w-16' />
+                <Skeleton className='h-3 w-full' />
+              </div>
+              <Skeleton className='h-6 w-16 rounded-md' />
+              <Skeleton className='h-3.5 w-24' />
+              <div className='flex justify-end gap-1'>
+                <Skeleton className='h-8 w-8 rounded' />
+                <Skeleton className='h-8 w-8 rounded' />
+              </div>
+            </div>
+          ))}
+        </Card>
       </div>
     );
 
