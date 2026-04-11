@@ -1,5 +1,41 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Search, Eye } from 'lucide-react';
+import { Search, Eye } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function FacilitatorUsersSkeleton() {
+  return (
+    <div className='space-y-6'>
+      <div className='space-y-2'>
+        <Skeleton className='h-8 w-52' />
+        <Skeleton className='h-4 w-80' />
+      </div>
+      <div className='flex gap-3'>
+        <Skeleton className='h-9 w-64' />
+        <Skeleton className='h-9 w-44' />
+      </div>
+      <div className='rounded-xl border border-slate-200 overflow-hidden bg-white'>
+        <div className='grid grid-cols-6 gap-4 px-4 py-3 border-b'>
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className='h-3 w-full' />)}
+        </div>
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className='grid grid-cols-6 gap-4 px-4 py-4 border-b border-slate-100 items-center'>
+            <div className='flex items-center gap-3 col-span-2'>
+              <Skeleton className='h-8 w-8 rounded-full shrink-0' />
+              <div className='space-y-1.5 flex-1'>
+                <Skeleton className='h-3.5 w-28' />
+                <Skeleton className='h-3 w-36' />
+              </div>
+            </div>
+            <Skeleton className='h-3 w-20' />
+            <Skeleton className='h-3 w-16' />
+            <Skeleton className='h-2 w-full rounded-full' />
+            <Skeleton className='h-7 w-16 rounded' />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -80,13 +116,7 @@ const FacilitatorStudents = () => {
     );
   }, [students, searchQuery, selectedCollege]);
 
-  if (loading) {
-    return (
-      <div className='flex h-96 items-center justify-center'>
-        <Loader2 className='h-8 w-8 animate-spin text-blue-600' />
-      </div>
-    );
-  }
+  if (loading) return <FacilitatorUsersSkeleton />;
 
   return (
     <div className='space-y-6 animate-in fade-in duration-500'>

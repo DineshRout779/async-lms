@@ -1,14 +1,71 @@
 import { useEffect, useState } from 'react';
-import {
-  Users,
-  BookOpen,
-  Building2,
-  Loader2,
-  Activity,
-  Award,
-} from 'lucide-react';
+import { Users, BookOpen, Building2, Activity, Award } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import apiClient from '@/services/api';
+
+function FacilitatorHomeSkeleton() {
+  return (
+    <div className='p-2 space-y-8'>
+      <div className='space-y-2'>
+        <Skeleton className='h-8 w-56' />
+        <Skeleton className='h-4 w-80' />
+      </div>
+      <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+        {[...Array(3)].map((_, i) => (
+          <Card key={i} className='border-none shadow-sm'>
+            <CardContent className='p-6 flex flex-col justify-between h-36'>
+              <div className='flex justify-between items-start'>
+                <div className='space-y-2'>
+                  <Skeleton className='h-4 w-24' />
+                  <Skeleton className='h-8 w-16' />
+                </div>
+                <Skeleton className='h-12 w-12 rounded-xl' />
+              </div>
+              <Skeleton className='h-3 w-32 mt-2' />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+        <Card className='lg:col-span-2 border-none shadow-sm p-6'>
+          <div className='flex items-center gap-2 mb-6'>
+            <Skeleton className='h-5 w-5 rounded' />
+            <Skeleton className='h-5 w-48' />
+          </div>
+          <div className='space-y-4'>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className='flex items-center justify-between p-3'>
+                <div className='flex gap-4 items-center'>
+                  <Skeleton className='h-10 w-10 rounded-full' />
+                  <div className='space-y-1.5'>
+                    <Skeleton className='h-4 w-32' />
+                    <Skeleton className='h-3 w-44' />
+                  </div>
+                </div>
+                <Skeleton className='h-3 w-16' />
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card className='border-none shadow-sm p-6 bg-slate-900'>
+          <div className='flex items-center gap-2 mb-6'>
+            <Skeleton className='h-5 w-5 rounded bg-slate-700' />
+            <Skeleton className='h-5 w-32 bg-slate-700' />
+          </div>
+          <div className='space-y-2'>
+            <Skeleton className='h-3 w-full bg-slate-700' />
+            <Skeleton className='h-3 w-4/5 bg-slate-700' />
+          </div>
+          <div className='mt-8 p-4 rounded-xl bg-white/5 space-y-2'>
+            <Skeleton className='h-3 w-16 bg-slate-700' />
+            <Skeleton className='h-3 w-full bg-slate-700' />
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
 
 /* =======================
    Types
@@ -57,13 +114,7 @@ export default function FacilitatorHome() {
     fetchStats();
   }, []);
 
-  if (loading) {
-    return (
-      <div className='flex h-96 w-full items-center justify-center'>
-        <Loader2 className='w-8 h-8 animate-spin text-blue-600' />
-      </div>
-    );
-  }
+  if (loading) return <FacilitatorHomeSkeleton />;
 
   if (!data) {
     return (

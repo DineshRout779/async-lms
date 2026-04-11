@@ -127,6 +127,21 @@ const Lesson = () => {
      Data Processing
   ======================= */
 
+  const buildNextUrl = (item: { type: 'subtopic' | 'exercise' | 'quiz' | 'assignment'; slug?: string; id?: string } | null, courseSlug: string | undefined): string => {
+    if (!item || !courseSlug) return `/dashboard/student/courses/${courseSlug ?? ''}`;
+    if (item.type === 'subtopic') return `/dashboard/student/courses/${courseSlug}/lesson/${item.slug}`;
+    if (item.type === 'exercise') return `/dashboard/student/courses/${courseSlug}/exercise/${item.id}`;
+    if (item.type === 'assignment') return `/dashboard/student/courses/${courseSlug}/assignment/${item.id}`;
+    return `/dashboard/student/courses/${courseSlug}/quiz/${item.id}`;
+  };
+
+  const nextLabel = (type: string) => {
+    if (type === 'subtopic') return 'Lesson';
+    if (type === 'exercise') return 'Exercise';
+    if (type === 'assignment') return 'Assignment';
+    return 'Quiz';
+  };
+
   const { lessonIndex, totalLessons, nextItem } = useMemo<{
     lessonIndex: number | null;
     totalLessons: number | null;
@@ -207,12 +222,7 @@ const Lesson = () => {
 
   useEffect(() => {
     if (lessonCompleted && isNavigating && nextItem && slug) {
-      const nextUrl =
-        nextItem.type === 'subtopic'
-          ? `/dashboard/student/courses/${slug}/lesson/${nextItem.slug}`
-          : nextItem.type === 'exercise'
-            ? `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`
-            : `/dashboard/student/courses/${slug}/quiz/${nextItem.id}`;
+      const nextUrl = buildNextUrl(nextItem, slug);
 
       const timer = setTimeout(() => {
         navigate(nextUrl);
@@ -428,22 +438,9 @@ const Lesson = () => {
                   <Button
                     variant='outline'
                     className='mt-4 border-emerald-300 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700'
-                    onClick={() => {
-                      const nextUrl =
-                        nextItem.type === 'subtopic'
-                          ? `/dashboard/student/courses/${slug}/lesson/${nextItem.slug}`
-                          : nextItem.type === 'exercise'
-                            ? `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`
-                            : `/dashboard/student/courses/${slug}/quiz/${nextItem.id}`;
-                      navigate(nextUrl);
-                    }}
+                    onClick={() => navigate(buildNextUrl(nextItem, slug))}
                   >
-                    Next{' '}
-                    {nextItem.type === 'subtopic'
-                      ? 'Lesson'
-                      : nextItem.type === 'exercise'
-                        ? 'Exercise'
-                        : 'Quiz'}
+                    Next {nextLabel(nextItem.type)}
                   </Button>
                 )}
               </div>
@@ -724,18 +721,7 @@ const Lesson = () => {
                       {isPassed && slug && (
                         <Button
                           className='flex-1 bg-emerald-600 hover:bg-emerald-700'
-                          onClick={() => {
-                            const nextUrl = nextItem
-                              ? nextItem.type === 'subtopic'
-                                ? `/dashboard/student/courses/${slug}/lesson/${nextItem.slug}`
-                                : nextItem.type === 'exercise'
-                                  ? `/dashboard/student/courses/${slug}/exercise/${nextItem.id}`
-                                  : nextItem.type === 'quiz'
-                                    ? `/dashboard/student/courses/${slug}/quiz/${nextItem.id}`
-                                    : `/dashboard/student/courses/${slug}`
-                              : `/dashboard/student/courses/${slug}`;
-                            navigate(nextUrl);
-                          }}
+                          onClick={() => navigate(buildNextUrl(nextItem, slug))}
                         >
                           {nextItem ? 'Continue →' : 'Back to Course'}
                         </Button>

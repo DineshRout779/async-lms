@@ -4,7 +4,47 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Loader2, BookOpen, KeyRound, User } from 'lucide-react';
+import { BookOpen, KeyRound, User } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function FacilitatorSettingsSkeleton() {
+  return (
+    <div className='space-y-6 max-w-3xl'>
+      <div className='space-y-2'>
+        <Skeleton className='h-8 w-40' />
+        <Skeleton className='h-4 w-64' />
+      </div>
+      <div className='rounded-xl border border-slate-200 bg-white p-6 space-y-4'>
+        <div className='flex items-center gap-4'>
+          <Skeleton className='h-16 w-16 rounded-full' />
+          <div className='space-y-2'>
+            <Skeleton className='h-5 w-40' />
+            <Skeleton className='h-4 w-56' />
+            <Skeleton className='h-5 w-20 rounded-full' />
+          </div>
+        </div>
+        <div className='grid grid-cols-2 gap-4 pt-2'>
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className='space-y-1.5'>
+              <Skeleton className='h-3 w-20' />
+              <Skeleton className='h-9 w-full rounded-lg' />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className='rounded-xl border border-slate-200 bg-white p-6 space-y-4'>
+        <Skeleton className='h-5 w-36' />
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className='space-y-1.5'>
+            <Skeleton className='h-3 w-24' />
+            <Skeleton className='h-9 w-full rounded-lg' />
+          </div>
+        ))}
+        <Skeleton className='h-9 w-36 rounded-lg' />
+      </div>
+    </div>
+  );
+}
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -76,13 +116,7 @@ const FacilitatorSettings = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className='flex h-[60vh] items-center justify-center'>
-        <Loader2 className='h-8 w-8 animate-spin text-emerald-600' />
-      </div>
-    );
-  }
+  if (loading) return <FacilitatorSettingsSkeleton />;
 
   if (!profile) {
     return (
