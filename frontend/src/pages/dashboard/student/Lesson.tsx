@@ -32,7 +32,6 @@ import {
 } from '@/features/lesson/lessonSlice';
 import type { Quiz, Topic, SubjectDetailResponse } from '@/utils/types';
 import apiClient from '@/services/api';
-import { isAxiosError } from 'axios';
 
 /* =======================
    Types
@@ -125,14 +124,8 @@ const Lesson = () => {
         const id = u.pathname.replace('/', '');
         if (id) return `https://www.youtube.com/embed/${id}`;
       }
-    } catch (error) {
-      if (isAxiosError(error)) {
-        toast.error(error.response?.data.error || error.response?.data.message);
-      } else if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error('Something went wrong');
-      }
+    } catch {
+      // Invalid URL — fall through and return as-is
     }
     return url;
   };
@@ -396,8 +389,10 @@ const Lesson = () => {
                     className='h-full w-full'
                     src={getEmbedUrl(lesson.video_url)}
                     title='Lesson video'
-                    allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
+                    allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen'
                     allowFullScreen
+                    // @ts-expect-error — credentialless is a newer HTML attribute not yet in React's JSX types
+                    credentialless='true'
                   />
                 </div>
               </div>
