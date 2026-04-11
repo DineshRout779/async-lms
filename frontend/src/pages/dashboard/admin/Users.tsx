@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Eye, Search } from 'lucide-react';
+import { Pencil, Eye, Search, Loader2 } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -110,7 +110,7 @@ const Users = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -206,7 +206,9 @@ const Users = () => {
       );
       await fetchUsers();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to update verification status'));
+      toast.error(
+        getErrorMessage(error, 'Failed to update verification status'),
+      );
     }
   };
 
@@ -223,10 +225,15 @@ const Users = () => {
         </div>
         <Card className='border-none shadow-sm overflow-hidden'>
           <div className='bg-slate-50/50 px-4 py-3 grid grid-cols-7 gap-4'>
-            {[...Array(7)].map((_, i) => <Skeleton key={i} className='h-3 w-full' />)}
+            {[...Array(7)].map((_, i) => (
+              <Skeleton key={i} className='h-3 w-full' />
+            ))}
           </div>
           {[...Array(8)].map((_, i) => (
-            <div key={i} className='px-4 py-4 border-t border-slate-100 grid grid-cols-7 gap-4 items-center'>
+            <div
+              key={i}
+              className='px-4 py-4 border-t border-slate-100 grid grid-cols-7 gap-4 items-center'
+            >
               <div className='space-y-1.5'>
                 <Skeleton className='h-3.5 w-full' />
                 <Skeleton className='h-3 w-3/4' />
