@@ -190,6 +190,8 @@ function WorkspaceStopped({ onReconnect }: { onReconnect: () => void }) {
 }
 
 function WorkspaceError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const isCoepError = message.includes('cross-origin isolation');
+
   return (
     <div className='absolute inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center gap-4'>
       <div className='text-red-400 text-3xl'>⚠</div>
@@ -197,9 +199,21 @@ function WorkspaceError({ message, onRetry }: { message: string; onRetry: () => 
         <p className='text-slate-200 text-sm font-medium'>Workspace failed to start</p>
         <p className='text-slate-500 text-xs mt-2 max-w-sm px-4'>{message}</p>
       </div>
-      <Button variant='outline' size='sm' onClick={onRetry}>
-        Retry
-      </Button>
+      {isCoepError ? (
+        <button
+          onClick={() => window.location.reload()}
+          className='px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors'
+        >
+          Hard Reload to Fix
+        </button>
+      ) : (
+        <button
+          onClick={onRetry}
+          className='px-4 py-2 text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors'
+        >
+          Retry
+        </button>
+      )}
     </div>
   );
 }
