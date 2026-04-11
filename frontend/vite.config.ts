@@ -9,7 +9,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -52,18 +51,25 @@ export default defineConfig({
         './src/routes/PrivateRoute.tsx',
       ],
     },
-    headers: {
-      // Required by WebContainers (SharedArrayBuffer)
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'credentialless',
-    },
   },
-  preview: {
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'credentialless',
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Apply COOP/COEP only on /code-editor — these are required for
+    // WebContainers (SharedArrayBuffer) but break YouTube embeds everywhere else.
+    {
+      name: 'coep-coop-code-editor-only',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.startsWith('/code-editor')) {
+            res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+            res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+          }
+          next();
+        });
+      },
     },
-  },
+  ],
   build: {
     target: 'esnext',
     rollupOptions: {
