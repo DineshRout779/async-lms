@@ -5,10 +5,10 @@ import {
   ChevronRight,
   Trophy,
   Activity,
-  Loader2,
   BookOpen,
   type LucideIcon,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -163,8 +163,21 @@ const StudentDashboardHome: React.FC = () => {
 
         {loadingCourses ? (
           <Card className='border-none shadow-sm'>
-            <CardContent className='p-6 flex items-center justify-center h-40'>
-              <Loader2 className='w-8 h-8 animate-spin text-indigo-400' />
+            <CardContent className='p-6'>
+              <div className='flex flex-col lg:flex-row gap-8 items-center'>
+                <Skeleton className='w-full lg:w-80 aspect-video rounded-2xl shrink-0' />
+                <div className='flex-1 w-full space-y-5'>
+                  <Skeleton className='h-5 w-20 rounded-full' />
+                  <div className='space-y-2'>
+                    <Skeleton className='h-7 w-2/3' />
+                    <Skeleton className='h-4 w-24' />
+                  </div>
+                  <div className='space-y-3'>
+                    <Skeleton className='h-2 w-full rounded-full' />
+                    <Skeleton className='h-3 w-16 ml-auto' />
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         ) : currentCourse ? (
@@ -239,8 +252,19 @@ const StudentDashboardHome: React.FC = () => {
           </CardHeader>
           <CardContent className='space-y-3'>
             {loadingAssignments ? (
-              <div className='flex justify-center py-6'>
-                <Loader2 className='w-6 h-6 animate-spin text-slate-400' />
+              <div className='space-y-3'>
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className='flex items-center justify-between p-4 rounded-2xl border border-slate-100'>
+                    <div className='flex items-center gap-4'>
+                      <Skeleton className='h-10 w-10 rounded-xl' />
+                      <div className='space-y-1.5'>
+                        <Skeleton className='h-3.5 w-36' />
+                        <Skeleton className='h-3 w-24' />
+                      </div>
+                    </div>
+                    <Skeleton className='h-4 w-4' />
+                  </div>
+                ))}
               </div>
             ) : assignments.length === 0 ? (
               <p className='py-4 text-center text-sm text-slate-400'>
@@ -287,8 +311,19 @@ const StudentDashboardHome: React.FC = () => {
           </CardHeader>
           <CardContent className='space-y-3'>
             {loadingCourses ? (
-              <div className='flex justify-center py-6'>
-                <Loader2 className='w-6 h-6 animate-spin text-slate-400' />
+              <div className='space-y-3'>
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className='flex items-center justify-between p-4 rounded-2xl border border-slate-100'>
+                    <div className='flex items-center gap-4 min-w-0'>
+                      <Skeleton className='h-10 w-10 rounded-xl shrink-0' />
+                      <div className='space-y-1.5'>
+                        <Skeleton className='h-3.5 w-40' />
+                        <Skeleton className='h-3 w-24' />
+                      </div>
+                    </div>
+                    <Skeleton className='h-4 w-4 shrink-0' />
+                  </div>
+                ))}
               </div>
             ) : courses.length === 0 ? (
               <p className='py-4 text-center text-sm text-slate-400'>

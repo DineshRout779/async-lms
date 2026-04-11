@@ -5,9 +5,9 @@ import {
   BookOpen,
   Lock,
   // ClipboardCheck,
-  Loader2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import apiClient from '@/services/api';
 
 /* =======================
@@ -58,8 +58,38 @@ export default function AdminHome() {
 
   if (loading) {
     return (
-      <div className='flex h-screen w-full items-center justify-center'>
-        <Loader2 className='w-8 h-8 animate-spin text-blue-600' />
+      <div className='p-6 space-y-8'>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className='border-none shadow-sm'>
+              <CardContent className='p-5 flex flex-col justify-between h-32'>
+                <div className='flex justify-between items-start'>
+                  <div className='space-y-2'>
+                    <Skeleton className='h-3 w-24' />
+                    <Skeleton className='h-7 w-16' />
+                  </div>
+                  <Skeleton className='h-10 w-10 rounded-xl' />
+                </div>
+                <Skeleton className='h-3 w-28 mt-2' />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className='border-none shadow-sm p-6'>
+          <Skeleton className='h-5 w-36 mb-6' />
+          <Skeleton className='h-3 w-24 mb-4' />
+          <div className='space-y-6'>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className='flex gap-4'>
+                <Skeleton className='h-2 w-2 rounded-full mt-1.5 shrink-0' />
+                <div className='space-y-1.5 flex-1'>
+                  <Skeleton className='h-4 w-3/4' />
+                  <Skeleton className='h-3 w-32' />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
     );
   }

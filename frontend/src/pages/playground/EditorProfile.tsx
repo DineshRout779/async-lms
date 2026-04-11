@@ -27,7 +27,6 @@ import {
   Loader2,
   Clock,
 } from 'lucide-react';
-import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -105,8 +104,6 @@ function timeAgo(dateStr: string) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const EditorProfile = () => {
-  const navigate = useNavigate();
-
   // Projects list state
   const [projects, setProjects] = useState<StudentProject[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -156,7 +153,8 @@ const EditorProfile = () => {
         { name: projectName.trim(), profile: selectedEnv.id },
       );
       const project = res.data.data;
-      navigate(`/code-editor?pid=${project.id}&cp=${project.profile}`);
+      // Use full page navigation so CloudFront serves /code-editor with COOP/COEP headers
+      window.location.href = `/code-editor?pid=${project.id}&cp=${project.profile}`;
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to create project'));
       setCreating(false);
@@ -166,7 +164,8 @@ const EditorProfile = () => {
   // ── Open existing project in editor ─────────────────────────────────────────
 
   const openProject = (project: StudentProject) => {
-    navigate(`/code-editor?pid=${project.id}&cp=${project.profile}`);
+    // Use full page navigation so CloudFront serves /code-editor with COOP/COEP headers
+    window.location.href = `/code-editor?pid=${project.id}&cp=${project.profile}`;
   };
 
   // ── Delete project ───────────────────────────────────────────────────────────

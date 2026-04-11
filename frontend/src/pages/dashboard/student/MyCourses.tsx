@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Loader2, Code2, Layout, Boxes, Zap, BookOpen, PlusCircle } from 'lucide-react';
+import { Code2, Layout, Boxes, Zap, BookOpen, PlusCircle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -60,8 +61,36 @@ const MyCourses = () => {
 
   if (loading)
     return (
-      <div className='flex h-[60vh] items-center justify-center'>
-        <Loader2 className='w-8 h-8 animate-spin text-[#333D7C]' />
+      <div className='p-8 max-w-7xl mx-auto space-y-8'>
+        <div className='space-y-1'>
+          <Skeleton className='h-8 w-32' />
+          <Skeleton className='h-4 w-56' />
+        </div>
+        <div className='flex gap-1 border-b border-slate-200 pb-0'>
+          <Skeleton className='h-9 w-24' />
+          <Skeleton className='h-9 w-16' />
+        </div>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className='bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden'>
+              <Skeleton className='h-44 w-full rounded-none' />
+              <div className='p-8 space-y-5'>
+                <Skeleton className='h-5 w-16 rounded-full' />
+                <div className='space-y-2'>
+                  <Skeleton className='h-7 w-3/4' />
+                  <Skeleton className='h-4 w-1/2' />
+                </div>
+                <div className='space-y-2 pt-1'>
+                  <div className='flex justify-between'>
+                    <Skeleton className='h-3.5 w-16' />
+                    <Skeleton className='h-3.5 w-8' />
+                  </div>
+                  <Skeleton className='h-2 w-full rounded-full' />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
 
