@@ -384,7 +384,6 @@ const Lesson = () => {
                     title='Lesson video'
                     allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen'
                     allowFullScreen
-                    credentialless
                   />
                 </div>
               </div>
