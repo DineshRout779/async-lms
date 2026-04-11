@@ -382,7 +382,8 @@ const Lesson = () => {
                     className='h-full w-full'
                     src={getEmbedUrl(lesson.video_url)}
                     title='Lesson video'
-                    allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen'
+                    allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+                    referrerPolicy='strict-origin-when-cross-origin'
                     allowFullScreen
                   />
                 </div>
