@@ -63,7 +63,7 @@ export default function StudentSidebar({ isOpen }: StudentSidebarProps) {
     >
       {/* Brand Header matching Admin */}
       <div className='h-16 flex items-center gap-3 px-6 shrink-0 mt-4'>
-        <Logo className={'h-12 w-12'} />
+        <Logo className='h-12 w-12' iconOnly={!isOpen} />
         {isOpen && (
           <span className='font-bold text-xl text-blue-800 tracking-tight'>
             CodeGuru

@@ -58,7 +58,7 @@ export default function FacilitatorSidebar({
     >
       {/* Brand Header */}
       <div className='h-16 flex items-center gap-3 px-6 shrink-0 mt-4'>
-        <Logo className={'h-12 w-12'} />
+        <Logo className='h-12 w-12' iconOnly={!isOpen} />
         {isOpen && (
           <span className='font-bold text-xl text-white tracking-tight'>
             CodeGuru

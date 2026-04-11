@@ -17,10 +17,12 @@ const {
   updateAssignment,
   deleteAssignment,
   submitCollegeAssignment,
+  getFilteredAssignments,
 } = require('../controllers/collegeAssignment.controller');
 
 // Admin / Facilitator: manage assignments (MUST COME BEFORE /:id)
 router.get('/manage', verifyToken, isFacilitator, manageAssignments);
+router.get('/evaluation-filters', verifyToken, isFacilitator, getFilteredAssignments);
 
 // Admin / Facilitator: upload instruction document to S3
 router.post(
