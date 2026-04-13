@@ -41,11 +41,14 @@ const TopHeader = ({ onFilterChange }: Props) => {
   }, []);
 
   useEffect(() => {
-    onFilterChange({
+    // onFilterChange({ college: selectedCollege, domain: selectedDomain, batch: selectedBatch });
+    const newFilters = {
       college: selectedCollege,
       domain: selectedDomain,
       batch: selectedBatch,
-    });
+    };
+
+    onFilterChange(newFilters);
   }, [selectedCollege, selectedDomain, selectedBatch, onFilterChange]);
 
   return (
