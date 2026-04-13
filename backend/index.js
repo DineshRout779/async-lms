@@ -12,6 +12,7 @@ require('./config/pg');
 const evaluationRoutes = require("./routes/evaluationRoutes");
 
 const compression = require('compression');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
 const app = express();
 app.use(compression());
@@ -41,6 +42,7 @@ app.use('/api/v1/facilitator', require('./routes/facilitator.routes'));
 app.use('/api/v1/assistant', require('./routes/assistant.routes'));
 app.use('/api/v1/college-assignments', require('./routes/collegeAssignment.routes'));
 app.use("/api/v1/evaluations", evaluationRoutes);
+app.use("/api/v1/analytics", analyticsRoutes);
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 
 // ── Internal worker registry endpoints (no auth — internal network only) ────
