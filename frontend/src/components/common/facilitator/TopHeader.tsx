@@ -51,8 +51,15 @@ const TopHeader = ({ onFilterChange }: Props) => {
 
   // Whenever a filter changes, inform parent
   useEffect(() => {
-    onFilterChange({ college: selectedCollege, domain: selectedDomain, batch: selectedBatch });
-  }, [selectedCollege, selectedDomain, selectedBatch]);
+    // onFilterChange({ college: selectedCollege, domain: selectedDomain, batch: selectedBatch });
+    const newFilters = {
+    college: selectedCollege,
+    domain: selectedDomain,
+    batch: selectedBatch,
+  };
+
+  onFilterChange(newFilters);
+  }, [selectedCollege, selectedDomain, selectedBatch, onFilterChange]);
 
   return (
     <div className="flex items-center justify-between mb-4 bg-white h-[56px] p-[24px]">
@@ -105,6 +112,6 @@ const TopHeader = ({ onFilterChange }: Props) => {
       </div>
     </div>
   );
-};
+  }; 
 
 export default TopHeader;
