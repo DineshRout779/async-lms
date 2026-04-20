@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ChevronRight, ChevronLeft, Sparkles, Loader2, Plus, X, Check } from 'lucide-react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
-import type { CourseFormData, Skill, GeneratedCurriculum } from '@/features/aiCurriculum/types';
+import type { CourseFormData } from '@/features/aiCurriculum/types';
 import toast from 'react-hot-toast';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';

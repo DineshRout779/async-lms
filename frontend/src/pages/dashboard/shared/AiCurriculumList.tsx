@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Plus, Sparkles, Loader2, Trash2, Eye, Clock, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { Plus, Sparkles, Loader2, Trash2, Eye, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 import type { AiCourse, CourseStatus } from '@/features/aiCurriculum/types';
 import toast from 'react-hot-toast';

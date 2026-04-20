@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import {
   ChevronDown, ChevronRight, Edit2, Check, X, Sparkles,
-  Loader2, Send, Eye, ArrowLeft, GripVertical, Trash2, RotateCcw,
+  Loader2, Send, Eye, ArrowLeft, GripVertical, RotateCcw,
 } from 'lucide-react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 import type { AiCourse, AiModule, AiTopic, AiLesson } from '@/features/aiCurriculum/types';
@@ -104,11 +104,9 @@ function InlineEdit({
 // ─── Lesson panel ─────────────────────────────────────────────────────────────
 
 function LessonRow({
-  lesson, roleFocus, level, onUpdate,
+  lesson, onUpdate,
 }: {
   lesson: AiLesson;
-  roleFocus: string;
-  level: string;
   onUpdate: (updated: Partial<AiLesson>) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -227,9 +225,9 @@ function LessonRow({
 // ─── Topic section ────────────────────────────────────────────────────────────
 
 function TopicSection({
-  topic, roleFocus, level, onUpdate,
+  topic, onUpdate,
 }: {
-  topic: AiTopic; roleFocus: string; level: string;
+  topic: AiTopic;
   onUpdate: (updated: Partial<AiTopic>) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -272,8 +270,6 @@ function TopicSection({
               <LessonRow
                 key={lesson.id}
                 lesson={lesson}
-                roleFocus={roleFocus}
-                level={level}
                 onUpdate={(u) => updateLesson(lesson.id, u)}
               />
             ))}
@@ -287,9 +283,9 @@ function TopicSection({
 // ─── Module card ──────────────────────────────────────────────────────────────
 
 function ModuleCard({
-  module: mod, roleFocus, level, onUpdate,
+  module: mod, onUpdate,
 }: {
-  module: AiModule; roleFocus: string; level: string;
+  module: AiModule;
   onUpdate: (updated: Partial<AiModule>) => void;
 }) {
   const [open, setOpen] = useState(true);
@@ -354,8 +350,6 @@ function ModuleCard({
               <TopicSection
                 key={topic.id}
                 topic={topic}
-                roleFocus={roleFocus}
-                level={level}
                 onUpdate={(u) => updateTopic(topic.id, u)}
               />
             ))}
@@ -532,8 +526,6 @@ export default function AiCurriculumEditor() {
           <ModuleCard
             key={mod.id}
             module={mod}
-            roleFocus={course.role_focus}
-            level={course.level}
             onUpdate={(u) => updateModule(mod.id, u)}
           />
         ))}
