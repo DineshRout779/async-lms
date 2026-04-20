@@ -476,9 +476,9 @@ const CodeEditor = (): JSX.Element => {
     const timeoutId = setTimeout(() => {
       if (!cancelled) {
         setWsStatus('error');
-        setWsError('Workspace startup timed out. Please retry.');
+        setWsError('Workspace startup timed out. Check that the Docker image is built (workspace-node / workspace-python) and Docker Desktop is running, then retry.');
       }
-    }, 90_000);
+    }, 45_000);
 
     const boot = async () => {
       setWsStatus('provisioning');

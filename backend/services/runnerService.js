@@ -8,16 +8,22 @@
 
 const { spawn } = require('child_process');
 
-const POOL_SIZE = parseInt(process.env.RUNNER_POOL_SIZE || '20', 10);
+const POOL_SIZE     = parseInt(process.env.RUNNER_POOL_SIZE      || '20', 10);
+const POOL_SIZE_JVM = parseInt(process.env.RUNNER_POOL_SIZE_JAVA || '5',  10);
+const POOL_SIZE_SQL = parseInt(process.env.RUNNER_POOL_SIZE_SQL  || '5',  10);
 
 const LANGUAGE_PROFILES = {
-  javascript: { image: 'workspace-node',   cmd: ['node',    'index.js']   },
-  python:     { image: 'workspace-python', cmd: ['python3', 'main.py']    },
+  javascript: { image: 'workspace-node',   cmd: ['node',    'index.js'],   poolSize: POOL_SIZE     },
+  python:     { image: 'workspace-python', cmd: ['python3', 'main.py'],    poolSize: POOL_SIZE     },
+  java:       { image: 'workspace-java',   cmd: ['sh', '-c', 'cd /workspace && javac Main.java 2>&1 && java -cp /workspace Main'], poolSize: POOL_SIZE_JVM },
+  sql:        { image: 'workspace-sql',    cmd: ['sh', '-c', 'sqlite3 -column -header :memory: < /workspace/solution.sql'],        poolSize: POOL_SIZE_SQL },
 };
 
 const TEST_CMDS = {
   javascript: ['node',    '__tests__.js'],
   python:     ['python3', '__tests__.py'],
+  java:       ['sh', '-c', 'cd /workspace && javac Main.java __Tests__.java 2>&1 && java -cp /workspace __Tests__'],
+  // SQL test execution is not supported — exercises should use run-only mode
 };
 
 // ── Low-level helpers ─────────────────────────────────────────────────────────
@@ -129,8 +135,8 @@ const pools = {};
 
 async function initPools() {
   await Promise.all(
-    Object.entries(LANGUAGE_PROFILES).map(([lang, { image }]) => {
-      pools[lang] = new ContainerPool(image, POOL_SIZE);
+    Object.entries(LANGUAGE_PROFILES).map(([lang, { image, poolSize }]) => {
+      pools[lang] = new ContainerPool(image, poolSize);
       return pools[lang].init();
     })
   );
@@ -142,15 +148,17 @@ async function initPools() {
 function execute(workspaceDir, language) {
   const profile = LANGUAGE_PROFILES[language] ?? LANGUAGE_PROFILES.javascript;
   const pool    = pools[language]             ?? pools.javascript;
-  return pool.run(workspaceDir, profile.cmd, 10000);
+  return pool.run(workspaceDir, profile.cmd, 15000);
 }
 
 // Run the pre-written test file and return raw { output, exitCode }.
-// Caller is responsible for writing __tests__.js / __tests__.py first.
+// Caller is responsible for writing the test file first.
+// Returns null if the language does not support test execution.
 function executeTests(workspaceDir, language) {
+  const cmd = TEST_CMDS[language];
+  if (!cmd) return null;
   const pool = pools[language] ?? pools.javascript;
-  const cmd  = TEST_CMDS[language] ?? TEST_CMDS.javascript;
-  return pool.run(workspaceDir, cmd, 15000);
+  return pool.run(workspaceDir, cmd, 20000);
 }
 
 module.exports = { initPools, execute, executeTests };

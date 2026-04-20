@@ -1,7 +1,7 @@
 {
   "javascript": {
     "name": "JavaScript (Node.js)",
-    "engine": "webcontainer",
+    "engine": "docker",
     "image": "workspace-node",
     "language": "javascript",
     "entry": "index.js",
@@ -10,7 +10,7 @@
   },
   "mern": {
     "name": "React (Vite)",
-    "engine": "webcontainer",
+    "engine": "docker",
     "image": "workspace-node",
     "language": "javascript",
     "entry": "src/App.jsx",

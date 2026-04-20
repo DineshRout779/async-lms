@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y \
-    postgresql-client git sudo nano vim bash \
+    postgresql-client sqlite3 git sudo nano vim bash \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -ms /bin/bash playground \

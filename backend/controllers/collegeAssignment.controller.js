@@ -1,4 +1,5 @@
 const pool = require('../config/pg');
+const { notifyCollege } = require('../services/notificationService');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const path = require('path');
 const fs = require('fs');
@@ -206,7 +207,18 @@ exports.createAssignment = async (req, res) => {
         req.body.instruction_file_name || null,
       ],
     );
-    res.status(201).json({ success: true, data: rows[0] });
+    const assignment = rows[0];
+    // Notify all students in the college about the new assignment
+    notifyCollege({
+      collegeId: college_id,
+      type: 'new_assignment',
+      title: `New Assignment: ${title}`,
+      body: due_date
+        ? `Due ${new Date(due_date).toLocaleDateString()}: ${description || title}`
+        : description || title,
+      link: '/dashboard/student/assignments',
+    });
+    res.status(201).json({ success: true, data: assignment });
   } catch (error) {
     console.error('createAssignment:', error);
     res.status(500).json({ success: false, message: error.message });

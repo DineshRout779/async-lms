@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const setupSocket = require('./services/socketService');
 const { initPools } = require('./services/runnerService');
+const notificationService = require('./services/notificationService');
 const path = require('path');
 const { getContainerIP } = require('./services/dockerService');
 const { registerWorker, heartbeat, deregisterWorker, releaseWorkspace, getStatus } = require('./services/workerRegistry');
@@ -49,6 +50,8 @@ app.use('/api/v1/assistant', require('./routes/assistant.routes'));
 app.use('/api/v1/college-assignments', require('./routes/collegeAssignment.routes'));
 app.use("/api/v1/evaluations", evaluationRoutes);
 app.use("/api/v1/analytics", analyticsRoutes);
+app.use('/api/v1/notifications', require('./routes/notification.routes'));
+app.use('/api/v1/ai-curriculum', require('./routes/aiCurriculum.routes'));
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 const verifyToken = require('./middlewares/verfiyToken');
 app.use('/uploads', verifyToken, express.static(path.join(__dirname, 'public', 'uploads')));
@@ -94,6 +97,7 @@ const io = new Server(server, {
 });
 
 setupSocket(io);
+notificationService.setIo(io);
 
 // ── WebSocket proxy for preview HMR (Vite hot-reload) ──────────────────────
 // Intercept WS upgrades for the path-based preview proxy and tunnel them to
