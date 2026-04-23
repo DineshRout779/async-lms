@@ -1,5 +1,12 @@
 const pty = require('node-pty');
 const { spawnSync } = require('child_process');
+const fs = require('fs');
+
+const DOCKER_PATH = fs.existsSync('/usr/local/bin/docker')
+  ? '/usr/local/bin/docker'
+  : fs.existsSync('/opt/homebrew/bin/docker')
+  ? '/opt/homebrew/bin/docker'
+  : 'docker';
 
 function containerExists(name) {
   const res = spawnSync('docker', ['inspect', name], { stdio: 'ignore' });
@@ -13,10 +20,8 @@ function createTerminal({ userId, projectId, cols = 80, rows = 24 }) {
     throw new Error(`Workspace container not running`);
   }
 
-  console.log('Attaching terminal to container:', name);
-
   const shell = pty.spawn(
-    'docker',
+    DOCKER_PATH,
     [
       'exec',
       '-it',

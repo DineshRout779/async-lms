@@ -2,13 +2,22 @@ const { spawnSync, spawn } = require('child_process');
 const path = require('path');
 
 // Resource limits per profile
+// const PROFILE_LIMITS = {
+//   mern: { memory: '512m', cpus: '0.5' },
+//   javascript: { memory: '192m', cpus: '0.2' },
+//   python: { memory: '192m', cpus: '0.2' },
+//   java: { memory: '512m', cpus: '0.5' },
+//   sql: { memory: '192m', cpus: '0.2' },
+//   default: { memory: '192m', cpus: '0.2' },
+// };
+
 const PROFILE_LIMITS = {
-  mern: { memory: '512m', cpus: '0.5' },
-  javascript: { memory: '192m', cpus: '0.2' },
-  python: { memory: '192m', cpus: '0.2' },
-  java: { memory: '512m', cpus: '0.5' },
-  sql: { memory: '192m', cpus: '0.2' },
-  default: { memory: '192m', cpus: '0.2' },
+  mern: { memory: '256m', swap: '768m', cpus: '0.5' },
+  javascript: { memory: '128m', cpus: '0.2' },
+  python: { memory: '128m', cpus: '0.2', env: ['PYTHONDONTWRITEBYTECODE=1'] }, 
+  java: { memory: '256m', cpus: '0.5', env: ['_JAVA_OPTIONS=-Xmx128m -Xms64m'] }, 
+  sql: { memory: '128m', cpus: '0.2' },
+  default: { memory: '128m', cpus: '0.2' },
 };
 
 // Async wrapper for one-shot docker commands (stop, rm, etc.)
@@ -75,27 +84,39 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
     );
 
     const limits = PROFILE_LIMITS[profile] ?? PROFILE_LIMITS.default;
+    const swap = limits.swap || limits.memory;
+
     console.log(
-      `Starting container ${name} [${profile ?? 'default'}] memory=${limits.memory} cpus=${limits.cpus}`,
+      `Starting container ${name} [${profile ?? 'default'}] memory=${limits.memory} swap=${swap} cpus=${limits.cpus}`,
     );
 
-    await runDockerAsync([
+    const dockerArgs = [
       'run',
       '-d',
       '--name',
       name,
       `--memory=${limits.memory}`,
+      `--memory-swap=${swap}`,
       `--cpus=${limits.cpus}`,
       '--pids-limit=256',
       '--network=bridge',
+    ];
+
+    if (limits.env) {
+      limits.env.forEach(e => dockerArgs.push('-e', e));
+    }
+
+    dockerArgs.push(
       '-v',
       `${workspacePath}:/workspace`,
       '-w',
       '/workspace',
       image,
       'sleep',
-      'infinity',
-    ]);
+      'infinity'
+    );
+
+    await runDockerAsync(dockerArgs);
   }
 
   await waitForContainer(name);

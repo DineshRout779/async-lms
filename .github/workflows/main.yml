@@ -6,25 +6,62 @@ on:
       - staging
 
 jobs:
-  # ── Backend → EC2 ────────────────────────────────────────────────────────────
-  deploy-backend:
+  # ── Orchestrator → EC2 (t3.small) ─────────────────────────────────────────────
+  deploy-orchestrator:
     if: >
       contains(github.event.commits[0].modified, 'backend/') ||
       contains(github.event.commits[0].added,    'backend/')
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2   # needed so git diff HEAD~1 works
-
-      - name: Deploy to EC2
+      - name: Deploy Orchestrator to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.ORCHESTRATOR_IP }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            cd /home/ubuntu/lms-be
+            git pull origin staging
+            cd backend
+            npm install
+            
+            # Restart ONLY the orchestrator process via ecosystem.config.js
+            pm2 start ecosystem.config.js --only orchestrator || pm2 restart orchestrator --update-env
+
+  # ── Workers → 5x EC2 (t3.large) ───────────────────────────────────────────────
+  deploy-workers:
+    if: >
+      contains(github.event.commits[0].modified, 'backend/') ||
+      contains(github.event.commits[0].added,    'backend/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Deploy to 5x Worker Nodes
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # This accepts a comma-separated list natively! 
+          # Example Secret: 10.0.0.1,10.0.0.2,10.0.0.3
+          host: ${{ secrets.WORKER_IPS }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Self-healing Swap Setup (Ensures 10GB swap exists for Docker stability)
+            if [ ! -f /swapfile ]; then
+              echo "No swapfile found. Provisioning 10GB swap space..."
+              sudo fallocate -l 10G /swapfile
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+            else
+              if ! swapon --show | grep -q '/swapfile'; then
+                sudo swapon /swapfile
+              fi
+            fi
+
             cd /home/ubuntu/lms-be
             git pull origin staging
             cd backend
@@ -39,7 +76,8 @@ jobs:
               docker build -t workspace-sql    ./docker/workspace-sql
             fi
 
-            pm2 restart lms-be --update-env
+            # Restart ONLY the worker process via ecosystem.config.js
+            pm2 start ecosystem.config.js --only worker || pm2 restart worker --update-env
 
   # ── Frontend → S3 + CloudFront ───────────────────────────────────────────────
   deploy-frontend:

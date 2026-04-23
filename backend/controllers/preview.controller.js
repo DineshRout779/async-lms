@@ -25,10 +25,10 @@ function rewritePaths(body, proxyBase) {
   return body.replace(/([`"'])(\/)(?!\/)/g, `$1${proxyBase}/`);
 }
 
-function sendProxied(res, status, headers, rawBody, isText, proxyBase) {
+function sendProxied(res, status, headers, rawBody, shouldRewrite, proxyBase) {
   delete headers['content-length'];
   res.writeHead(status, headers);
-  res.end(isText ? rewritePaths(rawBody.toString('utf8'), proxyBase) : rawBody);
+  res.end(shouldRewrite ? rewritePaths(rawBody.toString('utf8'), proxyBase) : rawBody);
 }
 
 // ─── Strategy A: direct HTTP to Docker bridge IP ────────────────────────────
@@ -46,7 +46,9 @@ function proxyDirect(ip, port, req, res, proxyBase) {
         for (const [k, v] of Object.entries(upstreamRes.headers)) {
           if (!DROP_HEADERS.has(k.toLowerCase())) headers[k] = v;
         }
+        const isHtml = (headers['content-type'] || '').includes('text/html');
         const isText = TEXT_TYPES.some((t) => (headers['content-type'] || '').includes(t));
+
         if (!isText) {
           delete headers['content-length'];
           res.writeHead(upstreamRes.statusCode, headers);
@@ -57,7 +59,7 @@ function proxyDirect(ip, port, req, res, proxyBase) {
         const chunks = [];
         upstreamRes.on('data', (c) => chunks.push(c));
         upstreamRes.on('end', () => {
-          sendProxied(res, upstreamRes.statusCode, headers, Buffer.concat(chunks), true, proxyBase);
+          sendProxied(res, upstreamRes.statusCode, headers, Buffer.concat(chunks), isHtml, proxyBase);
           resolve();
         });
       }
@@ -96,8 +98,8 @@ function proxyCurl(containerName, port, req, res, proxyBase) {
         const k = line.slice(0, ci).toLowerCase();
         if (!DROP_HEADERS.has(k)) headers[k] = line.slice(ci + 2);
       }
-      const isText = TEXT_TYPES.some((t) => (headers['content-type'] || '').includes(t));
-      sendProxied(res, status, headers, Buffer.from(raw.slice(sep + sepLen), 'binary'), isText, proxyBase);
+      const isHtml = (headers['content-type'] || '').includes('text/html');
+      sendProxied(res, status, headers, Buffer.from(raw.slice(sep + sepLen), 'binary'), isHtml, proxyBase);
       resolve();
     });
     child.on('error', reject);

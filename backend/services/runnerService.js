@@ -80,12 +80,21 @@ class ContainerPool {
   async _startContainer(name) {
     // Remove stale container from a previous run, if any.
     await spawnAsync('docker', ['rm', '-f', name]).catch(() => {});
-    await spawnAsync('docker', [
+    const dockerArgs = [
       'run', '-d', '--name', name,
-      '--memory=256m', '--cpus=0.5',
-      '--network=none', '--pids-limit=64',
-      this.image, 'sleep', 'infinity',
-    ]);
+      '--memory=128m', '--memory-swap=128m', '--cpus=0.5',
+      '--network=none', '--pids-limit=64'
+    ];
+
+    if (this.image === 'workspace-python') {
+      dockerArgs.push('-e', 'PYTHONDONTWRITEBYTECODE=1');
+    } else if (this.image === 'workspace-java') {
+      dockerArgs.push('-e', '_JAVA_OPTIONS=-Xmx128m -Xms64m');
+    }
+
+    dockerArgs.push(this.image, 'sleep', 'infinity');
+
+    await spawnAsync('docker', dockerArgs);
     await spawnAsync('docker', ['exec', name, 'mkdir', '-p', '/workspace']);
     this.available.push(name);
   }

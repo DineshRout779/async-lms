@@ -1,16 +1,17 @@
-FROM ubuntu:22.04
+FROM node:20-alpine
 
-ENV DEBIAN_FRONTEND=noninteractive
+RUN apk update && apk add --no-cache \
+    curl \
+    git \
+    python3 \
+    py3-pip \
+    sudo \
+    nano \
+    vim \
+    bash \
+    build-base
 
-RUN apt-get update && apt-get install -y \
-    curl git build-essential python3 python3-pip \
-    ca-certificates sudo nano vim bash \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
-
-RUN useradd -ms /bin/bash playground \
+RUN adduser -D -s /bin/bash playground \
     && echo "playground ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER playground
