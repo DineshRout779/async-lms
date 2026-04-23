@@ -44,6 +44,8 @@ app.use('/api/v1/college-assignments', require('./routes/collegeAssignment.route
 app.use("/api/v1/evaluations", evaluationRoutes);
 
 app.use("/api/v1/analytics", analyticsRoutes);
+app.use('/api/v1/notifications', require('./routes/notification.routes'));
+app.use('/api/v1/ai-curriculum', require('./routes/aiCurriculum.routes'));
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 const verifyToken = require('./middlewares/verfiyToken');
 app.use('/uploads', verifyToken, express.static(path.join(__dirname, 'public', 'uploads')));

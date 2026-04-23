@@ -58,6 +58,8 @@ const EXT_TO_LANG: Record<string, string> = {
   js: 'javascript',
   ts: 'typescript',
   py: 'python',
+  java: 'java',
+  sql: 'sql',
   json: 'json',
   html: 'html',
   css: 'css',

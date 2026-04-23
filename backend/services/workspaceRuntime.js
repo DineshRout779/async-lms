@@ -21,14 +21,31 @@ const PROFILE_LIMITS = {
 };
 
 // Async wrapper for one-shot docker commands (stop, rm, etc.)
-function runDockerAsync(args) {
+// timeoutMs: if > 0, kills the process and rejects after that many ms.
+function runDockerAsync(args, timeoutMs = 0) {
   return new Promise((resolve, reject) => {
     const proc = spawn('docker', args, { stdio: 'ignore' });
+    let settled = false;
+
+    const done = (err) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      err ? reject(err) : resolve();
+    };
+
+    const timer = timeoutMs > 0
+      ? setTimeout(() => {
+          try { proc.kill(); } catch (_) {}
+          done(new Error(`docker ${args[0]} timed out after ${timeoutMs / 1000}s`));
+        }, timeoutMs)
+      : null;
+
     proc.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`docker ${args[0]} exited with code ${code}`));
+      if (code === 0) done(null);
+      else done(new Error(`docker ${args[0]} exited with code ${code}`));
     });
-    proc.on('error', reject);
+    proc.on('error', (err) => done(err));
   });
 }
 

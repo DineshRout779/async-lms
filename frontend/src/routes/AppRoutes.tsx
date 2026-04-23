@@ -112,6 +112,20 @@ const AssignmentSuccess = lazy(
   () => import('@/pages/dashboard/admin/AssignmentSuccess'),
 );
 
+// AI Curriculum Builder (shared)
+const AiCurriculumList = lazy(
+  () => import('@/pages/dashboard/shared/AiCurriculumList'),
+);
+const AiCurriculumBuilder = lazy(
+  () => import('@/pages/dashboard/shared/AiCurriculumBuilder'),
+);
+const AiCurriculumEditor = lazy(
+  () => import('@/pages/dashboard/shared/AiCurriculumEditor'),
+);
+const AiCurriculumReview = lazy(
+  () => import('@/pages/dashboard/shared/AiCurriculumReview'),
+);
+
 // ---------- Router ----------
 
 const router = createBrowserRouter([
@@ -195,6 +209,10 @@ const router = createBrowserRouter([
               { path: 'assignment-success', element: <AssignmentSuccess /> },
               { path: 'evaluations', element: <FacilitatorEvaluations /> },
               { path: 'results', element: <ResultsPage /> },
+              { path: 'ai-curriculum', element: <AiCurriculumList /> },
+              { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
+              { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
+              { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
               { path: 'analytics', element: <FacilitatorAnalytics /> },
               { path: 'student-growth', element: <FacilitatorStudentGrowth /> },
               { path: 'reports', element: <FacilitatorReports /> },
@@ -226,6 +244,10 @@ const router = createBrowserRouter([
                 path: 'assignment-success',
                 element: <AssignmentSuccess />,
               },
+              { path: 'ai-curriculum', element: <AiCurriculumList /> },
+              { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
+              { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
+              { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
             ],
           },
         ],

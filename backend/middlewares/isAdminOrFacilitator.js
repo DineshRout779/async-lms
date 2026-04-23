@@ -5,7 +5,7 @@ const isAdminOrFacilitator = (req, res, next) => {
   }
 
   // Check if the role is 'admin' (adjust 'admin' string to match your DB value)
-  if (req.user.role !== 'admin' || req.user.role !== 'facilitator') {
+  if (req.user.role !== 'admin' && req.user.role !== 'facilitator') {
     return res
       .status(403)
       .json({ message: 'Access denied: Admins and Facilitators only' });

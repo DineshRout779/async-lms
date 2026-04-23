@@ -1,4 +1,5 @@
 const pool = require('../config/pg');
+const { notify } = require('../services/notificationService');
 
 // ============================================
 // HELPERS
@@ -69,12 +70,22 @@ async function checkAndAwardBadges(userId) {
     // Award every qualifying badge the user doesn't already have
     for (const b of XP_BADGES) {
       if (totalXP >= b.threshold) {
-        await pool.query(
+        const badgeInsert = await pool.query(
           `INSERT INTO user_badges (user_id, badge_id)
            SELECT $1, id FROM badges WHERE name = $2
-           ON CONFLICT (user_id, badge_id) DO NOTHING`,
+           ON CONFLICT (user_id, badge_id) DO NOTHING
+           RETURNING user_id`,
           [userId, b.name],
         );
+        if (badgeInsert.rowCount > 0) {
+          notify({
+            userId,
+            type: 'achievement',
+            title: `${b.icon} Badge Unlocked: ${b.name}`,
+            body: b.description,
+            link: '/dashboard/student/profile',
+          });
+        }
       }
     }
   } catch (err) {
@@ -791,13 +802,17 @@ const runnerService = require('../services/runnerService');
 const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
 const EXERCISE_RUNNER = {
-  javascript: { image: 'workspace-node',  cmd: ['node',    'index.js'] },
+  javascript: { image: 'workspace-node',   cmd: ['node',    'index.js'] },
   python:     { image: 'workspace-python', cmd: ['python3', 'main.py']  },
+  java:       { image: 'workspace-java',   cmd: ['sh', '-c', 'cd /workspace && javac Main.java 2>&1 && java -cp /workspace Main'] },
+  sql:        { image: 'workspace-sql',    cmd: ['sh', '-c', 'sqlite3 -column -header :memory: < /workspace/solution.sql'] },
 };
 
 const TEST_RUNNER_CMD = {
-  javascript: { image: 'workspace-node',  cmd: ['node',    '__tests__.js']  },
+  javascript: { image: 'workspace-node',   cmd: ['node',    '__tests__.js']  },
   python:     { image: 'workspace-python', cmd: ['python3', '__tests__.py']  },
+  java:       { image: 'workspace-java',   cmd: ['sh', '-c', 'cd /workspace && javac Main.java __Tests__.java 2>&1 && java -cp /workspace __Tests__'] },
+  // sql: not supported — no test runner for SQL exercises
 };
 
 const JS_TEST_HEADER = `let __p=0,__f=0,__r=[];
@@ -816,20 +831,68 @@ const JS_TEST_FOOTER = `\nconsole.log(JSON.stringify({passed:__p,failed:__f,tota
 const PY_TEST_HEADER = `import json,sys\n_p,_f,_r=0,0,[]\ndef __test(d,fn):\n  global _p,_f\n  try: fn();_r.append({"description":d,"passed":True});_p+=1\n  except Exception as e: _r.append({"description":d,"passed":False,"error":str(e)});_f+=1\nclass _E:\n  def __init__(self,a):self._a=a\n  def to_be(self,e):\n    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"\n  def to_equal(self,e):\n    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"\n  def to_be_truthy(self):\n    assert self._a,"Expected truthy"\n  def to_be_falsy(self):\n    assert not self._a,"Expected falsy"\ndef __expect(a): return _E(a)\n`;
 const PY_TEST_FOOTER = `\nprint(json.dumps({"passed":_p,"failed":_f,"total":_p+_f,"results":_r}))\nsys.exit(1 if _f>0 else 0)\n`;
 
+// Java test framework — test cases call static methods on the student's Main class.
+// Both Main.java and __Tests__.java are compiled together so Main's public members are accessible.
+const JAVA_TEST_HEADER = `import java.util.*;
+public class __Tests__ {
+  static int __p=0,__f=0;
+  static List<Map<String,Object>> __r=new ArrayList<>();
+  @FunctionalInterface interface __Fn{void run()throws Exception;}
+  static void __test(String d,__Fn fn){
+    try{fn.run();Map<String,Object>m=new LinkedHashMap<>();m.put("description",d);m.put("passed",true);__r.add(m);__p++;}
+    catch(Exception e){Map<String,Object>m=new LinkedHashMap<>();m.put("description",d);m.put("passed",false);String err=e.getMessage()==null?"error":e.getMessage().replace("\\\\","\\\\\\\\").replace("\\"","'");m.put("error",err);__r.add(m);__f++;}
+  }
+  static<T>__E<T>__expect(T a){return new __E<>(a);}
+  static class __E<T>{T a;__E(T v){this.a=v;}
+    public void toBe(T e){if(!Objects.equals(a,e))throw new AssertionError("Expected "+e+", got "+a);}
+    public void toEqual(T e){if(!Objects.equals(a,e))throw new AssertionError("Expected "+e+", got "+a);}
+    public void toBeTruthy(){if(a==null||Boolean.FALSE.equals(a)||Integer.valueOf(0).equals(a))throw new AssertionError("Expected truthy");}
+    public void toBeFalsy(){if(a!=null&&!Boolean.FALSE.equals(a)&&!Integer.valueOf(0).equals(a))throw new AssertionError("Expected falsy");}
+  }
+  public static void main(String[]args)throws Exception{
+`;
+const JAVA_TEST_FOOTER = `
+    StringBuilder sb=new StringBuilder();
+    sb.append("{\\"passed\\":").append(__p).append(",\\"failed\\":").append(__f).append(",\\"total\\":").append(__p+__f).append(",\\"results\\":[");
+    for(int i=0;i<__r.size();i++){Map<String,Object>m=__r.get(i);sb.append("{\\"description\\":\\"").append(m.get("description")).append("\\",\\"passed\\":").append(m.get("passed"));if(m.containsKey("error"))sb.append(",\\"error\\":\\"").append(m.get("error")).append("\\"");sb.append("}");if(i<__r.size()-1)sb.append(",");}
+    sb.append("]}");
+    System.out.println(sb);
+    System.exit(__f>0?1:0);
+  }
+}
+`;
+
 /**
  * Write the test runner file to disk, execute it via the container pool,
  * and return { passed, failed, total, results }.
  */
 async function runTestCases(workspaceDir, language, testCases) {
-  const isJs = language !== 'python';
-  const header   = isJs ? JS_TEST_HEADER : PY_TEST_HEADER;
-  const footer   = isJs ? JS_TEST_FOOTER : PY_TEST_FOOTER;
+  let header, footer, testFile;
+
+  if (language === 'python') {
+    header   = PY_TEST_HEADER;
+    footer   = PY_TEST_FOOTER;
+    testFile = path.join(workspaceDir, '__tests__.py');
+  } else if (language === 'java') {
+    header   = JAVA_TEST_HEADER;
+    footer   = JAVA_TEST_FOOTER;
+    testFile = path.join(workspaceDir, '__Tests__.java');
+  } else if (language === 'sql') {
+    throw new Error('Automated test cases are not supported for SQL exercises.');
+  } else {
+    // javascript (default)
+    header   = JS_TEST_HEADER;
+    footer   = JS_TEST_FOOTER;
+    testFile = path.join(workspaceDir, '__tests__.js');
+  }
+
   const testCode = testCases.map((tc) => tc.test_code).join('\n');
-  const testFile = path.join(workspaceDir, isJs ? '__tests__.js' : '__tests__.py');
   fs.writeFileSync(testFile, header + testCode + footer, 'utf-8');
 
-  const { output } = await runnerService.executeTests(workspaceDir, language);
+  const result = await runnerService.executeTests(workspaceDir, language);
+  if (!result) throw new Error('Test execution is not supported for this language.');
 
+  const { output } = result;
   const lines = output.trim().split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     try {
@@ -841,8 +904,10 @@ async function runTestCases(workspaceDir, language, testCases) {
 }
 
 const DEFAULT_INITIAL_FILES = {
-  javascript: [{ name: 'index.js', content: '// Write your solution here\n' }],
-  python:     [{ name: 'main.py',  content: '# Write your solution here\n'  }],
+  javascript: [{ name: 'index.js',    content: '// Write your solution here\n' }],
+  python:     [{ name: 'main.py',     content: '# Write your solution here\n'  }],
+  java:       [{ name: 'Main.java',   content: 'public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n' }],
+  sql:        [{ name: 'solution.sql', content: '-- Write your SQL here\n' }],
 };
 
 /**

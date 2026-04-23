@@ -1,5 +1,6 @@
 const pool = require("../config/pg");
 const axios = require("axios");
+const { notify } = require('../services/notificationService');
 
 const EVALUATOR_APIS = {
   JS: "https://js-evaluator-r80h.onrender.com/evaluate-batch-by-links",
@@ -153,6 +154,20 @@ exports.runEvaluation = async (req, res) => {
     );
 
     await client.query("COMMIT");
+
+    // Notify each evaluated student of their result
+    for (const r of results) {
+      const matched = submissions.find((s) => s.student_name === r.student);
+      if (matched?.user_id) {
+        notify({
+          userId: matched.user_id,
+          type: 'assignment_graded',
+          title: 'Assignment Graded',
+          body: `Your submission has been evaluated. Score: ${r.marks}${r.feedback ? ` — ${r.feedback}` : ''}`,
+          link: '/dashboard/student/assignments',
+        });
+      }
+    }
 
     return res.json({
       success: true,

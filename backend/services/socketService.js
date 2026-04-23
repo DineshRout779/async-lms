@@ -145,36 +145,47 @@ module.exports = function setupSocket(io) {
     console.log('Socket connected:', socket.id);
     socket.workspace = null;
 
+    // Client emits this immediately after connecting so the server can
+    // push real-time notifications to them via their personal room.
+    socket.on('notification:subscribe', ({ userId }) => {
+      if (userId) socket.join(`user:${userId}`);
+    });
+
     socket.on('workspace:start', async ({ userId, projectId, image, profile }) => {
-      // Quota check before anything else
-      const quota = getWorkspaceQuota(userId, projectId);
-      if (quota.overQuota) {
-        socket.emit('workspace:error', `Disk quota exceeded: ${quota.usedMB} MB used (limit: ${quota.limitMB} MB). Please delete files to continue.`);
-        return;
-      }
-
-      const key = `${userId}:${projectId}`;
-
-      // Reconnecting users already have a running container — skip the queue
-      const isReconnect = lastActivity.has(key);
-
-      if (!isReconnect && lastActivity.size >= MAX_CONCURRENT_WORKSPACES) {
-        // Server at capacity — enqueue, or update position if already waiting
-        let idx = workspaceQueue.findIndex(q => q.userId === userId && q.projectId === projectId);
-        if (idx === -1) {
-          workspaceQueue.push({ socketId: socket.id, socket, userId, projectId, image, profile });
-          idx = workspaceQueue.length - 1;
-        } else {
-          // Update the socket ref in case user reconnected while queued
-          workspaceQueue[idx].socket = socket;
-          workspaceQueue[idx].socketId = socket.id;
+      try {
+        // Quota check before anything else
+        const quota = getWorkspaceQuota(userId, projectId);
+        if (quota.overQuota) {
+          socket.emit('workspace:error', `Disk quota exceeded: ${quota.usedMB} MB used (limit: ${quota.limitMB} MB). Please delete files to continue.`);
+          return;
         }
-        socket.emit('workspace:queued', { position: idx + 1, total: workspaceQueue.length });
-        console.log(`[queue] ${key} queued at position ${idx + 1}/${workspaceQueue.length} (active: ${lastActivity.size})`);
-        return;
-      }
 
-      await startWorkspace(socket, { userId, projectId, image, profile });
+        const key = `${userId}:${projectId}`;
+
+        // Reconnecting users already have a running container — skip the queue
+        const isReconnect = lastActivity.has(key);
+
+        if (!isReconnect && lastActivity.size >= MAX_CONCURRENT_WORKSPACES) {
+          // Server at capacity — enqueue, or update position if already waiting
+          let idx = workspaceQueue.findIndex(q => q.userId === userId && q.projectId === projectId);
+          if (idx === -1) {
+            workspaceQueue.push({ socketId: socket.id, socket, userId, projectId, image, profile });
+            idx = workspaceQueue.length - 1;
+          } else {
+            // Update the socket ref in case user reconnected while queued
+            workspaceQueue[idx].socket = socket;
+            workspaceQueue[idx].socketId = socket.id;
+          }
+          socket.emit('workspace:queued', { position: idx + 1, total: workspaceQueue.length });
+          console.log(`[queue] ${key} queued at position ${idx + 1}/${workspaceQueue.length} (active: ${lastActivity.size})`);
+          return;
+        }
+
+        await startWorkspace(socket, { userId, projectId, image, profile });
+      } catch (err) {
+        console.error('[workspace:start] unhandled error:', err);
+        socket.emit('workspace:error', err?.message ?? 'Failed to start workspace');
+      }
     });
 
     socket.on('terminal:start', ({ cols, rows } = {}) => {

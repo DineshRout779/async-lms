@@ -99,6 +99,101 @@ const pool = new Pool({
       END $$
     `);
 
+    // ── Notifications ──────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type       TEXT NOT NULL,
+        title      TEXT NOT NULL,
+        body       TEXT NOT NULL,
+        link       TEXT,
+        is_read    BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = false`);
+
+    // ── AI Curriculum Builder ──────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ai_courses (
+        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title               TEXT NOT NULL,
+        domain              TEXT NOT NULL,
+        role_focus          TEXT NOT NULL,
+        jd_text             TEXT,
+        skills              JSONB NOT NULL DEFAULT '[]',
+        audience            TEXT NOT NULL,
+        level               TEXT NOT NULL,
+        learning_goal       TEXT NOT NULL,
+        duration_weeks      INTEGER,
+        daily_hours         NUMERIC(4,1),
+        content_preference  TEXT,
+        status              TEXT NOT NULL DEFAULT 'draft',
+        created_by          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reviewed_by         UUID REFERENCES users(id) ON DELETE SET NULL,
+        subject_id          UUID REFERENCES subjects(id) ON DELETE SET NULL,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_courses_created_by ON ai_courses(created_by)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_courses_status ON ai_courses(status)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ai_course_modules (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        course_id     UUID NOT NULL REFERENCES ai_courses(id) ON DELETE CASCADE,
+        title         TEXT NOT NULL,
+        description   TEXT,
+        order_index   INTEGER NOT NULL DEFAULT 0,
+        practice_tasks JSONB NOT NULL DEFAULT '[]',
+        case_studies  JSONB NOT NULL DEFAULT '[]',
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_modules_course_id ON ai_course_modules(course_id)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ai_course_topics (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        module_id   UUID NOT NULL REFERENCES ai_course_modules(id) ON DELETE CASCADE,
+        title       TEXT NOT NULL,
+        description TEXT,
+        order_index INTEGER NOT NULL DEFAULT 0,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_topics_module_id ON ai_course_topics(module_id)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ai_course_lessons (
+        id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        topic_id             UUID NOT NULL REFERENCES ai_course_topics(id) ON DELETE CASCADE,
+        title                TEXT NOT NULL,
+        explanation          TEXT,
+        example              TEXT,
+        activity             TEXT,
+        interview_questions  JSONB NOT NULL DEFAULT '[]',
+        order_index          INTEGER NOT NULL DEFAULT 0,
+        created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_lessons_topic_id ON ai_course_lessons(topic_id)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ai_course_reviews (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        course_id   UUID NOT NULL REFERENCES ai_courses(id) ON DELETE CASCADE,
+        reviewer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        action      TEXT NOT NULL,
+        feedback    JSONB,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_reviews_course_id ON ai_course_reviews(course_id)`);
+
     client.release(); // Always release the client back to the pool
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);
