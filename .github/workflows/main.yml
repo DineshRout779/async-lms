@@ -24,6 +24,25 @@ jobs:
             cd /home/ubuntu/lms-be
             git pull origin staging
             cd backend
+            
+            # Generate .env file automatically
+            echo "PGHOST=${{ secrets.PGHOST }}" > .env
+            echo "PGDATABASE=${{ secrets.PGDATABASE }}" >> .env
+            echo "PGUSER=${{ secrets.PGUSER }}" >> .env
+            echo "PGPASSWORD='${{ secrets.PGPASSWORD }}'" >> .env
+            echo "PGPORT=${{ secrets.PGPORT }}" >> .env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> .env
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
+            echo "AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> .env
+            echo "GOOGLE_AUTH_CLIENT_ID=${{ secrets.GOOGLE_AUTH_CLIENT_ID }}" >> .env
+            echo "GOOGLE_AUTH_CLIENT_SECRET=${{ secrets.GOOGLE_AUTH_CLIENT_SECRET }}" >> .env
+            echo "GOOGLE_CALLBACK_URL=${{ secrets.GOOGLE_CALLBACK_URL }}" >> .env
+            echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
+            echo "CHATGPT_API_KEY=${{ secrets.CHATGPT_API_KEY }}" >> .env
+            echo "PORT=3001" >> .env
+
             npm install
             
             # Restart ONLY the orchestrator process via ecosystem.config.js
@@ -65,6 +84,29 @@ jobs:
             cd /home/ubuntu/lms-be
             git pull origin staging
             cd backend
+
+            # Generate .env file automatically with Dynamic IP Detection
+            PUBLIC_IP=$(curl -s ifconfig.me)
+            echo "WORKER_PORT=4000" > .env
+            echo "WORKER_ID=worker-$(hostname)" >> .env
+            echo "WORKER_URL=http://$PUBLIC_IP:4000" >> .env
+            echo "ORCHESTRATOR_URL=${{ secrets.ORCHESTRATOR_URL }}" >> .env
+            echo "PGHOST=${{ secrets.PGHOST }}" >> .env
+            echo "PGDATABASE=${{ secrets.PGDATABASE }}" >> .env
+            echo "PGUSER=${{ secrets.PGUSER }}" >> .env
+            echo "PGPASSWORD='${{ secrets.PGPASSWORD }}'" >> .env
+            echo "PGPORT=${{ secrets.PGPORT }}" >> .env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> .env
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
+            echo "AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> .env
+            echo "GOOGLE_AUTH_CLIENT_ID=${{ secrets.GOOGLE_AUTH_CLIENT_ID }}" >> .env
+            echo "GOOGLE_AUTH_CLIENT_SECRET=${{ secrets.GOOGLE_AUTH_CLIENT_SECRET }}" >> .env
+            echo "GOOGLE_CALLBACK_URL=${{ secrets.GOOGLE_CALLBACK_URL }}" >> .env
+            echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
+            echo "CHATGPT_API_KEY=${{ secrets.CHATGPT_API_KEY }}" >> .env
+            
             npm install
 
             # Rebuild workspace Docker images only when Dockerfiles change
