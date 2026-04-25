@@ -1,16 +1,11 @@
 name: Deploy
 
 on:
-  push:
-    branches:
-      - staging
+  workflow_dispatch:
 
 jobs:
   # ── Orchestrator → EC2 (t3.small) ─────────────────────────────────────────────
   deploy-orchestrator:
-    if: >
-      contains(github.event.commits[0].modified, 'backend/') ||
-      contains(github.event.commits[0].added,    'backend/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +17,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/lms-be
-            git pull origin staging
+            git pull origin infra-test
             cd backend
             
             # Generate .env file automatically
@@ -50,9 +45,6 @@ jobs:
 
   # ── Workers → 5x EC2 (t3.large) ───────────────────────────────────────────────
   deploy-workers:
-    if: >
-      contains(github.event.commits[0].modified, 'backend/') ||
-      contains(github.event.commits[0].added,    'backend/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +74,7 @@ jobs:
             fi
 
             cd /home/ubuntu/lms-be
-            git pull origin staging
+            git pull origin infra-test
             cd backend
 
             # Generate .env file automatically with Dynamic IP Detection
