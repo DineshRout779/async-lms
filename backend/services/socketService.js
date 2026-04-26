@@ -87,6 +87,10 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
   try {
     socket.workspace = { userId, projectId };
     const key = `${userId}:${projectId}`;
+    
+    // Synchronously occupy the slot to prevent concurrency race conditions
+    lastActivity.set(key, Date.now());
+    
     socket.join(`ws:${key}`);
 
     const knownPorts = activePorts.get(key);
@@ -116,6 +120,11 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
   } catch (error) {
     console.error('[workspace:start]', error);
     socket.emit('workspace:error', error.message);
+    
+    // Free the slot if startup failed so it doesn't leak capacity
+    const key = `${userId}:${projectId}`;
+    lastActivity.delete(key);
+    
     // Release the slot so the queue can advance
     promoteFromQueue();
   }

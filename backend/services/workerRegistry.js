@@ -54,17 +54,34 @@ function assignWorker(userId, projectId) {
   // Pick the least-loaded worker that still has capacity
   let bestId = null;
   let bestLoad = Infinity;
+  
+  // Track the absolute least loaded worker for queue overflow
+  let overflowId = null;
+  let overflowLoad = Infinity;
 
   for (const [id, w] of workers.entries()) {
-    if (w.activeCount >= w.capacity) continue;
     const load = w.activeCount / w.capacity;
+    
+    // Track for overflow queueing
+    if (load < overflowLoad) {
+      overflowLoad = load;
+      overflowId = id;
+    }
+
+    if (w.activeCount >= w.capacity) continue;
+    
     if (load < bestLoad) {
       bestLoad = load;
       bestId = id;
     }
   }
 
-  if (!bestId) return null; // all workers full
+  // If all workers are full, assign to the absolute least-loaded worker 
+  // so the user gets put into its local queue gracefully.
+  if (!bestId) {
+    if (!overflowId) return null;
+    bestId = overflowId;
+  }
 
   const w = workers.get(bestId);
   w.activeCount++;
