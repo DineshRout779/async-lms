@@ -6,6 +6,9 @@ on:
 jobs:
   # ── Orchestrator → EC2 (t3.small) ─────────────────────────────────────────────
   deploy-orchestrator:
+    if: >
+      contains(github.event.commits[0].modified, 'backend/') ||
+      contains(github.event.commits[0].added,    'backend/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +20,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/lms-be
-            git pull origin infra-test
+            git fetch origin
+            git checkout infra-test
+            git reset --hard origin/infra-test
             cd backend
             
             # Generate .env file automatically
@@ -78,7 +83,9 @@ jobs:
             fi
 
             cd /home/ubuntu/lms-be
-            git pull origin infra-test
+            git fetch origin
+            git checkout infra-test
+            git reset --hard origin/infra-test
             cd backend
 
             # Generate .env file automatically with Dynamic IP Detection
