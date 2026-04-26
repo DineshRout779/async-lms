@@ -2,14 +2,29 @@ name: Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_orchestrator:
+        description: 'Deploy Orchestrator'
+        required: true
+        type: boolean
+        default: true
+      deploy_workers:
+        description: 'Deploy Workers'
+        required: true
+        type: boolean
+        default: true
+      deploy_frontend:
+        description: 'Deploy Frontend'
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   # ── Orchestrator → EC2 (t3.small) ─────────────────────────────────────────────
   deploy-orchestrator:
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.commits[0].modified, 'backend/') ||
-      contains(github.event.commits[0].added,    'backend/')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_orchestrator == 'true') ||
+      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'backend/') || contains(github.event.commits[0].added, 'backend/')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +70,9 @@ jobs:
 
   # ── Workers → 5x EC2 (t3.large) ───────────────────────────────────────────────
   deploy-workers:
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_workers == 'true') ||
+      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'backend/') || contains(github.event.commits[0].added, 'backend/')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,9 +150,8 @@ jobs:
   # ── Frontend → S3 + CloudFront ───────────────────────────────────────────────
   deploy-frontend:
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.commits[0].modified, 'frontend/') ||
-      contains(github.event.commits[0].added,    'frontend/')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == 'true') ||
+      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'frontend/') || contains(github.event.commits[0].added, 'frontend/')))
     runs-on: ubuntu-latest
 
     steps:
