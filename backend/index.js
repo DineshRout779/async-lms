@@ -87,10 +87,22 @@ app.use((req, res) => {
 });
 
 
+const { Server } = require('socket.io');
+
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+io.on('connection', (socket) => {
+  // Minimal socket handler for frontend notifications/collaboration
+  socket.on('disconnect', () => {});
+});
 
 server.listen(3001, () => {
   const ct = new Date().toLocaleTimeString();
-  console.log('Backend running on http://localhost:3001', ct);
+  console.log('Backend (Orchestrator) running on http://localhost:3001', ct);
 });
-
 

@@ -506,16 +506,24 @@ const CodeEditor = (): JSX.Element => {
       // ── Docker path — check cancelled before setting up persistent state ──
       if (cancelled) return;
 
+      // ── Secure Proxy Routing for Worker Nodes ──
       const { workerUrl } = envData;
       const targetUrl = workerUrl ?? import.meta.env.VITE_API_URL;
 
       if (workerUrl && workerUrl !== import.meta.env.VITE_API_URL) {
+        const workerIp = new URL(workerUrl).hostname;
+        const secureApiUrl = import.meta.env.VITE_API_URL; // https://codeguru-api...
+
         socketRef.current?.disconnect();
-        const workerSocket = io(workerUrl, {
+        
+        // Connect to Orchestrator, but tell it to proxy the socket to the worker IP
+        const workerSocket = io(secureApiUrl, {
+          path: `/worker/${workerIp}/socket.io`,
           reconnection: true,
           reconnectionDelay: 2000,
           reconnectionAttempts: 5,
         });
+        
         socketRef.current = workerSocket;
         terminalInputRef.current = (data) => workerSocket.emit('terminal:input', data);
         terminalResizeRef.current = (cols, rows) => workerSocket.emit('terminal:resize', { cols, rows });
@@ -548,15 +556,25 @@ const CodeEditor = (): JSX.Element => {
           if (fsRefreshTimerRef.current) clearTimeout(fsRefreshTimerRef.current);
           fsRefreshTimerRef.current = setTimeout(() => loadTree(res.data.projectId), 500);
         });
-      }
 
-      const client = axios.create({ baseURL: `${targetUrl}/api/v1` });
-      client.interceptors.request.use((config) => {
-        const t = localStorage.getItem('token');
-        if (t) config.headers.Authorization = `Bearer ${t}`;
-        return config;
-      });
-      workerClientRef.current = client;
+        // Proxy all HTTP requests to the worker securely through Nginx
+        const client = axios.create({ baseURL: `${secureApiUrl}/worker/${workerIp}/api/v1` });
+        client.interceptors.request.use((config) => {
+          const t = localStorage.getItem('token');
+          if (t) config.headers.Authorization = `Bearer ${t}`;
+          return config;
+        });
+        workerClientRef.current = client;
+      } else {
+        // Local mode fallback
+        const client = axios.create({ baseURL: `${targetUrl}/api/v1` });
+        client.interceptors.request.use((config) => {
+          const t = localStorage.getItem('token');
+          if (t) config.headers.Authorization = `Bearer ${t}`;
+          return config;
+        });
+        workerClientRef.current = client;
+      }
 
       setWsStatus('starting');
       terminalRef.current?.clear();
