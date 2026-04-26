@@ -7,7 +7,9 @@ RUN apk update && apk add --no-cache \
     bash \
     build-base
 # Create playground user (Alpine uses adduser)
-RUN adduser -D -s /bin/bash playground \
+RUN deluser ubuntu || true \
+    && deluser node || true \
+    && adduser -u 1000 -D -s /bin/bash playground \
     && echo "playground ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 USER playground
 WORKDIR /workspace
