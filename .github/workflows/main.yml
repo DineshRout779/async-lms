@@ -119,14 +119,11 @@ jobs:
 
             npm install
 
-            # Rebuild workspace Docker images only when Dockerfiles change
-            if git diff HEAD~1 --name-only 2>/dev/null | grep -q '^backend/docker/'; then
-              echo "Dockerfiles changed — rebuilding workspace images..."
-              docker build -t workspace-node   ./docker/workspace-node
-              docker build -t workspace-python ./docker/workspace-python
-              docker build -t workspace-java   ./docker/workspace-java
-              docker build -t workspace-sql    ./docker/workspace-sql
-            fi
+            echo "Rebuilding workspace images (uses cache if unchanged)..."
+            docker build -t workspace-node   ./docker/workspace-node
+            docker build -t workspace-python ./docker/workspace-python
+            docker build -t workspace-java   ./docker/workspace-java
+            docker build -t workspace-sql    ./docker/workspace-sql
 
             # Restart ONLY the worker process via ecosystem.config.js
             pm2 start ecosystem.config.js --only worker || pm2 restart worker --update-env
