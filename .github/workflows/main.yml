@@ -144,6 +144,9 @@ jobs:
             docker build -t workspace-java   ./docker/workspace-java
             docker build -t workspace-sql    ./docker/workspace-sql
 
+            # Fix permissions of existing workspaces that Docker accidentally created as root
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/lms-be/backend/workspaces || true
+
             # Restart ONLY the worker process via ecosystem.config.js
             pm2 start ecosystem.config.js --only worker || pm2 restart worker --update-env
 

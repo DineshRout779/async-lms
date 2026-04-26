@@ -92,6 +92,7 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
   const name = `workspace-${userId}-${projectId}`;
 
   if (!(await containerExistsAsync(name))) {
+    const fs = require('fs');
     const workspacePath = path.resolve(
       __dirname,
       '..',
@@ -99,6 +100,11 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
       String(userId),
       String(projectId),
     );
+    
+    // CRITICAL: Create the directory as the ubuntu user BEFORE Docker tries to mount it.
+    // If we let Docker mount a non-existent host path, Docker creates it as root,
+    // which prevents the playground container user from writing to it!
+    fs.mkdirSync(workspacePath, { recursive: true });
 
     const limits = PROFILE_LIMITS[profile] ?? PROFILE_LIMITS.default;
     const swap = limits.swap || limits.memory;
