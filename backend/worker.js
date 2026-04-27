@@ -138,6 +138,11 @@ server.listen(WORKER_PORT, () => {
   } else {
     console.log('[worker] ORCHESTRATOR_URL/WORKER_URL not set — standalone mode (no registration)');
   }
+
+  // Warm up exercise runner pool after worker binds to port.
+  // This shifts all pre-warmed pool containers to the Compute Instances.
+  const { initPools } = require('./services/runnerService');
+  initPools().catch(err => console.error('[pool] Failed to initialize runner pools:', err));
 });
 
 async function registerWithOrchestrator(retries = 0) {

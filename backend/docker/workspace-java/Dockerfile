@@ -1,10 +1,13 @@
-FROM ubuntu:22.04
+FROM eclipse-temurin:21-jdk-alpine
 
-RUN apt-get update && apt-get install -y \
-    openjdk-21-jdk git sudo nano vim bash \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk update && apk add --no-cache \
+    git \
+    sudo \
+    nano \
+    vim \
+    bash
 
-RUN useradd -ms /bin/bash playground \
+RUN adduser -D -s /bin/bash playground \
     && echo "playground ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER playground

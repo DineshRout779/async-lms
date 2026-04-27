@@ -274,7 +274,6 @@ module.exports = function setupSocket(io) {
     socket.on('terminal:input', (data) => {
       const term = terminals.get(socket.id);
       if (term) term.write(data);
-
       if (socket.workspace) {
         const key = `${socket.workspace.userId}:${socket.workspace.projectId}`;
         lastActivity.set(key, Date.now());

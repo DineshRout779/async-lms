@@ -14,7 +14,7 @@
     "image": "workspace-node",
     "language": "javascript",
     "entry": "src/App.jsx",
-    "run": "npm run dev",
+    "run": "npm install && npm run dev -- --host",
     "template": []
   },
   "python": {

@@ -79,42 +79,42 @@ exports.runEvaluation = async (req, res) => {
       throw new Error("Rubric missing");
     }
     // evaluator payload
-   const getPayload = (type, submissions, assignment) => {
-  const baseSubmissions = submissions.map((s) => ({
-    submissionId: s.submission_id,
-    student: s.student_name,
-    submissionLink: s.submission_link, 
-  }));
+    const getPayload = (type, submissions, assignment) => {
+      const baseSubmissions = submissions.map((s) => ({
+        submissionId: s.submission_id,
+        student: s.student_name,
+        submissionLink: s.submission_link, 
+      }));
 
-  switch (type) {
-    case "JS":
-      return {
-        submissions: baseSubmissions,
-        testCases: assignment.test_cases, // ✅ JSON
-      };
+      switch (type) {
+        case "JS":
+          return {
+            submissions: baseSubmissions,
+            testCases: assignment.test_cases, // ✅ JSON
+          };
 
-    case "REACT":
-      return {
-        submissions: baseSubmissions,
-        rubric: assignment.rubric, // ✅ JSON
-      };
+        case "REACT":
+          return {
+            submissions: baseSubmissions,
+            rubric: assignment.rubric, // ✅ JSON
+          };
 
-    default:
-      throw new Error(`Unsupported evaluator type: ${type}`);
-  }
-};
+        default:
+          throw new Error(`Unsupported evaluator type: ${type}`);
+      }
+    };
 
-//creating a  payload
-const payload = getPayload(evaluatorType, submissions, assignment);
-console.log("this is payload", payload)
+    //creating a  payload
+    const payload = getPayload(evaluatorType, submissions, assignment);
+    console.log("this is payload", payload)
     
-// Call external evaluator api
-const evaluatorUrl = EVALUATOR_APIS[evaluatorType] || "JS";
-console.log("this is evaluationUrl", evaluatorUrl)
+    // Call external evaluator api
+    const evaluatorUrl = EVALUATOR_APIS[evaluatorType] || "JS";
+    console.log("this is evaluationUrl", evaluatorUrl)
 
-if (!evaluatorUrl) {
-  throw new Error(`No evaluator found for type: ${evaluatorType}`);
-}
+    if (!evaluatorUrl) {
+      throw new Error(`No evaluator found for type: ${evaluatorType}`);
+    }
     //api call
     const response = await axios.post( evaluatorUrl, payload );
     console.log("this is response", response);

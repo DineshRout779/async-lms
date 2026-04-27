@@ -1,10 +1,14 @@
-FROM ubuntu:22.04
+FROM alpine:3.19
 
-RUN apt-get update && apt-get install -y \
-    postgresql-client sqlite3 git sudo nano vim bash \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk update && apk add --no-cache \
+    postgresql15-client \
+    git \
+    sudo \
+    nano \
+    vim \
+    bash
 
-RUN useradd -ms /bin/bash playground \
+RUN adduser -D -s /bin/bash playground \
     && echo "playground ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER playground
