@@ -59,7 +59,7 @@ function proxyDirect(ip, port, req, res, proxyBase) {
         const chunks = [];
         upstreamRes.on('data', (c) => chunks.push(c));
         upstreamRes.on('end', () => {
-          sendProxied(res, upstreamRes.statusCode, headers, Buffer.concat(chunks), isHtml, proxyBase);
+          sendProxied(res, upstreamRes.statusCode, headers, Buffer.concat(chunks), isText, proxyBase);
           resolve();
         });
       }
@@ -98,8 +98,8 @@ function proxyCurl(containerName, port, req, res, proxyBase) {
         const k = line.slice(0, ci).toLowerCase();
         if (!DROP_HEADERS.has(k)) headers[k] = line.slice(ci + 2);
       }
-      const isHtml = (headers['content-type'] || '').includes('text/html');
-      sendProxied(res, status, headers, Buffer.from(raw.slice(sep + sepLen), 'binary'), isHtml, proxyBase);
+      const isText = TEXT_TYPES.some((t) => (headers['content-type'] || '').includes(t));
+      sendProxied(res, status, headers, Buffer.from(raw.slice(sep + sepLen), 'binary'), isText, proxyBase);
       resolve();
     });
     child.on('error', reject);
