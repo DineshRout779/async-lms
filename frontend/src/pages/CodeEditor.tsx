@@ -911,13 +911,17 @@ const CodeEditor = (): JSX.Element => {
 
   const active = tabs.find((t) => t.path === activeTab);
   const activePortInfo = ports.find((p) => p.port === activePort);
-  const previewBase = env?.workerUrl ?? import.meta.env.VITE_API_URL;
+  let previewBaseUrl = import.meta.env.VITE_API_URL;
+  if (env?.workerUrl && env.workerUrl !== import.meta.env.VITE_API_URL) {
+    const workerIp = new URL(env.workerUrl).hostname;
+    previewBaseUrl = `${import.meta.env.VITE_API_URL}/worker/${workerIp}`;
+  }
 
   // WC provides a direct URL from server-ready; Docker uses the proxy route
   const iframeSrc = env?.engine === 'webcontainer'
     ? (wcPreviewUrl ?? null)
     : (env && activePort
-        ? (activePortInfo?.url ?? `${previewBase}/api/v1/preview/${user!.id}/${env.projectId}/${activePort}`)
+        ? (activePortInfo?.url ?? `${previewBaseUrl}/api/v1/preview/${user!.id}/${env.projectId}/${activePort}`)
         : null);
 
   const togglePreview = () => {
