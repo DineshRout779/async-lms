@@ -110,7 +110,20 @@ function proxyCurl(containerName, port, req, res, proxyBase) {
 exports.previewController = async (req, res) => {
   const { userId, projectId, port } = req.params;
   const containerName = `workspace-${userId}-${projectId}`;
-  const proxyBase = `/api/v1/preview/${userId}/${projectId}/${port}`;
+  
+  let prefix = '';
+  if (process.env.WORKER_URL) {
+    try {
+      const ip = new URL(process.env.WORKER_URL).hostname;
+      // If the orchestrator is in front, all absolute paths must be prefixed
+      // with /worker/<ip> so the orchestrator knows to route them back to this worker!
+      prefix = `/worker/${ip}`;
+    } catch (e) {
+      console.error('[preview] invalid WORKER_URL:', e.message);
+    }
+  }
+  
+  const proxyBase = `${prefix}/api/v1/preview/${userId}/${projectId}/${port}`;
 
   // 1. Port proxy running → use localhost (fast, works on Windows + Linux)
   if (hasPortProxy(containerName, parseInt(port, 10))) {
