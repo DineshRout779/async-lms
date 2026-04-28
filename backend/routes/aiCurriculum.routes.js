@@ -8,9 +8,27 @@ const ctrl = require('../controllers/aiCurriculum.controller');
 // All routes require auth
 router.use(verifyToken);
 
-// AI generation helpers
+// AI generation helpers (specific paths first, before /:id param routes)
 router.post('/extract-skills', isAdminOrFacilitator, ctrl.extractSkills);
 router.post('/generate', isAdminOrFacilitator, ctrl.generate);
+
+// Create sub-resources
+router.post('/modules', isAdminOrFacilitator, ctrl.addModule);
+router.post('/topics', isAdminOrFacilitator, ctrl.addTopic);
+router.post('/lessons', isAdminOrFacilitator, ctrl.addLesson);
+
+// Inline edits (must come before /:id to avoid param capture)
+router.patch('/modules/:id', isAdminOrFacilitator, ctrl.updateModule);
+router.delete('/modules/:id', isAdminOrFacilitator, ctrl.deleteModule);
+router.post('/modules/:id/duplicate', isAdminOrFacilitator, ctrl.duplicateModule);
+router.patch('/topics/:id', isAdminOrFacilitator, ctrl.updateTopic);
+router.delete('/topics/:id', isAdminOrFacilitator, ctrl.deleteTopic);
+router.post('/topics/:id/duplicate', isAdminOrFacilitator, ctrl.duplicateTopic);
+router.patch('/lessons/:id', isAdminOrFacilitator, ctrl.updateLesson);
+router.delete('/lessons/:id', isAdminOrFacilitator, ctrl.deleteLesson);
+router.post('/lessons/:id/duplicate', isAdminOrFacilitator, ctrl.duplicateLesson);
+router.post('/lessons/:id/regenerate', isAdminOrFacilitator, ctrl.regenerateLesson);
+router.put('/:courseId/reorder-topics', isAdminOrFacilitator, ctrl.reorderTopics);
 
 // Course CRUD
 router.get('/', isAdminOrFacilitator, ctrl.listCourses);
@@ -23,14 +41,6 @@ router.delete('/:id', isAdminOrFacilitator, ctrl.deleteCourse);
 router.put('/:id/submit', isAdminOrFacilitator, ctrl.submitForReview);
 router.put('/:id/review', isAdmin, ctrl.reviewCourse);
 router.put('/:id/publish', isAdmin, ctrl.publishCourse);
-
-// Inline edits
-router.patch('/modules/:id', isAdminOrFacilitator, ctrl.updateModule);
-router.patch('/topics/:id', isAdminOrFacilitator, ctrl.updateTopic);
-router.patch('/lessons/:id', isAdminOrFacilitator, ctrl.updateLesson);
-router.post('/lessons/:id/regenerate', isAdminOrFacilitator, ctrl.regenerateLesson);
-
-// Reorder
 router.put('/:id/reorder-modules', isAdminOrFacilitator, ctrl.reorderModules);
 
 module.exports = router;

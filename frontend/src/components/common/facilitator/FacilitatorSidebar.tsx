@@ -38,7 +38,11 @@ const menuItems = [
     icon: TrendingUp,
     path: '/dashboard/facilitator/student-growth',
   },
-  { name: 'AI Curriculum', icon: Sparkles, path: '/dashboard/facilitator/ai-curriculum' },
+  {
+    name: 'AI Curriculum',
+    icon: Sparkles,
+    path: '/dashboard/facilitator/ai-curriculum',
+  },
   { name: 'Reports', icon: FileText, path: '/dashboard/facilitator/reports' },
   { name: 'Settings', icon: Settings, path: '/dashboard/facilitator/settings' },
 ];
@@ -69,7 +73,7 @@ export default function FacilitatorSidebar({
       </div>
 
       {/* Nav Items */}
-      <nav className='flex-1 py-4 px-3 space-y-1 overflow-y-auto uppercase'>
+      <nav className='flex-1 py-4 px-3 space-y-1 overflow-y-auto'>
         {menuItems.map((item) => (
           <NavLink
             key={item.name}
@@ -95,7 +99,7 @@ export default function FacilitatorSidebar({
                   )}
                 />
                 {isOpen && (
-                  <span className='font-medium text-[12px] tracking-wider'>
+                  <span className='font-medium text-[14px] tracking-wider'>
                     {item.name}
                   </span>
                 )}

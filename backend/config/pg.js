@@ -181,6 +181,11 @@ const pool = new Pool({
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_lessons_topic_id ON ai_course_lessons(topic_id)`);
+    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS lesson_type TEXT NOT NULL DEFAULT 'video'`);
+    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS duration_mins INTEGER NOT NULL DEFAULT 15`);
+    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS video_url TEXT`);
+    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`);
+    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS exercise_data JSONB`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_course_reviews (
@@ -193,6 +198,11 @@ const pool = new Pool({
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_reviews_course_id ON ai_course_reviews(course_id)`);
+    await client.query(`ALTER TABLE ai_course_modules ADD COLUMN IF NOT EXISTS capstone_project JSONB`);
+    await client.query(`ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS assignment JSONB`);
+    await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS capstone_project JSONB`);
+    await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS audience TEXT[] DEFAULT '{}'`);
+    await client.query(`ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`);
 
     client.release(); // Always release the client back to the pool
   } catch (error) {
