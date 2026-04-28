@@ -1,30 +1,44 @@
 name: Deploy
 
 on:
-  push:
-    branches:
-      - staging
   workflow_dispatch:
+    inputs:
+      deploy_orchestrator:
+        description: 'Deploy Orchestrator'
+        required: true
+        type: boolean
+        default: true
+      deploy_workers:
+        description: 'Deploy Workers'
+        required: true
+        type: boolean
+        default: true
+      deploy_frontend:
+        description: 'Deploy Frontend'
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   # ── Orchestrator → EC2 (t3.small) ─────────────────────────────────────────────
   deploy-orchestrator:
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.commits[0].modified, 'backend/') ||
-      contains(github.event.commits[0].added,    'backend/')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_orchestrator == 'true') ||
+      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'backend/') || contains(github.event.commits[0].added, 'backend/')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Deploy Orchestrator to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.ORCHESTRATOR_IP }}
+          host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/lms-be
-            git pull origin staging
+            git fetch origin
+            git checkout infra-test
+            git reset --hard origin/infra-test
             cd backend
             
             # Generate .env file automatically
@@ -38,10 +52,14 @@ jobs:
             echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
             echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
             echo "AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> .env
+            echo "S3_WORKSPACE_BUCKET=${{ secrets.S3_WORKSPACE_BUCKET }}" >> .env
             echo "GOOGLE_AUTH_CLIENT_ID=${{ secrets.GOOGLE_AUTH_CLIENT_ID }}" >> .env
             echo "GOOGLE_AUTH_CLIENT_SECRET=${{ secrets.GOOGLE_AUTH_CLIENT_SECRET }}" >> .env
             echo "GOOGLE_CALLBACK_URL=${{ secrets.GOOGLE_CALLBACK_URL }}" >> .env
             echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
+            echo "ORCHESTRATOR_URL=${{ secrets.ORCHESTRATOR_URL }}" >> .env
+            echo "WORKER_CAPACITY=${{ secrets.WORKER_CAPACITY }}" >> .env
+            echo "MAX_WORKSPACES=${{ secrets.MAX_WORKSPACES }}" >> .env
             echo "CHATGPT_API_KEY=${{ secrets.CHATGPT_API_KEY }}" >> .env
             echo "PORT=3001" >> .env
 
@@ -53,9 +71,8 @@ jobs:
   # ── Workers → 5x EC2 (t3.large) ───────────────────────────────────────────────
   deploy-workers:
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.commits[0].modified, 'backend/') ||
-      contains(github.event.commits[0].added,    'backend/')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_workers == 'true') ||
+      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'backend/') || contains(github.event.commits[0].added, 'backend/')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +85,7 @@ jobs:
           # Example Secret: 10.0.0.1,10.0.0.2,10.0.0.3
           host: ${{ secrets.WORKER_IPS }}
           username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ secrets.WORKER_SSH_KEY }}
           script: |
             # Self-healing Swap Setup (Ensures 10GB swap exists for Docker stability)
             if [ ! -f /swapfile ]; then
@@ -85,7 +102,9 @@ jobs:
             fi
 
             cd /home/ubuntu/lms-be
-            git pull origin staging
+            git fetch origin
+            git checkout infra-test
+            git reset --hard origin/infra-test
             cd backend
 
             # Generate .env file automatically with Dynamic IP Detection
@@ -109,17 +128,24 @@ jobs:
             echo "GOOGLE_CALLBACK_URL=${{ secrets.GOOGLE_CALLBACK_URL }}" >> .env
             echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
             echo "CHATGPT_API_KEY=${{ secrets.CHATGPT_API_KEY }}" >> .env
+            echo "WORKER_CAPACITY=${{ secrets.WORKER_CAPACITY }}" >> .env
+            echo "MAX_WORKSPACES=${{ secrets.MAX_WORKSPACES }}" >> .env
+            echo "S3_WORKSPACE_BUCKET=${{ secrets.S3_WORKSPACE_BUCKET }}" >> .env
             
+            # Install build tools for native modules like node-pty
+            sudo apt-get update -y
+            sudo apt-get install -y build-essential python3
+
             npm install
 
-            # Rebuild workspace Docker images only when Dockerfiles change
-            if git diff HEAD~1 --name-only 2>/dev/null | grep -q '^backend/docker/'; then
-              echo "Dockerfiles changed — rebuilding workspace images..."
-              docker build -t workspace-node   ./docker/workspace-node
-              docker build -t workspace-python ./docker/workspace-python
-              docker build -t workspace-java   ./docker/workspace-java
-              docker build -t workspace-sql    ./docker/workspace-sql
-            fi
+            echo "Rebuilding workspace images (uses cache if unchanged)..."
+            docker build -t workspace-node   ./docker/workspace-node
+            docker build -t workspace-python ./docker/workspace-python
+            docker build -t workspace-java   ./docker/workspace-java
+            docker build -t workspace-sql    ./docker/workspace-sql
+
+            # Fix permissions of existing workspaces that Docker accidentally created as root
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/lms-be/backend/workspaces || true
 
             # Restart ONLY the worker process via ecosystem.config.js
             pm2 start ecosystem.config.js --only worker || pm2 restart worker --update-env
@@ -127,9 +153,8 @@ jobs:
   # ── Frontend → S3 + CloudFront ───────────────────────────────────────────────
   deploy-frontend:
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.commits[0].modified, 'frontend/') ||
-      contains(github.event.commits[0].added,    'frontend/')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == 'true') ||
+      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'frontend/') || contains(github.event.commits[0].added, 'frontend/')))
     runs-on: ubuntu-latest
 
     steps:
