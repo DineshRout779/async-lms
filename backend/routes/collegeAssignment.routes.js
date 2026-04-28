@@ -19,10 +19,16 @@ const {
   submitCollegeAssignment,
   getFilteredAssignments,
 } = require('../controllers/collegeAssignment.controller');
+const isAdminOrFacilitator = require('../middlewares/isAdminOrFacilitator');
 
 // Admin / Facilitator: manage assignments (MUST COME BEFORE /:id)
 router.get('/manage', verifyToken, isFacilitator, manageAssignments);
-router.get('/evaluation-filters', verifyToken, isFacilitator, getFilteredAssignments);
+router.get(
+  '/evaluation-filters',
+  verifyToken,
+  isFacilitator,
+  getFilteredAssignments,
+);
 
 // Admin / Facilitator: upload instruction document to S3
 router.post(
@@ -35,6 +41,12 @@ router.post(
 
 // Student: fetch and submit assignments
 router.get('/', verifyToken, isStudent, getMyCollegeAssignments);
+router.get(
+  '/facilitator',
+  verifyToken,
+  isAdminOrFacilitator,
+  manageAssignments,
+);
 router.get('/:id', verifyToken, isStudent, getCollegeAssignmentById);
 router.post(
   '/:id/submit',

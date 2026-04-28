@@ -125,6 +125,9 @@ const AiCurriculumEditor = lazy(
 const AiCurriculumReview = lazy(
   () => import('@/pages/dashboard/shared/AiCurriculumReview'),
 );
+const AiCurriculumPreview = lazy(
+  () => import('@/pages/dashboard/shared/AiCurriculumPreview'),
+);
 
 // ---------- Router ----------
 
@@ -212,6 +215,7 @@ const router = createBrowserRouter([
               { path: 'ai-curriculum', element: <AiCurriculumList /> },
               { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
               { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
+              { path: 'ai-curriculum/:id/preview', element: <AiCurriculumPreview /> },
               { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
               { path: 'analytics', element: <FacilitatorAnalytics /> },
               { path: 'student-growth', element: <FacilitatorStudentGrowth /> },
@@ -247,6 +251,7 @@ const router = createBrowserRouter([
               { path: 'ai-curriculum', element: <AiCurriculumList /> },
               { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
               { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
+              { path: 'ai-curriculum/:id/preview', element: <AiCurriculumPreview /> },
               { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
             ],
           },

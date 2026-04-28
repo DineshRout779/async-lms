@@ -222,3 +222,29 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+exports.getBatches = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const colRes = await pool.query(
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      [facilitatorId],
+    );
+    const collegeIds = colRes.rows.map((r) => r.college_id);
+    if (collegeIds.length === 0) return res.json({ success: true, data: [] });
+
+    const { rows } = await pool.query(
+      `SELECT DISTINCT sp.year AS id, sp.year::text AS name
+       FROM student_profiles sp
+       WHERE sp.college_id = ANY($1::uuid[])
+         AND sp.year IS NOT NULL
+       ORDER BY sp.year DESC`,
+      [collegeIds],
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('getBatches error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
