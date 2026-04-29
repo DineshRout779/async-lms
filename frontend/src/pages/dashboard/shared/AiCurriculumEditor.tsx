@@ -155,33 +155,6 @@ export default function AiCurriculumEditor() {
     [],
   );
 
-  const handleDuplicateModule = useCallback(
-    (dup: AiModule) => setModules((ms) => [...ms, dup]),
-    [],
-  );
-
-  const handleDuplicateTopic = useCallback(
-    (moduleId: string, dup: AiTopic) =>
-      setModules((ms) =>
-        ms.map((m) =>
-          m.id === moduleId ? { ...m, topics: [...m.topics, dup] } : m,
-        ),
-      ),
-    [],
-  );
-
-  const handleDuplicateLesson = useCallback(
-    (topicId: string, dup: AiLesson) =>
-      setModules((ms) =>
-        ms.map((m) => ({
-          ...m,
-          topics: m.topics.map((t) =>
-            t.id === topicId ? { ...t, lessons: [...t.lessons, dup] } : t,
-          ),
-        })),
-      ),
-    [],
-  );
 
   const handleDeleteModule = useCallback(
     (moduleId: string) => {
@@ -682,11 +655,8 @@ export default function AiCurriculumEditor() {
                 onDeleteLesson={handleDeleteLesson}
                 onDeleteTopic={handleDeleteTopic}
                 onDeleteModule={handleDeleteModule}
-                onDuplicateModule={handleDuplicateModule}
-                onDuplicateTopic={handleDuplicateTopic}
                 onAddTopic={handleAddTopic}
                 onAddLesson={handleAddLesson}
-                onDuplicateLesson={handleDuplicateLesson}
                 onRenameLesson={handleRenameLesson}
                 onRenameTopic={handleRenameTopic}
                 onRenameModule={handleRenameModule}

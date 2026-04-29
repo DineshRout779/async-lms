@@ -1,29 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, Pencil, X } from 'lucide-react';
+import { Check, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// ─── Inline title (double-click to rename) ────────────────────────────────────
+// ─── Inline title (pencil-button-controlled rename) ───────────────────────────
 
 export function InlineTitle({
   value,
   onSave,
   className = '',
   disabled = false,
+  editing = false,
+  onStopEditing,
 }: {
   value: string;
   onSave: (v: string) => Promise<void>;
   className?: string;
   disabled?: boolean;
+  editing?: boolean;
+  onStopEditing?: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+  useEffect(() => { if (editing) { setDraft(value); ref.current?.focus(); } }, [editing]);
 
   const commit = async () => {
-    if (!draft.trim() || draft === value) { setEditing(false); return; }
+    if (!draft.trim() || draft === value) { onStopEditing?.(); return; }
     setSaving(true);
     try {
       await onSave(draft.trim());
@@ -32,11 +35,11 @@ export function InlineTitle({
       setDraft(value);
     } finally {
       setSaving(false);
-      setEditing(false);
+      onStopEditing?.();
     }
   };
 
-  if (editing) {
+  if (editing && !disabled) {
     return (
       <div className='flex items-center gap-1 flex-1 min-w-0'>
         <input
@@ -45,7 +48,7 @@ export function InlineTitle({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') commit();
-            if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+            if (e.key === 'Escape') { setDraft(value); onStopEditing?.(); }
           }}
           onBlur={commit}
           className='flex-1 min-w-0 border border-indigo-300 rounded px-2 py-0.5 text-[13px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white'
@@ -56,13 +59,8 @@ export function InlineTitle({
   }
 
   return (
-    <span
-      className={`${className} group/title flex items-center gap-1 min-w-0`}
-      onDoubleClick={() => { if (!disabled) { setDraft(value); setEditing(true); } }}
-      title={disabled ? undefined : 'Double-click to rename'}
-    >
-      <span className='truncate'>{value}</span>
-      {!disabled && <Pencil className='w-3 h-3 text-slate-300 opacity-0 group-hover/title:opacity-100 shrink-0 transition-opacity' />}
+    <span className={`${className} truncate`}>
+      {value}
     </span>
   );
 }

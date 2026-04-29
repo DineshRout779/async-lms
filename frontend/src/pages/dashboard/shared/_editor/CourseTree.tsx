@@ -3,11 +3,11 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
-  Copy,
   GripVertical,
   ListChecks,
   Loader2,
   MoreHorizontal,
+  Pencil,
   Plus,
   Sparkles,
   Trash2,
@@ -82,7 +82,6 @@ export const LessonItem = memo(function LessonItem({
   canEdit,
   onSelect,
   onDelete,
-  onDuplicate,
   onRename,
 }: {
   lesson: AiLesson;
@@ -90,11 +89,10 @@ export const LessonItem = memo(function LessonItem({
   canEdit: boolean;
   onSelect: () => void;
   onDelete: (id: string) => void;
-  onDuplicate: (lesson: AiLesson) => void;
   onRename: (id: string, title: string) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
-  const [duplicating, setDuplicating] = useState(false);
+  const [renaming, setRenaming] = useState(false);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -109,20 +107,6 @@ export const LessonItem = memo(function LessonItem({
     }
   };
 
-  const handleDuplicate = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDuplicating(true);
-    try {
-      const res = await aiCurriculumApi.duplicateLesson(lesson.id);
-      onDuplicate(res.data.data);
-      toast.success('Subtopic duplicated');
-    } catch {
-      toast.error('Failed to duplicate');
-    } finally {
-      setDuplicating(false);
-    }
-  };
-
   const { Icon, color } = getLessonMeta();
 
   return (
@@ -133,7 +117,7 @@ export const LessonItem = memo(function LessonItem({
       }`}
     >
       {canEdit && (
-        <GripVertical className='w-3.5 h-3.5 text-slate-300 shrink-0 opacity-0 group-hover:opacity-100 cursor-grab' />
+        <GripVertical className='w-3.5 h-3.5 text-slate-300 shrink-0 cursor-grab' />
       )}
       <Icon
         className={`w-4 h-4 shrink-0 ${selected ? 'text-indigo-500' : color}`}
@@ -141,6 +125,8 @@ export const LessonItem = memo(function LessonItem({
       <InlineTitle
         value={lesson.title || 'New Lesson'}
         disabled={!canEdit}
+        editing={renaming}
+        onStopEditing={() => setRenaming(false)}
         className={`flex-1 text-[13px] min-w-0 ${selected ? 'text-indigo-700 font-semibold' : 'text-slate-700'}`}
         onSave={async (v) => {
           await aiCurriculumApi.updateLesson(lesson.id, { title: v });
@@ -148,17 +134,12 @@ export const LessonItem = memo(function LessonItem({
         }}
       />
       {canEdit && (
-        <div className='opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity'>
+        <div className='flex items-center gap-0.5 shrink-0'>
           <button
-            onClick={handleDuplicate}
-            disabled={duplicating}
+            onClick={(e) => { e.stopPropagation(); setRenaming(true); }}
             className='p-1 text-slate-300 hover:text-indigo-500 transition-colors'
           >
-            {duplicating ? (
-              <Loader2 className='w-3 h-3 animate-spin' />
-            ) : (
-              <Copy className='w-3 h-3' />
-            )}
+            <Pencil className='w-3 h-3' />
           </button>
           <button
             onClick={handleDelete}
@@ -186,9 +167,7 @@ export function TopicItem({
   onSelectLesson,
   onDeleteLesson,
   onDeleteTopic,
-  onDuplicateTopic,
   onAddLesson,
-  onDuplicateLesson,
   onRenameLesson,
   onRename,
   onUpdateTopic,
@@ -203,9 +182,7 @@ export function TopicItem({
   onSelectLesson: (l: AiLesson) => void;
   onDeleteLesson: (topicId: string, lessonId: string) => void;
   onDeleteTopic: (id: string) => void;
-  onDuplicateTopic: (topic: AiTopic) => void;
   onAddLesson: (topicId: string, lesson: AiLesson) => void;
-  onDuplicateLesson: (topicId: string, lesson: AiLesson) => void;
   onRenameLesson: (lessonId: string, title: string) => void;
   onRename: (topicId: string, title: string) => void;
   onUpdateTopic: (topicId: string, data: Partial<AiTopic>) => void;
@@ -215,7 +192,7 @@ export function TopicItem({
   dragHandlers?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const [deleting, setDeleting] = useState(false);
-  const [duplicating, setDuplicating] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [addingLesson, setAddingLesson] = useState(false);
   const [savingLesson, setSavingLesson] = useState(false);
   const [generatingSubtopics, setGeneratingSubtopics] = useState(false);
@@ -234,20 +211,6 @@ export function TopicItem({
     } catch {
       toast.error('Failed to delete unit');
       setDeleting(false);
-    }
-  };
-
-  const handleDuplicateTopic = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDuplicating(true);
-    try {
-      const res = await aiCurriculumApi.duplicateTopic(topic.id);
-      onDuplicateTopic(res.data.data);
-      toast.success('Unit duplicated');
-    } catch {
-      toast.error('Failed to duplicate');
-    } finally {
-      setDuplicating(false);
     }
   };
 
@@ -313,6 +276,8 @@ export function TopicItem({
           <InlineTitle
             value={topic.title}
             disabled={!canEdit}
+            editing={renaming}
+            onStopEditing={() => setRenaming(false)}
             className='flex-1 text-[12px] font-bold text-slate-600 uppercase tracking-wider min-w-0'
             onSave={async (v) => {
               await aiCurriculumApi.updateTopic(topic.id, { title: v });
@@ -320,7 +285,7 @@ export function TopicItem({
             }}
           />
           {canEdit && (
-            <div className='flex items-center gap-0.5 opacity-0 group-hover/unit:opacity-100 transition-opacity shrink-0'>
+            <div className='flex items-center gap-0.5 shrink-0'>
               {anyGenerating ? (
                 <Loader2 className='w-3.5 h-3.5 animate-spin text-indigo-400' />
               ) : (
@@ -337,15 +302,10 @@ export function TopicItem({
                 />
               )}
               <button
-                onClick={handleDuplicateTopic}
-                disabled={duplicating}
+                onClick={(e) => { e.stopPropagation(); setRenaming(true); }}
                 className='p-1 text-slate-300 hover:text-indigo-500 transition-colors'
               >
-                {duplicating ? (
-                  <Loader2 className='w-3 h-3 animate-spin' />
-                ) : (
-                  <Copy className='w-3 h-3' />
-                )}
+                <Pencil className='w-3 h-3' />
               </button>
               <button
                 onClick={handleDeleteTopic}
@@ -377,7 +337,6 @@ export function TopicItem({
               canEdit={canEdit}
               onSelect={() => onSelectLesson(lesson)}
               onDelete={(lessonId) => onDeleteLesson(topic.id, lessonId)}
-              onDuplicate={(dup) => onDuplicateLesson(topic.id, dup)}
               onRename={onRenameLesson}
             />
           ))}
@@ -516,11 +475,8 @@ export function ModuleItem({
   onDeleteLesson,
   onDeleteTopic,
   onDeleteModule,
-  onDuplicateModule,
-  onDuplicateTopic,
   onAddTopic,
   onAddLesson,
-  onDuplicateLesson,
   onRenameLesson,
   onRenameTopic,
   onRenameModule,
@@ -541,11 +497,8 @@ export function ModuleItem({
   onDeleteLesson: (topicId: string, lessonId: string) => void;
   onDeleteTopic: (moduleId: string, topicId: string) => void;
   onDeleteModule: (id: string) => void;
-  onDuplicateModule: (mod: AiModule) => void;
-  onDuplicateTopic: (moduleId: string, topic: AiTopic) => void;
   onAddTopic: (moduleId: string, topic: AiTopic) => void;
   onAddLesson: (topicId: string, lesson: AiLesson) => void;
-  onDuplicateLesson: (topicId: string, lesson: AiLesson) => void;
   onRenameLesson: (lessonId: string, title: string) => void;
   onRenameTopic: (moduleId: string, topicId: string, title: string) => void;
   onRenameModule: (moduleId: string, title: string) => void;
@@ -560,7 +513,7 @@ export function ModuleItem({
 }) {
   const [open, setOpen] = useState(index === 0);
   const [deleting, setDeleting] = useState(false);
-  const [duplicating, setDuplicating] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [addingTopic, setAddingTopic] = useState(false);
   const [savingTopic, setSavingTopic] = useState(false);
   const [generatingUnits, setGeneratingUnits] = useState(false);
@@ -577,20 +530,6 @@ export function ModuleItem({
     } catch {
       toast.error('Failed to delete topic');
       setDeleting(false);
-    }
-  };
-
-  const handleDuplicateModule = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDuplicating(true);
-    try {
-      const res = await aiCurriculumApi.duplicateModule(mod.id);
-      onDuplicateModule(res.data.data);
-      toast.success('Topic duplicated');
-    } catch {
-      toast.error('Failed to duplicate topic');
-    } finally {
-      setDuplicating(false);
     }
   };
 
@@ -660,6 +599,8 @@ export function ModuleItem({
         <InlineTitle
           value={mod.title}
           disabled={!canEdit}
+          editing={renaming}
+          onStopEditing={() => setRenaming(false)}
           className='flex-1 text-[14px] font-bold text-slate-800 min-w-0'
           onSave={async (v) => {
             await aiCurriculumApi.updateModule(mod.id, { title: v });
@@ -667,7 +608,7 @@ export function ModuleItem({
           }}
         />
         {canEdit && (
-          <div className='flex items-center gap-0.5 opacity-0 group-hover/mod:opacity-100 transition-opacity shrink-0'>
+          <div className='flex items-center gap-0.5 shrink-0'>
             {generatingUnits ? (
               <Loader2 className='w-3.5 h-3.5 animate-spin text-indigo-400' />
             ) : (
@@ -680,15 +621,10 @@ export function ModuleItem({
               </button>
             )}
             <button
-              onClick={handleDuplicateModule}
-              disabled={duplicating}
+              onClick={(e) => { e.stopPropagation(); setRenaming(true); }}
               className='p-1.5 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-all'
             >
-              {duplicating ? (
-                <Loader2 className='w-3.5 h-3.5 animate-spin' />
-              ) : (
-                <Copy className='w-3.5 h-3.5' />
-              )}
+              <Pencil className='w-3.5 h-3.5' />
             </button>
             <button
               onClick={handleDeleteModule}
@@ -722,9 +658,7 @@ export function ModuleItem({
               onSelectLesson={onSelectLesson}
               onDeleteLesson={onDeleteLesson}
               onDeleteTopic={(topicId) => onDeleteTopic(mod.id, topicId)}
-              onDuplicateTopic={(dup) => onDuplicateTopic(mod.id, dup)}
               onAddLesson={onAddLesson}
-              onDuplicateLesson={onDuplicateLesson}
               onRenameLesson={onRenameLesson}
               onRename={(topicId, title) =>
                 onRenameTopic(mod.id, topicId, title)
