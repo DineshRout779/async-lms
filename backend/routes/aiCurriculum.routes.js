@@ -11,6 +11,9 @@ router.use(verifyToken);
 // AI generation helpers (specific paths first, before /:id param routes)
 router.post('/extract-skills', isAdminOrFacilitator, ctrl.extractSkills);
 router.post('/generate', isAdminOrFacilitator, ctrl.generate);
+router.post('/generate-topics', isAdminOrFacilitator, ctrl.generateTopics);
+router.post('/generate-units', isAdminOrFacilitator, ctrl.generateAndSaveUnits);
+router.post('/generate-subtopics', isAdminOrFacilitator, ctrl.generateAndSaveSubtopics);
 
 // Create sub-resources
 router.post('/modules', isAdminOrFacilitator, ctrl.addModule);
@@ -28,6 +31,9 @@ router.patch('/lessons/:id', isAdminOrFacilitator, ctrl.updateLesson);
 router.delete('/lessons/:id', isAdminOrFacilitator, ctrl.deleteLesson);
 router.post('/lessons/:id/duplicate', isAdminOrFacilitator, ctrl.duplicateLesson);
 router.post('/lessons/:id/regenerate', isAdminOrFacilitator, ctrl.regenerateLesson);
+router.post('/lessons/:id/generate-content', isAdminOrFacilitator, ctrl.generateAndSaveLessonContent);
+router.post('/topics/:id/generate-quiz', isAdminOrFacilitator, ctrl.generateAndSaveUnitQuiz);
+router.post('/topics/:id/generate-assignment', isAdminOrFacilitator, ctrl.generateAndSaveUnitAssignment);
 router.put('/:courseId/reorder-topics', isAdminOrFacilitator, ctrl.reorderTopics);
 
 // Course CRUD

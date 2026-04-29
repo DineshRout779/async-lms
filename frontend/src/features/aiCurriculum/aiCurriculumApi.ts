@@ -2,6 +2,7 @@ import apiClient from '@/services/api';
 import type {
   AiCourse, CourseFormData, GeneratedCurriculum, Skill,
   CourseAction, ReviewFeedback, AiModule, AiTopic, AiLesson,
+  TopicSuggestion, AiQuizQuestion, AiAssignment,
 } from './types';
 
 export const aiCurriculumApi = {
@@ -81,4 +82,23 @@ export const aiCurriculumApi = {
 
   duplicateLesson: (id: string) =>
     apiClient.post<{ success: boolean; data: AiLesson }>(`/ai-curriculum/lessons/${id}/duplicate`),
+
+  // Incremental AI generation
+  generateTopicSuggestions: (data: Pick<CourseFormData, 'title' | 'domain' | 'role_focus' | 'level' | 'learning_goal'> & { num_topics?: number }) =>
+    apiClient.post<{ success: boolean; data: TopicSuggestion[] }>('/ai-curriculum/generate-topics', data),
+
+  generateAndSaveUnits: (module_id: string) =>
+    apiClient.post<{ success: boolean; data: AiTopic[] }>('/ai-curriculum/generate-units', { module_id }),
+
+  generateAndSaveSubtopics: (topic_id: string) =>
+    apiClient.post<{ success: boolean; data: AiLesson[] }>('/ai-curriculum/generate-subtopics', { topic_id }),
+
+  generateLessonContent: (lesson_id: string, type: 'video' | 'markdown' | 'exercise') =>
+    apiClient.post<{ success: boolean; data: Record<string, unknown> }>(`/ai-curriculum/lessons/${lesson_id}/generate-content`, { type }),
+
+  generateUnitQuiz: (topic_id: string) =>
+    apiClient.post<{ success: boolean; data: AiQuizQuestion[] }>(`/ai-curriculum/topics/${topic_id}/generate-quiz`),
+
+  generateUnitAssignment: (topic_id: string) =>
+    apiClient.post<{ success: boolean; data: AiAssignment }>(`/ai-curriculum/topics/${topic_id}/generate-assignment`),
 };

@@ -266,6 +266,125 @@ export default function AiCurriculumEditor() {
     [],
   );
 
+  const handleUpdateTopic = useCallback(
+    (topicId: string, data: Partial<AiTopic>) =>
+      setModules((ms) =>
+        ms.map((m) => ({
+          ...m,
+          topics: m.topics.map((t) =>
+            t.id === topicId ? { ...t, ...data } : t,
+          ),
+        })),
+      ),
+    [],
+  );
+
+  const handleGenerateUnits = useCallback(async (moduleId: string) => {
+    try {
+      const res = await aiCurriculumApi.generateAndSaveUnits(moduleId);
+      setModules((ms) =>
+        ms.map((m) =>
+          m.id === moduleId
+            ? { ...m, topics: [...m.topics, ...res.data.data] }
+            : m,
+        ),
+      );
+      toast.success(
+        `${res.data.data.length} unit${res.data.data.length !== 1 ? 's' : ''} generated`,
+      );
+    } catch {
+      toast.error('Failed to generate units');
+    }
+  }, []);
+
+  const handleGenerateSubtopics = useCallback(async (topicId: string) => {
+    try {
+      const res = await aiCurriculumApi.generateAndSaveSubtopics(topicId);
+      setModules((ms) =>
+        ms.map((m) => ({
+          ...m,
+          topics: m.topics.map((t) =>
+            t.id === topicId
+              ? { ...t, lessons: [...t.lessons, ...res.data.data] }
+              : t,
+          ),
+        })),
+      );
+      toast.success(
+        `${res.data.data.length} subtopic${res.data.data.length !== 1 ? 's' : ''} generated`,
+      );
+    } catch {
+      toast.error('Failed to generate subtopics');
+    }
+  }, []);
+
+  const handleGenerateTopicQuiz = useCallback(
+    async (topicId: string) => {
+      try {
+        const res = await aiCurriculumApi.generateUnitQuiz(topicId);
+        handleUpdateTopic(topicId, { quiz_questions: res.data.data });
+        toast.success(`Quiz generated (${res.data.data.length} questions)`);
+      } catch {
+        toast.error('Failed to generate quiz');
+      }
+    },
+    [handleUpdateTopic],
+  );
+
+  const handleGenerateTopicAssignment = useCallback(
+    async (topicId: string) => {
+      try {
+        const res = await aiCurriculumApi.generateUnitAssignment(topicId);
+        handleUpdateTopic(topicId, { assignment: res.data.data });
+        toast.success('Assignment generated');
+      } catch {
+        toast.error('Failed to generate assignment');
+      }
+    },
+    [handleUpdateTopic],
+  );
+
+  const handleGenerateLessonContent = useCallback(
+    async (lessonId: string, type: 'video' | 'markdown' | 'exercise') => {
+      try {
+        const res = await aiCurriculumApi.generateLessonContent(lessonId, type);
+        const data = res.data.data as Record<string, unknown>;
+        let patch: Partial<AiLesson>;
+        if (type === 'video') {
+          patch = { video_url: data.video_url as string };
+        } else if (type === 'markdown') {
+          patch = {
+            explanation: data.explanation as string,
+            example: data.example as string,
+            activity: data.activity as string,
+            interview_questions: data.interview_questions as string[],
+            duration_mins: (data.duration_mins as number) ?? undefined,
+          };
+        } else {
+          patch = { exercise_data: data.exercise as AiLesson['exercise_data'] };
+        }
+        setModules((ms) =>
+          ms.map((m) => ({
+            ...m,
+            topics: m.topics.map((t) => ({
+              ...t,
+              lessons: t.lessons.map((l) =>
+                l.id === lessonId ? { ...l, ...patch } : l,
+              ),
+            })),
+          })),
+        );
+        setSelectedLesson((l) => (l?.id === lessonId ? { ...l, ...patch } : l));
+        toast.success(
+          `${type === 'video' ? 'Video link' : type === 'markdown' ? 'Content' : 'Exercise'} generated`,
+        );
+      } catch {
+        toast.error(`Failed to generate ${type}`);
+      }
+    },
+    [],
+  );
+
   const handleRenameLesson = useCallback((lessonId: string, title: string) => {
     setModules((ms) =>
       ms.map((m) => ({
@@ -548,99 +667,110 @@ export default function AiCurriculumEditor() {
         )}
       </div>
 
-      {/* Two-column body */}
-      <div className='px-8 pb-10 flex gap-5 items-start flex-1 overflow-hidden'>
-        <div className='flex-1 min-w-0 space-y-3 overflow-y-auto'>
-          {modules.map((mod, i) => (
-            <ModuleItem
-              key={mod.id}
-              module={mod}
-              index={i}
-              selectedLessonId={selectedLesson?.id ?? null}
-              canEdit={canEdit}
-              onSelectLesson={setSelectedLesson}
-              onDeleteLesson={handleDeleteLesson}
-              onDeleteTopic={handleDeleteTopic}
-              onDeleteModule={handleDeleteModule}
-              onDuplicateModule={handleDuplicateModule}
-              onDuplicateTopic={handleDuplicateTopic}
-              onAddTopic={handleAddTopic}
-              onAddLesson={handleAddLesson}
-              onDuplicateLesson={handleDuplicateLesson}
-              onRenameLesson={handleRenameLesson}
-              onRenameTopic={handleRenameTopic}
-              onRenameModule={handleRenameModule}
-              onReorderTopics={handleReorderTopics}
-              isDragOver={dragModuleOver === i && dragModuleIdx !== i}
-              dragHandlers={
-                canEdit
-                  ? {
-                      draggable: true,
-                      onDragStart: () => setDragModuleIdx(i),
-                      onDragOver: (e) => {
-                        e.preventDefault();
-                        setDragModuleOver(i);
-                      },
-                      onDrop: () => {
-                        if (dragModuleIdx !== null)
-                          handleDropModule(dragModuleIdx, i);
-                      },
-                      onDragEnd: () => {
-                        setDragModuleIdx(null);
-                        setDragModuleOver(null);
-                      },
-                    }
-                  : {}
-              }
-            />
-          ))}
-
-          {canEdit &&
-            (addingModule ? (
-              <div className='bg-white border border-slate-200 rounded-xl px-4 py-3'>
-                <InlineInput
-                  placeholder='Topic title...'
-                  onConfirm={handleAddModule}
-                  onCancel={() => setAddingModule(false)}
-                  loading={savingModule}
-                />
-              </div>
-            ) : (
-              <button
-                onClick={() => setAddingModule(true)}
-                className='w-full flex items-center justify-center gap-2 py-3.5 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all'
-              >
-                <Plus className='w-4 h-4' /> Add Topic
-              </button>
+      {/* Course tree + sidebar */}
+      <div className='px-8 pb-10 flex-1 overflow-y-auto'>
+        <div className='flex gap-6 items-start'>
+          <div className='basis-7/12 min-w-0 space-y-3'>
+            {modules.map((mod, i) => (
+              <ModuleItem
+                key={mod.id}
+                module={mod}
+                index={i}
+                selectedLessonId={selectedLesson?.id ?? null}
+                canEdit={canEdit}
+                onSelectLesson={setSelectedLesson}
+                onDeleteLesson={handleDeleteLesson}
+                onDeleteTopic={handleDeleteTopic}
+                onDeleteModule={handleDeleteModule}
+                onDuplicateModule={handleDuplicateModule}
+                onDuplicateTopic={handleDuplicateTopic}
+                onAddTopic={handleAddTopic}
+                onAddLesson={handleAddLesson}
+                onDuplicateLesson={handleDuplicateLesson}
+                onRenameLesson={handleRenameLesson}
+                onRenameTopic={handleRenameTopic}
+                onRenameModule={handleRenameModule}
+                onReorderTopics={handleReorderTopics}
+                onUpdateTopic={handleUpdateTopic}
+                onGenerateUnits={handleGenerateUnits}
+                onGenerateSubtopics={handleGenerateSubtopics}
+                onGenerateTopicQuiz={handleGenerateTopicQuiz}
+                onGenerateTopicAssignment={handleGenerateTopicAssignment}
+                isDragOver={dragModuleOver === i && dragModuleIdx !== i}
+                dragHandlers={
+                  canEdit
+                    ? {
+                        draggable: true,
+                        onDragStart: () => setDragModuleIdx(i),
+                        onDragOver: (e) => {
+                          e.preventDefault();
+                          setDragModuleOver(i);
+                        },
+                        onDrop: () => {
+                          if (dragModuleIdx !== null)
+                            handleDropModule(dragModuleIdx, i);
+                        },
+                        onDragEnd: () => {
+                          setDragModuleIdx(null);
+                          setDragModuleOver(null);
+                        },
+                      }
+                    : {}
+                }
+              />
             ))}
 
-          {course.capstone_project && (
-            <div className='flex items-start gap-3 px-5 py-4 rounded-xl bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200'>
-              <Trophy className='w-5 h-5 text-indigo-500 shrink-0 mt-0.5' />
-              <div className='min-w-0'>
-                <p className='text-[11px] font-bold text-indigo-400 uppercase tracking-wide mb-0.5'>
-                  Final Capstone Project
-                </p>
-                <p className='text-sm font-bold text-indigo-800'>
-                  {course.capstone_project.title}
-                </p>
-                <p className='text-[12px] text-indigo-500 mt-1 line-clamp-2'>
-                  {course.capstone_project.description}
-                </p>
-                <p className='text-[11px] text-indigo-400 mt-1.5 font-medium'>
-                  🏆 Complete this to earn your certificate
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+            {canEdit &&
+              (addingModule ? (
+                <div className='bg-white border border-slate-200 rounded-xl px-4 py-3'>
+                  <InlineInput
+                    placeholder='Topic title...'
+                    onConfirm={handleAddModule}
+                    onCancel={() => setAddingModule(false)}
+                    loading={savingModule}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingModule(true)}
+                  className='w-full flex items-center justify-center gap-2 py-3.5 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all'
+                >
+                  <Plus className='w-4 h-4' /> Add Topic
+                </button>
+              ))}
 
-        <div className='w-80 shrink-0'>
-          <RightSidebar
-            selectedLesson={selectedLesson}
-            canEdit={canEdit}
-            onUpdateLesson={handleUpdateLesson}
-          />
+            {course.capstone_project && (
+              <div className='flex items-start gap-3 px-5 py-4 rounded-xl bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200'>
+                <Trophy className='w-5 h-5 text-indigo-500 shrink-0 mt-0.5' />
+                <div className='min-w-0'>
+                  <p className='text-[11px] font-bold text-indigo-400 uppercase tracking-wide mb-0.5'>
+                    Final Capstone Project
+                  </p>
+                  <p className='text-sm font-bold text-indigo-800'>
+                    {course.capstone_project.title}
+                  </p>
+                  <p className='text-[12px] text-indigo-500 mt-1 line-clamp-2'>
+                    {course.capstone_project.description}
+                  </p>
+                  <p className='text-[11px] text-indigo-400 mt-1.5 font-medium'>
+                    🏆 Complete this to earn your certificate
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* end flex-1 tree column */}
+
+          {/* Right sidebar */}
+          <div className='basis-5/12 shrink-0 sticky top-4'>
+            <h3 className='text-md font-bold mb-2'>Content Preview</h3>
+            <RightSidebar
+              selectedLesson={selectedLesson}
+              canEdit={canEdit}
+              onUpdateLesson={handleUpdateLesson}
+              onGenerateLessonContent={handleGenerateLessonContent}
+            />
+          </div>
         </div>
       </div>
     </div>

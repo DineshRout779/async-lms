@@ -1,5 +1,9 @@
 const pool = require('../config/pg');
-const { generateCurriculum, regenerateLesson, extractSkillsFromJD } = require('../services/aiCurriculumService');
+const {
+  generateCurriculum, regenerateLesson, extractSkillsFromJD,
+  generateTopics, generateUnits, generateSubtopics,
+  generateLessonContent, generateUnitQuiz, generateUnitAssignment,
+} = require('../services/aiCurriculumService');
 const { notify } = require('../services/notificationService');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -588,14 +592,17 @@ exports.updateModule = async (req, res) => {
 exports.updateTopic = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description } = req.body;
-    await pool.query(
-      `UPDATE ai_course_topics SET
-         title = COALESCE($1, title),
-         description = COALESCE($2, description)
-       WHERE id = $3`,
-      [title || null, description || null, id],
-    );
+    const { title, description, quiz_questions, assignment } = req.body;
+    const sets = [];
+    const vals = [];
+    let i = 1;
+    if (title !== undefined)         { sets.push(`title = $${i++}`);          vals.push(title); }
+    if (description !== undefined)   { sets.push(`description = $${i++}`);    vals.push(description); }
+    if (quiz_questions !== undefined) { sets.push(`quiz_questions = $${i++}`); vals.push(JSON.stringify(quiz_questions)); }
+    if (assignment !== undefined)    { sets.push(`assignment = $${i++}`);     vals.push(assignment ? JSON.stringify(assignment) : null); }
+    if (!sets.length) return res.status(400).json({ success: false, message: 'Nothing to update' });
+    vals.push(id);
+    await pool.query(`UPDATE ai_course_topics SET ${sets.join(', ')} WHERE id = $${i}`, vals);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -904,6 +911,253 @@ exports.regenerateLesson = async (req, res) => {
     res.json({ success: true, data: updated });
   } catch (err) {
     console.error('regenerateLesson error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── Incremental AI generation ───────────────────────────────────────────────
+
+exports.generateTopics = async (req, res) => {
+  try {
+    const { title, domain, role_focus, level, learning_goal, num_topics } = req.body;
+    if (!title || !level || !learning_goal) {
+      return res.status(400).json({ success: false, message: 'title, level, learning_goal are required' });
+    }
+    const result = await generateTopics({
+      title, domain, roleFocus: role_focus, level, learningGoal: learning_goal, numTopics: num_topics || null,
+    });
+    res.json({ success: true, data: result.topics });
+  } catch (err) {
+    console.error('generateTopics error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Generate units for a module and save them to DB — returns created topics with IDs
+exports.generateAndSaveUnits = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { module_id } = req.body;
+    if (!module_id) return res.status(400).json({ success: false, message: 'module_id is required' });
+
+    // Fetch context from DB
+    const ctxRes = await client.query(
+      `SELECT m.title AS topic_title, c.title AS course_title, c.role_focus, c.level
+       FROM ai_course_modules m
+       JOIN ai_courses c ON m.course_id = c.id
+       WHERE m.id = $1`,
+      [module_id],
+    );
+    if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Module not found' });
+    const { topic_title, course_title, role_focus, level } = ctxRes.rows[0];
+
+    const result = await generateUnits({ courseTitle: course_title, roleFocus: role_focus, level, topicTitle: topic_title });
+
+    // Get current max order_index
+    const orderRes = await client.query(
+      `SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_topics WHERE module_id = $1`,
+      [module_id],
+    );
+    let orderIndex = orderRes.rows[0].next;
+
+    await client.query('BEGIN');
+    const created = [];
+    for (const unit of result.units) {
+      const r = await client.query(
+        `INSERT INTO ai_course_topics (module_id, title, description, order_index)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [module_id, unit.title, unit.description || '', orderIndex++],
+      );
+      created.push({ ...r.rows[0], lessons: [] });
+    }
+    await client.query('COMMIT');
+    res.status(201).json({ success: true, data: created });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('generateAndSaveUnits error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+// Generate subtopics for a unit and save them to DB — returns created lessons with IDs
+exports.generateAndSaveSubtopics = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { topic_id } = req.body;
+    if (!topic_id) return res.status(400).json({ success: false, message: 'topic_id is required' });
+
+    const ctxRes = await client.query(
+      `SELECT t.title AS unit_title, m.title AS topic_title, c.title AS course_title, c.role_focus, c.level
+       FROM ai_course_topics t
+       JOIN ai_course_modules m ON t.module_id = m.id
+       JOIN ai_courses c ON m.course_id = c.id
+       WHERE t.id = $1`,
+      [topic_id],
+    );
+    if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Unit not found' });
+    const { unit_title, topic_title, course_title, role_focus, level } = ctxRes.rows[0];
+
+    const result = await generateSubtopics({
+      courseTitle: course_title, roleFocus: role_focus, level, topicTitle: topic_title, unitTitle: unit_title,
+    });
+
+    const orderRes = await client.query(
+      `SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_lessons WHERE topic_id = $1`,
+      [topic_id],
+    );
+    let orderIndex = orderRes.rows[0].next;
+
+    await client.query('BEGIN');
+    const created = [];
+    for (const sub of result.subtopics) {
+      const r = await client.query(
+        `INSERT INTO ai_course_lessons
+           (topic_id, title, explanation, example, activity, interview_questions,
+            lesson_type, duration_mins, video_url, quiz_questions, exercise_data, order_index)
+         VALUES ($1,$2,'','','','[]','video',$3,NULL,'[]',NULL,$4) RETURNING *`,
+        [topic_id, sub.title, sub.duration_mins || 20, orderIndex++],
+      );
+      created.push(r.rows[0]);
+    }
+    await client.query('COMMIT');
+    res.status(201).json({ success: true, data: created });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('generateAndSaveSubtopics error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+// Generate and save a specific content type for a lesson (video | markdown | exercise)
+exports.generateAndSaveLessonContent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.body;
+    if (!['video', 'markdown', 'exercise'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'type must be: video | markdown | exercise' });
+    }
+
+    const ctxRes = await pool.query(
+      `SELECT l.title AS lesson_title, t.title AS unit_title, m.title AS topic_title,
+              c.title AS course_title, c.role_focus, c.level
+       FROM ai_course_lessons l
+       JOIN ai_course_topics t ON l.topic_id = t.id
+       JOIN ai_course_modules m ON t.module_id = m.id
+       JOIN ai_courses c ON m.course_id = c.id
+       WHERE l.id = $1`,
+      [id],
+    );
+    if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Lesson not found' });
+    const { lesson_title, unit_title, topic_title, course_title, role_focus, level } = ctxRes.rows[0];
+
+    const result = await generateLessonContent({
+      type, courseTitle: course_title, roleFocus: role_focus, level,
+      topicTitle: topic_title, unitTitle: unit_title, lessonTitle: lesson_title,
+    });
+
+    let updateFields, updateVals;
+    if (type === 'video') {
+      updateFields = 'video_url = $1';
+      updateVals = [result.video_url, id];
+    } else if (type === 'markdown') {
+      updateFields = 'explanation = $1, example = $2, activity = $3, interview_questions = $4, duration_mins = $5';
+      updateVals = [
+        result.explanation, result.example, result.activity,
+        JSON.stringify(result.interview_questions || []),
+        result.duration_mins || 25, id,
+      ];
+    } else {
+      updateFields = 'exercise_data = $1';
+      updateVals = [JSON.stringify(result.exercise), id];
+    }
+
+    await pool.query(
+      `UPDATE ai_course_lessons SET ${updateFields} WHERE id = $${updateVals.length}`,
+      updateVals,
+    );
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('generateAndSaveLessonContent error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Generate and save quiz questions for a unit
+exports.generateAndSaveUnitQuiz = async (req, res) => {
+  try {
+    const { id } = req.params; // topic id
+
+    const ctxRes = await pool.query(
+      `SELECT t.title AS unit_title, m.title AS topic_title,
+              c.title AS course_title, c.role_focus, c.level
+       FROM ai_course_topics t
+       JOIN ai_course_modules m ON t.module_id = m.id
+       JOIN ai_courses c ON m.course_id = c.id
+       WHERE t.id = $1`,
+      [id],
+    );
+    if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Unit not found' });
+    const { unit_title, topic_title, course_title, role_focus, level } = ctxRes.rows[0];
+
+    // Collect subtopic titles for better quiz coverage
+    const lessonsRes = await pool.query(
+      `SELECT title FROM ai_course_lessons WHERE topic_id = $1 ORDER BY order_index`,
+      [id],
+    );
+    const subtopics = lessonsRes.rows.map((r) => r.title);
+
+    const result = await generateUnitQuiz({
+      courseTitle: course_title, roleFocus: role_focus, level,
+      topicTitle: topic_title, unitTitle: unit_title, subtopics,
+    });
+
+    await pool.query(
+      `UPDATE ai_course_topics SET quiz_questions = $1 WHERE id = $2`,
+      [JSON.stringify(result.quiz_questions), id],
+    );
+
+    res.json({ success: true, data: result.quiz_questions });
+  } catch (err) {
+    console.error('generateAndSaveUnitQuiz error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Generate and save assignment for a unit
+exports.generateAndSaveUnitAssignment = async (req, res) => {
+  try {
+    const { id } = req.params; // topic id
+
+    const ctxRes = await pool.query(
+      `SELECT t.title AS unit_title, m.title AS topic_title,
+              c.title AS course_title, c.role_focus, c.level
+       FROM ai_course_topics t
+       JOIN ai_course_modules m ON t.module_id = m.id
+       JOIN ai_courses c ON m.course_id = c.id
+       WHERE t.id = $1`,
+      [id],
+    );
+    if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Unit not found' });
+    const { unit_title, topic_title, course_title, role_focus, level } = ctxRes.rows[0];
+
+    const result = await generateUnitAssignment({
+      courseTitle: course_title, roleFocus: role_focus, level,
+      topicTitle: topic_title, unitTitle: unit_title,
+    });
+
+    await pool.query(
+      `UPDATE ai_course_topics SET assignment = $1 WHERE id = $2`,
+      [JSON.stringify(result.assignment), id],
+    );
+
+    res.json({ success: true, data: result.assignment });
+  } catch (err) {
+    console.error('generateAndSaveUnitAssignment error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };

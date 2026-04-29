@@ -54,6 +54,7 @@ export interface AiTopic {
   title: string;
   description: string;
   order_index: number;
+  quiz_questions: AiQuizQuestion[];
   assignment: AiAssignment | null;
   lessons: AiLesson[];
 }
@@ -125,6 +126,22 @@ export interface CourseFormData {
   daily_hours: number | '';
   content_preference: string;
   num_modules: number | '';
+}
+
+// Incremental generation suggestion shapes
+export interface TopicSuggestion {
+  title: string;
+  description: string;
+}
+
+export interface UnitSuggestion {
+  title: string;
+  description: string;
+}
+
+export interface SubtopicSuggestion {
+  title: string;
+  duration_mins: number;
 }
 
 // Shape returned by AI generate endpoint (before saving)

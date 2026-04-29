@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -7,7 +7,9 @@ import {
   GripVertical,
   ListChecks,
   Loader2,
+  MoreHorizontal,
   Plus,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -19,8 +21,61 @@ import type {
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 import { getLessonMeta } from './types';
 import { InlineInput, InlineTitle } from './InlineWidgets';
+import { QuizModal } from './QuizModal';
+import { AssignmentModal } from './AssignmentModal';
+
+// ─── Ellipsis dropdown ────────────────────────────────────────────────────────
+
+function DropMenu({
+  items,
+}: {
+  items: {
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+  }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const handleBlur = () => setTimeout(() => setOpen(false), 120);
+
+  return (
+    <div ref={ref} className='relative' onBlur={handleBlur}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className='p-1 text-slate-300 hover:text-indigo-500 rounded transition-colors'
+      >
+        <MoreHorizontal className='w-3.5 h-3.5' />
+      </button>
+      {open && (
+        <div className='absolute right-0 top-full mt-1 z-50 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1 text-[13px]'>
+          {items.map((item, i) => (
+            <button
+              key={i}
+              disabled={item.disabled}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                item.onClick();
+              }}
+              className='w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Subtopic row ─────────────────────────────────────────────────────────────
+
 export const LessonItem = memo(function LessonItem({
   lesson,
   selected,
@@ -68,7 +123,7 @@ export const LessonItem = memo(function LessonItem({
     }
   };
 
-  const { Icon, color } = getLessonMeta(lesson);
+  const { Icon, color } = getLessonMeta();
 
   return (
     <div
@@ -86,9 +141,7 @@ export const LessonItem = memo(function LessonItem({
       <InlineTitle
         value={lesson.title || 'New Lesson'}
         disabled={!canEdit}
-        className={`flex-1 text-[13px] min-w-0 ${
-          selected ? 'text-indigo-700 font-semibold' : 'text-slate-700'
-        }`}
+        className={`flex-1 text-[13px] min-w-0 ${selected ? 'text-indigo-700 font-semibold' : 'text-slate-700'}`}
         onSave={async (v) => {
           await aiCurriculumApi.updateLesson(lesson.id, { title: v });
           onRename(lesson.id, v);
@@ -125,7 +178,6 @@ export const LessonItem = memo(function LessonItem({
 });
 
 // ─── Unit card ────────────────────────────────────────────────────────────────
-// Matches the Figma: each unit is its own independent white bordered card
 
 export function TopicItem({
   topic,
@@ -139,6 +191,10 @@ export function TopicItem({
   onDuplicateLesson,
   onRenameLesson,
   onRename,
+  onUpdateTopic,
+  onGenerateSubtopics,
+  onGenerateTopicQuiz,
+  onGenerateTopicAssignment,
   dragHandlers,
 }: {
   topic: AiTopic;
@@ -152,12 +208,21 @@ export function TopicItem({
   onDuplicateLesson: (topicId: string, lesson: AiLesson) => void;
   onRenameLesson: (lessonId: string, title: string) => void;
   onRename: (topicId: string, title: string) => void;
+  onUpdateTopic: (topicId: string, data: Partial<AiTopic>) => void;
+  onGenerateSubtopics: (topicId: string) => Promise<void>;
+  onGenerateTopicQuiz: (topicId: string) => Promise<void>;
+  onGenerateTopicAssignment: (topicId: string) => Promise<void>;
   dragHandlers?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [addingLesson, setAddingLesson] = useState(false);
   const [savingLesson, setSavingLesson] = useState(false);
+  const [generatingSubtopics, setGeneratingSubtopics] = useState(false);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [generatingAssignment, setGeneratingAssignment] = useState(false);
+  const [quizModalOpen, setQuizModalOpen] = useState(false);
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
 
   const handleDeleteTopic = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -200,105 +265,151 @@ export function TopicItem({
     }
   };
 
-  const totalQs = topic.lessons.reduce(
-    (sum, l) =>
-      sum + (Array.isArray(l.quiz_questions) ? l.quiz_questions.length : 0),
-    0,
-  );
+  const handleGenerateSubtopics = async () => {
+    setGeneratingSubtopics(true);
+    try {
+      await onGenerateSubtopics(topic.id);
+    } finally {
+      setGeneratingSubtopics(false);
+    }
+  };
+
+  const handleGenerateQuiz = async () => {
+    setGeneratingQuiz(true);
+    try {
+      await onGenerateTopicQuiz(topic.id);
+    } finally {
+      setGeneratingQuiz(false);
+    }
+  };
+
+  const handleGenerateAssignment = async () => {
+    setGeneratingAssignment(true);
+    try {
+      await onGenerateTopicAssignment(topic.id);
+    } finally {
+      setGeneratingAssignment(false);
+    }
+  };
+
+  const hasQuiz =
+    Array.isArray(topic.quiz_questions) && topic.quiz_questions.length > 0;
+  const hasAssignment = !!topic.assignment;
+  const totalQs = hasQuiz ? topic.quiz_questions.length : 0;
+  const anyGenerating =
+    generatingSubtopics || generatingQuiz || generatingAssignment;
 
   return (
-    // Each unit is its own white card — matching the Figma
-    <div
-      className='bg-white border border-slate-200 rounded-xl overflow-hidden'
-      {...dragHandlers}
-    >
-      {/* Unit header */}
-      <div className='flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 group/unit'>
-        {canEdit && (
-          <GripVertical className='w-3.5 h-3.5 text-slate-300 shrink-0 cursor-grab' />
-        )}
-        <InlineTitle
-          value={topic.title}
-          disabled={!canEdit}
-          className='flex-1 text-[12px] font-bold text-slate-600 uppercase tracking-wider min-w-0'
-          onSave={async (v) => {
-            await aiCurriculumApi.updateTopic(topic.id, { title: v });
-            onRename(topic.id, v);
-          }}
-        />
-        {canEdit && (
-          <div className='flex items-center gap-0.5 opacity-0 group-hover/unit:opacity-100 transition-opacity shrink-0'>
-            <button
-              onClick={handleDuplicateTopic}
-              disabled={duplicating}
-              className='p-1 text-slate-300 hover:text-indigo-500 transition-colors'
-            >
-              {duplicating ? (
-                <Loader2 className='w-3 h-3 animate-spin' />
-              ) : (
-                <Copy className='w-3 h-3' />
-              )}
-            </button>
-            <button
-              onClick={handleDeleteTopic}
-              disabled={deleting}
-              className='p-1 text-slate-300 hover:text-red-400 transition-colors'
-            >
-              {deleting ? (
-                <Loader2 className='w-3 h-3 animate-spin' />
-              ) : (
-                <Trash2 className='w-3 h-3' />
-              )}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Subtopic list */}
-      <div className='px-1 py-1.5 space-y-0.5'>
-        {topic.lessons.length === 0 && !addingLesson && (
-          <p className='px-3 py-2 text-[12px] text-slate-300 italic'>
-            No subtopics yet
-          </p>
-        )}
-        {topic.lessons.map((lesson) => (
-          <LessonItem
-            key={lesson.id}
-            lesson={lesson}
-            selected={selectedLessonId === lesson.id}
-            canEdit={canEdit}
-            onSelect={() => onSelectLesson(lesson)}
-            onDelete={(lessonId) => onDeleteLesson(topic.id, lessonId)}
-            onDuplicate={(dup) => onDuplicateLesson(topic.id, dup)}
-            onRename={onRenameLesson}
+    <>
+      <div
+        className='bg-white border border-slate-200 rounded-xl overflow-hidden'
+        {...dragHandlers}
+      >
+        {/* Unit header */}
+        <div className='flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 group/unit'>
+          {canEdit && (
+            <GripVertical className='w-3.5 h-3.5 text-slate-300 shrink-0 cursor-grab' />
+          )}
+          <InlineTitle
+            value={topic.title}
+            disabled={!canEdit}
+            className='flex-1 text-[12px] font-bold text-slate-600 uppercase tracking-wider min-w-0'
+            onSave={async (v) => {
+              await aiCurriculumApi.updateTopic(topic.id, { title: v });
+              onRename(topic.id, v);
+            }}
           />
-        ))}
-
-        {canEdit &&
-          (addingLesson ? (
-            <div className='px-2 py-1'>
-              <InlineInput
-                placeholder='Subtopic title...'
-                onConfirm={handleAddLesson}
-                onCancel={() => setAddingLesson(false)}
-                loading={savingLesson}
-              />
+          {canEdit && (
+            <div className='flex items-center gap-0.5 opacity-0 group-hover/unit:opacity-100 transition-opacity shrink-0'>
+              {anyGenerating ? (
+                <Loader2 className='w-3.5 h-3.5 animate-spin text-indigo-400' />
+              ) : (
+                <DropMenu
+                  items={[
+                    {
+                      label: 'Generate Subtopics',
+                      icon: (
+                        <Sparkles className='w-3.5 h-3.5 text-indigo-400' />
+                      ),
+                      onClick: handleGenerateSubtopics,
+                    },
+                  ]}
+                />
+              )}
+              <button
+                onClick={handleDuplicateTopic}
+                disabled={duplicating}
+                className='p-1 text-slate-300 hover:text-indigo-500 transition-colors'
+              >
+                {duplicating ? (
+                  <Loader2 className='w-3 h-3 animate-spin' />
+                ) : (
+                  <Copy className='w-3 h-3' />
+                )}
+              </button>
+              <button
+                onClick={handleDeleteTopic}
+                disabled={deleting}
+                className='p-1 text-slate-300 hover:text-red-400 transition-colors'
+              >
+                {deleting ? (
+                  <Loader2 className='w-3 h-3 animate-spin' />
+                ) : (
+                  <Trash2 className='w-3 h-3' />
+                )}
+              </button>
             </div>
-          ) : (
-            <button
-              onClick={() => setAddingLesson(true)}
-              className='w-full flex items-center gap-2 py-1.5 px-3 text-[12px] text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors'
-            >
-              <Plus className='w-3.5 h-3.5 shrink-0' /> Add Subtopic
-            </button>
-          ))}
-      </div>
+          )}
+        </div>
 
-      {/* Quiz + Assignment rows — pinned at bottom of unit card */}
-      {(totalQs > 0 || topic.assignment) && (
+        {/* Subtopic list */}
+        <div className='px-1 py-1.5 space-y-0.5'>
+          {topic.lessons.length === 0 && !addingLesson && (
+            <p className='px-3 py-2 text-[12px] text-slate-300 italic'>
+              No subtopics yet
+            </p>
+          )}
+          {topic.lessons.map((lesson) => (
+            <LessonItem
+              key={lesson.id}
+              lesson={lesson}
+              selected={selectedLessonId === lesson.id}
+              canEdit={canEdit}
+              onSelect={() => onSelectLesson(lesson)}
+              onDelete={(lessonId) => onDeleteLesson(topic.id, lessonId)}
+              onDuplicate={(dup) => onDuplicateLesson(topic.id, dup)}
+              onRename={onRenameLesson}
+            />
+          ))}
+
+          {canEdit &&
+            (addingLesson ? (
+              <div className='px-2 py-1'>
+                <InlineInput
+                  placeholder='Subtopic title...'
+                  onConfirm={handleAddLesson}
+                  onCancel={() => setAddingLesson(false)}
+                  loading={savingLesson}
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingLesson(true)}
+                className='w-full flex items-center gap-2 py-1.5 px-3 text-[12px] text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors'
+              >
+                <Plus className='w-3.5 h-3.5 shrink-0' /> Add Subtopic
+              </button>
+            ))}
+        </div>
+
+        {/* Quiz + Assignment — always visible at bottom */}
         <div className='border-t border-slate-100 px-2 py-1.5 space-y-1'>
-          {totalQs > 0 && (
-            <div className='flex items-center gap-2 py-1.5 px-3 rounded-lg bg-orange-50'>
+          {/* Quiz row */}
+          {hasQuiz ? (
+            <button
+              onClick={() => setQuizModalOpen(true)}
+              className='w-full flex items-center gap-2 py-1.5 px-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors text-left'
+            >
               <ListChecks className='w-3.5 h-3.5 text-orange-500 shrink-0' />
               <span className='flex-1 text-[12px] font-medium text-orange-700'>
                 Unit Quiz
@@ -306,27 +417,95 @@ export function TopicItem({
               <span className='text-[11px] font-semibold text-orange-500 bg-white border border-orange-200 px-1.5 py-0.5 rounded-full shrink-0'>
                 {totalQs}Q
               </span>
-            </div>
+            </button>
+          ) : (
+            canEdit && (
+              <button
+                disabled={generatingQuiz}
+                onClick={handleGenerateQuiz}
+                className='w-full flex items-center gap-2 py-1.5 px-3 rounded-lg border border-dashed border-orange-200 text-[12px] text-orange-400 hover:bg-orange-50 hover:border-orange-300 disabled:opacity-50 transition-colors'
+              >
+                {generatingQuiz ? (
+                  <Loader2 className='w-3.5 h-3.5 animate-spin shrink-0' />
+                ) : (
+                  <ListChecks className='w-3.5 h-3.5 shrink-0' />
+                )}
+                {generatingQuiz ? 'Generating Quiz...' : 'Generate Quiz'}
+              </button>
+            )
           )}
-          {topic.assignment && (
-            <div className='flex items-center gap-2 py-1.5 px-3 rounded-lg bg-amber-50'>
+
+          {/* Assignment row */}
+          {hasAssignment ? (
+            <button
+              onClick={() => setAssignmentModalOpen(true)}
+              className='w-full flex items-center gap-2 py-1.5 px-3 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors text-left'
+            >
               <ClipboardList className='w-3.5 h-3.5 text-amber-500 shrink-0' />
               <span className='flex-1 text-[12px] font-medium text-amber-700 truncate'>
-                {topic.assignment.title}
+                {topic.assignment!.title}
               </span>
               <span className='text-[11px] font-semibold text-amber-500 bg-white border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0'>
-                {topic.assignment.max_score}pts
+                {topic.assignment!.max_score}pts
               </span>
-            </div>
+            </button>
+          ) : (
+            canEdit && (
+              <button
+                disabled={generatingAssignment}
+                onClick={handleGenerateAssignment}
+                className='w-full flex items-center gap-2 py-1.5 px-3 rounded-lg border border-dashed border-amber-200 text-[12px] text-amber-400 hover:bg-amber-50 hover:border-amber-300 disabled:opacity-50 transition-colors'
+              >
+                {generatingAssignment ? (
+                  <Loader2 className='w-3.5 h-3.5 animate-spin shrink-0' />
+                ) : (
+                  <ClipboardList className='w-3.5 h-3.5 shrink-0' />
+                )}
+                {generatingAssignment
+                  ? 'Generating Assignment...'
+                  : 'Generate Assignment'}
+              </button>
+            )
           )}
         </div>
+      </div>
+
+      {/* Modals */}
+      {quizModalOpen && (
+        <QuizModal
+          topicId={topic.id}
+          topicTitle={topic.title}
+          initialQuestions={topic.quiz_questions ?? []}
+          canEdit={canEdit}
+          onClose={() => setQuizModalOpen(false)}
+          onQuestionsChange={(questions) =>
+            onUpdateTopic(topic.id, { quiz_questions: questions })
+          }
+          onGenerateQuiz={async (topicId) => {
+            await onGenerateTopicQuiz(topicId);
+          }}
+        />
       )}
-    </div>
+      {assignmentModalOpen && (
+        <AssignmentModal
+          topicId={topic.id}
+          topicTitle={topic.title}
+          initialAssignment={topic.assignment ?? null}
+          canEdit={canEdit}
+          onClose={() => setAssignmentModalOpen(false)}
+          onAssignmentChange={(assignment) =>
+            onUpdateTopic(topic.id, { assignment: assignment ?? undefined })
+          }
+          onGenerateAssignment={async (topicId) => {
+            await onGenerateTopicAssignment(topicId);
+          }}
+        />
+      )}
+    </>
   );
 }
 
 // ─── Topic accordion ──────────────────────────────────────────────────────────
-// Matches the Figma: plain collapsible header row, unit cards stack below it
 
 export function ModuleItem({
   module: mod,
@@ -346,6 +525,11 @@ export function ModuleItem({
   onRenameTopic,
   onRenameModule,
   onReorderTopics,
+  onUpdateTopic,
+  onGenerateUnits,
+  onGenerateSubtopics,
+  onGenerateTopicQuiz,
+  onGenerateTopicAssignment,
   isDragOver,
   dragHandlers,
 }: {
@@ -366,6 +550,11 @@ export function ModuleItem({
   onRenameTopic: (moduleId: string, topicId: string, title: string) => void;
   onRenameModule: (moduleId: string, title: string) => void;
   onReorderTopics: (moduleId: string, topics: AiTopic[]) => void;
+  onUpdateTopic: (topicId: string, data: Partial<AiTopic>) => void;
+  onGenerateUnits: (moduleId: string) => Promise<void>;
+  onGenerateSubtopics: (topicId: string) => Promise<void>;
+  onGenerateTopicQuiz: (topicId: string) => Promise<void>;
+  onGenerateTopicAssignment: (topicId: string) => Promise<void>;
   isDragOver: boolean;
   dragHandlers: React.HTMLAttributes<HTMLDivElement>;
 }) {
@@ -374,6 +563,7 @@ export function ModuleItem({
   const [duplicating, setDuplicating] = useState(false);
   const [addingTopic, setAddingTopic] = useState(false);
   const [savingTopic, setSavingTopic] = useState(false);
+  const [generatingUnits, setGeneratingUnits] = useState(false);
   const [dragTopicIdx, setDragTopicIdx] = useState<number | null>(null);
   const [dragTopicOver, setDragTopicOver] = useState<number | null>(null);
 
@@ -418,6 +608,16 @@ export function ModuleItem({
     }
   };
 
+  const handleGenerateUnits = async () => {
+    setGeneratingUnits(true);
+    setOpen(true);
+    try {
+      await onGenerateUnits(mod.id);
+    } finally {
+      setGeneratingUnits(false);
+    }
+  };
+
   const handleDropTopic = async (from: number, to: number) => {
     if (from === to) return;
     const reordered = [...mod.topics];
@@ -438,7 +638,6 @@ export function ModuleItem({
   };
 
   return (
-    // Topic = plain header + stacked unit cards below, NOT wrapped in a card
     <div
       className={`transition-all ${isDragOver ? 'opacity-60' : ''}`}
       {...dragHandlers}
@@ -469,6 +668,17 @@ export function ModuleItem({
         />
         {canEdit && (
           <div className='flex items-center gap-0.5 opacity-0 group-hover/mod:opacity-100 transition-opacity shrink-0'>
+            {generatingUnits ? (
+              <Loader2 className='w-3.5 h-3.5 animate-spin text-indigo-400' />
+            ) : (
+              <button
+                onClick={handleGenerateUnits}
+                title='Generate Units with AI'
+                className='p-1.5 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-all'
+              >
+                <Sparkles className='w-3.5 h-3.5' />
+              </button>
+            )}
             <button
               onClick={handleDuplicateModule}
               disabled={duplicating}
@@ -495,7 +705,7 @@ export function ModuleItem({
         )}
       </div>
 
-      {/* Unit cards — stacked with gap */}
+      {/* Unit cards */}
       {open && (
         <div className='ml-6 mt-1 space-y-2'>
           {mod.topics.length === 0 && (
@@ -519,6 +729,10 @@ export function ModuleItem({
               onRename={(topicId, title) =>
                 onRenameTopic(mod.id, topicId, title)
               }
+              onUpdateTopic={onUpdateTopic}
+              onGenerateSubtopics={onGenerateSubtopics}
+              onGenerateTopicQuiz={onGenerateTopicQuiz}
+              onGenerateTopicAssignment={onGenerateTopicAssignment}
               dragHandlers={
                 canEdit
                   ? {
