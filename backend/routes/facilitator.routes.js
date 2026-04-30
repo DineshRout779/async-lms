@@ -7,6 +7,7 @@ const isFacilitator = require('../middlewares/isFacilitator');
 router.use(verifyToken, isFacilitator);
 
 router.get('/stats', facilitatorController.getFacilitatorStats);
+router.get('/batches', facilitatorController.getBatches);
 router.get('/students', facilitatorController.getFacilitatorStudents);
 router.get('/students/:id', facilitatorController.getFacilitatorStudentProfile);
 

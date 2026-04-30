@@ -1,276 +1,229 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import {
-  ArrowLeft, ChevronDown, ChevronRight, CheckCircle,
-  XCircle, MessageSquare, Loader2, Sparkles,
+  ArrowLeft, CheckCircle, XCircle, MessageSquare, Loader2,
+  Sparkles, MonitorPlay, BookOpen, ListChecks, FileText, Send,
+  ClipboardList, Trophy,
 } from 'lucide-react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
-import type { AiCourse, AiModule, ReviewFeedback, CourseAction } from '@/features/aiCurriculum/types';
+import type { AiCourse, AiModule, AiLesson, ReviewFeedback, CourseAction } from '@/features/aiCurriculum/types';
 import toast from 'react-hot-toast';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 
-// ─── Curriculum tree (read-only) ─────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-function LessonView({ lesson }: { lesson: AiModule['topics'][0]['lessons'][0] }) {
-  const [open, setOpen] = useState(false);
+const TYPE_ICON: Record<string, React.ElementType> = {
+  video: MonitorPlay, exercise: BookOpen, quiz: ListChecks, reading: FileText,
+};
+const TYPE_COLOR: Record<string, string> = {
+  video: 'text-blue-500', exercise: 'text-green-500',
+  quiz: 'text-orange-400', reading: 'text-purple-500',
+};
+
+// ─── Lesson row ────────────────────────────────────────────────────────────────
+
+function LessonRow({ lesson }: { lesson: AiLesson }) {
+  const Icon = TYPE_ICON[lesson.lesson_type] ?? MonitorPlay;
+  const iconColor = TYPE_COLOR[lesson.lesson_type] ?? 'text-blue-500';
   return (
-    <div className='border border-slate-100 rounded-lg overflow-hidden'>
-      <button
-        className='w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50'
-        onClick={() => setOpen((v) => !v)}
-      >
-        {open ? <ChevronDown className='w-3.5 h-3.5 text-slate-400' /> : <ChevronRight className='w-3.5 h-3.5 text-slate-400' />}
-        <span className='text-sm text-slate-700'>{lesson.title}</span>
-      </button>
-      {open && (
-        <div className='px-4 pb-4 pt-1 bg-slate-50 border-t border-slate-100 space-y-3'>
-          {lesson.explanation && (
-            <div>
-              <p className='text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5'>Explanation</p>
-              <p className='text-sm text-slate-700'>{lesson.explanation}</p>
-            </div>
-          )}
-          {lesson.example && (
-            <div>
-              <p className='text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5'>Example</p>
-              <p className='text-sm text-slate-700'>{lesson.example}</p>
-            </div>
-          )}
-          {lesson.activity && (
-            <div>
-              <p className='text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5'>Activity</p>
-              <p className='text-sm text-slate-700'>{lesson.activity}</p>
-            </div>
-          )}
-          {lesson.interview_questions?.length > 0 && (
-            <div>
-              <p className='text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1'>Interview Questions</p>
-              <ul className='space-y-1'>
-                {lesson.interview_questions.map((q, i) => (
-                  <li key={i} className='text-sm text-slate-600 flex gap-1.5'>
-                    <span className='text-blue-400 font-bold flex-shrink-0'>Q{i + 1}.</span>{q}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+    <div className='flex items-center gap-3 py-1.5'>
+      <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />
+      <span className='flex-1 text-[13px] text-slate-700'>{lesson.title}</span>
+      <span className='text-[12px] text-slate-400 shrink-0'>{lesson.duration_mins ?? 15} min</span>
+      <span className='text-[11px] text-slate-400 border border-slate-200 rounded px-1.5 py-px shrink-0 font-medium'>
+        Required
+      </span>
     </div>
   );
 }
 
-function ModuleView({ mod }: { mod: AiModule }) {
-  const [open, setOpen] = useState(true);
+// ─── Module card ──────────────────────────────────────────────────────────────
+
+function ModuleCard({ mod, index }: { mod: AiModule; index: number }) {
   return (
-    <div className='bg-white border-2 border-slate-100 rounded-xl overflow-hidden'>
-      <button
-        className='w-full flex items-center gap-3 px-5 py-4 text-left bg-blue-50/60 hover:bg-blue-50 transition-colors border-b border-slate-100'
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className='w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0'>
-          {mod.order_index + 1}
-        </span>
-        <span className='font-bold text-slate-800 flex-1'>{mod.title}</span>
-        <span className='text-xs text-slate-400'>{mod.topics.length} topics</span>
-        {open ? <ChevronDown className='w-4 h-4 text-slate-400' /> : <ChevronRight className='w-4 h-4 text-slate-400' />}
-      </button>
-
-      {open && (
-        <div className='px-5 py-4 space-y-4'>
-          {mod.description && <p className='text-sm text-slate-600'>{mod.description}</p>}
-
-          {mod.practice_tasks?.length > 0 && (
-            <div>
-              <p className='text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5'>Practice Tasks</p>
-              <ul className='space-y-1'>
-                {mod.practice_tasks.map((t, i) => (
-                  <li key={i} className='text-sm text-slate-600 flex gap-1.5'>
-                    <span className='text-green-500 font-bold flex-shrink-0'>→</span>{t}
-                  </li>
-                ))}
-              </ul>
+    <div className='bg-white border border-slate-200 rounded-xl px-6 py-5'>
+      <h3 className='text-[15px] font-bold text-slate-800 mb-4'>
+        Topic {index + 1}: {mod.title}
+      </h3>
+      <div className='space-y-4'>
+        {mod.topics.map((topic) => (
+          <div key={topic.id}>
+            <p className='text-[12px] font-bold text-slate-500 mb-1.5'>Unit: {topic.title}</p>
+            <div className='space-y-0.5 pl-1'>
+              {topic.lessons.map((lesson) => (
+                <LessonRow key={lesson.id} lesson={lesson} />
+              ))}
             </div>
-          )}
-
-          {mod.topics.map((topic) => (
-            <div key={topic.id}>
-              <div className='flex items-center gap-2 mb-2'>
-                <ChevronRight className='w-3.5 h-3.5 text-slate-400' />
-                <span className='text-sm font-semibold text-slate-700'>{topic.title}</span>
-                <span className='text-xs text-slate-400'>({topic.lessons.length} lessons)</span>
+            {topic.assignment && (
+              <div className='mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200'>
+                <ClipboardList className='w-3.5 h-3.5 text-amber-500 shrink-0' />
+                <span className='text-[12px] font-semibold text-amber-700 truncate flex-1'>
+                  Assignment: {topic.assignment.title}
+                </span>
+                <span className='text-[11px] text-amber-500 shrink-0'>{topic.assignment.max_score} pts</span>
               </div>
-              <div className='ml-5 space-y-1.5'>
-                {topic.lessons.map((lesson) => (
-                  <LessonView key={lesson.id} lesson={lesson} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── JD Alignment panel ───────────────────────────────────────────────────────
-
-function JDAlignmentPanel({ course }: { course: AiCourse }) {
-  const technicalSkills = course.skills.filter((s) => s.category === 'technical');
-  const toolSkills = course.skills.filter((s) => s.category === 'tools');
-  const softSkills = course.skills.filter((s) => s.category === 'soft');
-
-  return (
-    <div className='grid grid-cols-2 gap-4'>
-      {/* JD */}
-      <div className='bg-slate-50 rounded-xl p-4 border border-slate-100'>
-        <p className='text-xs font-bold text-slate-500 uppercase tracking-wide mb-2'>Job Description</p>
-        {course.jd_text ? (
-          <p className='text-sm text-slate-700 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto'>{course.jd_text}</p>
-        ) : (
-          <p className='text-sm text-slate-400 italic'>No JD provided</p>
-        )}
-      </div>
-
-      {/* Skills */}
-      <div className='bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-4'>
-        <p className='text-xs font-bold text-slate-500 uppercase tracking-wide'>Extracted Skills</p>
-        {technicalSkills.length > 0 && (
-          <div>
-            <p className='text-xs font-semibold text-blue-600 mb-1.5'>Technical</p>
-            <div className='flex flex-wrap gap-1.5'>
-              {technicalSkills.map((s, i) => (
-                <span key={i} className='text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium'>{s.name}</span>
-              ))}
-            </div>
+            )}
           </div>
-        )}
-        {toolSkills.length > 0 && (
-          <div>
-            <p className='text-xs font-semibold text-purple-600 mb-1.5'>Tools</p>
-            <div className='flex flex-wrap gap-1.5'>
-              {toolSkills.map((s, i) => (
-                <span key={i} className='text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium'>{s.name}</span>
-              ))}
-            </div>
-          </div>
-        )}
-        {softSkills.length > 0 && (
-          <div>
-            <p className='text-xs font-semibold text-green-600 mb-1.5'>Soft Skills</p>
-            <div className='flex flex-wrap gap-1.5'>
-              {softSkills.map((s, i) => (
-                <span key={i} className='text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium'>{s.name}</span>
-              ))}
-            </div>
-          </div>
-        )}
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Review form ──────────────────────────────────────────────────────────────
+// ─── Admin review panel ───────────────────────────────────────────────────────
 
-function ReviewForm({
-  onSubmit, submitting,
+function AdminReviewPanel({
+  course,
+  action,
+  setAction,
+  feedback,
+  setFeedback,
+  onReview,
+  submitting,
 }: {
-  onSubmit: (action: CourseAction, feedback: ReviewFeedback) => void;
+  course: AiCourse;
+  action: CourseAction | '';
+  setAction: (a: CourseAction | '') => void;
+  feedback: ReviewFeedback;
+  setFeedback: React.Dispatch<React.SetStateAction<ReviewFeedback>>;
+  onReview: (action: CourseAction, feedback: ReviewFeedback) => void;
   submitting: boolean;
 }) {
-  const [action, setAction] = useState<CourseAction | ''>('');
-  const [feedback, setFeedback] = useState<ReviewFeedback>({
-    missing_skills: '', incorrect_content: '',
-    difficulty_issues: '', suggestions: '', inline_comments: '',
-  });
 
-  const handleSubmit = () => {
-    if (!action) { toast.error('Select an action'); return; }
-    onSubmit(action as CourseAction, feedback);
-  };
+  const ACTIONS = [
+    { value: 'approved' as CourseAction, label: 'Approve', icon: CheckCircle, active: 'bg-green-600 text-white border-green-600', hover: 'hover:border-green-400 hover:text-green-600' },
+    { value: 'changes_requested' as CourseAction, label: 'Request Changes', icon: MessageSquare, active: 'bg-orange-500 text-white border-orange-500', hover: 'hover:border-orange-400 hover:text-orange-600' },
+    { value: 'rejected' as CourseAction, label: 'Reject', icon: XCircle, active: 'bg-red-600 text-white border-red-600', hover: 'hover:border-red-400 hover:text-red-600' },
+  ] as const;
 
   return (
-    <div className='bg-white border-2 border-slate-200 rounded-2xl p-5 space-y-5'>
-      <div className='flex items-center gap-2'>
-        <MessageSquare className='w-4 h-4 text-slate-500' />
-        <h3 className='font-bold text-slate-800'>Reviewer Decision</h3>
+    <div className='bg-white border border-slate-200 rounded-xl p-5 space-y-5 sticky top-6'>
+      <div>
+        <h3 className='text-sm font-bold text-slate-800 mb-1'>Reviewer Decision</h3>
+        <p className='text-xs text-slate-400'>"{course.title}" by {course.creator_name}</p>
       </div>
 
-      {/* Action selector */}
-      <div className='grid grid-cols-3 gap-3'>
-        {([
-          { value: 'approved', label: 'Approve', icon: CheckCircle, color: 'border-green-500 bg-green-50 text-green-700' },
-          { value: 'changes_requested', label: 'Request Changes', icon: MessageSquare, color: 'border-orange-400 bg-orange-50 text-orange-700' },
-          { value: 'rejected', label: 'Reject', icon: XCircle, color: 'border-red-400 bg-red-50 text-red-700' },
-        ] as const).map(({ value, label, icon: Icon, color }) => (
+      {/* Course meta */}
+      <div className='space-y-1.5 text-[12px]'>
+        {[
+          ['Domain', course.domain],
+          ['Level', course.level],
+          ['Goal', course.learning_goal],
+          ['Duration', course.duration_weeks ? `${course.duration_weeks} weeks` : '—'],
+          ['Style', course.content_preference || '—'],
+        ].map(([k, v]) => (
+          <div key={k} className='flex justify-between'>
+            <span className='text-slate-400'>{k}</span>
+            <span className='font-semibold text-slate-700 capitalize'>{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className='border-t border-slate-100' />
+
+      {/* Action buttons */}
+      <div className='space-y-2'>
+        {ACTIONS.map(({ value, label, icon: Icon, active, hover }) => (
           <button
             key={value}
             onClick={() => setAction(value)}
-            className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-sm font-bold border-2 transition-all ${
-              action === value ? color : 'border-slate-200 text-slate-500 hover:border-slate-300'
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold border-2 transition-all ${
+              action === value ? active : `border-slate-200 text-slate-500 ${hover}`
             }`}
           >
-            <Icon className='w-4 h-4' /> {label}
+            <Icon className='w-4 h-4 shrink-0' /> {label}
           </button>
         ))}
       </div>
 
       {/* Feedback fields */}
-      <div className='space-y-3'>
-        {[
-          { key: 'missing_skills', label: 'Missing Skills' },
-          { key: 'incorrect_content', label: 'Incorrect Content' },
-          { key: 'difficulty_issues', label: 'Difficulty Issues' },
-          { key: 'suggestions', label: 'Suggestions (required for changes)' },
-          { key: 'inline_comments', label: 'Additional Comments' },
-        ].map(({ key, label }) => (
-          <div key={key}>
-            <label className='block text-xs font-semibold text-slate-600 mb-1'>{label}</label>
-            <textarea
-              rows={2}
-              className='w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none'
-              value={feedback[key as keyof ReviewFeedback] || ''}
-              onChange={(e) => setFeedback((f) => ({ ...f, [key]: e.target.value }))}
-            />
-          </div>
-        ))}
-      </div>
+      {action && (
+        <div className='space-y-3'>
+          {[
+            { key: 'missing_skills', label: 'Missing Skills' },
+            { key: 'suggestions', label: 'Suggestions' },
+            { key: 'inline_comments', label: 'Additional Comments' },
+          ].map(({ key, label }) => (
+            <div key={key}>
+              <label className='block text-[11px] font-bold text-slate-500 mb-1'>{label}</label>
+              <textarea
+                rows={2}
+                className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 resize-none'
+                value={feedback[key as keyof ReviewFeedback] || ''}
+                onChange={(e) => setFeedback((f) => ({ ...f, [key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
-      <button
-        onClick={handleSubmit}
-        disabled={!action || submitting}
-        className={`w-full py-3 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          action === 'approved'
-            ? 'bg-green-600 text-white hover:bg-green-700'
-            : action === 'rejected'
-            ? 'bg-red-600 text-white hover:bg-red-700'
-            : 'bg-blue-600 text-white hover:bg-blue-700'
-        }`}
-      >
-        {submitting ? (
-          <span className='flex items-center justify-center gap-2'>
-            <Loader2 className='w-4 h-4 animate-spin' /> Submitting…
-          </span>
-        ) : (
-          'Submit Review'
-        )}
-      </button>
+      {/* Review history */}
+      {course.reviews?.length > 0 && (
+        <>
+          <div className='border-t border-slate-100' />
+          <div>
+            <p className='text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2'>Review History</p>
+            <div className='space-y-2'>
+              {course.reviews.map((r) => (
+                <div key={r.id} className='text-[11px] border border-slate-100 rounded-lg px-3 py-2'>
+                  <div className='flex items-center justify-between mb-0.5'>
+                    <span className='font-bold text-slate-700'>{r.reviewer_name}</span>
+                    <span className={`px-1.5 py-px rounded-full font-bold ${
+                      r.action === 'approved' ? 'bg-green-100 text-green-700' :
+                      r.action === 'rejected' ? 'bg-red-100 text-red-700' :
+                      'bg-orange-100 text-orange-700'
+                    }`}>
+                      {r.action.replace('_', ' ')}
+                    </span>
+                  </div>
+                  {r.feedback?.suggestions && (
+                    <p className='text-slate-500 mt-0.5'>{r.feedback.suggestions}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className='flex gap-2'>
+        <button
+          onClick={() => { if (!action) { toast.error('Select an action'); return; } onReview(action as CourseAction, feedback); }}
+          disabled={!action || submitting}
+          className='flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#1e2653] text-white text-sm font-bold rounded-lg hover:bg-[#16203f] disabled:opacity-50 transition-colors'
+        >
+          {submitting ? <Loader2 className='w-4 h-4 animate-spin' /> : <CheckCircle className='w-4 h-4' />}
+          Submit
+        </button>
+        <button
+          disabled={submitting}
+          className='px-3 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors'
+        >
+          Draft
+        </button>
+      </div>
     </div>
   );
 }
 
-// ─── Main review page ─────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function AiCurriculumReview() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
   const isAdmin = user?.role === 'admin';
+  const base = isAdmin ? '/dashboard/admin' : '/dashboard/facilitator';
 
   const [course, setCourse] = useState<AiCourse | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [reviewAction, setReviewAction] = useState<CourseAction | ''>('');
+  const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedback>({
+    missing_skills: '', incorrect_content: '',
+    difficulty_issues: '', suggestions: '', inline_comments: '',
+  });
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -287,12 +240,25 @@ export default function AiCurriculumReview() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleReview = async (action: CourseAction, feedback: ReviewFeedback) => {
+  const handleSubmitForReview = async () => {
+    setSubmitting(true);
+    try {
+      await aiCurriculumApi.submit(id!);
+      toast.success('Submitted for review!');
+      setCourse((c) => c ? { ...c, status: 'in_review' } : c);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to submit');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAdminReview = async (action: CourseAction, feedback: ReviewFeedback) => {
     setSubmitting(true);
     try {
       await aiCurriculumApi.review(id!, action, feedback);
       toast.success(`Course ${action.replace('_', ' ')}`);
-      navigate('/dashboard/admin/ai-curriculum');
+      navigate(`${base}/ai-curriculum`);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Review failed');
     } finally {
@@ -302,106 +268,164 @@ export default function AiCurriculumReview() {
 
   if (loading) {
     return (
-      <div className='flex items-center justify-center h-64'>
-        <Loader2 className='w-6 h-6 animate-spin text-blue-500' />
+      <div className='flex items-center justify-center h-screen bg-slate-50'>
+        <Loader2 className='w-6 h-6 animate-spin text-indigo-500' />
       </div>
     );
   }
 
   if (!course) return <div className='p-8 text-slate-500'>Course not found.</div>;
 
+  // Aggregate stats
+  const totalTopics = course.modules.reduce((s, m) => s + m.topics.length, 0);
+  const totalLessons = course.modules.reduce((s, m) =>
+    s + m.topics.reduce((ts, t) => ts + t.lessons.length, 0), 0);
+
+  const canSubmit = ['draft', 'changes_requested'].includes(course.status) && !isAdmin;
+  const isAdminReview = isAdmin && course.status === 'in_review';
+
   return (
-    <div className='max-w-5xl mx-auto px-4 py-6'>
-      {/* Header */}
-      <div className='flex items-center gap-3 mb-6'>
-        <button
-          onClick={() => navigate('/dashboard/admin/ai-curriculum')}
-          className='p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors'
-        >
-          <ArrowLeft className='w-4 h-4' />
-        </button>
-        <div>
-          <div className='flex items-center gap-2'>
-            <Sparkles className='w-4 h-4 text-blue-500' />
-            <h1 className='text-xl font-bold text-[#1e2653]'>Course Review</h1>
+    <div className='min-h-screen bg-slate-50 flex flex-col'>
+      {/* ── Page content ── */}
+      <div className={`flex-1 pb-24 ${isAdminReview ? 'max-w-6xl' : 'max-w-3xl'} mx-auto w-full px-6 pt-6`}>
+
+        {/* Breadcrumb */}
+        <div className='flex items-center gap-1.5 text-[11px] text-slate-400 mb-4'>
+          <span className='hover:text-slate-600 cursor-pointer' onClick={() => navigate(base)}>Dashboard</span>
+          <span>/</span>
+          <span className='hover:text-slate-600 cursor-pointer' onClick={() => navigate(`${base}/ai-curriculum`)}>Courses</span>
+          <span>/</span>
+          <span className='text-slate-600 font-semibold'>Submit for Review</span>
+        </div>
+
+        {/* Header */}
+        <div className='flex items-center gap-3 mb-6'>
+          <button
+            onClick={() => navigate(`${base}/ai-curriculum/${id}/edit`)}
+            className='p-1.5 hover:bg-white rounded-lg text-slate-500 border border-transparent hover:border-slate-200 transition-colors'
+          >
+            <ArrowLeft className='w-4 h-4' />
+          </button>
+          <div>
+            <h1 className='text-2xl font-extrabold text-slate-800'>
+              {isAdminReview ? 'Review Course' : 'Review & Submit'}
+            </h1>
+            <p className='text-[13px] text-slate-400 mt-0.5'>
+              {isAdminReview
+                ? `Reviewing "${course.title}" by ${course.creator_name}`
+                : 'Review your course before submitting for approval'}
+            </p>
           </div>
-          <p className='text-xs text-slate-500 mt-0.5'>
-            {course.title} · by {course.creator_name} · {course.role_focus}
-          </p>
+        </div>
+
+        <div className={isAdminReview ? 'flex gap-6 items-start' : ''}>
+          {/* Main content */}
+          <div className='flex-1 min-w-0 space-y-4'>
+            {/* Stats strip */}
+            <div className='bg-white border border-slate-200 rounded-xl px-6 py-4 grid grid-cols-4 divide-x divide-slate-100'>
+              <div className='pr-6'>
+                <p className='text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1'>Course Title</p>
+                <p className='text-[14px] font-bold text-slate-800 truncate'>{course.title}</p>
+              </div>
+              <div className='px-6'>
+                <p className='text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1'>Topics</p>
+                <p className='text-[22px] font-extrabold text-slate-800'>{course.modules.length}</p>
+              </div>
+              <div className='px-6'>
+                <p className='text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1'>Units</p>
+                <p className='text-[22px] font-extrabold text-slate-800'>{totalTopics}</p>
+              </div>
+              <div className='pl-6'>
+                <p className='text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1'>Subtopics</p>
+                <p className='text-[22px] font-extrabold text-slate-800'>{totalLessons}</p>
+              </div>
+            </div>
+
+            {/* Module cards */}
+            {course.modules.map((mod, i) => (
+              <ModuleCard key={mod.id} mod={mod} index={i} />
+            ))}
+
+            {/* Course-level capstone */}
+            {course.capstone_project && (
+              <div className='flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-50 border border-indigo-200'>
+                <Trophy className='w-4 h-4 text-indigo-500 shrink-0' />
+                <div className='flex-1 min-w-0'>
+                  <p className='text-[12px] font-bold text-indigo-700'>Final Capstone: {course.capstone_project.title}</p>
+                  <p className='text-[11px] text-indigo-500 truncate'>{course.capstone_project.description}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Admin review sidebar */}
+          {isAdminReview && (
+            <div className='w-80 shrink-0'>
+              <AdminReviewPanel
+                course={course}
+                action={reviewAction}
+                setAction={setReviewAction}
+                feedback={reviewFeedback}
+                setFeedback={setReviewFeedback}
+                onReview={handleAdminReview}
+                submitting={submitting}
+              />
+            </div>
+          )}
         </div>
       </div>
 
-      <div className='grid grid-cols-3 gap-6'>
-        {/* Left: curriculum */}
-        <div className='col-span-2 space-y-5'>
-          {/* JD alignment */}
-          <section>
-            <h2 className='text-sm font-bold text-slate-700 mb-3'>JD Alignment</h2>
-            <JDAlignmentPanel course={course} />
-          </section>
+      {/* ── Sticky bottom bar ── */}
+      <div className='fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-between z-10'>
+        <button
+          onClick={() => navigate(`${base}/ai-curriculum/${id}/edit`)}
+          className='flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors'
+        >
+          <ArrowLeft className='w-4 h-4' /> Back to Editor
+        </button>
 
-          {/* Curriculum tree */}
-          <section>
-            <h2 className='text-sm font-bold text-slate-700 mb-3'>
-              Curriculum ({course.modules.length} modules)
-            </h2>
-            <div className='space-y-3'>
-              {course.modules.map((mod) => (
-                <ModuleView key={mod.id} mod={mod} />
-              ))}
-            </div>
-          </section>
-        </div>
-
-        {/* Right: review form + metadata */}
-        <div className='space-y-4'>
-          {/* Course info */}
-          <div className='bg-white border border-slate-200 rounded-xl p-4 space-y-2'>
-            <h3 className='text-xs font-bold text-slate-500 uppercase tracking-wide'>Course Info</h3>
-            {[
-              ['Domain', course.domain],
-              ['Audience', course.audience],
-              ['Level', course.level],
-              ['Goal', course.learning_goal],
-              ['Duration', course.duration_weeks ? `${course.duration_weeks} weeks` : '—'],
-              ['Style', course.content_preference || '—'],
-            ].map(([k, v]) => (
-              <div key={k} className='flex justify-between text-sm'>
-                <span className='text-slate-500'>{k}</span>
-                <span className='font-medium text-slate-700 capitalize'>{v}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Review history */}
-          {course.reviews?.length > 0 && (
-            <div className='bg-white border border-slate-200 rounded-xl p-4'>
-              <h3 className='text-xs font-bold text-slate-500 uppercase tracking-wide mb-3'>Review History</h3>
-              <div className='space-y-2'>
-                {course.reviews.map((r) => (
-                  <div key={r.id} className='text-xs border border-slate-100 rounded-lg p-2.5'>
-                    <div className='flex items-center justify-between mb-1'>
-                      <span className='font-semibold text-slate-700'>{r.reviewer_name}</span>
-                      <span className={`px-1.5 py-0.5 rounded-full font-bold ${
-                        r.action === 'approved' ? 'bg-green-100 text-green-700' :
-                        r.action === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-orange-100 text-orange-700'
-                      }`}>
-                        {r.action.replace('_', ' ')}
-                      </span>
-                    </div>
-                    {r.feedback?.suggestions && (
-                      <p className='text-slate-600'>{r.feedback.suggestions}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div className='flex items-center gap-3'>
+          {/* Facilitator: submit for review */}
+          {canSubmit && (
+            <button
+              onClick={handleSubmitForReview}
+              disabled={submitting}
+              className='flex items-center gap-2 px-5 py-2 text-sm font-bold bg-[#1e2653] text-white rounded-lg hover:bg-[#16203f] disabled:opacity-50 transition-colors'
+            >
+              {submitting ? <Loader2 className='w-4 h-4 animate-spin' /> : <Send className='w-4 h-4' />}
+              Submit for Review
+            </button>
           )}
 
-          {/* Review form — only admin, only when in_review */}
-          {isAdmin && course.status === 'in_review' && (
-            <ReviewForm onSubmit={handleReview} submitting={submitting} />
+          {/* Facilitator: pending state */}
+          {course.status === 'in_review' && !isAdmin && (
+            <span className='text-sm font-semibold text-yellow-600 bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-lg'>
+              Pending Review
+            </span>
+          )}
+
+
+          {/* Admin: publish approved course */}
+          {isAdmin && course.status === 'approved' && (
+            <button
+              onClick={async () => {
+                setSubmitting(true);
+                try {
+                  await aiCurriculumApi.publish(id!);
+                  toast.success('Course published!');
+                  navigate(`${base}/ai-curriculum`);
+                } catch (err: any) {
+                  toast.error(err?.response?.data?.message || 'Failed to publish');
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              disabled={submitting}
+              className='flex items-center gap-2 px-5 py-2 text-sm font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors'
+            >
+              {submitting ? <Loader2 className='w-4 h-4 animate-spin' /> : <Sparkles className='w-4 h-4' />}
+              Publish Course
+            </button>
           )}
         </div>
       </div>

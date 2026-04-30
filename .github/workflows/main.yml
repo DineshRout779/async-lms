@@ -37,10 +37,10 @@ jobs:
           script: |
             cd /home/ubuntu/lms-be
             git fetch origin
-            git checkout infra-test
-            git reset --hard origin/infra-test
+            git checkout ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
             cd backend
-            
+
             # Generate .env file automatically
             echo "PGHOST=${{ secrets.PGHOST }}" > .env
             echo "PGDATABASE=${{ secrets.PGDATABASE }}" >> .env
@@ -103,8 +103,8 @@ jobs:
 
             cd /home/ubuntu/lms-be
             git fetch origin
-            git checkout infra-test
-            git reset --hard origin/infra-test
+            git checkout ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
             cd backend
 
             # Generate .env file automatically with Dynamic IP Detection

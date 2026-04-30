@@ -2,7 +2,7 @@ const isStudent = async (req, res, next) => {
   try {
     if (req.user.role !== 'student') {
       return res.status(403).json({
-        message: 'User is not stduent',
+        message: 'User is not student',
       });
     }
     next();

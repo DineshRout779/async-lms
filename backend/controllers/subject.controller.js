@@ -417,11 +417,13 @@ exports.getSubtopicContent = async (req, res) => {
       lessonRows.find((r) => r.video_url) ||
       lessonRows.find((r) => r.content_type === 'video');
 
-    // Read markdown
+    // Read markdown — three sources: inline AI content, remote URL, or local file
     let markdownContent = '';
     if (markdownRow?.markdown_path) {
       try {
-        if (markdownRow.markdown_path.startsWith('http')) {
+        if (markdownRow.markdown_path.startsWith('ai-generated:')) {
+          markdownContent = markdownRow.markdown_path.slice('ai-generated:'.length);
+        } else if (markdownRow.markdown_path.startsWith('http')) {
           markdownContent = await fetchTextFromUrl(markdownRow.markdown_path);
         } else {
           const relativePath = markdownRow.markdown_path.replace(/^\/+/, '');

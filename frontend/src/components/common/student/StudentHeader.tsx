@@ -8,7 +8,6 @@ import {
   Settings,
 } from 'lucide-react';
 import NotificationBell from '@/components/common/NotificationBell';
-import { Button } from '@/components/ui/button';
 import { useAppSelector, useAppDispatch } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 import { logout } from '@/features/auth/authSlice';
@@ -55,7 +54,11 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
         <h1 className='font-bold text-lg text-[#1e2653] hidden sm:block tracking-tight'>
           {(() => {
             const h = new Date().getHours();
-            return h < 12 ? 'Good Morning,' : h < 17 ? 'Good Afternoon,' : 'Good Evening,';
+            return h < 12
+              ? 'Good Morning,'
+              : h < 17
+                ? 'Good Afternoon,'
+                : 'Good Evening,';
           })()}{' '}
           <span className='text-blue-600 capitalize'>
             {user?.full_name?.split(' ')[0] || 'Student'}!
@@ -140,16 +143,6 @@ export default function StudentHeader({ toggleSidebar }: HeaderProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Primary CTA */}
-          <Button
-            size='sm'
-            variant={'accent'}
-            onClick={() => navigate('/dashboard/student/courses')}
-            className='cursor-pointer text-white font-bold rounded-lg shadow-sm shadow-blue-100 hidden sm:flex'
-          >
-            Continue Learning
-          </Button>
         </div>
       </div>
     </header>

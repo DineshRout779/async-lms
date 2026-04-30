@@ -6,6 +6,20 @@ export interface Skill {
   category: 'technical' | 'tools' | 'soft';
 }
 
+export interface AiQuizQuestion {
+  question: string;
+  options: string[];
+  correct_index: number;
+  explanation: string;
+}
+
+export interface AiExercise {
+  title: string;
+  description: string;
+  tasks: string[];
+  starter_code: string;
+}
+
 export interface AiLesson {
   id: string;
   topic_id: string;
@@ -14,7 +28,24 @@ export interface AiLesson {
   example: string;
   activity: string;
   interview_questions: string[];
+  lesson_type: 'video' | 'exercise' | 'quiz' | 'reading';
+  duration_mins: number;
   order_index: number;
+  video_url: string | null;
+  quiz_questions: AiQuizQuestion[];
+  exercise_data: AiExercise | null;
+}
+
+export interface AiAssignment {
+  title: string;
+  instructions: string;
+  max_score: number;
+}
+
+export interface AiCapstoneProject {
+  title: string;
+  description: string;
+  instructions: string;
 }
 
 export interface AiTopic {
@@ -23,6 +54,8 @@ export interface AiTopic {
   title: string;
   description: string;
   order_index: number;
+  quiz_questions: AiQuizQuestion[];
+  assignment: AiAssignment | null;
   lessons: AiLesson[];
 }
 
@@ -61,8 +94,9 @@ export interface AiCourse {
   role_focus: string;
   jd_text: string | null;
   skills: Skill[];
-  audience: string;
+  audience: string[];
   level: string;
+  capstone_project: AiCapstoneProject | null;
   learning_goal: string;
   duration_weeks: number | null;
   daily_hours: number | null;
@@ -85,16 +119,34 @@ export interface CourseFormData {
   role_focus: string;
   jd_text: string;
   skills: Skill[];
-  audience: string;
+  audience: string[];
   level: string;
   learning_goal: string;
   duration_weeks: number | '';
   daily_hours: number | '';
   content_preference: string;
+  num_modules: number | '';
+}
+
+// Incremental generation suggestion shapes
+export interface TopicSuggestion {
+  title: string;
+  description: string;
+}
+
+export interface UnitSuggestion {
+  title: string;
+  description: string;
+}
+
+export interface SubtopicSuggestion {
+  title: string;
+  duration_mins: number;
 }
 
 // Shape returned by AI generate endpoint (before saving)
 export interface GeneratedCurriculum {
+  capstone_project?: AiCapstoneProject;
   modules: Array<{
     title: string;
     description: string;
@@ -103,12 +155,18 @@ export interface GeneratedCurriculum {
     topics: Array<{
       title: string;
       description: string;
+      assignment?: AiAssignment;
       lessons: Array<{
         title: string;
         explanation: string;
         example: string;
         activity: string;
         interview_questions: string[];
+        lesson_type?: string;
+        duration_mins?: number;
+        video_url?: string;
+        quiz_questions?: AiQuizQuestion[];
+        exercise?: AiExercise;
       }>;
     }>;
   }>;
