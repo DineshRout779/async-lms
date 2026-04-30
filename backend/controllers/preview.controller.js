@@ -59,7 +59,7 @@ function proxyDirect(ip, port, req, res, proxyBase) {
         const chunks = [];
         upstreamRes.on('data', (c) => chunks.push(c));
         upstreamRes.on('end', () => {
-          sendProxied(res, upstreamRes.statusCode, headers, Buffer.concat(chunks), isHtml, proxyBase);
+          sendProxied(res, upstreamRes.statusCode, headers, Buffer.concat(chunks), isText, proxyBase);
           resolve();
         });
       }
@@ -98,8 +98,8 @@ function proxyCurl(containerName, port, req, res, proxyBase) {
         const k = line.slice(0, ci).toLowerCase();
         if (!DROP_HEADERS.has(k)) headers[k] = line.slice(ci + 2);
       }
-      const isHtml = (headers['content-type'] || '').includes('text/html');
-      sendProxied(res, status, headers, Buffer.from(raw.slice(sep + sepLen), 'binary'), isHtml, proxyBase);
+      const isText = TEXT_TYPES.some((t) => (headers['content-type'] || '').includes(t));
+      sendProxied(res, status, headers, Buffer.from(raw.slice(sep + sepLen), 'binary'), isText, proxyBase);
       resolve();
     });
     child.on('error', reject);
@@ -110,7 +110,20 @@ function proxyCurl(containerName, port, req, res, proxyBase) {
 exports.previewController = async (req, res) => {
   const { userId, projectId, port } = req.params;
   const containerName = `workspace-${userId}-${projectId}`;
-  const proxyBase = `/api/v1/preview/${userId}/${projectId}/${port}`;
+  
+  let prefix = '';
+  if (process.env.WORKER_URL) {
+    try {
+      const ip = new URL(process.env.WORKER_URL).hostname;
+      // If the orchestrator is in front, all absolute paths must be prefixed
+      // with /worker/<ip> so the orchestrator knows to route them back to this worker!
+      prefix = `/worker/${ip}`;
+    } catch (e) {
+      console.error('[preview] invalid WORKER_URL:', e.message);
+    }
+  }
+  
+  const proxyBase = `${prefix}/api/v1/preview/${userId}/${projectId}/${port}`;
 
   // 1. Port proxy running → use localhost (fast, works on Windows + Linux)
   if (hasPortProxy(containerName, parseInt(port, 10))) {

@@ -8,7 +8,9 @@ RUN apk update && apk add --no-cache \
     vim \
     bash
 
-RUN adduser -D -s /bin/bash playground \
+RUN deluser ubuntu || true \
+    && deluser node || true \
+    && adduser -u 1000 -D -s /bin/bash playground \
     && echo "playground ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER playground
