@@ -55,6 +55,9 @@ const StudentProfile = lazy(
 const StudentSettings = lazy(
   () => import('@/pages/dashboard/student/StudentSettings'),
 );
+const ResumeBuilder = lazy(
+  () => import('@/pages/dashboard/student/ResumeBuilder'),
+);
 const CourseViewLayout = lazy(() => import('@/layouts/CourseLayout'));
 
 // Facilitator Dashboard
@@ -170,6 +173,7 @@ const router = createBrowserRouter([
               { path: 'leaderboard', element: <Leaderboard /> },
               { path: 'profile', element: <StudentProfile /> },
               { path: 'settings', element: <StudentSettings /> },
+              { path: 'resume-builder', element: <ResumeBuilder /> },
               { path: 'courses', element: <MyCourses /> },
               {
                 path: 'courses/:slug',

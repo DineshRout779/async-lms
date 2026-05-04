@@ -57,6 +57,7 @@ function DropMenu({
             <button
               key={i}
               disabled={item.disabled}
+              onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation();
                 setOpen(false);

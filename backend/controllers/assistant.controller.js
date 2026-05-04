@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const pool = require('../config/pg');
 
 // console.log('using opennai key: ', process.env.CHATGPT_API_KEY);
 
@@ -78,5 +79,162 @@ exports.chat = async (req, res) => {
     res
       .status(500)
       .json({ message: 'AI service unavailable. Please try again.' });
+  }
+};
+
+exports.generateResume = async (req, res) => {
+  const userId = req.user.id;
+  const { workExperience = [], extraSkills = [], careerObjective = '' } = req.body;
+
+  try {
+    // Fetch profile (same query pattern as getUserProfile)
+    console.log('[resume] fetching profile for', userId);
+    const profileResult = await pool.query(
+      `SELECT
+         u.full_name, u.email, sp.degree, sp.year,
+         COALESCE(c.name, '') AS college_name,
+         COALESCE(SUM(pl.points), 0)::integer AS total_points
+       FROM public.users u
+       LEFT JOIN public.student_profiles sp ON sp.user_id = u.id
+       LEFT JOIN public.colleges c ON c.id = sp.college_id
+       LEFT JOIN public.points_log pl ON pl.user_id = u.id
+       WHERE u.id = $1
+       GROUP BY u.full_name, u.email, sp.degree, sp.year, c.name`,
+      [userId],
+    );
+    console.log('[resume] profile ok:', profileResult.rows[0]?.full_name);
+
+
+    // Fetch enrolled subjects and completed topic progress
+    console.log('[resume] fetching subjects');
+    const subjectsResult = await pool.query(
+      `SELECT s.name AS subject_name,
+              COUNT(DISTINCT utp.topic_id) FILTER (WHERE utp.is_completed = true) AS completed_topics,
+              COUNT(DISTINCT t.id) AS total_topics
+       FROM public.user_subjects us
+       JOIN public.subjects s ON s.id = us.subject_id
+       LEFT JOIN public.topics t ON t.subject_id = s.id
+       LEFT JOIN public.user_topic_progress utp ON utp.topic_id = t.id AND utp.user_id = $1
+       WHERE us.user_id = $1
+       GROUP BY s.name`,
+      [userId],
+    );
+    console.log('[resume] subjects ok:', subjectsResult.rows.length);
+
+    const profile = profileResult.rows[0] || {};
+    const subjects = subjectsResult.rows;
+
+    const systemPrompt = `You are a professional resume writer specializing in tech students and early-career developers.
+Generate a structured, ATS-friendly resume in JSON format. Be concise and impactful. Use action verbs. Do not fabricate specifics not provided.`;
+
+    const userPrompt = `Generate a professional resume for this student. Return ONLY valid JSON with this exact structure:
+{
+  "summary": "2-3 sentence professional summary",
+  "education": [{ "degree": "", "institution": "", "year": "", "details": "" }],
+  "skills": ["skill1", "skill2"],
+  "projects": [{ "name": "", "description": "", "technologies": [] }],
+  "achievements": ["achievement1"],
+  "experience": [{ "title": "", "company": "", "duration": "", "points": [""] }]
+}
+
+Student Data:
+- Name: ${profile.full_name || 'Student'}
+- Email: ${profile.email || ''}
+- College: ${profile.college_name || 'Not specified'}
+- Degree: ${profile.degree || 'Not specified'}, Year: ${profile.year || 'Not specified'}
+- Total XP Points: ${profile.total_points || 0}
+- Enrolled Subjects: ${subjects.map((s) => `${s.subject_name} (${s.completed_topics}/${s.total_topics} topics completed)`).join(', ') || 'None'}
+- Badges Earned: ${profile.badge_count || 0} badges
+- Career Objective: ${careerObjective || 'To grow as a software developer'}
+- Extra Skills: ${extraSkills.join(', ') || 'None provided'}
+- Work Experience: ${workExperience.length ? JSON.stringify(workExperience) : 'None'}
+
+Instructions:
+- Under skills, include programming languages and tools inferred from enrolled subjects plus extra skills provided.
+- Under projects, create 1-2 plausible student projects based on the subjects studied. Only include if subjects are present.
+- Under achievements, mention the badge count and notable XP milestones if points > 0.
+- Under experience, only include entries if work experience was provided. Leave as empty array otherwise.
+- Keep the summary grounded in the actual data provided.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 1200,
+      temperature: 0.7,
+      response_format: { type: 'json_object' },
+    });
+
+    const raw = completion.choices[0]?.message?.content ?? '{}';
+    const resumeData = JSON.parse(raw);
+
+    res.json({
+      success: true,
+      data: {
+        personalInfo: {
+          name: profile.full_name || '',
+          email: profile.email || '',
+          college: profile.college_name || '',
+          degree: profile.degree || '',
+          year: profile.year || '',
+        },
+        ...resumeData,
+      },
+    });
+  } catch (err) {
+    console.error('RESUME GENERATION ERROR:', err);
+    res.status(500).json({ message: 'Failed to generate resume. Please try again.' });
+  }
+};
+
+exports.optimizeWithJD = async (req, res) => {
+  const { resumeData, jobDescription } = req.body;
+
+  if (!resumeData || !jobDescription) {
+    return res.status(400).json({ message: 'resumeData and jobDescription are required' });
+  }
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an ATS optimization expert. Analyze a resume against a job description and return JSON with improvement suggestions and keyword matches.`,
+        },
+        {
+          role: 'user',
+          content: `Analyze this resume against the job description and return ONLY valid JSON with this structure:
+{
+  "atsScore": <number 0-100>,
+  "keywordMatch": <number 0-100>,
+  "contentQuality": <number 0-100>,
+  "formatting": <number 0-100>,
+  "missingKeywords": ["keyword1", "keyword2"],
+  "suggestions": ["suggestion1", "suggestion2", "suggestion3"],
+  "optimizedSummary": "Rewritten summary tailored to the JD"
+}
+
+Resume Summary: ${resumeData.summary || ''}
+Resume Skills: ${(resumeData.skills || []).join(', ')}
+Resume Experience: ${JSON.stringify(resumeData.experience || [])}
+Resume Projects: ${JSON.stringify(resumeData.projects || [])}
+
+Job Description:
+${jobDescription.slice(0, 2000)}`,
+        },
+      ],
+      max_tokens: 800,
+      temperature: 0.5,
+      response_format: { type: 'json_object' },
+    });
+
+    const raw = completion.choices[0]?.message?.content ?? '{}';
+    res.json({ success: true, data: JSON.parse(raw) });
+  } catch (err) {
+    console.error('JD OPTIMIZE ERROR:', err);
+    res.status(500).json({ message: 'Optimization failed. Please try again.' });
   }
 };

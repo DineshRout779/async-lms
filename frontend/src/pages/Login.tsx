@@ -21,8 +21,9 @@ export default function Login() {
   const userTypeParam = searchParams.get('user_type');
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { status, isAuthenticated, user } = useAppSelector(selectAuth);
+  const { status, isAuthenticated, user, token } = useAppSelector(selectAuth);
   const isLoading = status === 'loading';
+  const isResolvingSession = !!token && status === 'loading' && !user;
 
   // Show error from Google redirect failure
   useEffect(() => {
@@ -32,7 +33,7 @@ export default function Login() {
 
   // Redirect after auth
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (isResolvingSession || !isAuthenticated || !user) return;
     if (user.role === 'admin') {
       navigate('/dashboard/admin');
       return;
@@ -50,7 +51,7 @@ export default function Login() {
           : '/dashboard/student',
       );
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isResolvingSession, isAuthenticated, user, navigate]);
 
   const loginForm = useFormik({
     initialValues: { email: '', password: '' },
