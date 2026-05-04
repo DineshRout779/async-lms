@@ -123,9 +123,9 @@ const DEFAULT_SECTIONS: Section[] = [
 
 // ── ATS helpers ───────────────────────────────────────────────────────────────
 
-function calcLocalATS(data: ResumeData | null) {
+function calcLocalATS(data: ResumeData | null): ATSResult {
   if (!data)
-    return { atsScore: 0, keywordMatch: 0, contentQuality: 0, formatting: 0 };
+    return { atsScore: 0, keywordMatch: 0, contentQuality: 0, formatting: 0, missingKeywords: [], suggestions: [] };
   let content = 0;
   if (data.summary) content += 20;
   if (data.experience?.length) content += 25;
@@ -136,7 +136,7 @@ function calcLocalATS(data: ResumeData | null) {
     data.personalInfo.name && data.personalInfo.email ? 92 : 60;
   const keywordMatch = Math.min(100, Math.round(content * 0.75));
   const atsScore = Math.round((content + formatting + keywordMatch) / 3);
-  return { atsScore, keywordMatch, contentQuality: content, formatting };
+  return { atsScore, keywordMatch, contentQuality: content, formatting, missingKeywords: [], suggestions: [] };
 }
 
 // ── Score Bar ─────────────────────────────────────────────────────────────────
