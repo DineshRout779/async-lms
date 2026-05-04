@@ -1,5 +1,3 @@
-import type { Briefcase, GraduationCap, Code2, Award, User, Lightbulb } from 'lucide-react';
-
 export interface WorkExperience {
   title: string;
   company: string;
@@ -67,6 +65,3 @@ export interface Section {
   label: string;
   icon: React.ElementType;
 }
-
-// Suppress unused import warning — icons are used as values via Section.icon
-void (Briefcase, GraduationCap, Code2, Award, User, Lightbulb);

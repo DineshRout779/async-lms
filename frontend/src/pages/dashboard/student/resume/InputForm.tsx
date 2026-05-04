@@ -65,7 +65,7 @@ export function InputForm({ initialValues, onSubmit, loading, onClose }: InputFo
     onSubmit,
   });
 
-  const { values, errors, touched, handleChange, handleBlur, setFieldValue } = formik;
+  const { values, errors, touched, handleChange, handleBlur } = formik;
 
   return (
     <FormikProvider value={formik}>
