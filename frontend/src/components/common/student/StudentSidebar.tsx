@@ -7,6 +7,7 @@ import {
   Settings,
   MessageSquare,
   Code,
+  FileText,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,11 @@ const menuItems: MenuItem[] = [
     name: 'AI Assistant',
     icon: MessageSquare,
     path: '/dashboard/student/ai-assistant',
+  },
+  {
+    name: 'Resume Builder',
+    icon: FileText,
+    path: '/dashboard/student/resume-builder',
   },
   { name: 'Profile', icon: User, path: '/dashboard/student/profile' },
   { name: 'Settings', icon: Settings, path: '/dashboard/student/settings' },

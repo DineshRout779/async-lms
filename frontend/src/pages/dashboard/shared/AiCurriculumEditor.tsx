@@ -641,7 +641,7 @@ export default function AiCurriculumEditor() {
       </div>
 
       {/* Course tree + sidebar */}
-      <div className='px-8 pb-10 flex-1 overflow-y-auto'>
+      <div className='px-8 pb-10 flex-1'>
         <div className='flex gap-6 items-start'>
           <div className='basis-7/12 min-w-0 space-y-3'>
             {modules.map((mod, i) => (
@@ -732,7 +732,7 @@ export default function AiCurriculumEditor() {
           {/* end flex-1 tree column */}
 
           {/* Right sidebar */}
-          <div className='basis-5/12 shrink-0 sticky top-4'>
+          <div className='basis-5/12 shrink-0 sticky top-6 max-h-[calc(100vh-6rem)] overflow-y-auto'>
             <h3 className='text-md font-bold mb-2'>Content Preview</h3>
             <RightSidebar
               selectedLesson={selectedLesson}

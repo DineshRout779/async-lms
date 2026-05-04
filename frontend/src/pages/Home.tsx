@@ -11,15 +11,16 @@ import { Card, CardContent } from '@/components/ui/card';
 
 export default function Home() {
   const [step, setStep] = useState<'welcome' | 'role'>('welcome');
-  const { isAuthenticated, user } = useAppSelector(selectAuth);
+  const { isAuthenticated, user, status, token } = useAppSelector(selectAuth);
   const navigate = useNavigate();
+  const isResolvingSession = !!token && status === 'loading' && !user;
 
   const handleRoleSelect = (role: string) => {
     navigate(`/login?user_type=${role}`);
   };
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (isResolvingSession || !isAuthenticated || !user) return;
 
     if (user.role === 'admin') {
       navigate('/dashboard/admin');
@@ -32,7 +33,15 @@ export default function Home() {
           : '/dashboard/student',
       );
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isResolvingSession, isAuthenticated, user, navigate]);
+
+  if (isResolvingSession) {
+    return (
+      <div className='min-h-screen w-full flex items-center justify-center bg-[#344499]'>
+        <Logo className='h-16 w-16 animate-pulse' />
+      </div>
+    );
+  }
 
   return (
     <>
