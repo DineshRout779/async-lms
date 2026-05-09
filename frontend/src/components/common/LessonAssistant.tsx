@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bot, Send, Loader2, BookOpen } from 'lucide-react';
+import { Bot, Send, Loader2, BookOpen, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -31,6 +31,26 @@ interface Props {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
+
+function CopyButton({ text }: { text: string }) {
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-md text-slate-300 transition-colors border border-slate-700/50 backdrop-blur-sm"
+      title="Copy code"
+    >
+      {isCopied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+    </button>
+  );
+}
 
 export default function LessonAssistant({ lessonContext }: Props) {
   const [open, setOpen] = useState(false);
@@ -161,7 +181,39 @@ export default function LessonAssistant({ lessonContext }: Props) {
                   >
                     {msg.role === 'assistant' ? (
                       <div className='prose prose-sm max-w-none prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-code:bg-slate-200 prose-code:px-1 prose-code:rounded prose-p:my-1 prose-ul:my-1 prose-li:my-0 [&_pre>code]:bg-transparent [&_pre>code]:p-0 [&_pre>code]:text-slate-100'>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            pre({ children, ...props }: any) {
+                              return (
+                                <pre {...props} className={`${props.className || ''} relative group`}>
+                                  {children}
+                                </pre>
+                              );
+                            },
+                            code({ className, children, ...props }: any) {
+                              const match = /language-(\w+)/.exec(className || '');
+                              const codeContent = String(children).replace(/\n$/, '');
+                              if (match) {
+                                return (
+                                  <>
+                                    <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                      <CopyButton text={codeContent} />
+                                    </div>
+                                    <code className={className} {...props}>
+                                      {children}
+                                    </code>
+                                  </>
+                                );
+                              }
+                              return (
+                                <code className={className} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
+                          }}
+                        >
                           {msg.content}
                         </ReactMarkdown>
                       </div>

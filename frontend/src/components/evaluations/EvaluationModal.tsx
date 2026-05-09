@@ -23,7 +23,7 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
       setStatus("running");
       setProgress(20);
 
-      const res = await fetch("http://localhost:3001/api/v1/evaluations/run", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/evaluations/run`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -183,6 +183,7 @@ export default function ResumeBuilder() {
   const [jdText, setJdText] = useState('');
   const [jdLoading, setJdLoading] = useState(false);
   const [sections, setSections] = useState<Section[]>(DEFAULT_SECTIONS);
+  const [eligibilityError, setEligibilityError] = useState<{ message: string; suggestion: any } | null>(null);
 
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -213,6 +214,14 @@ export default function ResumeBuilder() {
         extraSkills: values.extraSkills.filter(Boolean),
         workExperience: values.workExperience,
       });
+
+      if (res.data.success === false && res.data.eligible === false) {
+        setEligibilityError({ message: res.data.message, suggestion: res.data.suggestion });
+        setShowForm(false);
+        return;
+      }
+
+      setEligibilityError(null);
       const data = res.data.data as ResumeData;
       data.personalInfo = {
         ...data.personalInfo,
@@ -443,7 +452,39 @@ export default function ResumeBuilder() {
 
         {/* Resume Canvas */}
         <main className='flex-1 overflow-y-auto p-8'>
-          {resumeData ? (
+          {eligibilityError ? (
+            <div className='max-w-3xl mx-auto bg-white shadow-sm rounded-lg p-10 min-h-[400px] flex flex-col items-center justify-center border border-slate-100'>
+              <div className='w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mb-5'>
+                <X size={36} className='text-red-500' />
+              </div>
+              <h2 className='text-xl font-bold text-[#1e2653] mb-2 text-center'>
+                {eligibilityError.message}
+              </h2>
+              {typeof eligibilityError.suggestion === 'string' ? (
+                <p className='text-sm text-slate-500 text-center max-w-md mb-8 mt-2'>
+                  {eligibilityError.suggestion}
+                </p>
+              ) : (
+                <div className='w-full max-w-md mt-6'>
+                  <h3 className='text-sm font-semibold text-slate-700 mb-3 text-center'>Underperforming Projects</h3>
+                  <div className='space-y-3'>
+                    {eligibilityError.suggestion.map((proj: any, idx: number) => (
+                      <div key={idx} className='flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100'>
+                        <span className='font-medium text-slate-700 text-sm truncate pr-2'>{proj.name}</span>
+                        <span className='text-xs text-amber-600 font-semibold bg-amber-50 px-2 py-1 rounded-md shrink-0'>{proj.needed}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => setEligibilityError(null)}
+                className='mt-8 flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-6 py-2.5 rounded-xl transition-colors'
+              >
+                Go Back
+              </button>
+            </div>
+          ) : resumeData ? (
             <div
               className='max-w-3xl mx-auto bg-white shadow-sm rounded-lg p-10 min-h-225'
               ref={previewRef}
