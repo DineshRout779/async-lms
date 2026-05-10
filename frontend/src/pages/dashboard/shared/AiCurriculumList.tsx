@@ -100,9 +100,11 @@ function CourseCard({
     }
   };
 
-  const moduleCount = course.modules?.length ?? 0;
+  const moduleCount = course.modules_count ?? course.modules?.length ?? 0;
   const topicCount =
-    course.modules?.reduce((acc, m) => acc + (m.topics?.length ?? 0), 0) ?? 0;
+    course.topics_count ??
+    course.modules?.reduce((acc, m) => acc + (m.topics?.length ?? 0), 0) ??
+    0;
 
   const tags: string[] = [];
   if (course.domain) tags.push(course.domain);

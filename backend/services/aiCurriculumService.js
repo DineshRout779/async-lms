@@ -364,6 +364,33 @@ async function searchYouTubeVideo(query) {
 }
 
 /**
+ * Search YouTube Data API v3 and return multiple results for user selection.
+ */
+async function searchYouTubeVideos(query, maxResults = 3) {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    return [];
+  }
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.items?.length) {
+      return data.items.map((item) => ({
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+        thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+        channel: item.snippet.channelTitle,
+        url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      }));
+    }
+  } catch (err) {
+    console.warn('YouTube API multi-search failed:', err.message);
+  }
+  return [];
+}
+
+/**
  * Generate specific content for a subtopic lesson.
  * type: 'video' | 'markdown' | 'exercise'
  */
@@ -379,7 +406,8 @@ async function generateLessonContent({
   if (type === 'video') {
     const searchQuery = `${lessonTitle} ${unitTitle} ${roleFocus} tutorial`;
     const video_url = await searchYouTubeVideo(searchQuery);
-    return { video_url };
+    const video_results = await searchYouTubeVideos(searchQuery);
+    return { video_url, video_results };
   }
 
   const context = `Course: ${courseTitle}\nTopic: ${topicTitle}\nUnit: ${unitTitle}\nSubtopic: ${lessonTitle}\nRole: ${roleFocus}\nLevel: ${level}`;

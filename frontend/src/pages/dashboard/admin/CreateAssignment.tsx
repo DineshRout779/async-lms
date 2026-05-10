@@ -231,7 +231,7 @@ export default function CreateAssignment() {
         <div className='flex items-center gap-3'>
           <button
             className='text-slate-500 hover:text-slate-700 transition'
-            onClick={() => navigate(`${basePath}/assignments`)}
+            onClick={() => navigate(`${basePath}/assignment-management`)}
           >
             <ArrowLeft className='w-5 h-5' />
           </button>
@@ -572,7 +572,7 @@ export default function CreateAssignment() {
           <Button
             variant='outline'
             className='px-6'
-            onClick={() => navigate(`${basePath}/assignments`)}
+            onClick={() => navigate(`${basePath}/assignment-management`)}
           >
             Cancel
           </Button>

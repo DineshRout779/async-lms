@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import TopHeader from '@/components/common/facilitator/TopHeader';
 import EvaluationTable from '@/components/evaluations/EvaluationTable';
 
@@ -7,9 +7,13 @@ const FacilitatorEvaluations = () => {
   const [search, setSearch] = useState('');
   const [refresh, setRefresh] = useState(false);
 
+  const handleFilterChange = useCallback((f: { college: string; domain: string; batch: string }) => {
+    setFilters(f);
+  }, []);
+
   return (
     <div>
-      <TopHeader onFilterChange={(f) => setFilters(f)} />
+      <TopHeader onFilterChange={handleFilterChange} />
 
       <div className='mt-4 space-y-4 px-4 py-3'>
         <div className='text-xs text-slate-400'>

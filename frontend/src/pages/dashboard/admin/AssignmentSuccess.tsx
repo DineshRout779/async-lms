@@ -29,6 +29,7 @@ export default function AssignmentSuccess() {
 
   const dashboardType = location.pathname.includes('/dashboard/admin') ? 'admin' : 'facilitator';
   const basePath = `/dashboard/${dashboardType}`;
+  const managementPath = dashboardType === 'admin' ? '/assignment-management' : '/assignments';
 
   // If no data was passed (e.g. user navigated directly), redirect to create page
   if (!assignment) {
@@ -174,7 +175,7 @@ export default function AssignmentSuccess() {
           <Button
             variant='outline'
             className='gap-2 text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600'
-            onClick={() => navigate(`${basePath}/assignments`)}
+            onClick={() => navigate(`${basePath}${managementPath}`)}
           >
             <Trash2 className='w-4 h-4' />
             Delete Assignment
@@ -182,7 +183,7 @@ export default function AssignmentSuccess() {
 
           <Button
             className='gap-2 bg-blue-600 hover:bg-blue-700'
-            onClick={() => navigate(`${basePath}/assignments`)}
+            onClick={() => navigate(`${basePath}${managementPath}`)}
           >
             Go to Assignment Management
             <ArrowRight className='w-4 h-4' />

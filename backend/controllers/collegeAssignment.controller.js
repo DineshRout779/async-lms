@@ -499,94 +499,110 @@ exports.getCollegeAssignmentById = async (req, res) => {
 // GET /api/v1/college-assignments/evaluation-filters
 exports.getFilteredAssignments = async (req, res) => {
   try {
-    console.log('🔥 evaluation-filters API hit');
     const { collegeId, domain, search } = req.query;
+    const isFacilitator = req.user.role !== 'admin';
+    const facilitatorCollegeIds = req.user.college_ids || [];
 
-    // let query = `
-    //   SELECT
-    //     ca.id,
-    //     ca.title,
-    //     ca.description,
-    //     ca.due_date,
-    //     ca.created_at,
-    //     ca.college_id,
-    //     c.name AS college_name,
-    //     u.full_name AS created_by_name,
-    //     ca.course
-    //   FROM college_assignments ca
-    //   JOIN colleges c ON c.id = ca.college_id
-    //   JOIN users u ON u.id = ca.created_by
-    //   WHERE 1=1
-    // `;
+    if (isFacilitator && !facilitatorCollegeIds.length) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // This query UNIONS facilitator-created "College Assignments" 
+    // and curriculum-level "Unit Assignments" (from subjects/topics).
     let query = `
-    SELECT 
-  ca.id, 
-  ca.title, 
-  ca.description, 
-  ca.due_date,
-  ca.created_at,
-  ca.college_id,
-  c.name AS college_name,
-  u.full_name AS created_by_name,
-  ca.course,
+      WITH all_assignments AS (
+        -- 1. Facilitator-Created College Assignments
+        SELECT 
+          ca.id, 
+          ca.title, 
+          ca.course, 
+          'college' as type,
+          ca.college_id, 
+          c.name AS college_name,
+          ca.created_at,
+          ca.due_date,
+          (
+            SELECT COUNT(*)::int 
+            FROM public.college_assignment_submissions cas 
+            WHERE cas.assignment_id = ca.id
+          ) as submissions_count,
+          CASE WHEN e.status = 'completed' THEN 'evaluated' ELSE 'pending' END as status,
+          e.id as evaluation_id
+        FROM public.college_assignments ca
+        JOIN public.colleges c ON c.id = ca.college_id
+        LEFT JOIN public.evaluations e ON e.assignment_id = ca.id
 
-  CASE 
-    WHEN e.status = 'completed' THEN 'evaluated'
-    ELSE 'pending'
-  END AS status
+        UNION ALL
 
-FROM college_assignments ca
-JOIN colleges c ON c.id = ca.college_id
-JOIN users u ON u.id = ca.created_by
-LEFT JOIN evaluations e ON e.assignment_id = ca.id
+        -- 2. Curriculum-level Unit Assignments
+        SELECT 
+          a.id, 
+          a.title, 
+          s.name as course, 
+          'unit' as type,
+          NULL as college_id, 
+          'Curriculum' as college_name,
+          NULL as created_at,
+          NULL as due_date,
+          (
+            SELECT COUNT(DISTINCT asub.user_id)::int 
+            FROM public.assignment_submissions asub
+            JOIN public.student_profiles sp ON asub.user_id = sp.user_id
+            WHERE asub.assignment_id = a.id
+            ${isFacilitator ? 'AND sp.college_id = ANY($1)' : ''}
+          ) as submissions_count,
+          CASE WHEN e.status = 'completed' THEN 'evaluated' ELSE 'pending' END as status,
+          e.id as evaluation_id
+        FROM public.assignments a
+        JOIN public.units u ON a.unit_id = u.id
+        JOIN public.topics t ON u.topic_id = t.id
+        JOIN public.subjects s ON t.subject_id = s.id
+        LEFT JOIN public.evaluations e ON e.assignment_id = a.id
+      )
+      SELECT * FROM all_assignments
+      WHERE 1=1
+    `;
 
-WHERE 1=1`;
-    const values = [];
-    let index = 1;
+    const values = isFacilitator ? [facilitatorCollegeIds] : [];
+    let index = isFacilitator ? 2 : 1;
 
     // 🔒 Role-based restriction (facilitator)
-    if (req.user.role !== 'admin') {
-      const college_ids = req.user.college_ids || [];
-
-      if (!college_ids.length) {
-        return res.json({ success: true, data: [] });
-      }
-
-      query += ` AND ca.college_id = ANY($${index}::uuid[])`;
-      values.push(college_ids);
-      index++;
+    if (isFacilitator) {
+      // For College Assignments, they must match the facilitator's college.
+      // For Unit Assignments, we show them if they belong to a subject the facilitator can see (simplified to 'all' for now)
+      query += ` AND (college_id IS NULL OR college_id = ANY($1))`;
     }
 
     // 🎯 College filter
     if (collegeId) {
-      query += ` AND ca.college_id = $${index}`;
+      query += ` AND (college_id = $${index} OR (type = 'unit' AND $${index} = ANY($1)))`;
       values.push(collegeId);
       index++;
     }
 
-    // 🎯 Domain filter (course column)
+    // 🎯 Domain filter
     if (domain) {
-      query += ` AND LOWER(ca.course) LIKE LOWER($${index})`;
+      query += ` AND LOWER(course) LIKE LOWER($${index})`;
       values.push(`%${domain}%`);
       index++;
     }
 
     // 🔍 Search filter
     if (search) {
-      query += ` AND LOWER(ca.title) LIKE LOWER($${index})`;
+      query += ` AND LOWER(title) LIKE LOWER($${index})`;
       values.push(`%${search}%`);
       index++;
     }
 
-    query += ` ORDER BY c.name ASC, ca.due_date ASC NULLS LAST`;
+    // Only show assignments that have at least one submission (to avoid cluttering with thousands of curriculum assignments)
+    query += ` AND submissions_count > 0`;
+
+    query += ` ORDER BY created_at DESC NULLS LAST, title ASC`;
 
     const { rows } = await pool.query(query, values);
-
-    console.log('DOMAIN RECEIVED:', domain);
-
     res.json({ success: true, data: rows });
   } catch (error) {
-    console.error('getFilteredAssignments:', error);
+    console.error('getFilteredAssignments Error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

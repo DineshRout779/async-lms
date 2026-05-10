@@ -114,6 +114,9 @@ const CreateAssignment = lazy(
 const AssignmentSuccess = lazy(
   () => import('@/pages/dashboard/admin/AssignmentSuccess'),
 );
+const Evaluations = lazy(
+  () => import('@/pages/dashboard/admin/Evaluations'),
+);
 
 // AI Curriculum Builder (shared)
 const AiCurriculumList = lazy(
@@ -215,7 +218,7 @@ const router = createBrowserRouter([
               { path: 'create-assignment', element: <CreateAssignment /> },
               { path: 'assignment-success', element: <AssignmentSuccess /> },
               { path: 'evaluations', element: <FacilitatorEvaluations /> },
-              { path: 'results', element: <ResultsPage /> },
+              { path: 'results/:id', element: <ResultsPage /> },
               { path: 'ai-curriculum', element: <AiCurriculumList /> },
               { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
               { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
@@ -252,6 +255,7 @@ const router = createBrowserRouter([
                 path: 'assignment-success',
                 element: <AssignmentSuccess />,
               },
+              { path: 'evaluations', element: <Evaluations /> },
               { path: 'ai-curriculum', element: <AiCurriculumList /> },
               { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
               { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
