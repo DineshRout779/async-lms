@@ -3,6 +3,13 @@ name: Deploy
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
       deploy_orchestrator:
         description: 'Deploy Orchestrator'
         required: true
@@ -22,10 +29,9 @@ on:
 jobs:
   # ── Orchestrator → EC2 (t3.small) ─────────────────────────────────────────────
   deploy-orchestrator:
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_orchestrator == 'true') ||
-      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'backend/') || contains(github.event.commits[0].added, 'backend/')))
+    if: github.event.inputs.deploy_orchestrator == 'true'
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
     steps:
       - uses: actions/checkout@v4
       - name: Deploy Orchestrator to EC2
@@ -68,21 +74,20 @@ jobs:
             # Restart ONLY the orchestrator process via ecosystem.config.js
             pm2 start ecosystem.config.js --only orchestrator || pm2 restart orchestrator --update-env
 
-  # ── Workers → 5x EC2 (t3.large) ───────────────────────────────────────────────
+  # ── Workers → staging: 1x EC2 (t3.medium/4GB) | production: 5x EC2 (t3.large/8GB) ──
   deploy-workers:
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_workers == 'true') ||
-      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'backend/') || contains(github.event.commits[0].added, 'backend/')))
+    if: github.event.inputs.deploy_workers == 'true'
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      - name: Deploy to 5x Worker Nodes
+      - name: Deploy to Worker Node(s)
         uses: appleboy/ssh-action@v1.0.3
         with:
-          # This accepts a comma-separated list natively! 
-          # Example Secret: 10.0.0.1,10.0.0.2,10.0.0.3
+          # staging environment secret → single IP (4GB t3.medium)
+          # production environment secret → 5 comma-separated IPs (8GB t3.large)
           host: ${{ secrets.WORKER_IPS }}
           username: ubuntu
           key: ${{ secrets.WORKER_SSH_KEY }}
@@ -152,10 +157,9 @@ jobs:
 
   # ── Frontend → S3 + CloudFront ───────────────────────────────────────────────
   deploy-frontend:
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == 'true') ||
-      (github.event_name == 'push' && (contains(github.event.commits[0].modified, 'frontend/') || contains(github.event.commits[0].added, 'frontend/')))
+    if: github.event.inputs.deploy_frontend == 'true'
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
 
     steps:
       - uses: actions/checkout@v4

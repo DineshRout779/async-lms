@@ -157,7 +157,9 @@ exports.listCourses = async (req, res) => {
     const { status } = req.query;
 
     let query = `
-      SELECT c.*, u.full_name AS creator_name
+      SELECT c.*, u.full_name AS creator_name,
+        (SELECT COUNT(*) FROM ai_course_modules WHERE course_id = c.id) AS module_count,
+        (SELECT COUNT(*) FROM ai_course_topics t JOIN ai_course_modules m ON t.module_id = m.id WHERE m.course_id = c.id) AS topic_count
       FROM ai_courses c
       JOIN users u ON c.created_by = u.id
     `;
