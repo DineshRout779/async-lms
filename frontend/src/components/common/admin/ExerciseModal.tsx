@@ -69,7 +69,8 @@ const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChang
   const [generating, setGenerating] = useState(false);
 
   const generateTests = async () => {
-    if (!task.instructions.trim()) {
+    const taskInstructions = task.instructions || '';
+    if (!taskInstructions.trim()) {
       toast.error('Please provide task instructions first so the AI knows what to test.');
       return;
     }
@@ -77,11 +78,11 @@ const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChang
     setGenerating(true);
     try {
       const res = await aiCurriculumApi.generateTaskTests({
-        instructions: task.instructions,
-        language: 'javascript', // can be dynamic if needed
+        instructions: taskInstructions,
+        language: task.initial_files[0]?.name.endsWith('.py') ? 'python' : 'javascript',
       });
       
-      const newTests = res.data.data.map((tc: any) => ({
+      const newTests = (res.data.data || []).map((tc: any) => ({
         ...tc,
         id: crypto.randomUUID()
       }));
