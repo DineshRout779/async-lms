@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button';
 import type { ExerciseModalProps, ExerciseTask, TestCase } from '@/utils/types';
-import { Save, X, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 import toast from 'react-hot-toast';
 
 const LANGUAGE_DEFAULTS: Record<string, { name: string; content: string }> = {
@@ -63,6 +64,38 @@ const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChang
       ...task,
       test_cases: (task.test_cases ?? []).map(tc => tc.id === tcId ? { ...tc, [field]: value } : tc),
     });
+  };
+
+  const [generating, setGenerating] = useState(false);
+
+  const generateTests = async () => {
+    if (!task.instructions.trim()) {
+      toast.error('Please provide task instructions first so the AI knows what to test.');
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const res = await aiCurriculumApi.generateTaskTests({
+        instructions: task.instructions,
+        language: 'javascript', // can be dynamic if needed
+      });
+      
+      const newTests = res.data.data.map((tc: any) => ({
+        ...tc,
+        id: crypto.randomUUID()
+      }));
+
+      onChange({
+        ...task,
+        test_cases: [...(task.test_cases ?? []), ...newTests],
+      });
+      toast.success(`Generated ${newTests.length} test cases!`);
+    } catch (err) {
+      toast.error('Failed to generate tests');
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -154,9 +187,25 @@ const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChang
                 Test Cases
                 <span className='ml-1 text-slate-400 font-normal'>auto-grade this task</span>
               </label>
-              <Button onClick={addTestCase} size='sm' variant='outline' className='text-xs h-6 px-2'>
-                <Plus className='w-3 h-3 mr-1' /> Add Test
-              </Button>
+              <div className='flex items-center gap-2'>
+                <Button 
+                  onClick={generateTests} 
+                  disabled={generating}
+                  size='sm' 
+                  variant='outline' 
+                  className='text-xs h-6 px-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50'
+                >
+                  {generating ? (
+                    <Loader2 className='w-3 h-3 mr-1 animate-spin' />
+                  ) : (
+                    <Sparkles className='w-3 h-3 mr-1' />
+                  )}
+                  Generate AI Tests
+                </Button>
+                <Button onClick={addTestCase} size='sm' variant='outline' className='text-xs h-6 px-2'>
+                  <Plus className='w-3 h-3 mr-1' /> Add Test
+                </Button>
+              </div>
             </div>
             {(task.test_cases ?? []).length === 0 ? (
               <p className='text-xs text-slate-400 italic'>No test cases — task will not be auto-graded.</p>

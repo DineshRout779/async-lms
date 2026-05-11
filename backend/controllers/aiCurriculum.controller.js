@@ -3,6 +3,7 @@ const {
   generateCurriculum, regenerateLesson, extractSkillsFromJD,
   generateTopics, generateUnits, generateSubtopics,
   generateLessonContent, generateUnitQuiz, generateUnitAssignment,
+  generateExerciseTests,
 } = require('../services/aiCurriculumService');
 const { notify } = require('../services/notificationService');
 
@@ -35,7 +36,28 @@ exports.extractSkills = async (req, res) => {
   }
 };
 
-// ─── Generate curriculum via AI ───────────────────────────────────────────────
+// ─── Generate exercise tests via AI ──────────────────────────────────────────
++
++exports.generateTaskTests = async (req, res) => {
++  try {
++    const { instructions, language, role_focus, level } = req.body;
++    if (!instructions) return res.status(400).json({ success: false, message: 'instructions is required' });
++
++    const testCases = await generateExerciseTests({
++      instructions,
++      language: language || 'javascript',
++      roleFocus: role_focus || 'Software Engineer',
++      level: level || 'Beginner',
++    });
++
++    res.json({ success: true, data: testCases });
++  } catch (err) {
++    console.error('generateTaskTests error:', err);
++    res.status(500).json({ success: false, message: err.message });
++  }
++};
++
+ // ─── Generate curriculum via AI ───────────────────────────────────────────────
 
 exports.generate = async (req, res) => {
   try {
