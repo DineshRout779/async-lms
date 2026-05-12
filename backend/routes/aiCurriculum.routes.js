@@ -14,6 +14,7 @@ router.post('/generate', isAdminOrFacilitator, ctrl.generate);
 router.post('/generate-topics', isAdminOrFacilitator, ctrl.generateTopics);
 router.post('/generate-units', isAdminOrFacilitator, ctrl.generateAndSaveUnits);
 router.post('/generate-subtopics', isAdminOrFacilitator, ctrl.generateAndSaveSubtopics);
+router.post('/exercises/generate-tests', isAdminOrFacilitator, ctrl.generateTaskTests);
 
 // Create sub-resources
 router.post('/modules', isAdminOrFacilitator, ctrl.addModule);

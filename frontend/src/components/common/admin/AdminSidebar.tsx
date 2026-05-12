@@ -9,6 +9,7 @@ import {
   BarChart3,
   Settings,
   Sparkles,
+  CheckCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router'; // Switched to NavLink
@@ -29,6 +30,11 @@ const menuItems = [
     name: 'Assignment Management',
     icon: ClipboardCheck,
     path: '/dashboard/admin/assignment-management',
+  },
+  {
+    name: 'Evaluations',
+    icon: CheckCircle,
+    path: '/dashboard/admin/evaluations',
   },
   { name: 'AI Curriculum', icon: Sparkles, path: '/dashboard/admin/ai-curriculum' },
   { name: 'Analytics', icon: BarChart3, path: '/dashboard/admin/analytics' },

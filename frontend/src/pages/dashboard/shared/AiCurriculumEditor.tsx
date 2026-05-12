@@ -255,15 +255,20 @@ export default function AiCurriculumEditor() {
   const handleGenerateUnits = useCallback(async (moduleId: string) => {
     try {
       const res = await aiCurriculumApi.generateAndSaveUnits(moduleId);
+      const newData = res.data.data;
+      if (newData.length === 0) {
+        toast('Units already exist — no duplicates added', { icon: 'ℹ️' });
+        return;
+      }
       setModules((ms) =>
         ms.map((m) =>
           m.id === moduleId
-            ? { ...m, topics: [...m.topics, ...res.data.data] }
+            ? { ...m, topics: [...m.topics, ...newData] }
             : m,
         ),
       );
       toast.success(
-        `${res.data.data.length} unit${res.data.data.length !== 1 ? 's' : ''} generated`,
+        `${newData.length} unit${newData.length !== 1 ? 's' : ''} generated`,
       );
     } catch {
       toast.error('Failed to generate units');
@@ -273,18 +278,23 @@ export default function AiCurriculumEditor() {
   const handleGenerateSubtopics = useCallback(async (topicId: string) => {
     try {
       const res = await aiCurriculumApi.generateAndSaveSubtopics(topicId);
+      const newData = res.data.data;
+      if (newData.length === 0) {
+        toast('Subtopics already exist — no duplicates added', { icon: 'ℹ️' });
+        return;
+      }
       setModules((ms) =>
         ms.map((m) => ({
           ...m,
           topics: m.topics.map((t) =>
             t.id === topicId
-              ? { ...t, lessons: [...t.lessons, ...res.data.data] }
+              ? { ...t, lessons: [...t.lessons, ...newData] }
               : t,
           ),
         })),
       );
       toast.success(
-        `${res.data.data.length} subtopic${res.data.data.length !== 1 ? 's' : ''} generated`,
+        `${newData.length} subtopic${newData.length !== 1 ? 's' : ''} generated`,
       );
     } catch {
       toast.error('Failed to generate subtopics');
@@ -351,6 +361,11 @@ export default function AiCurriculumEditor() {
         toast.success(
           `${type === 'video' ? 'Video link' : type === 'markdown' ? 'Content' : 'Exercise'} generated`,
         );
+
+        // Return video results for the sidebar to display
+        if (type === 'video' && Array.isArray(data.video_results)) {
+          return data.video_results as { videoId: string; title: string; thumbnail: string; channel: string; url: string }[];
+        }
       } catch {
         toast.error(`Failed to generate ${type}`);
       }

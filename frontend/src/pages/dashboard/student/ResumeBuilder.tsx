@@ -33,6 +33,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import apiClient from '@/services/api';
+import { useReactToPrint } from 'react-to-print';
 
 import type { ResumeData, ATSResult, Section } from './resume/types';
 import { DEFAULT_SECTIONS, calcLocalATS } from './resume/resumeUtils';
@@ -265,20 +266,10 @@ export default function ResumeBuilder() {
     }
   };
 
-  const handleExportPDF = async () => {
-    if (!previewRef.current) return;
-    const html2pdf = (await import('html2pdf.js')).default;
-    html2pdf()
-      .set({
-        margin: 14,
-        filename: `${resumeData?.personalInfo.name || 'resume'}_resume.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      })
-      .from(previewRef.current)
-      .save();
-  };
+  const handleExportPDF = useReactToPrint({
+    contentRef: previewRef,
+    documentTitle: resumeData?.personalInfo.name ? `${resumeData.personalInfo.name}_resume` : 'resume',
+  });
 
   const localATS = atsResult ?? calcLocalATS(resumeData);
 

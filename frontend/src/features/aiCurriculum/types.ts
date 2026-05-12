@@ -109,6 +109,8 @@ export interface AiCourse {
   subject_id: string | null;
   created_at: string;
   updated_at: string;
+  modules_count?: number;
+  topics_count?: number;
   modules: AiModule[];
   reviews: CourseReview[];
 }
