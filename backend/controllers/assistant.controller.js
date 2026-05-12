@@ -10,12 +10,12 @@ const SYSTEM_PROMPT = `You are CodeGuru AI, a coding tutor inside a learning man
 Your role is to EDUCATE students — not to solve their problems for them.
 
 ## Core Rules
-
 1. **Never give complete solutions.** If a student pastes a homework problem, assignment, or exercise, do NOT write the full solution. Instead, guide them step by step.
 
 2. **When a student shares buggy code:** identify the type of error (syntax, logic, runtime), explain the underlying concept, and ask them a guiding question. Show at most 1–3 lines of corrected code to illustrate a specific concept only.
 
 3. **When a student pastes a problem or question:** break it down into smaller steps, ask what they have tried so far, and guide them toward the approach without writing the code.
+
 
 4. **Use Socratic questioning.** Examples:
    - "What do you think this line is doing?"
@@ -139,6 +139,46 @@ exports.generateResume = async (req, res) => {
     const subjects = subjectsResult.rows;
     const verifiedProjects = projectsResult.rows;
 
+    // Using exercises as projects since they contain the actual submission scores
+    console.log('[resume] fetching projects (exercises)');
+    const projectsResult = await pool.query(
+      `SELECT 
+         e.title AS name, 
+         CASE WHEN e.max_score > 0 THEN ROUND((es.score::numeric / e.max_score::numeric) * 100) ELSE 0 END AS score 
+       FROM public.exercise_submissions es
+       JOIN public.exercises e ON e.id = es.exercise_id
+       WHERE es.user_id = $1`,
+      [userId]
+    );
+    const allProjects = projectsResult.rows;
+    
+    const eligibleProjects = allProjects.filter(p => p.score >= 75);
+
+    if (eligibleProjects.length < 3) {
+      console.log(`[resume] user ${userId} not eligible. Has ${eligibleProjects.length} eligible projects.`);
+      let suggestionData;
+      
+      if (allProjects.length === 0) {
+        suggestionData = "You haven't submitted any projects yet. Complete at least 3 projects with 75%+ score to unlock resume generation.";
+      } else {
+        suggestionData = allProjects
+          .filter(p => p.score == null || p.score < 75)
+          .map(p => {
+            if (p.score == null || p.score === 0) {
+              return { name: p.name, needed: "Not attempted" };
+            }
+            return { name: p.name, needed: `Needs ${75 - p.score}% more to reach 75%` };
+          });
+      }
+
+      return res.status(200).json({
+        success: false,
+        eligible: false,
+        message: "You need at least 3 projects with 75%+ score to generate a resume.",
+        suggestion: suggestionData
+      });
+    }
+
     const systemPrompt = `You are a professional resume writer specializing in tech students and early-career developers.
 Generate a structured, ATS-friendly resume in JSON format. Be concise and impactful. Use action verbs. Do not fabricate specifics not provided.`;
 
@@ -164,6 +204,7 @@ Student Data:
 - Career Objective: ${careerObjective || 'To grow as a software developer'}
 - Extra Skills: ${extraSkills.join(', ') || 'None provided'}
 - Work Experience: ${workExperience.length ? JSON.stringify(workExperience) : 'None'}
+- Eligible Projects: ${eligibleProjects.length ? JSON.stringify(eligibleProjects.map(p => ({ name: p.name, score: p.score }))) : 'None'}
 
 Instructions:
 - Summary: Mention the student's status in their current courses (e.g. "Currently mastering Web Development (85% completed)").
