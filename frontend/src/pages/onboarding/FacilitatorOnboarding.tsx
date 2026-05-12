@@ -19,6 +19,9 @@ export default function FacilitatorOnboarding() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCustomCollege, setShowCustomCollege] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customCity, setCustomCity] = useState('');
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
 
@@ -43,15 +46,41 @@ export default function FacilitatorOnboarding() {
   };
 
   const handleSubmit = async () => {
-    if (selectedIds.length === 0) {
-      toast.error('Please select at least one college');
+    if (selectedIds.length === 0 && !showCustomCollege) {
+      toast.error('Please select at least one college or add a custom one');
+      return;
+    }
+
+    if (showCustomCollege && (!customName.trim() || !customCity.trim())) {
+      toast.error('Please provide custom college name and city');
       return;
     }
 
     try {
       setIsSubmitting(true);
+      let finalCollegeIds = [...selectedIds];
+
+      // Create custom college if provided
+      if (showCustomCollege) {
+        const name = customName.trim();
+        const city = customCity.trim();
+        const words = name.split(/\s+/);
+        const shortCode = words.length > 1 
+          ? words.map(w => w[0]).join('').toUpperCase().substring(0, 5)
+          : name.substring(0, 5).toUpperCase();
+
+        const collegeRes = await apiClient.post('/colleges', {
+          name,
+          city,
+          short_code: shortCode,
+          state: '',
+        });
+        const newCollegeId = collegeRes.data.data.id;
+        finalCollegeIds.push(newCollegeId);
+      }
+
       await apiClient.post('/onboarding/facilitator-colleges', {
-        college_ids: selectedIds,
+        college_ids: finalCollegeIds,
       });
       toast.success('Onboarding complete!');
       await dispatch(loadUser());
@@ -89,7 +118,7 @@ export default function FacilitatorOnboarding() {
             </p>
           </div>
 
-          <ScrollArea className='h-[300px] border rounded-lg p-4 bg-muted/30'>
+          <ScrollArea className='h-[250px] border rounded-lg p-4 bg-muted/30'>
             {loading ? (
               <div className='flex items-center justify-center h-full'>
                 <p className='text-sm animate-pulse'>Loading colleges...</p>
@@ -124,10 +153,57 @@ export default function FacilitatorOnboarding() {
             )}
           </ScrollArea>
 
+          <div className='space-y-4'>
+            {!showCustomCollege ? (
+              <button
+                type='button'
+                onClick={() => setShowCustomCollege(true)}
+                className='text-xs font-semibold text-primary hover:underline flex items-center gap-1'
+              >
+                + My college is not listed
+              </button>
+            ) : (
+              <div className='p-4 border border-dashed rounded-lg bg-muted/20 space-y-3 animate-in zoom-in-95 duration-200'>
+                <div className='flex items-center justify-between'>
+                  <p className='text-xs font-bold uppercase tracking-wider text-muted-foreground'>Add Custom College</p>
+                  <button
+                    type='button'
+                    onClick={() => setShowCustomCollege(false)}
+                    className='text-[10px] text-destructive hover:underline'
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div className='grid grid-cols-2 gap-3'>
+                  <div className='space-y-1'>
+                    <label className='text-[10px] font-bold text-muted-foreground'>College Name</label>
+                    <input
+                      type='text'
+                      placeholder='e.g. Stanford University'
+                      className='w-full px-3 py-2 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-primary'
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                    />
+                  </div>
+                  <div className='space-y-1'>
+                    <label className='text-[10px] font-bold text-muted-foreground'>City</label>
+                    <input
+                      type='text'
+                      placeholder='e.g. Palo Alto'
+                      className='w-full px-3 py-2 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-primary'
+                      value={customCity}
+                      onChange={(e) => setCustomCity(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <Button
             className='w-full py-6 text-lg rounded-xl shadow-xl hover:shadow-primary/25 transition-all group'
             onClick={handleSubmit}
-            disabled={loading || isSubmitting || selectedIds.length === 0}
+            disabled={loading || isSubmitting || (selectedIds.length === 0 && !showCustomCollege)}
           >
             {isSubmitting ? (
               'Processing...'

@@ -101,4 +101,7 @@ export const aiCurriculumApi = {
 
   generateUnitAssignment: (topic_id: string) =>
     apiClient.post<{ success: boolean; data: AiAssignment }>(`/ai-curriculum/topics/${topic_id}/generate-assignment`),
+
+  generateTaskTests: (data: { instructions: string; language?: string; role_focus?: string; level?: string }) =>
+    apiClient.post<{ success: boolean; data: any[] }>('/ai-curriculum/exercises/generate-tests', data),
 };

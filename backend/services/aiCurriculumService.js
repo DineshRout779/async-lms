@@ -364,6 +364,33 @@ async function searchYouTubeVideo(query) {
 }
 
 /**
+ * Search YouTube Data API v3 and return multiple results for user selection.
+ */
+async function searchYouTubeVideos(query, maxResults = 3) {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    return [];
+  }
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.items?.length) {
+      return data.items.map((item) => ({
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+        thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+        channel: item.snippet.channelTitle,
+        url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      }));
+    }
+  } catch (err) {
+    console.warn('YouTube API multi-search failed:', err.message);
+  }
+  return [];
+}
+
+/**
  * Generate specific content for a subtopic lesson.
  * type: 'video' | 'markdown' | 'exercise'
  */
@@ -379,7 +406,8 @@ async function generateLessonContent({
   if (type === 'video') {
     const searchQuery = `${lessonTitle} ${unitTitle} ${roleFocus} tutorial`;
     const video_url = await searchYouTubeVideo(searchQuery);
-    return { video_url };
+    const video_results = await searchYouTubeVideos(searchQuery);
+    return { video_url, video_results };
   }
 
   const context = `Course: ${courseTitle}\nTopic: ${topicTitle}\nUnit: ${unitTitle}\nSubtopic: ${lessonTitle}\nRole: ${roleFocus}\nLevel: ${level}`;
@@ -547,6 +575,48 @@ Rules:
   return parsed;
 }
 
+async function generateExerciseTests({ instructions, language, roleFocus, level }) {
+  const prompt = `You are an expert software tester and curriculum designer.
+  
+Generate automated test cases for a coding task.
+Task Instructions:
+${instructions}
+
+Programming Language: ${language}
+Target Role: ${roleFocus}
+Complexity Level: ${level}
+
+Return ONLY a valid JSON object:
+{
+  "test_cases": [
+    {
+      "description": "Clear description of what this test verifies",
+      "test_code": "The grading code using the required syntax below",
+      "is_hidden": false
+    }
+  ]
+}
+
+Syntax Rules:
+1. Use \`__test(description, () => { ... })\` for the test block.
+2. Use \`__expect(actual).toBe(expected)\` for assertions.
+3. For JavaScript: The student's code is available in the scope. You can call their functions directly.
+4. For Python: Use similar \`__test\` and \`__expect\` wrappers.
+5. Generate 2-4 comprehensive test cases covering edge cases and main functionality.
+6. Return only the JSON, no markdown wrappers.`;
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.6,
+    max_tokens: 1500,
+    response_format: { type: 'json_object' },
+  });
+
+  const parsed = JSON.parse(response.choices[0].message.content);
+  return parsed.test_cases || [];
+}
+
 module.exports = {
   generateCurriculum,
   regenerateLesson,
@@ -557,4 +627,5 @@ module.exports = {
   generateLessonContent,
   generateUnitQuiz,
   generateUnitAssignment,
+  generateExerciseTests,
 };

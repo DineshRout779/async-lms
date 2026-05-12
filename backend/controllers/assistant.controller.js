@@ -10,12 +10,12 @@ const SYSTEM_PROMPT = `You are CodeGuru AI, a coding tutor inside a learning man
 Your role is to EDUCATE students — not to solve their problems for them.
 
 ## Core Rules
-
 1. **Never give complete solutions.** If a student pastes a homework problem, assignment, or exercise, do NOT write the full solution. Instead, guide them step by step.
 
 2. **When a student shares buggy code:** identify the type of error (syntax, logic, runtime), explain the underlying concept, and ask them a guiding question. Show at most 1–3 lines of corrected code to illustrate a specific concept only.
 
 3. **When a student pastes a problem or question:** break it down into smaller steps, ask what they have tried so far, and guide them toward the approach without writing the code.
+
 
 4. **Use Socratic questioning.** Examples:
    - "What do you think this line is doing?"
@@ -110,7 +110,8 @@ exports.generateResume = async (req, res) => {
     const subjectsResult = await pool.query(
       `SELECT s.name AS subject_name,
               COUNT(DISTINCT utp.topic_id) FILTER (WHERE utp.is_completed = true) AS completed_topics,
-              COUNT(DISTINCT t.id) AS total_topics
+              COUNT(DISTINCT t.id) AS total_topics,
+              ROUND(COALESCE(COUNT(DISTINCT utp.topic_id) FILTER (WHERE utp.is_completed = true)::numeric / NULLIF(COUNT(DISTINCT t.id), 0) * 100, 0), 0) as progress_percent
        FROM public.user_subjects us
        JOIN public.subjects s ON s.id = us.subject_id
        LEFT JOIN public.topics t ON t.subject_id = s.id
@@ -119,17 +120,71 @@ exports.generateResume = async (req, res) => {
        GROUP BY s.name`,
       [userId],
     );
-    console.log('[resume] subjects ok:', subjectsResult.rows.length);
+
+    // Fetch Top 3 Evaluated Projects
+    console.log('[resume] fetching verified projects');
+    const projectsResult = await pool.query(
+      `SELECT p.title, p.instructions, ps.score, s.name as subject
+       FROM public.project_submissions ps
+       JOIN public.projects p ON p.id = ps.project_id
+       JOIN public.topics t ON p.topic_id = t.id
+       JOIN public.subjects s ON t.subject_id = s.id
+       WHERE ps.user_id = $1 AND ps.is_approved = true AND ps.score IS NOT NULL
+       ORDER BY ps.score DESC
+       LIMIT 3`,
+      [userId],
+    );
 
     const profile = profileResult.rows[0] || {};
     const subjects = subjectsResult.rows;
+    const verifiedProjects = projectsResult.rows;
+
+    // Using exercises as projects since they contain the actual submission scores
+    console.log('[resume] fetching projects (exercises)');
+    const projectsResult = await pool.query(
+      `SELECT 
+         e.title AS name, 
+         CASE WHEN e.max_score > 0 THEN ROUND((es.score::numeric / e.max_score::numeric) * 100) ELSE 0 END AS score 
+       FROM public.exercise_submissions es
+       JOIN public.exercises e ON e.id = es.exercise_id
+       WHERE es.user_id = $1`,
+      [userId]
+    );
+    const allProjects = projectsResult.rows;
+    
+    const eligibleProjects = allProjects.filter(p => p.score >= 75);
+
+    if (eligibleProjects.length < 3) {
+      console.log(`[resume] user ${userId} not eligible. Has ${eligibleProjects.length} eligible projects.`);
+      let suggestionData;
+      
+      if (allProjects.length === 0) {
+        suggestionData = "You haven't submitted any projects yet. Complete at least 3 projects with 75%+ score to unlock resume generation.";
+      } else {
+        suggestionData = allProjects
+          .filter(p => p.score == null || p.score < 75)
+          .map(p => {
+            if (p.score == null || p.score === 0) {
+              return { name: p.name, needed: "Not attempted" };
+            }
+            return { name: p.name, needed: `Needs ${75 - p.score}% more to reach 75%` };
+          });
+      }
+
+      return res.status(200).json({
+        success: false,
+        eligible: false,
+        message: "You need at least 3 projects with 75%+ score to generate a resume.",
+        suggestion: suggestionData
+      });
+    }
 
     const systemPrompt = `You are a professional resume writer specializing in tech students and early-career developers.
 Generate a structured, ATS-friendly resume in JSON format. Be concise and impactful. Use action verbs. Do not fabricate specifics not provided.`;
 
     const userPrompt = `Generate a professional resume for this student. Return ONLY valid JSON with this exact structure:
 {
-  "summary": "2-3 sentence professional summary",
+  "summary": "2-3 sentence professional summary highlighting their current learning path and top skills",
   "education": [{ "degree": "", "institution": "", "year": "", "details": "" }],
   "skills": ["skill1", "skill2"],
   "projects": [{ "name": "", "description": "", "technologies": [] }],
@@ -143,18 +198,21 @@ Student Data:
 - College: ${profile.college_name || 'Not specified'}
 - Degree: ${profile.degree || 'Not specified'}, Year: ${profile.year || 'Not specified'}
 - Total XP Points: ${profile.total_points || 0}
-- Enrolled Subjects: ${subjects.map((s) => `${s.subject_name} (${s.completed_topics}/${s.total_topics} topics completed)`).join(', ') || 'None'}
+- Course Status: ${subjects.map((s) => `${s.subject_name}: ${s.progress_percent}% Complete (${s.completed_topics}/${s.total_topics} topics mastering)`).join(', ') || 'None'}
+- Verified Projects (Top Performance): ${verifiedProjects.length ? JSON.stringify(verifiedProjects) : 'None yet'}
 - Badges Earned: ${profile.badge_count || 0} badges
 - Career Objective: ${careerObjective || 'To grow as a software developer'}
 - Extra Skills: ${extraSkills.join(', ') || 'None provided'}
 - Work Experience: ${workExperience.length ? JSON.stringify(workExperience) : 'None'}
+- Eligible Projects: ${eligibleProjects.length ? JSON.stringify(eligibleProjects.map(p => ({ name: p.name, score: p.score }))) : 'None'}
 
 Instructions:
-- Under skills, include programming languages and tools inferred from enrolled subjects plus extra skills provided.
-- Under projects, create 1-2 plausible student projects based on the subjects studied. Only include if subjects are present.
-- Under achievements, mention the badge count and notable XP milestones if points > 0.
-- Under experience, only include entries if work experience was provided. Leave as empty array otherwise.
-- Keep the summary grounded in the actual data provided.`;
+- Summary: Mention the student's status in their current courses (e.g. "Currently mastering Web Development (85% completed)").
+- Skills: Include programming languages and tools inferred from enrolled subjects plus extra skills provided.
+- Projects: ONLY include the verified projects listed above. Do not create placeholder projects. If no verified projects are present, leave the projects array empty.
+- Achievements: Mention badge counts and XP milestones.
+- Experience: Only include if work experience was provided.
+- Keep the tone professional and data-driven.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
