@@ -41,13 +41,29 @@ function TabStrip({ active, onTab }: { active: Tab; onTab: (t: Tab) => void }) {
 
 // ─── Video tab ────────────────────────────────────────────────────────────────
 
+type VideoResult = {
+  videoId: string;
+  title: string;
+  thumbnail: string;
+  channel: string;
+  url: string;
+};
+
 function VideoTab({
   lesson,
   canEdit,
+  searching,
+  videoResults,
+  onSearchYouTube,
+  onSelectVideo,
   onUpdateLesson,
 }: {
   lesson: AiLesson;
   canEdit: boolean;
+  searching: boolean;
+  videoResults: VideoResult[];
+  onSearchYouTube: () => void;
+  onSelectVideo: (url: string) => void;
   onUpdateLesson: (data: Partial<AiLesson>) => Promise<void>;
 }) {
   const [url, setUrl] = useState(lesson.video_url ?? '');
@@ -112,6 +128,56 @@ function VideoTab({
           )}
         </div>
       </div>
+
+      {/* Search YouTube button */}
+      {canEdit && (
+        <button
+          onClick={onSearchYouTube}
+          disabled={searching}
+          className='flex items-center gap-2 w-full justify-center px-4 py-2.5 text-[12px] font-bold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors'
+        >
+          {searching ? <Loader2 className='w-4 h-4 animate-spin' /> : <MonitorPlay className='w-4 h-4' />}
+          {searching ? 'Searching YouTube...' : lesson.video_url ? '🔍 Find a Better Video' : '🔍 Search YouTube for Best Video'}
+        </button>
+      )}
+
+      {/* YouTube Search Results */}
+      {videoResults.length > 0 && (
+        <div className='space-y-2'>
+          <p className='text-[11px] font-semibold text-slate-500 uppercase tracking-wider'>
+            Search Results — Click to select
+          </p>
+          {videoResults.map((v) => {
+            const isSelected = url === v.url;
+            return (
+              <button
+                key={v.videoId}
+                onClick={() => onSelectVideo(v.url)}
+                className={`w-full flex items-start gap-3 p-2 rounded-lg border text-left transition-all ${
+                  isSelected
+                    ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200'
+                    : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                }`}
+              >
+                <img
+                  src={v.thumbnail}
+                  alt={v.title}
+                  className='w-24 h-14 rounded-md object-cover shrink-0 bg-slate-100'
+                />
+                <div className='min-w-0 flex-1'>
+                  <p className='text-[12px] font-semibold text-slate-800 line-clamp-2 leading-tight'
+                     dangerouslySetInnerHTML={{ __html: v.title }}
+                  />
+                  <p className='text-[10px] text-slate-400 mt-0.5'>{v.channel}</p>
+                  {isSelected && (
+                    <span className='inline-block mt-1 text-[10px] font-bold text-indigo-600'>✓ Selected</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {url && !videoId && (
         <a href={url} target='_blank' rel='noopener noreferrer'
@@ -463,18 +529,20 @@ export function RightSidebar({
   selectedLesson: AiLesson | null;
   canEdit: boolean;
   onUpdateLesson: (id: string, data: Partial<AiLesson>) => Promise<void>;
-  onGenerateLessonContent: (lessonId: string, type: 'video' | 'markdown' | 'exercise') => Promise<void>;
+  onGenerateLessonContent: (lessonId: string, type: 'video' | 'markdown' | 'exercise') => Promise<VideoResult[] | void>;
 }) {
   const [tab, setTab] = useState<Tab>('video');
   const [generatingType, setGeneratingType] = useState<'video' | 'markdown' | 'exercise' | null>(null);
+  const [videoResults, setVideoResults] = useState<VideoResult[]>([]);
 
-  // Reset tab when lesson changes
+  // Reset tab and video results when lesson changes
   useEffect(() => {
     if (selectedLesson) {
       if (selectedLesson.video_url) setTab('video');
       else if (selectedLesson.explanation) setTab('content');
       else setTab('video');
     }
+    setVideoResults([]);
   }, [selectedLesson?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!selectedLesson) {
@@ -489,11 +557,25 @@ export function RightSidebar({
 
   const handleGenerate = async (type: 'video' | 'markdown' | 'exercise') => {
     setGeneratingType(type);
-    try { await onGenerateLessonContent(selectedLesson.id, type); }
+    try {
+      const results = await onGenerateLessonContent(selectedLesson.id, type);
+      if (type === 'video' && Array.isArray(results)) {
+        setVideoResults(results);
+      }
+    }
     finally { setGeneratingType(null); }
   };
 
   const handleUpdate = (data: Partial<AiLesson>) => onUpdateLesson(selectedLesson.id, data);
+
+  const handleSelectVideo = async (videoUrl: string) => {
+    try {
+      await handleUpdate({ video_url: videoUrl });
+      toast.success('Video selected & saved');
+    } catch {
+      toast.error('Failed to save video');
+    }
+  };
 
   return (
     <div className='bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden sticky top-4 max-h-[calc(100vh-120px)]'>
@@ -520,6 +602,10 @@ export function RightSidebar({
         <VideoTab
           lesson={selectedLesson}
           canEdit={canEdit}
+          searching={generatingType === 'video'}
+          videoResults={videoResults}
+          onSearchYouTube={() => handleGenerate('video')}
+          onSelectVideo={handleSelectVideo}
           onUpdateLesson={handleUpdate}
         />
       )}
