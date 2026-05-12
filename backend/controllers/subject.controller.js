@@ -431,8 +431,10 @@ exports.getSubtopicContent = async (req, res) => {
           markdownContent = await fs.readFile(filePath, 'utf8');
         }
       } catch (err) {
-        console.error('Error reading markdown file:', err);
-        markdownContent = '';
+        console.error('Error reading markdown file:', err.message);
+        markdownContent = markdownRow.markdown_path.startsWith('http')
+          ? '_Lesson content is temporarily unavailable. Please try again later._'
+          : '';
       }
     }
 
