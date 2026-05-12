@@ -37,27 +37,27 @@ exports.extractSkills = async (req, res) => {
 };
 
 // ─── Generate exercise tests via AI ──────────────────────────────────────────
-+
-+exports.generateTaskTests = async (req, res) => {
-+  try {
-+    const { instructions, language, role_focus, level } = req.body;
-+    if (!instructions) return res.status(400).json({ success: false, message: 'instructions is required' });
-+
-+    const testCases = await generateExerciseTests({
-+      instructions,
-+      language: language || 'javascript',
-+      roleFocus: role_focus || 'Software Engineer',
-+      level: level || 'Beginner',
-+    });
-+
-+    res.json({ success: true, data: testCases });
-+  } catch (err) {
-+    console.error('generateTaskTests error:', err);
-+    res.status(500).json({ success: false, message: err.message });
-+  }
-+};
-+
- // ─── Generate curriculum via AI ───────────────────────────────────────────────
+
+exports.generateTaskTests = async (req, res) => {
+  try {
+    const { instructions, language, role_focus, level } = req.body;
+    if (!instructions) return res.status(400).json({ success: false, message: 'instructions is required' });
+
+    const testCases = await generateExerciseTests({
+      instructions,
+      language: language || 'javascript',
+      roleFocus: role_focus || 'Software Engineer',
+      level: level || 'Beginner',
+    });
+
+    res.json({ success: true, data: testCases });
+  } catch (err) {
+    console.error('generateTaskTests error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── Generate curriculum via AI ───────────────────────────────────────────────
 
 exports.generate = async (req, res) => {
   try {
@@ -847,11 +847,17 @@ exports.duplicateTopic = async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const topicRes = await pool.query(`SELECT * FROM ai_course_topics WHERE id = $1`, [id]);
-    if (!topicRes.rows.length) return res.status(404).json({ success: false });
-    const t = topicRes.rows[0];
-    const orderRes = await pool.query(`SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_topics WHERE module_id = $1`, [t.module_id]);
     await client.query('BEGIN');
+
+    // Read inside transaction to prevent race conditions on order_index
+    const topicRes = await client.query(`SELECT * FROM ai_course_topics WHERE id = $1`, [id]);
+    if (!topicRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false });
+    }
+    const t = topicRes.rows[0];
+    const orderRes = await client.query(`SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_topics WHERE module_id = $1`, [t.module_id]);
+
     const newTopic = await client.query(
       `INSERT INTO ai_course_topics (module_id, title, description, order_index, assignment)
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
