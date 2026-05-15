@@ -6,6 +6,7 @@ import {
   XCircle,
   Award,
   TrendingUp,
+  MonitorPlay,
 } from 'lucide-react';
 import ExerciseEditor from '@/components/common/ExerciseEditor';
 import ReactMarkdown from 'react-markdown';
