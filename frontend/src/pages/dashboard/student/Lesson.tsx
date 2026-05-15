@@ -387,16 +387,26 @@ const Lesson = () => {
           <div className='bg-white px-6 py-8'>
             {lesson.video_url && (
               <div className='not-prose mb-6'>
-                <div className='aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-black'>
-                  <iframe
-                    className='h-full w-full'
-                    src={getEmbedUrl(lesson.video_url)}
-                    title='Lesson video'
-                    allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
-                    referrerPolicy='strict-origin-when-cross-origin'
-                    allowFullScreen
-                  />
-                </div>
+                {lesson.video_url.includes('results?') ? (
+                  <div className='bg-slate-50 rounded-2xl p-8 text-center border border-slate-200'>
+                    <MonitorPlay className='w-10 h-10 text-slate-400 mx-auto mb-3' />
+                    <p className='text-base font-semibold text-slate-700 mb-3'>AI suggested a YouTube search instead of a direct video.</p>
+                    <a href={lesson.video_url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-2 px-5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors'>
+                      View Search Results on YouTube
+                    </a>
+                  </div>
+                ) : (
+                  <div className='aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-black'>
+                    <iframe
+                      className='h-full w-full'
+                      src={getEmbedUrl(lesson.video_url)}
+                      title='Lesson video'
+                      allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+                      referrerPolicy='strict-origin-when-cross-origin'
+                      allowFullScreen
+                    />
+                  </div>
+                )}
               </div>
             )}
 
