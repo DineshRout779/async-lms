@@ -19,6 +19,8 @@ import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 import type { AiCourse, AiModule, AiTopic, AiLesson } from '@/features/aiCurriculum/types';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // ─── Week/day breakdown calculator ────────────────────────────────────────────
 
@@ -111,21 +113,27 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
           {lesson.explanation && (
             <div>
               <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5'>Lesson Content</p>
-              <p className='text-[13px] text-slate-600 leading-relaxed whitespace-pre-wrap line-clamp-6'>{lesson.explanation}</p>
+              <div className='prose prose-slate prose-sm max-w-none'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.explanation}</ReactMarkdown>
+              </div>
             </div>
           )}
 
           {lesson.example && (
             <div>
               <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5'>Example</p>
-              <p className='text-[13px] text-slate-600 leading-relaxed'>{lesson.example}</p>
+              <div className='prose prose-slate prose-sm max-w-none'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.example}</ReactMarkdown>
+              </div>
             </div>
           )}
 
           {lesson.activity && (
             <div className='bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5'>
               <p className='text-[11px] font-semibold text-blue-600 mb-1'>Activity</p>
-              <p className='text-[13px] text-blue-700'>{lesson.activity}</p>
+              <div className='prose prose-slate prose-sm max-w-none text-blue-800 prose-p:text-blue-800 prose-headings:text-blue-900'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.activity}</ReactMarkdown>
+              </div>
             </div>
           )}
 
