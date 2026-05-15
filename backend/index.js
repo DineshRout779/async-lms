@@ -59,9 +59,9 @@ app.post('/api/v1/internal/workers/register', (req, res) => {
 });
 
 app.post('/api/v1/internal/workers/heartbeat', (req, res) => {
-  const { id } = req.body;
+  const { id, freeMemory, totalMemory } = req.body;
   if (!id) return res.status(400).json({ error: 'id required' });
-  heartbeat(id);
+  heartbeat(id, { freeMemory, totalMemory });
   res.json({ ok: true });
 });
 

@@ -159,6 +159,8 @@ async function registerWithOrchestrator(retries = 0) {
       try {
         await axios.post(`${ORCHESTRATOR_URL}/api/v1/internal/workers/heartbeat`, {
           id: WORKER_ID,
+          freeMemory: Math.round(os.freemem() / 1024 / 1024),
+          totalMemory: Math.round(os.totalmem() / 1024 / 1024),
         });
       } catch { /* orchestrator temporarily unreachable — will retry next tick */ }
     }, 30_000);

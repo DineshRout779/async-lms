@@ -168,4 +168,15 @@ async function stopWorkspaceContainer(userId, projectId) {
   }
 }
 
-module.exports = { ensureWorkspaceContainer, stopWorkspaceContainer };
+function getProfileMemoryLimit(profile) {
+  const limits = PROFILE_LIMITS[profile] ?? PROFILE_LIMITS.default;
+  // Parse '256m' or '128m' into 256 or 128
+  return parseInt(limits.memory, 10);
+}
+
+module.exports = { 
+  ensureWorkspaceContainer, 
+  stopWorkspaceContainer, 
+  getProfileMemoryLimit,
+  PROFILE_LIMITS 
+};
