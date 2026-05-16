@@ -215,13 +215,23 @@ function ContentTab({
   const [section, setSection] = useState<'explanation' | 'example' | 'activity'>('explanation');
 
   useEffect(() => {
-    setDraft({
-      explanation: lesson.explanation ?? '',
-      example: lesson.example ?? '',
-      activity: lesson.activity ?? '',
-    });
+  setDraft({
+    explanation: lesson.explanation ?? '',
+    example: lesson.example ?? '',
+    activity: lesson.activity ?? '',
+  });
+
+  // if generated content exists mark unsaved
+  if (
+    lesson.explanation ||
+    lesson.example ||
+    lesson.activity
+  ) {
+    setDirty(true);
+  } else {
     setDirty(false);
-  }, [lesson.id, lesson.explanation, lesson.example, lesson.activity]);
+  }
+}, [lesson.id, lesson.explanation, lesson.example, lesson.activity]);
 
   const set = (field: keyof typeof draft, val: string) => {
     setDraft((d) => ({ ...d, [field]: val }));
@@ -389,6 +399,7 @@ function ExerciseTab({
   });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   useEffect(() => {
     const ex = !lesson.exercise_data ? null
@@ -401,7 +412,12 @@ function ExerciseTab({
       tasks: (ex?.tasks ?? []).join('\n'),
       starter_code: ex?.starter_code ?? '',
     });
-    setDirty(false);
+    // setDirty(false);
+    if (ex) {
+  setDirty(true);
+} else {
+  setDirty(false);
+}
   }, [lesson.id, lesson.exercise_data]);
 
   const set = (field: keyof typeof draft, val: string) => {
@@ -430,6 +446,27 @@ function ExerciseTab({
 
   return (
     <div className='flex flex-col flex-1 min-h-0'>
+       {/* PREVIEW TOOLBAR */}
+    <div className='flex items-center gap-2 px-4 py-2 border-b border-slate-100'>
+      <div className='flex-1' />
+
+      <button
+        onClick={() => setPreview((v) => !v)}
+        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors border ${
+          preview
+            ? 'bg-blue-50 text-blue-700 border-blue-200'
+            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+        }`}
+      >
+        {preview ? (
+          <Pencil className='w-3 h-3' />
+        ) : (
+          <Eye className='w-3 h-3' />
+        )}
+
+        {preview ? 'Edit' : 'Preview'}
+      </button>
+    </div>
       <div className='flex-1 overflow-y-auto p-4 space-y-3'>
         {!exercise && !canEdit && (
           <div className='py-12 text-center'>
@@ -439,7 +476,114 @@ function ExerciseTab({
         )}
 
         {(exercise || canEdit) && (
+  <>
+    {preview ? (
+      <div className='space-y-4 text-[13px]'>
+
+        <div>
+          <h4 className='font-bold text-slate-700 mb-1'>Title</h4>
+          <p>{draft.title || '—'}</p>
+        </div>
+
+        <div>
+          <h4 className='font-bold text-slate-700 mb-1'>Description</h4>
+
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {draft.description || 'No description'}
+          </ReactMarkdown>
+        </div>
+
+        <div>
+          <h4 className='font-bold text-slate-700 mb-1'>Tasks</h4>
+
+          <ul className='list-disc pl-5 space-y-1'>
+            {draft.tasks
+              .split('\n')
+              .filter(Boolean)
+              .map((task, i) => (
+                <li key={i}>{task}</li>
+              ))}
+          </ul>
+        </div>
+
+        <div>
+          <h4 className='font-bold text-slate-700 mb-1'>
+            Starter Code
+          </h4>
+
+          <pre className='bg-slate-100 p-3 rounded-lg overflow-auto'>
+            <code>{draft.starter_code}</code>
+          </pre>
+        </div>
+      </div>
+    ) : (
+      <>
+        <div>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Title
+          </label>
+
+          <input
+            disabled={!canEdit}
+            value={draft.title}
+            onChange={(e) => set('title', e.target.value)}
+            placeholder='Exercise title...'
+            className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400'
+          />
+        </div>
+
+        <div>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Description
+          </label>
+
+          <textarea
+            rows={2}
+            disabled={!canEdit}
+            value={draft.description}
+            onChange={(e) => set('description', e.target.value)}
+            placeholder='Brief description of the exercise...'
+            className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400 resize-none'
+          />
+        </div>
+
+        <div>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Tasks
+          </label>
+
+          <textarea
+            rows={5}
+            disabled={!canEdit}
+            value={draft.tasks}
+            onChange={(e) => set('tasks', e.target.value)}
+            placeholder={'Task 1\nTask 2\nTask 3'}
+            className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400 resize-none font-mono'
+          />
+        </div>
+
+        <div>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Starter Code
+          </label>
+
+          <textarea
+            rows={6}
+            disabled={!canEdit}
+            value={draft.starter_code}
+            onChange={(e) => set('starter_code', e.target.value)}
+            placeholder='// starter code here...'
+            className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400 resize-none font-mono'
+          />
+        </div>
+      </>
+    )}
+  </>
+)}
+{/* 
+        {(exercise || canEdit) && (
           <>
+          
             <div>
               <label className='block text-[11px] font-semibold text-slate-500 mb-1'>Title</label>
               <input
@@ -489,7 +633,7 @@ function ExerciseTab({
               />
             </div>
           </>
-        )}
+        )} */}
       </div>
 
       {canEdit && (
@@ -502,6 +646,40 @@ function ExerciseTab({
             {generating ? <Loader2 className='w-3.5 h-3.5 animate-spin' /> : <Sparkles className='w-3.5 h-3.5' />}
             {generating ? 'Generating...' : exercise ? 'Regenerate' : 'Generate'}
           </button>
+
+        {exercise && (
+  <button
+    onClick={async () => {
+      try {
+        setSaving(true);
+
+        await onUpdateLesson({
+          exercise_data: null,
+        });
+
+        setDraft({
+          title: '',
+          description: '',
+          tasks: '',
+          starter_code: '',
+        });
+
+        setDirty(false);
+
+        toast.success('Exercise removed');
+      } catch {
+        toast.error('Failed to remove exercise');
+      } finally {
+        setSaving(false);
+      }
+    }}
+    disabled={saving}
+    className='flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors'
+  >
+    Remove
+  </button>
+)}
+
           <div className='flex-1' />
           {dirty && <span className='text-[11px] text-amber-500 font-semibold'>Unsaved</span>}
           <button
