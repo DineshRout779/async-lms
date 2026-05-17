@@ -33,7 +33,6 @@ import {
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import apiClient from '@/services/api';
-import { useReactToPrint } from 'react-to-print';
 
 import type { ResumeData, ATSResult, Section } from './resume/types';
 import { DEFAULT_SECTIONS, calcLocalATS } from './resume/resumeUtils';
@@ -188,6 +187,44 @@ export default function ResumeBuilder() {
 
   const previewRef = useRef<HTMLDivElement>(null);
 
+  const handleExportPDF = useCallback(() => {
+    if (!previewRef.current) return;
+    const printId = 'resume-print-target';
+    previewRef.current.id = printId;
+
+    const style = document.createElement('style');
+    style.id = 'resume-print-style';
+    style.textContent = `
+      @media print {
+        body > *:not([data-resume-print-root]) { display: none !important; }
+        [data-resume-print-root] { display: block !important; position: fixed; inset: 0; z-index: 99999; background: white; padding: 32px; overflow: visible; }
+        [data-resume-print-root] * { visibility: visible !important; }
+        @page { margin: 0.5in; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-resume-print-root', '');
+    wrapper.style.cssText = 'display:none';
+    const clone = previewRef.current.cloneNode(true) as HTMLElement;
+    // Strip interactive hover/edit styles for print
+    clone.querySelectorAll('[title="Double-click to edit"]').forEach((el) => {
+      (el as HTMLElement).removeAttribute('title');
+    });
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    const cleanup = () => {
+      document.getElementById('resume-print-style')?.remove();
+      wrapper.remove();
+      previewRef.current && (previewRef.current.id = '');
+    };
+
+    window.addEventListener('afterprint', cleanup, { once: true });
+    window.print();
+  }, []);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -265,11 +302,6 @@ export default function ResumeBuilder() {
       setJdLoading(false);
     }
   };
-
-  const handleExportPDF = useReactToPrint({
-    contentRef: previewRef,
-    documentTitle: resumeData?.personalInfo.name ? `${resumeData.personalInfo.name}_resume` : 'resume',
-  });
 
   const localATS = atsResult ?? calcLocalATS(resumeData);
 
