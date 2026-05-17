@@ -1,8 +1,6 @@
 const OpenAI = require('openai');
 const pool = require('../config/pg');
 
-// console.log('using opennai key: ', process.env.CHATGPT_API_KEY);
-
 const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
 
 const SYSTEM_PROMPT = `You are CodeGuru AI, a coding tutor inside a learning management system for students learning programming.
@@ -34,6 +32,10 @@ Your role is to EDUCATE students — not to solve their problems for them.
 - End with a question or prompt that encourages the student to try next.`;
 
 exports.chat = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
   const { messages, lessonContext } = req.body;
 
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -54,13 +56,18 @@ exports.chat = async (req, res) => {
 
   let systemPrompt = SYSTEM_PROMPT;
   if (lessonContext?.title) {
+    // Truncate and strip control characters to prevent prompt injection
+    const safeTitle = String(lessonContext.title).slice(0, 200).replace(/[\x00-\x1F]/g, '');
+    const safeType = String(lessonContext.contentType || 'lesson').slice(0, 50).replace(/[\x00-\x1F]/g, '');
+    const safeContent = lessonContext.content
+      ? String(lessonContext.content).slice(0, 500).replace(/[\x00-\x1F]/g, '')
+      : null;
+
     systemPrompt +=
       `\n\n## Current Lesson Context\n` +
-      `**Title:** ${lessonContext.title}\n` +
-      `**Type:** ${lessonContext.contentType || 'lesson'}\n` +
-      (lessonContext.content
-        ? `**Content excerpt:**\n${lessonContext.content}\n`
-        : '') +
+      `**Title:** ${safeTitle}\n` +
+      `**Type:** ${safeType}\n` +
+      (safeContent ? `**Content excerpt:**\n${safeContent}\n` : '') +
       `\nThe student is currently studying this lesson. Tailor your guidance to this specific topic.`;
   }
 
@@ -87,26 +94,22 @@ exports.generateResume = async (req, res) => {
   const { workExperience = [], extraSkills = [], careerObjective = '' } = req.body;
 
   try {
-    // Fetch profile (same query pattern as getUserProfile)
-    console.log('[resume] fetching profile for', userId);
     const profileResult = await pool.query(
       `SELECT
          u.full_name, u.email, sp.degree, sp.year,
          COALESCE(c.name, '') AS college_name,
-         COALESCE(SUM(pl.points), 0)::integer AS total_points
+         COALESCE(SUM(pl.points), 0)::integer AS total_points,
+         COUNT(DISTINCT ub.badge_id)::integer AS badge_count
        FROM public.users u
        LEFT JOIN public.student_profiles sp ON sp.user_id = u.id
        LEFT JOIN public.colleges c ON c.id = sp.college_id
        LEFT JOIN public.points_log pl ON pl.user_id = u.id
+       LEFT JOIN public.user_badges ub ON ub.user_id = u.id
        WHERE u.id = $1
        GROUP BY u.full_name, u.email, sp.degree, sp.year, c.name`,
       [userId],
     );
-    console.log('[resume] profile ok:', profileResult.rows[0]?.full_name);
 
-
-    // Fetch enrolled subjects and completed topic progress
-    console.log('[resume] fetching subjects');
     const subjectsResult = await pool.query(
       `SELECT s.name AS subject_name,
               COUNT(DISTINCT utp.topic_id) FILTER (WHERE utp.is_completed = true) AS completed_topics,
@@ -121,9 +124,7 @@ exports.generateResume = async (req, res) => {
       [userId],
     );
 
-    // Fetch Top 3 Evaluated Projects
-    console.log('[resume] fetching verified projects');
-    const projectsResult = await pool.query(
+    const verifiedProjectsResult = await pool.query(
       `SELECT p.title, p.instructions, ps.score, s.name as subject
        FROM public.project_submissions ps
        JOIN public.projects p ON p.id = ps.project_id
@@ -148,16 +149,15 @@ exports.generateResume = async (req, res) => {
        FROM public.exercise_submissions es
        JOIN public.exercises e ON e.id = es.exercise_id
        WHERE es.user_id = $1`,
-      [userId]
+      [userId],
     );
     const allProjects = exercisesResult.rows;
     
     const eligibleProjects = allProjects.filter(p => p.score >= 75);
 
     if (eligibleProjects.length < 3) {
-      console.log(`[resume] user ${userId} not eligible. Has ${eligibleProjects.length} eligible projects.`);
       let suggestionData;
-      
+
       if (allProjects.length === 0) {
         suggestionData = "You haven't submitted any projects yet. Complete at least 3 projects with 75%+ score to unlock resume generation.";
       } else {
@@ -175,7 +175,7 @@ exports.generateResume = async (req, res) => {
         success: false,
         eligible: false,
         message: "You need at least 3 projects with 75%+ score to generate a resume.",
-        suggestion: suggestionData
+        suggestion: suggestionData,
       });
     }
 
@@ -194,7 +194,6 @@ Generate a structured, ATS-friendly resume in JSON format. Be concise and impact
 
 Student Data:
 - Name: ${profile.full_name || 'Student'}
-- Email: ${profile.email || ''}
 - College: ${profile.college_name || 'Not specified'}
 - Degree: ${profile.degree || 'Not specified'}, Year: ${profile.year || 'Not specified'}
 - Total XP Points: ${profile.total_points || 0}
@@ -226,7 +225,14 @@ Instructions:
     });
 
     const raw = completion.choices[0]?.message?.content ?? '{}';
-    const resumeData = JSON.parse(raw);
+
+    let resumeData;
+    try {
+      resumeData = JSON.parse(raw);
+    } catch {
+      console.error('RESUME JSON PARSE ERROR: invalid JSON from model:', raw.slice(0, 200));
+      return res.status(500).json({ message: 'Resume generation returned invalid data. Please try again.' });
+    }
 
     res.json({
       success: true,
@@ -253,6 +259,9 @@ exports.optimizeWithJD = async (req, res) => {
   if (!resumeData || !jobDescription) {
     return res.status(400).json({ message: 'resumeData and jobDescription are required' });
   }
+
+  const truncatedJD = jobDescription.slice(0, 2000);
+  const jdWasTruncated = jobDescription.length > 2000;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -281,7 +290,7 @@ Resume Experience: ${JSON.stringify(resumeData.experience || [])}
 Resume Projects: ${JSON.stringify(resumeData.projects || [])}
 
 Job Description:
-${jobDescription.slice(0, 2000)}`,
+${truncatedJD}`,
         },
       ],
       max_tokens: 800,
@@ -290,7 +299,16 @@ ${jobDescription.slice(0, 2000)}`,
     });
 
     const raw = completion.choices[0]?.message?.content ?? '{}';
-    res.json({ success: true, data: JSON.parse(raw) });
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      console.error('JD OPTIMIZE JSON PARSE ERROR:', raw.slice(0, 200));
+      return res.status(500).json({ message: 'Optimization returned invalid data. Please try again.' });
+    }
+
+    res.json({ success: true, data: parsed, ...(jdWasTruncated && { warning: 'Job description was truncated to 2000 characters.' }) });
   } catch (err) {
     console.error('JD OPTIMIZE ERROR:', err);
     res.status(500).json({ message: 'Optimization failed. Please try again.' });
