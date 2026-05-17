@@ -57,7 +57,7 @@ exports.generateTaskTests = async (req, res) => {
   }
 };
 
-// ─── Generate curriculum via AI ───────────────────────────────────────────────
+ // ─── Generate curriculum via AI ───────────────────────────────────────────────
 
 exports.generate = async (req, res) => {
   try {

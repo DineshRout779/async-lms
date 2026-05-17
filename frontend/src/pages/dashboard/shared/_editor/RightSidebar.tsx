@@ -106,6 +106,17 @@ function VideoTab({
         </div>
       )}
 
+      {url && url.includes('results?') && (
+        <div className='bg-slate-50 border border-slate-200 rounded-xl p-5 text-center'>
+          <MonitorPlay className='w-6 h-6 text-slate-400 mx-auto mb-2' />
+          <p className='text-[12px] font-semibold text-slate-700 mb-1'>Search Result URL</p>
+          <p className='text-[11px] text-slate-500 mb-3'>AI returned a search query instead of a specific video.</p>
+          <a href={url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg font-bold text-[11px] hover:bg-red-100 transition-colors'>
+            Open Search Results
+          </a>
+        </div>
+      )}
+
       <div>
         <label className='block text-[11px] font-semibold text-slate-500 mb-1.5'>YouTube URL</label>
         <div className='flex gap-2'>
