@@ -24,16 +24,17 @@ type Props = {
 
 export default function SubmissionsModal({ open, onClose, assignmentId, assignmentTitle }: Props) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!open || !assignmentId) return;
-    setLoading(true);
+    let cancelled = false;
     apiClient
       .get(`/college-assignments/submissions/${assignmentId}`)
-      .then((res) => setSubmissions(res.data.data))
-      .catch((err) => toast.error(getErrorMessage(err, 'Failed to load submissions')))
-      .finally(() => setLoading(false));
+      .then((res) => { if (!cancelled) setSubmissions(res.data.data); })
+      .catch((err) => { if (!cancelled) toast.error(getErrorMessage(err, 'Failed to load submissions')); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [open, assignmentId]);
 
   if (!open) return null;

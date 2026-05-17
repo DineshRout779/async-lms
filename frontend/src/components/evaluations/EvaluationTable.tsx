@@ -161,6 +161,7 @@ const EvaluationTable = ({ search, selectedCollege, selectedDomain, selectedBatc
       />
 
       <SubmissionsModal
+        key={submissionsAssignment.id}
         open={submissionsOpen}
         onClose={() => setSubmissionsOpen(false)}
         assignmentId={submissionsAssignment.id}
