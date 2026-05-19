@@ -98,7 +98,7 @@ The JSON keys use "modules/topics/lessons" as internal names but they map to Top
                 "title": "Exercise title — a real coding/practical task for this subtopic",
                 "description": "Clear instructions for what the learner must build or do",
                 "tasks": ["Step 1", "Step 2", "Step 3"],
-                "starter_code": "// starter code, HTML scaffold, or pseudocode"
+                "starter_code": "// starter code, HTML scaffold, or empty string if non-technical"
               }
             }
           ]
@@ -120,7 +120,7 @@ Rules:
 - video_url must be a YouTube search URL: "https://www.youtube.com/results?search_query=" + URL-encoded terms specific to that subtopic and role
 - duration_mins: total estimated time for video + reading (15–45 mins)
 - quiz_questions: exactly 4 options per question, correct_index (0–3), and explanation
-- exercise: one hands-on exercise per subtopic with 3–5 concrete tasks and starter_code
+- exercise: one hands-on exercise per subtopic with 3–5 concrete tasks. Include starter_code ONLY if the topic involves programming or technical coding; otherwise, leave it as an empty string.
 - explanation must be rich markdown — use ## subheadings, bullet lists, and \`\`\`language code blocks\`\`\`
 - Level appropriateness: ${level} — calibrate depth and complexity accordingly
 - Avoid generic filler — every subtopic must teach something directly employable for ${roleFocus}`;
@@ -443,13 +443,14 @@ Return ONLY a valid JSON object:
     "title": "Exercise title",
     "description": "What the learner must build or do",
     "tasks": ["Step 1", "Step 2", "Step 3"],
-    "starter_code": "// starter code or HTML scaffold"
+    "starter_code": "// starter code, HTML scaffold, or empty string if non-technical"
   }
 }
 
 Rules:
 - Must be practical and directly related to ${roleFocus} work
-- 3–5 concrete, actionable task steps`;
+- 3–5 concrete, actionable task steps
+- Include starter_code ONLY if the topic involves programming or technical coding; otherwise, leave it as an empty string.`;
     maxTokens = 1000;
   } else {
     throw new Error(`Unknown content type: ${type}`);

@@ -208,6 +208,7 @@ function ContentTab({
     explanation: lesson.explanation ?? '',
     example: lesson.example ?? '',
     activity: lesson.activity ?? '',
+    resource_links: lesson.resource_links?.length ? lesson.resource_links : [''],
   });
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -219,9 +220,10 @@ function ContentTab({
       explanation: lesson.explanation ?? '',
       example: lesson.example ?? '',
       activity: lesson.activity ?? '',
+      resource_links: lesson.resource_links?.length ? lesson.resource_links : [''],
     });
     setDirty(false);
-  }, [lesson.id, lesson.explanation, lesson.example, lesson.activity]);
+  }, [lesson.id, lesson.explanation, lesson.example, lesson.activity, lesson.resource_links]);
 
   const set = (field: keyof typeof draft, val: string) => {
     setDraft((d) => ({ ...d, [field]: val }));
@@ -310,26 +312,86 @@ function ContentTab({
       </div>
 
       {/* Editor / Preview area */}
-      <div className='flex-1 overflow-y-auto px-4 py-3'>
-        {sections.map((s) => s.key === section && (
-          preview ? (
-            <div key={s.key} className='prose prose-sm max-w-none text-slate-700 text-[13px]'>
-              {draft[s.key]
-                ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft[s.key]}</ReactMarkdown>
-                : <span className='text-slate-300 italic'>Nothing to preview yet</span>}
-            </div>
-          ) : (
-            <textarea
-              key={s.key}
-              rows={16}
-              disabled={!canEdit}
-              value={draft[s.key]}
-              onChange={(e) => set(s.key, e.target.value)}
-              placeholder={s.placeholder}
-              className='w-full h-full min-h-64 border border-slate-200 rounded-lg px-3 py-2.5 text-[12px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white disabled:bg-slate-50 disabled:text-slate-400 resize-none font-mono leading-relaxed'
-            />
-          )
-        ))}
+      <div className='flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-6'>
+        <div className='flex-1 min-h-[280px]'>
+          {sections.map((s) => s.key === section && (
+            preview ? (
+              <div key={s.key} className='prose prose-sm max-w-none text-slate-700 text-[13px]'>
+                {draft[s.key]
+                  ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft[s.key]}</ReactMarkdown>
+                  : <span className='text-slate-300 italic'>Nothing to preview yet</span>}
+                
+                {/* Resource Links Preview */}
+                {s.key === 'explanation' && draft.resource_links.filter(l => l.trim()).length > 0 && (
+                  <div className='mt-8 pt-4 border-t border-slate-100'>
+                    <h4 className='font-bold text-slate-800 mb-3'>Attached Resources:</h4>
+                    <ul className='list-disc pl-5 space-y-1.5'>
+                      {draft.resource_links.filter(l => l.trim()).map((link, idx) => (
+                        <li key={idx}>
+                          <a href={link} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all'>
+                            {link}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <textarea
+                key={s.key}
+                rows={12}
+                disabled={!canEdit}
+                value={draft[s.key]}
+                onChange={(e) => set(s.key, e.target.value)}
+                placeholder={s.placeholder}
+                className='w-full h-full border border-slate-200 rounded-lg px-3 py-2.5 text-[12px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white disabled:bg-slate-50 disabled:text-slate-400 resize-y font-mono leading-relaxed'
+              />
+            )
+          ))}
+        </div>
+
+        {/* Resource Links */}
+        {!preview && (
+          <div className='space-y-3 shrink-0 pt-3 border-t border-slate-100'>
+            <label className='block text-[12px] font-bold text-slate-700 mb-1'>Additional Resources (Links / Files / Folders)</label>
+            {draft.resource_links.map((link, idx) => (
+              <div key={idx} className='flex gap-2 items-center'>
+                <input
+                  disabled={!canEdit}
+                  value={link}
+                  onChange={(e) => {
+                    const newLinks = [...draft.resource_links];
+                    newLinks[idx] = e.target.value;
+                    set('resource_links', newLinks);
+                  }}
+                  placeholder='https://...'
+                  className='flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400'
+                />
+                {canEdit && draft.resource_links.length > 1 && (
+                  <button
+                    onClick={() => {
+                      const newLinks = draft.resource_links.filter((_, i) => i !== idx);
+                      set('resource_links', newLinks);
+                    }}
+                    className='p-2 text-slate-400 hover:text-red-500 transition-colors'
+                    title='Remove link'
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            {canEdit && (
+              <button
+                onClick={() => set('resource_links', [...draft.resource_links, ''])}
+                className='text-[12px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors mt-1 inline-block'
+              >
+                + Add another field
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
