@@ -351,7 +351,7 @@ async function searchYouTubeVideo(query) {
     return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
   }
   try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=1&key=${apiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&order=viewCount&maxResults=1&key=${apiKey}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.items?.length) {
@@ -372,7 +372,7 @@ async function searchYouTubeVideos(query, maxResults = 3) {
     return [];
   }
   try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${apiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&order=viewCount&maxResults=${maxResults}&key=${apiKey}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.items?.length) {
