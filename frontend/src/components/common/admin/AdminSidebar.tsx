@@ -9,7 +9,6 @@ import {
   BarChart3,
   Settings,
   Sparkles,
-  CheckCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router'; // Switched to NavLink
