@@ -247,7 +247,7 @@ function ContentTab({
     }
   }, [lesson.id, lesson.explanation, lesson.example, lesson.activity, lesson.resource_links]);
 
-  const set = (field: keyof typeof draft, val: string) => {
+  const set = (field: keyof typeof draft, val: string | string[]) => {
     setDraft((d) => ({ ...d, [field]: val }));
     setDirty(true);
   };
