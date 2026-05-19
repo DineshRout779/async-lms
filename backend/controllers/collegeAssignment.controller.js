@@ -496,6 +496,93 @@ exports.getCollegeAssignmentById = async (req, res) => {
   }
 };
 
+// GET /api/v1/college-assignments/submissions/:assignmentId
+// Returns all student submissions for either a unit assignment or a college assignment.
+// Facilitators only see submissions from students in their assigned colleges.
+exports.getAssignmentSubmissions = async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const isFacilitator = req.user.role !== 'admin';
+    const facilitatorCollegeIds = req.user.college_ids || [];
+
+    // Determine assignment type
+    const unitCheck = await pool.query(
+      `SELECT id FROM assignments WHERE id = $1`,
+      [assignmentId],
+    );
+    const isUnitAssignment = unitCheck.rowCount > 0;
+
+    let rows;
+
+    if (isUnitAssignment) {
+      const collegeFilter = isFacilitator
+        ? 'AND sp.college_id = ANY($2)'
+        : '';
+      const values = isFacilitator
+        ? [assignmentId, facilitatorCollegeIds]
+        : [assignmentId];
+
+      const result = await pool.query(
+        `SELECT
+           asub.id,
+           asub.submission_link,
+           asub.submitted_at,
+           u.full_name  AS student_name,
+           u.email      AS student_email,
+           c.name       AS college_name
+         FROM assignment_submissions asub
+         JOIN users u            ON u.id  = asub.user_id
+         LEFT JOIN student_profiles sp ON sp.user_id = asub.user_id
+         LEFT JOIN colleges c    ON c.id  = sp.college_id
+         WHERE asub.assignment_id = $1
+         ${collegeFilter}
+         ORDER BY asub.submitted_at DESC`,
+        values,
+      );
+      rows = result.rows;
+    } else {
+      // College assignment — check facilitator owns this college
+      if (isFacilitator) {
+        const ownerCheck = await pool.query(
+          `SELECT college_id FROM college_assignments WHERE id = $1`,
+          [assignmentId],
+        );
+        if (!ownerCheck.rowCount) {
+          return res.status(404).json({ success: false, message: 'Assignment not found' });
+        }
+        if (!facilitatorCollegeIds.includes(ownerCheck.rows[0].college_id)) {
+          return res.status(403).json({ success: false, message: 'Access denied' });
+        }
+      }
+
+      const result = await pool.query(
+        `SELECT
+           cas.id,
+           cas.submission_link,
+           cas.submission_file_url,
+           cas.submission_file_name,
+           cas.submitted_at,
+           u.full_name  AS student_name,
+           u.email      AS student_email,
+           c.name       AS college_name
+         FROM college_assignment_submissions cas
+         JOIN users u            ON u.id  = cas.student_id
+         LEFT JOIN student_profiles sp ON sp.user_id = cas.student_id
+         LEFT JOIN colleges c    ON c.id  = sp.college_id
+         WHERE cas.assignment_id = $1
+         ORDER BY cas.submitted_at DESC`,
+        [assignmentId],
+      );
+      rows = result.rows;
+    }
+
+    res.json({ success: true, data: rows, type: isUnitAssignment ? 'unit' : 'college' });
+  } catch (error) {
+    console.error('getAssignmentSubmissions error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // GET /api/v1/college-assignments/evaluation-filters
 exports.getFilteredAssignments = async (req, res) => {
   try {

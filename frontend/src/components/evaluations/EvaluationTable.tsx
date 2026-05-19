@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import StatusBadge from "./StatusBadge";
 import ActionButton from "./ActionButton";
 import EvaluationModal from "./EvaluationModal";
+import SubmissionsModal from "./SubmissionsModal";
 import apiClient from "@/services/api";
 import { getErrorMessage } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Eye } from "lucide-react";
 
 type Props = {
   search: string;
@@ -34,6 +36,8 @@ const EvaluationTable = ({ search, selectedCollege, selectedDomain, selectedBatc
   const [open, setOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState("");
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+  const [submissionsOpen, setSubmissionsOpen] = useState(false);
+  const [submissionsAssignment, setSubmissionsAssignment] = useState({ id: "", title: "" });
 
   const fetchAssignments = async () => {
     try {
@@ -122,14 +126,23 @@ const EvaluationTable = ({ search, selectedCollege, selectedDomain, selectedBatc
                 </div>
               </td>
               <td className="px-4 py-3 text-right">
-                <ActionButton
-                  status={item.status}
-                  onClick={() => {
-                    setSelectedAssignment(item.title);
-                    setSelectedAssignmentId(item.id);
-                    setOpen(true);
-                  }}
-                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => { setSubmissionsAssignment({ id: item.id, title: item.title }); setSubmissionsOpen(true); }}
+                    className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded px-2 py-1 transition"
+                    title="View student submissions"
+                  >
+                    <Eye size={12} /> Submissions
+                  </button>
+                  <ActionButton
+                    status={item.status}
+                    onClick={() => {
+                      setSelectedAssignment(item.title);
+                      setSelectedAssignmentId(item.id);
+                      setOpen(true);
+                    }}
+                  />
+                </div>
               </td>
             </tr>
           ))}
@@ -145,6 +158,14 @@ const EvaluationTable = ({ search, selectedCollege, selectedDomain, selectedBatc
           setOpen(false);
           onEvaluationComplete();
         }}
+      />
+
+      <SubmissionsModal
+        key={submissionsAssignment.id}
+        open={submissionsOpen}
+        onClose={() => setSubmissionsOpen(false)}
+        assignmentId={submissionsAssignment.id}
+        assignmentTitle={submissionsAssignment.title}
       />
     </div>
   );

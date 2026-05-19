@@ -19,6 +19,8 @@ import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 import type { AiCourse, AiModule, AiTopic, AiLesson } from '@/features/aiCurriculum/types';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // ─── Week/day breakdown calculator ────────────────────────────────────────────
 
@@ -77,6 +79,23 @@ function buildLearningPath(modules: AiModule[], durationWeeks: number | null, da
 
 // ─── Lesson preview row ────────────────────────────────────────────────────────
 
+const getEmbedUrl = (url: string) => {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com')) {
+      const v = u.searchParams.get('v');
+      if (v) return `https://www.youtube.com/embed/${v}`;
+    }
+    if (u.hostname === 'youtu.be') {
+      const id = u.pathname.replace('/', '');
+      if (id) return `https://www.youtube.com/embed/${id}`;
+    }
+  } catch {
+    //
+  }
+  return url;
+};
+
 function LessonPreview({ lesson }: { lesson: AiLesson }) {
   const [open, setOpen] = useState(false);
   const quizCount = Array.isArray(lesson.quiz_questions) ? lesson.quiz_questions.length : 0;
@@ -102,30 +121,54 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
       {open && (
         <div className='border-t border-slate-100 px-4 py-4 space-y-4 bg-slate-50/50'>
           {lesson.video_url && (
-            <a href={lesson.video_url} target='_blank' rel='noopener noreferrer'
-              className='flex items-center gap-2 text-[13px] font-semibold text-red-600 hover:text-red-700'>
-              <MonitorPlay className='w-4 h-4' /> Watch Video on YouTube
-            </a>
+            <div className='not-prose mb-6'>
+              {lesson.video_url.includes('results?') ? (
+                <div className='bg-slate-100 rounded-xl p-6 text-center border border-slate-200'>
+                  <MonitorPlay className='w-8 h-8 text-slate-400 mx-auto mb-3' />
+                  <p className='text-sm font-semibold text-slate-700 mb-2'>AI suggested a YouTube search instead of a direct video.</p>
+                  <a href={lesson.video_url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold text-[13px] hover:bg-red-100 transition-colors'>
+                    View Search Results on YouTube
+                  </a>
+                </div>
+              ) : (
+                <div className='aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-black'>
+                  <iframe
+                    className='h-full w-full'
+                    src={getEmbedUrl(lesson.video_url)}
+                    title='Lesson video'
+                    allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+                    referrerPolicy='strict-origin-when-cross-origin'
+                    allowFullScreen
+                  />
+                </div>
+              )}
+            </div>
           )}
 
           {lesson.explanation && (
             <div>
               <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5'>Lesson Content</p>
-              <p className='text-[13px] text-slate-600 leading-relaxed whitespace-pre-wrap line-clamp-6'>{lesson.explanation}</p>
+              <div className='prose prose-slate prose-sm max-w-none'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.explanation}</ReactMarkdown>
+              </div>
             </div>
           )}
 
           {lesson.example && (
             <div>
               <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5'>Example</p>
-              <p className='text-[13px] text-slate-600 leading-relaxed'>{lesson.example}</p>
+              <div className='prose prose-slate prose-sm max-w-none'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.example}</ReactMarkdown>
+              </div>
             </div>
           )}
 
           {lesson.activity && (
             <div className='bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5'>
               <p className='text-[11px] font-semibold text-blue-600 mb-1'>Activity</p>
-              <p className='text-[13px] text-blue-700'>{lesson.activity}</p>
+              <div className='prose prose-slate prose-sm max-w-none text-blue-800 prose-p:text-blue-800 prose-headings:text-blue-900'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.activity}</ReactMarkdown>
+              </div>
             </div>
           )}
 

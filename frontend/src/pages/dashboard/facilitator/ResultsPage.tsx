@@ -20,7 +20,7 @@ const [results, setResults] = useState([]);
   useEffect(() => {
   const fetchResults = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/v1/evaluations/${id}`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/evaluations/${id}`);
       const data = await res.json();
 
       setEvaluation(data.evaluation);
