@@ -10,7 +10,8 @@ const { watchWorkspace, stopWatchWorkspace } = require('./workspaceWatcher');
 const { extractPortsFromOutput } = require('./portDetectionService');
 const { getWorkspaceQuota, touchWorkspace } = require('./fileSystemService');
 const { getContainerIP, clearContainerIP } = require('./dockerService');
-const { ENABLED: nginxEnabled, addPreviewRoute, removePreviewRoutes, getPreviewUrl } = require('./nginxPreviewService');
+const { registerRoute: addPreviewRoute, unregisterRoutes: removePreviewRoutes, getPreviewUrl } = require('./previewProxyService');
+const nginxEnabled = true; // Native proxy is always available
 const { createPortProxy, destroyPortProxies } = require('./portProxyService');
 const { Queue, Worker } = require('bullmq');
 const Redis = require('ioredis');
@@ -45,7 +46,7 @@ const CONTAINER_TTL_MS    =  5 * 60 * 1000; // 5 minutes of inactivity
 const CLEANUP_INTERVAL_MS =  5 * 60 * 1000; // check every 5 minutes
 
 // ---------- Capacity & queue ----------
-const SAFETY_BUFFER_MB = 512; 
+const SAFETY_BUFFER_MB = 50; 
 
 function hasCapacity(profile) {
   const freeMB = os.freemem() / (1024 * 1024);
@@ -76,7 +77,7 @@ const cleanupTimer = setInterval(() => {
 
       // Full teardown
       clearContainerIP(cname);
-      removePreviewRoutes(cname);
+      removePreviewRoutes(cname); // unregister from proxy
       destroyPortProxies(cname);
       activePorts.delete(key);
       outputBuffers.delete(key);
@@ -183,10 +184,19 @@ const queueWorker = new Worker('workspace-queue', async (job) => {
   }
 
   // Find an active socket to associate with this start
-  const socket = activeSockets.get(socketId);
+  let socket = activeSockets.get(socketId);
   
   if (!socket || socket.disconnected) {
-    console.log(`[queue:worker] Socket ${socketId} disconnected, skipping job ${job.id}`);
+    // Attempt to find a new socket if the user reconnected while in queue
+    const room = _io?.sockets?.adapter?.rooms?.get(`ws:${key}`);
+    if (room && room.size > 0) {
+      const firstSocketId = room.values().next().value;
+      socket = activeSockets.get(firstSocketId);
+    }
+  }
+
+  if (!socket || socket.disconnected) {
+    console.log(`[queue:worker] Socket disconnected, skipping job ${job.id}`);
     return;
   }
 
@@ -244,7 +254,7 @@ module.exports = function setupSocket(io) {
             profile,
             socketId: socket.id
           }, {
-            jobId: key, // Deduplicate: only one queued job per workspace
+            jobId: key.replace(':', '-'), // Fix: BullMQ Job IDs cannot contain colons
             removeOnComplete: true,
             removeOnFail: true
           });
@@ -314,9 +324,8 @@ module.exports = function setupSocket(io) {
 
         const containerName = `workspace-${userId}-${projectId}`;
 
-        // Host-side TCP relay for Windows Docker Desktop compatibility
-        for (const port of newPorts) createPortProxy(containerName, port);
-
+        // Host-side TCP relay for Windows/Mac Docker Desktop compatibility
+        // We will assign these asynchronously below
         // Emit immediately (path-proxy URL) so preview shows right away
         socket.emit(
           'workspace:ports:update',
@@ -330,10 +339,25 @@ module.exports = function setupSocket(io) {
           const ip = await getContainerIP(containerName);
           if (!ip) return;
 
+          const isLocal = process.env.NODE_ENV !== 'production';
+          const targetIp = isLocal ? 'localhost' : ip;
+
           const urlMap = new Map();
           await Promise.all(
             newPorts.map(async (port) => {
-              const ok = await addPreviewRoute(containerName, ip, port);
+              let targetPort = port;
+              
+              if (isLocal) {
+                try {
+                  // createPortProxy now returns a dynamic free port on the host
+                  targetPort = await createPortProxy(containerName, port);
+                } catch(err) {
+                  console.warn(`[portProxy] failed for port ${port}`, err);
+                }
+              }
+
+              // Pass targetPort for routing, but original port for the URL string
+              const ok = await addPreviewRoute(containerName, targetIp, targetPort, port);
               if (ok) urlMap.set(port, getPreviewUrl(containerName, port));
             })
           );

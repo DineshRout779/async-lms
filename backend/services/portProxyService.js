@@ -36,55 +36,57 @@ const servers = new Map();
  * Safe to call multiple times — skips if already running.
  */
 function createPortProxy(containerName, port) {
-  const key = `${containerName}:${port}`;
-  if (servers.has(key)) return;
+  return new Promise((resolve, reject) => {
+    const key = `${containerName}:${port}`;
+    if (servers.has(key)) {
+      return resolve(servers.get(key).address().port);
+    }
 
-  const server = net.createServer((socket) => {
-    // Inline Node.js relay: connects to the target port inside the container
-    // and pipes stdin↔stdout bidirectionally.
-    const relayScript = [
-      `const net=require('net');`,
-      `const c=net.connect(${port},'127.0.0.1',()=>{`,
-      `  process.stdin.pipe(c,{end:false});`,
-      `  c.pipe(process.stdout,{end:false});`,
-      `});`,
-      `c.on('error',()=>process.exit(1));`,
-      `c.on('close',()=>process.exit(0));`,
-      `process.stdin.on('end',()=>c.destroy());`,
-    ].join('');
+    const server = net.createServer((socket) => {
+      const relayScript = [
+        `const net=require('net');`,
+        `const c=net.connect(${port},'127.0.0.1',()=>{`,
+        `  process.stdin.pipe(c,{end:false});`,
+        `  c.pipe(process.stdout,{end:false});`,
+        `});`,
+        `c.on('error',()=>process.exit(1));`,
+        `c.on('close',()=>process.exit(0));`,
+        `process.stdin.on('end',()=>c.destroy());`,
+      ].join('');
 
-    const relay = spawn('docker', ['exec', '-i', containerName, 'node', '-e', relayScript]);
+      const relay = spawn('docker', ['exec', '-i', containerName, 'node', '-e', relayScript]);
 
-    socket.pipe(relay.stdin, { end: false });
-    relay.stdout.pipe(socket, { end: false });
+      socket.pipe(relay.stdin, { end: false });
+      relay.stdout.pipe(socket, { end: false });
 
-    const cleanup = () => {
-      try { relay.kill(); } catch (_) {}
-      try { socket.destroy(); } catch (_) {}
-    };
+      const cleanup = () => {
+        try { relay.kill(); } catch (_) {}
+        try { socket.destroy(); } catch (_) {}
+      };
 
-    socket.on('error', cleanup);
-    socket.on('close', cleanup);
-    relay.on('exit', () => { try { socket.destroy(); } catch (_) {} });
+      socket.on('error', cleanup);
+      socket.on('close', cleanup);
+      relay.on('exit', () => { try { socket.destroy(); } catch (_) {} });
 
-    // Suppress noise on stderr / broken pipe
-    relay.stdin.on('error', () => {});
-    relay.stdout.on('error', () => {});
-    relay.stderr.on('data', () => {});
+      relay.stdin.on('error', () => {});
+      relay.stdout.on('error', () => {});
+      relay.stderr.on('data', () => {});
+    });
+
+    server.listen(0, '127.0.0.1', () => {
+      const hostPort = server.address().port;
+      console.log(`[portProxy] ${containerName} :${port} → localhost:${hostPort}`);
+      servers.set(key, server);
+      resolve(hostPort);
+    });
+
+    server.on('error', (err) => {
+      console.warn(`[portProxy] proxy failed to bind: ${err.message}`);
+      reject(err);
+    });
   });
-
-  server.listen(port, '127.0.0.1', () => {
-    console.log(`[portProxy] ${containerName} :${port} → localhost:${port}`);
-  });
-
-  server.on('error', (err) => {
-    // Port already in use on host — another workspace or unrelated process
-    console.warn(`[portProxy] skipping port ${port} — ${err.message}`);
-    servers.delete(key);
-  });
-
-  servers.set(key, server);
 }
+
 
 /**
  * Close all relay servers for a container (call on workspace disconnect).

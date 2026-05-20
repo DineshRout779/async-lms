@@ -112,6 +112,12 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
     console.log(
       `Starting container ${name} [${profile ?? 'default'}] memory=${limits.memory} swap=${swap} cpus=${limits.cpus}`,
     );
+    
+    // Forcefully remove any existing stopped/stale container with this name
+    // to prevent code 125 conflict errors if a previous cleanup was interrupted.
+    try {
+      await runDockerAsync(['rm', '-f', name]);
+    } catch (_) {}
 
     const dockerArgs = [
       'run',

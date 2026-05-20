@@ -23,6 +23,7 @@ const os = require('os');
 
 const setupSocket = require('./services/socketService');
 const { getContainerIP } = require('./services/dockerService');
+const { startProxy } = require('./services/previewProxyService');
 
 const WORKER_PORT     = parseInt(process.env.WORKER_PORT || '4000', 10);
 const WORKER_ID       = process.env.WORKER_ID || os.hostname();
@@ -133,6 +134,10 @@ server.on('upgrade', async (req, socket, head) => {
 
 server.listen(WORKER_PORT, () => {
   console.log(`[worker] ${WORKER_ID} listening on port ${WORKER_PORT}`);
+  
+  // Start the dynamic preview proxy (Task 3)
+  startProxy();
+
   if (ORCHESTRATOR_URL && WORKER_URL) {
     registerWithOrchestrator();
   } else {
