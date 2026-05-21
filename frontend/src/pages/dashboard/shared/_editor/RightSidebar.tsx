@@ -324,7 +324,7 @@ function ContentTab({
       <div className='flex-1 overflow-y-auto px-4 py-3'>
         {sections.map((s) => s.key === section && (
           preview ? (
-            <div key={s.key} className='prose prose-sm max-w-none text-slate-700 text-[13px]'>
+            <div key={s.key} className='prose prose-sm max-w-none text-slate-700 text-[13px] prose-pre:whitespace-pre-wrap prose-pre:break-words'>
               {draft[s.key]
                 ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft[s.key]}</ReactMarkdown>
                 : <span className='text-slate-300 italic'>Nothing to preview yet</span>}
