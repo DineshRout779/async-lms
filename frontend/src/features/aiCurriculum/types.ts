@@ -34,6 +34,7 @@ export interface AiLesson {
   video_url: string | null;
   quiz_questions: AiQuizQuestion[];
   exercise_data: AiExercise | null;
+  resource_links?: string[];
 }
 
 export interface AiAssignment {

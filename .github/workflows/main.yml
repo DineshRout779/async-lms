@@ -67,6 +67,7 @@ jobs:
             echo "WORKER_CAPACITY=${{ secrets.WORKER_CAPACITY }}" >> .env
             echo "MAX_WORKSPACES=${{ secrets.MAX_WORKSPACES }}" >> .env
             echo "CHATGPT_API_KEY=${{ secrets.CHATGPT_API_KEY }}" >> .env
+            echo "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}" >> .env
             echo "PORT=3001" >> .env
 
             npm install

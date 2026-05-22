@@ -219,6 +219,7 @@ function ContentTab({
     explanation: lesson.explanation ?? '',
     example: lesson.example ?? '',
     activity: lesson.activity ?? '',
+    resource_links: lesson.resource_links?.length ? lesson.resource_links : [''],
   });
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -230,11 +231,23 @@ function ContentTab({
       explanation: lesson.explanation ?? '',
       example: lesson.example ?? '',
       activity: lesson.activity ?? '',
+      resource_links: lesson.resource_links?.length ? lesson.resource_links : [''],
     });
-    setDirty(false);
-  }, [lesson.id, lesson.explanation, lesson.example, lesson.activity]);
 
-  const set = (field: keyof typeof draft, val: string) => {
+    // if generated content exists mark unsaved
+    if (
+      lesson.explanation ||
+      lesson.example ||
+      lesson.activity ||
+      lesson.resource_links?.length
+    ) {
+      setDirty(true);
+    } else {
+      setDirty(false);
+    }
+  }, [lesson.id, lesson.explanation, lesson.example, lesson.activity, lesson.resource_links]);
+
+  const set = (field: keyof typeof draft, val: string | string[]) => {
     setDraft((d) => ({ ...d, [field]: val }));
     setDirty(true);
   };
@@ -321,26 +334,86 @@ function ContentTab({
       </div>
 
       {/* Editor / Preview area */}
-      <div className='flex-1 overflow-y-auto px-4 py-3'>
-        {sections.map((s) => s.key === section && (
-          preview ? (
-            <div key={s.key} className='prose prose-sm max-w-none text-slate-700 text-[13px] prose-pre:whitespace-pre-wrap prose-pre:break-words'>
-              {draft[s.key]
-                ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft[s.key]}</ReactMarkdown>
-                : <span className='text-slate-300 italic'>Nothing to preview yet</span>}
-            </div>
-          ) : (
-            <textarea
-              key={s.key}
-              rows={16}
-              disabled={!canEdit}
-              value={draft[s.key]}
-              onChange={(e) => set(s.key, e.target.value)}
-              placeholder={s.placeholder}
-              className='w-full h-full min-h-64 border border-slate-200 rounded-lg px-3 py-2.5 text-[12px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white disabled:bg-slate-50 disabled:text-slate-400 resize-none font-mono leading-relaxed'
-            />
-          )
-        ))}
+      <div className='flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-6'>
+        <div className='flex-1 min-h-[280px]'>
+          {sections.map((s) => s.key === section && (
+            preview ? (
+              <div key={s.key} className='prose prose-sm max-w-none text-slate-700 text-[13px] prose-pre:whitespace-pre-wrap prose-pre:break-words'>
+                {draft[s.key]
+                  ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft[s.key]}</ReactMarkdown>
+                  : <span className='text-slate-300 italic'>Nothing to preview yet</span>}
+                
+                {/* Resource Links Preview */}
+                {s.key === 'explanation' && draft.resource_links.filter(l => l.trim()).length > 0 && (
+                  <div className='mt-8 pt-4 border-t border-slate-100'>
+                    <h4 className='font-bold text-slate-800 mb-3'>Attached Resources:</h4>
+                    <ul className='list-disc pl-5 space-y-1.5'>
+                      {draft.resource_links.filter(l => l.trim()).map((link, idx) => (
+                        <li key={idx}>
+                          <a href={link} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all'>
+                            {link}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <textarea
+                key={s.key}
+                rows={12}
+                disabled={!canEdit}
+                value={draft[s.key]}
+                onChange={(e) => set(s.key, e.target.value)}
+                placeholder={s.placeholder}
+                className='w-full h-full border border-slate-200 rounded-lg px-3 py-2.5 text-[12px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white disabled:bg-slate-50 disabled:text-slate-400 resize-y font-mono leading-relaxed'
+              />
+            )
+          ))}
+        </div>
+
+        {/* Resource Links */}
+        {!preview && (
+          <div className='space-y-3 shrink-0 pt-3 border-t border-slate-100'>
+            <label className='block text-[12px] font-bold text-slate-700 mb-1'>Additional Resources (Links / Files / Folders)</label>
+            {draft.resource_links.map((link, idx) => (
+              <div key={idx} className='flex gap-2 items-center'>
+                <input
+                  disabled={!canEdit}
+                  value={link}
+                  onChange={(e) => {
+                    const newLinks = [...draft.resource_links];
+                    newLinks[idx] = e.target.value;
+                    set('resource_links', newLinks);
+                  }}
+                  placeholder='https://...'
+                  className='flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400'
+                />
+                {canEdit && draft.resource_links.length > 1 && (
+                  <button
+                    onClick={() => {
+                      const newLinks = draft.resource_links.filter((_, i) => i !== idx);
+                      set('resource_links', newLinks);
+                    }}
+                    className='p-2 text-slate-400 hover:text-red-500 transition-colors'
+                    title='Remove link'
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            {canEdit && (
+              <button
+                onClick={() => set('resource_links', [...draft.resource_links, ''])}
+                className='text-[12px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors mt-1 inline-block'
+              >
+                + Add another field
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -400,6 +473,7 @@ function ExerciseTab({
   });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   useEffect(() => {
     const ex = !lesson.exercise_data ? null
@@ -412,7 +486,12 @@ function ExerciseTab({
       tasks: (ex?.tasks ?? []).join('\n'),
       starter_code: ex?.starter_code ?? '',
     });
-    setDirty(false);
+    // setDirty(false);
+    if (ex) {
+  setDirty(true);
+} else {
+  setDirty(false);
+}
   }, [lesson.id, lesson.exercise_data]);
 
   const set = (field: keyof typeof draft, val: string) => {
@@ -441,6 +520,27 @@ function ExerciseTab({
 
   return (
     <div className='flex flex-col flex-1 min-h-0'>
+       {/* PREVIEW TOOLBAR */}
+    <div className='flex items-center gap-2 px-4 py-2 border-b border-slate-100'>
+      <div className='flex-1' />
+
+      <button
+        onClick={() => setPreview((v) => !v)}
+        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors border ${
+          preview
+            ? 'bg-blue-50 text-blue-700 border-blue-200'
+            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+        }`}
+      >
+        {preview ? (
+          <Pencil className='w-3 h-3' />
+        ) : (
+          <Eye className='w-3 h-3' />
+        )}
+
+        {preview ? 'Edit' : 'Preview'}
+      </button>
+    </div>
       <div className='flex-1 overflow-y-auto p-4 space-y-3'>
         {!exercise && !canEdit && (
           <div className='py-12 text-center'>
@@ -450,7 +550,114 @@ function ExerciseTab({
         )}
 
         {(exercise || canEdit) && (
+  <>
+    {preview ? (
+      <div className='space-y-4 text-[13px]'>
+
+        <div>
+          <h4 className='font-bold text-slate-700 mb-1'>Title</h4>
+          <p>{draft.title || '—'}</p>
+        </div>
+
+        <div>
+          <h4 className='font-bold text-slate-700 mb-1'>Description</h4>
+
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {draft.description || 'No description'}
+          </ReactMarkdown>
+        </div>
+
+        <div>
+          <h4 className='font-bold text-slate-700 mb-1'>Tasks</h4>
+
+          <ul className='list-disc pl-5 space-y-1'>
+            {draft.tasks
+              .split('\n')
+              .filter(Boolean)
+              .map((task, i) => (
+                <li key={i}>{task}</li>
+              ))}
+          </ul>
+        </div>
+
+        <div>
+          <h4 className='font-bold text-slate-700 mb-1'>
+            Starter Code
+          </h4>
+
+          <pre className='bg-slate-100 p-3 rounded-lg overflow-auto'>
+            <code>{draft.starter_code}</code>
+          </pre>
+        </div>
+      </div>
+    ) : (
+      <>
+        <div>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Title
+          </label>
+
+          <input
+            disabled={!canEdit}
+            value={draft.title}
+            onChange={(e) => set('title', e.target.value)}
+            placeholder='Exercise title...'
+            className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400'
+          />
+        </div>
+
+        <div>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Description
+          </label>
+
+          <textarea
+            rows={2}
+            disabled={!canEdit}
+            value={draft.description}
+            onChange={(e) => set('description', e.target.value)}
+            placeholder='Brief description of the exercise...'
+            className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400 resize-none'
+          />
+        </div>
+
+        <div>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Tasks
+          </label>
+
+          <textarea
+            rows={5}
+            disabled={!canEdit}
+            value={draft.tasks}
+            onChange={(e) => set('tasks', e.target.value)}
+            placeholder={'Task 1\nTask 2\nTask 3'}
+            className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400 resize-none font-mono'
+          />
+        </div>
+
+        <div>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Starter Code
+          </label>
+
+          <textarea
+            rows={6}
+            disabled={!canEdit}
+            value={draft.starter_code}
+            onChange={(e) => set('starter_code', e.target.value)}
+            placeholder='// starter code here...'
+            className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400 resize-none font-mono'
+          />
+        </div>
+      </>
+    )}
+  </>
+)}
+{/* 
+        {(exercise || canEdit) && (
           <>
+          
             <div>
               <label className='block text-[11px] font-semibold text-slate-500 mb-1'>Title</label>
               <input
@@ -500,7 +707,7 @@ function ExerciseTab({
               />
             </div>
           </>
-        )}
+        )} */}
       </div>
 
       {canEdit && (
@@ -513,6 +720,40 @@ function ExerciseTab({
             {generating ? <Loader2 className='w-3.5 h-3.5 animate-spin' /> : <Sparkles className='w-3.5 h-3.5' />}
             {generating ? 'Generating...' : exercise ? 'Regenerate' : 'Generate'}
           </button>
+
+        {exercise && (
+  <button
+    onClick={async () => {
+      try {
+        setSaving(true);
+
+        await onUpdateLesson({
+          exercise_data: null,
+        });
+
+        setDraft({
+          title: '',
+          description: '',
+          tasks: '',
+          starter_code: '',
+        });
+
+        setDirty(false);
+
+        toast.success('Exercise removed');
+      } catch {
+        toast.error('Failed to remove exercise');
+      } finally {
+        setSaving(false);
+      }
+    }}
+    disabled={saving}
+    className='flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors'
+  >
+    Remove
+  </button>
+)}
+
           <div className='flex-1' />
           {dirty && <span className='text-[11px] text-amber-500 font-semibold'>Unsaved</span>}
           <button

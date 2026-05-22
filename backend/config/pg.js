@@ -186,6 +186,7 @@ const pool = new Pool({
     await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS video_url TEXT`);
     await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`);
     await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS exercise_data JSONB`);
+    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS resource_links JSONB DEFAULT '[]'::jsonb`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_course_reviews (

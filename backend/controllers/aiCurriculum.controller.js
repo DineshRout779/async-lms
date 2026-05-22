@@ -57,7 +57,7 @@ exports.generateTaskTests = async (req, res) => {
   }
 };
 
- // ─── Generate curriculum via AI ───────────────────────────────────────────────
+// ─── Generate curriculum via AI ───────────────────────────────────────────────
 
 exports.generate = async (req, res) => {
   try {
@@ -636,7 +636,7 @@ exports.updateTopic = async (req, res) => {
 exports.updateLesson = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, explanation, example, activity, interview_questions, lesson_type, duration_mins, video_url } = req.body;
+    const { title, explanation, example, activity, interview_questions, lesson_type, duration_mins, video_url, resource_links, exercise_data } = req.body;
     const sets = [];
     const vals = [];
     let i = 1;
@@ -649,6 +649,8 @@ exports.updateLesson = async (req, res) => {
     if (lesson_type !== undefined)         add('lesson_type', lesson_type);
     if (duration_mins !== undefined)       add('duration_mins', duration_mins);
     if (video_url !== undefined)           add('video_url', video_url);
+    if (resource_links !== undefined)      add('resource_links', JSON.stringify(resource_links));
+    if (exercise_data !== undefined)       add('exercise_data', exercise_data);
     if (!sets.length) return res.status(400).json({ success: false, message: 'Nothing to update' });
     vals.push(id);
     await pool.query(`UPDATE ai_course_lessons SET ${sets.join(', ')} WHERE id = $${i}`, vals);
@@ -847,11 +849,17 @@ exports.duplicateTopic = async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const topicRes = await pool.query(`SELECT * FROM ai_course_topics WHERE id = $1`, [id]);
-    if (!topicRes.rows.length) return res.status(404).json({ success: false });
-    const t = topicRes.rows[0];
-    const orderRes = await pool.query(`SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_topics WHERE module_id = $1`, [t.module_id]);
     await client.query('BEGIN');
+
+    // Read inside transaction to prevent race conditions on order_index
+    const topicRes = await client.query(`SELECT * FROM ai_course_topics WHERE id = $1`, [id]);
+    if (!topicRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false });
+    }
+    const t = topicRes.rows[0];
+    const orderRes = await client.query(`SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_topics WHERE module_id = $1`, [t.module_id]);
+
     const newTopic = await client.query(
       `INSERT INTO ai_course_topics (module_id, title, description, order_index, assignment)
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,

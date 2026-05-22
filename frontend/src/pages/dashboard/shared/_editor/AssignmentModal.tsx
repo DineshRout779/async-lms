@@ -32,8 +32,7 @@ export function AssignmentModal({
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [isPreview, setIsPreview] = useState(false);
-
+  const [preview, setPreview] = useState(false);
   const set = (patch: Partial<AiAssignment>) => {
     setDraft((d) => ({ ...d, ...patch }));
     setDirty(true);
@@ -97,14 +96,14 @@ export function AssignmentModal({
             <p className='text-[12px] text-slate-400 mt-0.5 truncate max-w-xs'>{topicTitle}</p>
           </div>
           <div className='flex items-center gap-2'>
+            <button
+              onClick={() => setPreview((p) => !p)}
+              className='px-3 py-1.5 text-[12px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors'
+            >
+              {preview ? 'Edit' : 'Preview'}
+            </button>
             {canEdit && (
               <>
-                <button
-                  onClick={() => setIsPreview(!isPreview)}
-                  className='px-3 py-1.5 text-[12px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors'
-                >
-                  {isPreview ? 'Edit' : 'Preview'}
-                </button>
                 <button
                   onClick={handleGenerate}
                   disabled={generating || saving}
@@ -123,20 +122,44 @@ export function AssignmentModal({
 
         {/* Body */}
         <div className='px-6 py-5 overflow-y-auto max-h-[70vh]'>
-          {isPreview ? (
-            <div className='space-y-6'>
-              <div className='prose prose-sm prose-slate max-w-none prose-pre:whitespace-pre-wrap prose-pre:break-words'>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {draft.instructions || '*No instructions provided.*'}
-                </ReactMarkdown>
+          {preview ? (
+            <div className='space-y-5'>
+              <div>
+                <p className='text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1'>
+                  Assignment Title
+                </p>
+                <h3 className='text-lg font-bold text-slate-800'>
+                  {draft.title || 'Untitled Assignment'}
+                </h3>
               </div>
+
+              <div>
+                <p className='text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1'>
+                  Max Score
+                </p>
+                <div className='inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-3 py-1 text-sm font-semibold'>
+                  {draft.max_score} points
+                </div>
+              </div>
+
+              <div>
+                <p className='text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2'>
+                  Instructions
+                </p>
+                <div className='prose prose-sm prose-slate max-w-none prose-pre:whitespace-pre-wrap prose-pre:break-words text-slate-700 bg-slate-50 border border-slate-100 rounded-xl p-4'>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {draft.instructions || '*No instructions provided.*'}
+                  </ReactMarkdown>
+                </div>
+              </div>
+
               {draft.resources && draft.resources.filter(r => r.trim() !== '').length > 0 && (
                 <div className='pt-4 border-t border-slate-100'>
                   <h4 className='text-[13px] font-semibold text-slate-800 mb-2'>Additional Resources</h4>
-                  <ul className='space-y-1.5'>
+                  <ul className='space-y-1.5 list-disc pl-5'>
                     {draft.resources.filter(r => r.trim() !== '').map((res, idx) => (
                       <li key={idx}>
-                        <a href={res} target='_blank' rel='noreferrer' className='text-[13px] text-indigo-600 hover:underline break-all'>
+                        <a href={res} target='_blank' rel='noreferrer' className='text-[13px] text-indigo-600 hover:underline break-all font-semibold'>
                           {res}
                         </a>
                       </li>
@@ -146,9 +169,12 @@ export function AssignmentModal({
               )}
             </div>
           ) : (
+
             <div className='space-y-4'>
               <div>
-                <label className='block text-[11px] font-semibold text-slate-500 mb-1.5'>Assignment Title</label>
+                <label className='block text-[11px] font-semibold text-slate-500 mb-1.5'>
+                  Assignment Title
+                </label>
                 <input
                   disabled={!canEdit}
                   value={draft.title}
@@ -159,7 +185,9 @@ export function AssignmentModal({
               </div>
 
               <div>
-                <label className='block text-[11px] font-semibold text-slate-500 mb-1.5'>Max Score</label>
+                <label className='block text-[11px] font-semibold text-slate-500 mb-1.5'>
+                  Max Score
+                </label>
                 <input
                   type='number'
                   min={1}
@@ -172,7 +200,9 @@ export function AssignmentModal({
               </div>
 
               <div>
-                <label className='block text-[11px] font-semibold text-slate-500 mb-1.5'>Instructions</label>
+                <label className='block text-[11px] font-semibold text-slate-500 mb-1.5'>
+                  Instructions
+                </label>
                 <textarea
                   rows={8}
                   disabled={!canEdit}
