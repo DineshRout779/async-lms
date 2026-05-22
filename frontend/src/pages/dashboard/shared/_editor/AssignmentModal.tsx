@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Sparkles, X, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Sparkles, X, Plus, Trash2, UploadCloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -33,6 +33,7 @@ export function AssignmentModal({
   const [generating, setGenerating] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const set = (patch: Partial<AiAssignment>) => {
     setDraft((d) => ({ ...d, ...patch }));
     setDirty(true);
@@ -57,6 +58,36 @@ export function AssignmentModal({
       toast.error('Failed to save assignment');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/college-assignments/upload-instruction`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        set({ resources: [...(draft.resources || []), data.url] });
+        toast.success('File uploaded');
+      } else {
+        toast.error('Upload failed');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Upload failed');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -244,12 +275,24 @@ export function AssignmentModal({
                     </div>
                   ))}
                   {canEdit && (
-                    <button
-                      onClick={() => set({ resources: [...(draft.resources || []), ''] })}
-                      className='text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 mt-1'
-                    >
-                      <Plus className='w-4 h-4' /> Add another field
-                    </button>
+                    <div className='flex items-center gap-4 mt-1'>
+                      <button
+                        onClick={() => set({ resources: [...(draft.resources || []), ''] })}
+                        className='text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1'
+                      >
+                        <Plus className='w-4 h-4' /> Add another field
+                      </button>
+                      <label className='text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer'>
+                        {isUploading ? <Loader2 className='w-4 h-4 animate-spin' /> : <UploadCloud className='w-4 h-4' />}
+                        {isUploading ? 'Uploading...' : 'Upload File'}
+                        <input
+                          type='file'
+                          className='hidden'
+                          onChange={handleFileUpload}
+                          disabled={isUploading || !canEdit}
+                        />
+                      </label>
+                    </div>
                   )}
                 </div>
               </div>
