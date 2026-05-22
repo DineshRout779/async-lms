@@ -14,9 +14,10 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle2,
+  Download,
 } from 'lucide-react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
-import type { AiCourse, AiModule, AiTopic, AiLesson } from '@/features/aiCurriculum/types';
+import type { AiCourse, AiModule, AiTopic, AiLesson, AiExercise } from '@/features/aiCurriculum/types';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 import ReactMarkdown from 'react-markdown';
@@ -197,15 +198,99 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
           )}
 
           {hasExercise && (() => {
-            const ex = typeof lesson.exercise_data === 'string' ? JSON.parse(lesson.exercise_data) : lesson.exercise_data as { title: string; description: string; tasks: string[]; starter_code: string };
+            const parsedData = typeof lesson.exercise_data === 'string'
+              ? JSON.parse(lesson.exercise_data)
+              : lesson.exercise_data;
+            const ex = parsedData as AiExercise;
+            if (!ex) return null;
             return (
               <div>
                 <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1.5'>
-                  <Code2 className='w-3.5 h-3.5 text-indigo-400' /> Exercise
+                  <Code2 className='w-3.5 h-3.5 text-indigo-400' /> Exercise: {ex.title}
                 </p>
-                <div className='bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5'>
-                  <p className='text-[13px] font-semibold text-indigo-800'>{ex.title}</p>
-                  <p className='text-[12px] text-indigo-600 mt-1'>{ex.description}</p>
+                <div className='bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 space-y-4 text-[13px]'>
+                  {ex.description && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Description</h5>
+                      <div className='prose prose-slate prose-sm max-w-none text-slate-600'>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{ex.description}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+
+                  {ex.tasks && (Array.isArray(ex.tasks) ? ex.tasks.length > 0 : typeof (ex.tasks as any) === 'string' && (ex.tasks as any).trim() !== '') && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Tasks</h5>
+                      <ul className='list-disc pl-5 space-y-1 text-slate-600'>
+                        {Array.isArray(ex.tasks) ? (
+                          ex.tasks.filter(t => typeof t === 'string' && t.trim()).map((task, i) => (
+                            <li key={i}>{task}</li>
+                          ))
+                        ) : typeof (ex.tasks as any) === 'string' ? (
+                          ((ex.tasks as any) as string).split('\n').filter(Boolean).map((task, i) => (
+                            <li key={i}>{task}</li>
+                          ))
+                        ) : null}
+                      </ul>
+                    </div>
+                  )}
+
+                  {ex.starter_code && typeof ex.starter_code === 'string' && ex.starter_code.trim() && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Starter Code</h5>
+                      <pre className='bg-slate-100 p-3 rounded-lg overflow-auto text-[12px] font-mono text-slate-800 border border-slate-200'>
+                        <code>{ex.starter_code}</code>
+                      </pre>
+                    </div>
+                  )}
+
+                  {ex.resource_links && Array.isArray(ex.resource_links) && ex.resource_links.filter(l => typeof l === 'string' && l.trim()).length > 0 && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Resource Links</h5>
+                      <ul className='list-disc pl-5 space-y-1'>
+                        {ex.resource_links.filter(l => typeof l === 'string' && l.trim()).map((link, idx) => (
+                          <li key={idx}>
+                            <a href={link} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all'>
+                              {link}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {ex.reference_files && Array.isArray(ex.reference_files) && ex.reference_files.filter(f => typeof f === 'string' && f.trim()).length > 0 && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Zip Files</h5>
+                      <ul className='list-disc pl-5 space-y-1'>
+                        {ex.reference_files.filter(f => typeof f === 'string' && f.trim()).map((file, idx) => {
+                          const isUrl = typeof file === 'string' && (file.startsWith('http://') || file.startsWith('https://'));
+                          const displayName = isUrl ? (() => {
+                            try {
+                              const decoded = decodeURIComponent(file);
+                              const parts = decoded.split('/');
+                              const lastPart = parts[parts.length - 1];
+                              return lastPart.replace(/^\d+-/, '');
+                            } catch {
+                              return file;
+                            }
+                          })() : file;
+
+                          return (
+                            <li key={idx}>
+                              {isUrl ? (
+                                <a href={file} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all inline-flex items-center gap-1'>
+                                  <Download className='w-3 h-3' /> {displayName}
+                                </a>
+                              ) : (
+                                <span className='text-slate-700'>{file}</span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -290,7 +375,7 @@ export default function AiCurriculumPreview() {
         setModules(res.data.data.modules);
         setOpenModules(new Set([res.data.data.modules[0]?.id]));
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [id]);
 

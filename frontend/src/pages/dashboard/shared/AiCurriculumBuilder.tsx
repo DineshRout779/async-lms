@@ -17,7 +17,7 @@ const CONTENT_PREF_LABELS: Record<string, string> = {
   'interview-focused': 'Interview Focused',
   balanced: 'Balanced',
 };
-const DURATIONS = [4, 6, 8, 10, 12, 16, 20, 24];
+const DURATIONS = [2, 4, 6, 8, 10, 12, 16, 20, 24];
 const DAILY_EFFORTS = [0.5, 1, 1.5, 2, 3, 4, 5, 6];
 
 const EMPTY_FORM: CourseFormData = {

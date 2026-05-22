@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import toast from 'react-hot-toast';
 import type { AiExercise, AiLesson } from '@/features/aiCurriculum/types';
+import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 
 
 type Tab = 'video' | 'content' | 'exercise';
@@ -514,10 +515,14 @@ function ExerciseTab({
     description: exercise?.description ?? '',
     tasks: (exercise?.tasks ?? []).join('\n'),
     starter_code: exercise?.starter_code ?? '',
+    resource_links: exercise?.resource_links?.length ? exercise?.resource_links : [''],
+    reference_files: exercise?.reference_files?.length ? exercise?.reference_files : [''],
   });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const ex = !lesson.exercise_data ? null
@@ -529,6 +534,8 @@ function ExerciseTab({
       description: ex?.description ?? '',
       tasks: (ex?.tasks ?? []).join('\n'),
       starter_code: ex?.starter_code ?? '',
+      resource_links: ex?.resource_links?.length ? ex?.resource_links : [''],
+      reference_files: ex?.reference_files?.length ? ex?.reference_files : [''],
     });
     // setDirty(false);
     if (ex) {
@@ -538,7 +545,7 @@ function ExerciseTab({
 }
   }, [lesson.id, lesson.exercise_data]);
 
-  const set = (field: keyof typeof draft, val: string) => {
+  const set = (field: keyof typeof draft, val: string | string[]) => {
     setDraft((d) => ({ ...d, [field]: val }));
     setDirty(true);
   };
@@ -551,6 +558,8 @@ function ExerciseTab({
         description: draft.description,
         tasks: draft.tasks.split('\n').map((t) => t.trim()).filter(Boolean),
         starter_code: draft.starter_code,
+        resource_links: draft.resource_links.filter(l => l.trim() !== ''),
+        reference_files: draft.reference_files.filter(f => f.trim() !== ''),
       };
       await onUpdateLesson({ exercise_data: updated });
       setDirty(false);
@@ -624,15 +633,64 @@ function ExerciseTab({
           </ul>
         </div>
 
-        <div>
-          <h4 className='font-bold text-slate-700 mb-1'>
-            Starter Code
-          </h4>
+        {draft.starter_code?.trim() && (
+          <div>
+            <h4 className='font-bold text-slate-700 mb-1'>
+              Starter Code
+            </h4>
 
-          <pre className='bg-slate-100 p-3 rounded-lg overflow-auto'>
-            <code>{draft.starter_code}</code>
-          </pre>
-        </div>
+            <pre className='bg-slate-100 p-3 rounded-lg overflow-auto'>
+              <code>{draft.starter_code}</code>
+            </pre>
+          </div>
+        )}
+
+        {draft.resource_links.filter(l => l.trim()).length > 0 && (
+          <div>
+            <h4 className='font-bold text-slate-700 mb-1'>Resource Links</h4>
+            <ul className='list-disc pl-5 space-y-1'>
+              {draft.resource_links.filter(l => l.trim()).map((link, idx) => (
+                <li key={idx}>
+                  <a href={link} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all'>
+                    {link}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {draft.reference_files.filter(f => f.trim()).length > 0 && (
+          <div>
+            <h4 className='font-bold text-slate-700 mb-1'>Zip Files</h4>
+            <ul className='list-disc pl-5 space-y-1.5'>
+              {draft.reference_files.filter(f => f.trim()).map((file, idx) => {
+                const isUrl = file.startsWith('http://') || file.startsWith('https://');
+                const displayName = isUrl ? (() => {
+                  try {
+                    const decoded = decodeURIComponent(file);
+                    const parts = decoded.split('/');
+                    const lastPart = parts[parts.length - 1];
+                    return lastPart.replace(/^\d+-/, '');
+                  } catch {
+                    return file;
+                  }
+                })() : file;
+                return (
+                  <li key={idx}>
+                    {isUrl ? (
+                      <a href={file} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all inline-flex items-center gap-1'>
+                        <Download className='w-3.5 h-3.5' /> {displayName}
+                      </a>
+                    ) : (
+                      <span className='text-slate-700'>{file}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
     ) : (
       <>
@@ -693,6 +751,140 @@ function ExerciseTab({
             placeholder='// starter code here...'
             className='w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400 resize-none font-mono'
           />
+        </div>
+
+        <div className='space-y-2'>
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>Resource Links</label>
+          {draft.resource_links.map((link, idx) => (
+            <div key={`link-${idx}`} className='flex gap-2 items-center'>
+              <input
+                disabled={!canEdit}
+                value={link}
+                onChange={(e) => {
+                  const newLinks = [...draft.resource_links];
+                  newLinks[idx] = e.target.value;
+                  set('resource_links', newLinks);
+                }}
+                placeholder='https://...'
+                className='flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400'
+              />
+              {canEdit && draft.resource_links.length > 1 && (
+                <button onClick={() => set('resource_links', draft.resource_links.filter((_, i) => i !== idx))} className='p-2 text-slate-400 hover:text-red-500 transition-colors' title='Remove link'>✕</button>
+              )}
+            </div>
+          ))}
+          {canEdit && (
+            <button onClick={() => set('resource_links', [...draft.resource_links, ''])} className='text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors'>+ Add link</button>
+          )}
+        </div>
+
+        <div
+          className={`space-y-2 p-3 -mx-3 border-2 border-dashed rounded-xl transition-colors ${
+            isDraggingFiles ? 'border-indigo-400 bg-indigo-50/50' : 'border-transparent'
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDraggingFiles(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setIsDraggingFiles(false);
+          }}
+          onDrop={async (e) => {
+            e.preventDefault();
+            setIsDraggingFiles(false);
+            if (!canEdit) return;
+            
+            const droppedFiles = Array.from(e.dataTransfer.files);
+            if (droppedFiles.length > 0) {
+              const currentFiles = draft.reference_files.filter(f => f.trim() !== '');
+              
+              // We'll upload the first dropped file to a new slot for simplicity
+              const newIdx = currentFiles.length;
+              setUploadingFiles(prev => ({ ...prev, [newIdx]: true }));
+              // Ensure there's a slot for it
+              set('reference_files', [...currentFiles, 'Uploading...']);
+              
+              try {
+                const formData = new FormData();
+                formData.append('file', droppedFiles[0]);
+                const res = await aiCurriculumApi.uploadFile(formData);
+                if (res.data.success) {
+                  set('reference_files', [...currentFiles, res.data.url]);
+                  toast.success('File uploaded');
+                } else {
+                  set('reference_files', currentFiles.length > 0 ? currentFiles : ['']);
+                  toast.error('Upload failed');
+                }
+              } catch (err) {
+                console.error(err);
+                set('reference_files', currentFiles.length > 0 ? currentFiles : ['']);
+                toast.error('Failed to upload file');
+              } finally {
+                setUploadingFiles(prev => ({ ...prev, [newIdx]: false }));
+              }
+            }
+          }}
+        >
+          <label className='block text-[11px] font-semibold text-slate-500 mb-1'>
+            Zip Files <span className='font-normal text-slate-400'>(Drag & Drop files here)</span>
+          </label>
+          {draft.reference_files.map((file, idx) => (
+            <div key={`file-${idx}`} className='flex gap-2 items-center'>
+              <div className='flex-1 relative'>
+                <input
+                  disabled={!canEdit}
+                  value={file}
+                  onChange={(e) => {
+                    const newFiles = [...draft.reference_files];
+                    newFiles[idx] = e.target.value;
+                    set('reference_files', newFiles);
+                  }}
+                  placeholder='Path or URL to zip file...'
+                  className='w-full border border-slate-200 rounded-lg pl-3 pr-8 py-2 text-[13px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400'
+                />
+                {canEdit && (
+                  <label className='absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-indigo-500 transition-colors' title='Select file'>
+                    {uploadingFiles[idx] ? <Loader2 className='w-4 h-4 animate-spin text-indigo-500' /> : <Upload className='w-4 h-4' />}
+                    <input
+                      type='file'
+                      className='hidden'
+                      disabled={uploadingFiles[idx]}
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length > 0) {
+                          setUploadingFiles(prev => ({ ...prev, [idx]: true }));
+                          try {
+                            const formData = new FormData();
+                            formData.append('file', files[0]);
+                            const res = await aiCurriculumApi.uploadFile(formData);
+                            if (res.data.success) {
+                              const newFiles = [...draft.reference_files];
+                              newFiles[idx] = res.data.url;
+                              set('reference_files', newFiles);
+                              toast.success('File uploaded');
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            toast.error('Failed to upload file');
+                          } finally {
+                            setUploadingFiles(prev => ({ ...prev, [idx]: false }));
+                          }
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+              {canEdit && draft.reference_files.length > 1 && (
+                <button onClick={() => set('reference_files', draft.reference_files.filter((_, i) => i !== idx))} className='p-2 text-slate-400 hover:text-red-500 transition-colors' title='Remove file'>✕</button>
+              )}
+            </div>
+          ))}
+          {canEdit && (
+            <button onClick={() => set('reference_files', [...draft.reference_files, ''])} className='text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors'>+ Add file</button>
+          )}
         </div>
       </>
     )}
@@ -780,6 +972,8 @@ function ExerciseTab({
           description: '',
           tasks: '',
           starter_code: '',
+          resource_links: [''],
+          reference_files: [''],
         });
 
         setDirty(false);
