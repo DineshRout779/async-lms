@@ -10,6 +10,7 @@ const {
   getProjectSubmissions,
   getStudentProfile,
   uploadLessonMarkdown,
+  uploadFile,
   createTopic,
   updateTopic,
   deleteTopic,
@@ -76,6 +77,13 @@ router.post(
   isAdmin,
   upload.single('file'),
   uploadLessonMarkdown,
+);
+router.post(
+  '/upload-file',
+  verifyToken,
+  isAdmin,
+  upload.single('file'),
+  uploadFile,
 );
 router.get(
   '/subjects/:slug/structure',

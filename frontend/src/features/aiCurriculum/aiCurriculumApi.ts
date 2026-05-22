@@ -104,4 +104,9 @@ export const aiCurriculumApi = {
 
   generateTaskTests: (data: { instructions: string; language?: string; role_focus?: string; level?: string }) =>
     apiClient.post<{ success: boolean; data: any[] }>('/ai-curriculum/exercises/generate-tests', data),
+
+  uploadFile: (formData: FormData) =>
+    apiClient.post<{ success: boolean; url: string }>('/admin/upload-file', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 };

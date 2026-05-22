@@ -2132,6 +2132,61 @@ exports.uploadLessonMarkdown = async (req, res) => {
   }
 };
 
+// ============================================
+// GENERAL FILE UPLOAD
+// ============================================
+
+exports.uploadFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded',
+      });
+    }
+
+    const bucket = process.env.AWS_S3_BUCKET;
+    const region = process.env.AWS_REGION;
+    const prefix = process.env.AWS_S3_PREFIX_FILES || 'uploads/';
+
+    if (!bucket || !region) {
+      return res.status(500).json({
+        success: false,
+        message: 'S3 is not configured (AWS_S3_BUCKET/AWS_REGION)',
+      });
+    }
+
+    const originalExt = path.extname(req.file.originalname) || '';
+    const key = `${prefix}${Date.now()}-${req.file.originalname
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9._-]/g, '')}${originalExt}`;
+
+    const s3 = new S3Client({ region });
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype || 'application/octet-stream',
+      }),
+    );
+
+    const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+
+    res.json({
+      success: true,
+      url,
+    });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload file',
+      error: error.message,
+    });
+  }
+};
+
 /**
  * Get all options for a quiz question
  * GET /api/admin/quiz-questions/:questionId/options

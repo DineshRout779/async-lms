@@ -117,7 +117,7 @@ Rules:
 - Every unit (topic) MUST have an assignment (graded, practical, max_score 100)
 - Every subtopic (lesson) MUST have ALL of: video_url, explanation, example, activity, interview_questions, exercise — NO quiz_questions inside lessons
 - quiz_questions belong ONLY at the unit (topic) level — each unit MUST have 5–10 MCQ questions covering all lessons in that unit
-- video_url must be a YouTube search URL: "https://www.youtube.com/results?search_query=" + URL-encoded terms specific to that subtopic and role
+- video_url must be a YouTube search URL: "https://www.youtube.com/results?search_query=" + URL-encoded terms. The search terms MUST strictly target the exact lesson topic using a natural, 3-to-6 word search phrase (e.g., "Excel Requirements Analysis tutorial"). Do NOT use complex academic phrases or negative keywords.
 - duration_mins: total estimated time for video + reading (15–45 mins)
 - quiz_questions: exactly 4 options per question, correct_index (0–3), and explanation
 - exercise: one hands-on exercise per subtopic with 3–5 concrete tasks. Include starter_code ONLY if the topic involves programming or technical coding; otherwise, leave it as an empty string.
@@ -351,7 +351,7 @@ async function searchYouTubeVideo(query) {
     return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
   }
   try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&order=viewCount&maxResults=1&key=${apiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoDuration=medium&order=relevance&maxResults=1&key=${apiKey}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.items?.length) {
@@ -372,7 +372,7 @@ async function searchYouTubeVideos(query, maxResults = 3) {
     return [];
   }
   try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&order=viewCount&maxResults=${maxResults}&key=${apiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoDuration=medium&order=relevance&maxResults=${maxResults}&key=${apiKey}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.items?.length) {
@@ -404,7 +404,31 @@ async function generateLessonContent({
   lessonTitle,
 }) {
   if (type === 'video') {
-    const searchQuery = `${lessonTitle} ${unitTitle} ${roleFocus} tutorial`;
+    const prompt = `You are an expert at finding educational YouTube videos.
+We need to find a video for a lesson.
+Course: ${courseTitle}
+Topic: ${topicTitle}
+Unit: ${unitTitle}
+Lesson: ${lessonTitle}
+Role: ${roleFocus}
+
+Generate a natural, highly effective YouTube search query (3 to 6 words maximum) that will return a relevant tutorial video specifically for the lesson "${lessonTitle}" in the context of "${topicTitle}". 
+DO NOT use the exact academic lesson title if it's too long or complex. Instead, extract the core tool and concept (e.g., instead of "Leveraging Spreadsheets for Requirements Analysis", output "Excel Requirements Analysis tutorial").
+Do NOT use negative keywords or operators, just provide a clean, simple search phrase that a real human would type into YouTube to learn this specific skill.
+
+Return ONLY a valid JSON object:
+{ "search_query": "the best youtube search string" }`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      response_format: { type: 'json_object' }
+    });
+    
+    const parsed = JSON.parse(response.choices[0].message.content);
+    const searchQuery = parsed.search_query;
+    
     const video_url = await searchYouTubeVideo(searchQuery);
     const video_results = await searchYouTubeVideos(searchQuery);
     return { video_url, video_results };

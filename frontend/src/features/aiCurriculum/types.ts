@@ -18,6 +18,8 @@ export interface AiExercise {
   description: string;
   tasks: string[];
   starter_code: string;
+  resource_links?: string[];
+  reference_files?: string[];
 }
 
 export interface AiLesson {
