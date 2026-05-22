@@ -41,6 +41,7 @@ export interface AiAssignment {
   title: string;
   instructions: string;
   max_score: number;
+  resources?: string[];
 }
 
 export interface AiCapstoneProject {

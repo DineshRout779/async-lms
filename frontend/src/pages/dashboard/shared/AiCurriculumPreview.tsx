@@ -148,7 +148,7 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
           {lesson.explanation && (
             <div>
               <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5'>Lesson Content</p>
-              <div className='prose prose-slate prose-sm max-w-none'>
+              <div className='prose prose-slate prose-sm max-w-none prose-pre:whitespace-pre-wrap prose-pre:break-words'>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.explanation}</ReactMarkdown>
               </div>
             </div>
@@ -157,7 +157,7 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
           {lesson.example && (
             <div>
               <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5'>Example</p>
-              <div className='prose prose-slate prose-sm max-w-none'>
+              <div className='prose prose-slate prose-sm max-w-none prose-pre:whitespace-pre-wrap prose-pre:break-words'>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.example}</ReactMarkdown>
               </div>
             </div>
@@ -166,7 +166,7 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
           {lesson.activity && (
             <div className='bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5'>
               <p className='text-[11px] font-semibold text-blue-600 mb-1'>Activity</p>
-              <div className='prose prose-slate prose-sm max-w-none text-blue-800 prose-p:text-blue-800 prose-headings:text-blue-900'>
+              <div className='prose prose-slate prose-sm max-w-none text-blue-800 prose-p:text-blue-800 prose-headings:text-blue-900 prose-pre:whitespace-pre-wrap prose-pre:break-words'>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.activity}</ReactMarkdown>
               </div>
             </div>

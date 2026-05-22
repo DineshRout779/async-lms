@@ -252,6 +252,38 @@ function ContentTab({
     setDirty(true);
   };
 
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/college-assignments/upload-instruction`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        set('resource_links', [...draft.resource_links, data.url]);
+        toast.success('File uploaded');
+      } else {
+        toast.error('Upload failed');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Upload failed');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -338,7 +370,7 @@ function ContentTab({
         <div className='flex-1 min-h-[280px]'>
           {sections.map((s) => s.key === section && (
             preview ? (
-              <div key={s.key} className='prose prose-sm max-w-none text-slate-700 text-[13px]'>
+              <div key={s.key} className='prose prose-sm max-w-none text-slate-700 text-[13px] prose-pre:whitespace-pre-wrap prose-pre:break-words'>
                 {draft[s.key]
                   ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft[s.key]}</ReactMarkdown>
                   : <span className='text-slate-300 italic'>Nothing to preview yet</span>}
@@ -405,12 +437,24 @@ function ContentTab({
               </div>
             ))}
             {canEdit && (
-              <button
-                onClick={() => set('resource_links', [...draft.resource_links, ''])}
-                className='text-[12px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors mt-1 inline-block'
-              >
-                + Add another field
-              </button>
+              <div className='flex items-center gap-4 mt-1'>
+                <button
+                  onClick={() => set('resource_links', [...draft.resource_links, ''])}
+                  className='text-[12px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors inline-flex items-center gap-1'
+                >
+                  + Add another link
+                </button>
+                <label className='text-[12px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors inline-flex items-center gap-1 cursor-pointer'>
+                  {isUploading ? <Loader2 className='w-3.5 h-3.5 animate-spin' /> : <Upload className='w-3.5 h-3.5' />}
+                  {isUploading ? 'Uploading...' : 'Upload File'}
+                  <input
+                    type='file'
+                    className='hidden'
+                    onChange={handleFileUpload}
+                    disabled={isUploading || !canEdit}
+                  />
+                </label>
+              </div>
             )}
           </div>
         )}
