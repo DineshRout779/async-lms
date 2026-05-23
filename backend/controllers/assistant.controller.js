@@ -141,16 +141,16 @@ exports.generateResume = async (req, res) => {
 
     // Using exercises as projects since they contain the actual submission scores
     console.log('[resume] fetching projects (exercises)');
-    const projectsResult = await pool.query(
-      `SELECT 
-         e.title AS name, 
-         CASE WHEN e.max_score > 0 THEN ROUND((es.score::numeric / e.max_score::numeric) * 100) ELSE 0 END AS score 
+    const exercisesResult = await pool.query(
+      `SELECT
+         e.title AS name,
+         CASE WHEN e.max_score > 0 THEN ROUND((es.score::numeric / e.max_score::numeric) * 100) ELSE 0 END AS score
        FROM public.exercise_submissions es
        JOIN public.exercises e ON e.id = es.exercise_id
        WHERE es.user_id = $1`,
       [userId]
     );
-    const allProjects = projectsResult.rows;
+    const allProjects = exercisesResult.rows;
     
     const eligibleProjects = allProjects.filter(p => p.score >= 75);
 
