@@ -19,6 +19,7 @@ const compression = require('compression');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(compression());
 app.use(cors());
 app.use(express.json());
