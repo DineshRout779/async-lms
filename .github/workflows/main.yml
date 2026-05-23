@@ -84,6 +84,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+      - name: Debug Worker IP
+        run: |
+          echo "Worker IP: ${{ secrets.WORKER_IPS }}"
       - name: Deploy to Worker Node(s)
         uses: appleboy/ssh-action@v1.0.3
         with:
