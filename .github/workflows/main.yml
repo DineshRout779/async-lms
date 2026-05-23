@@ -86,7 +86,11 @@ jobs:
           fetch-depth: 2
       - name: Debug Worker IP
         run: |
-          echo "Worker IP: ${{ secrets.WORKER_IPS }}"
+          IP="${{ secrets.WORKER_IPS }}"
+          echo "IP suffix: ${IP: -6}"
+      - name: Test SSH Port
+        run: |
+          nc -vz ${{ secrets.WORKER_IPS }} 22
       - name: Deploy to Worker Node(s)
         uses: appleboy/ssh-action@v1.0.3
         with:
