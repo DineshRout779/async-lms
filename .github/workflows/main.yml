@@ -87,7 +87,7 @@ jobs:
       - name: Debug Worker IP
         run: |
           IP="${{ secrets.WORKER_IPS }}"
-          echo "IP suffix: ${IP: -6}"
+          echo "IP suffix: ${IP: -10}"
       - name: Test SSH Port
         run: |
           nc -vz ${{ secrets.WORKER_IPS }} 22
