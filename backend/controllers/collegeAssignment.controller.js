@@ -1,6 +1,7 @@
 const pool = require('../config/pg');
 const { notifyCollege } = require('../services/notificationService');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const path = require('path');
 const fs = require('fs');
 const { promisify } = require('util');
@@ -23,6 +24,28 @@ const s3Configured = () =>
     process.env.AWS_ACCESS_KEY_ID &&
     process.env.AWS_SECRET_ACCESS_KEY
   );
+
+// Converts a raw S3 URL to a 1-hour presigned URL; returns original if not S3
+async function presignS3Url(url) {
+  if (!url || !url.includes('.amazonaws.com/')) return url;
+  try {
+    const { hostname, pathname } = new URL(url);
+    const bucket = hostname.split('.')[0];
+    const key = decodeURIComponent(pathname.slice(1)); // strip leading /
+    const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
+    return await getSignedUrl(s3, cmd, { expiresIn: 3600 });
+  } catch {
+    return url;
+  }
+}
+
+async function presignRow(row) {
+  if (!row) return row;
+  const copy = { ...row };
+  if (copy.instruction_file_url) copy.instruction_file_url = await presignS3Url(copy.instruction_file_url);
+  if (copy.submission_file_url) copy.submission_file_url = await presignS3Url(copy.submission_file_url);
+  return copy;
+}
 
 // ─── Shared file upload helper (S3 → local fallback) ─────────────────────────
 // s3KeyPrefix  : e.g. 'assignment-instructions'
@@ -119,7 +142,8 @@ exports.getMyCollegeAssignments = async (req, res) => {
        ORDER BY ca.due_date ASC NULLS LAST, ca.created_at DESC`,
       [college_id, req.user.id],
     );
-    res.json({ success: true, data: rows });
+    const data = await Promise.all(rows.map(presignRow));
+    res.json({ success: true, data });
   } catch (error) {
     console.error('getMyCollegeAssignments:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -162,7 +186,8 @@ exports.manageAssignments = async (req, res) => {
     }
 
     const { rows } = await pool.query(query, values);
-    res.json({ success: true, data: rows });
+    const data = await Promise.all(rows.map(presignRow));
+    res.json({ success: true, data });
   } catch (error) {
     console.error('manageAssignments:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -398,7 +423,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
         .json({ success: false, message: 'Assignment not found' });
     }
 
-    res.json({ success: true, data: rows[0] });
+    res.json({ success: true, data: await presignRow(rows[0]) });
   } catch (error) {
     console.error('getCollegeAssignmentById:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -489,7 +514,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
         .json({ success: false, message: 'Assignment not found' });
     }
 
-    res.json({ success: true, data: rows[0] });
+    res.json({ success: true, data: await presignRow(rows[0]) });
   } catch (error) {
     console.error('getCollegeAssignmentById:', error);
     res.status(500).json({ success: false, message: error.message });
