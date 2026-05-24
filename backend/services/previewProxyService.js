@@ -99,6 +99,18 @@ function startProxy() {
 }
 
 function getPreviewUrl(containerName, port) {
+  // If we are on a remote server (ORCHESTRATOR_URL is set and is not localhost)
+  // but DOMAIN is still lvh.me, return null. This forces the frontend to fall back
+  // to the secure path-based proxy (/worker/:workerIp/api/v1/preview/...) which is served
+  // over HTTPS and works without wildcard DNS.
+  const isRemote = process.env.ORCHESTRATOR_URL && 
+                   !process.env.ORCHESTRATOR_URL.includes('localhost') && 
+                   !process.env.ORCHESTRATOR_URL.includes('127.0.0.1');
+
+  if (DOMAIN === 'lvh.me' && isRemote) {
+    return null;
+  }
+
   let shortName = containerName;
   if (containerName.startsWith('workspace-')) {
     const parts = containerName.split('-');
