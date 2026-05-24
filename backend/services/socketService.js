@@ -28,6 +28,15 @@ const redisConnection = new Redis(REDIS_URL, {
   },
 });
 
+redisConnection.on('connect', () => {
+  console.log(`[redis] Successfully connected to ${REDIS_URL}`);
+});
+
+redisConnection.on('error', (err) => {
+  console.error(`[redis] Connection error:`, err.message);
+});
+
+
 const workspaceQueue = new Queue('workspace-queue', { connection: redisConnection });
 
 const terminals = new Map();          // socketId → PTY
