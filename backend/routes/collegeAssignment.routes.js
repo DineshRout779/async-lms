@@ -18,6 +18,7 @@ const {
   deleteAssignment,
   submitCollegeAssignment,
   getFilteredAssignments,
+  getAssignmentSubmissions,
 } = require('../controllers/collegeAssignment.controller');
 const isAdminOrFacilitator = require('../middlewares/isAdminOrFacilitator');
 
@@ -28,6 +29,12 @@ router.get(
   verifyToken,
   isFacilitator,
   getFilteredAssignments,
+);
+router.get(
+  '/submissions/:assignmentId',
+  verifyToken,
+  isFacilitator,
+  getAssignmentSubmissions,
 );
 
 // Admin / Facilitator: upload instruction document to S3

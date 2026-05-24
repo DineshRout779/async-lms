@@ -8,6 +8,7 @@ import { Info } from 'lucide-react';
 import { useAppDispatch } from '@/app/hooks';
 import { loadUser } from '@/features/auth/authThunks';
 import { useColleges } from '@/hooks/queries/useOnboarding';
+import toast from 'react-hot-toast';
 import {
   Select,
   SelectContent,
@@ -52,13 +53,21 @@ export default function CollegeStep() {
       let finalCollegeId = collegeId;
 
       if (collegeId === 'OTHER') {
+        const name = customCollegeName.trim();
+        const city = customCollegeAddress.trim();
+        const words = name.split(/\s+/);
+        const shortCode = words.length > 1 
+          ? words.map(w => w[0]).join('').toUpperCase().substring(0, 5)
+          : name.substring(0, 5).toUpperCase();
+
         const createRes = await apiClient.post('/colleges', {
-          name: customCollegeName,
-          city: customCollegeAddress,
-          short_code: customCollegeName.substring(0, 5).toUpperCase(),
-          state: 'Unknown',
+          name,
+          city,
+          short_code: shortCode,
+          state: '',
         });
-        finalCollegeId = createRes.data.id;
+        // FIX: access nested data object from backend response
+        finalCollegeId = createRes.data.data.id;
       }
 
       const res = await apiClient.post('/onboarding/college', {
@@ -68,8 +77,9 @@ export default function CollegeStep() {
       if (res.status === 200 || res.status === 201) {
         navigate(`/onboarding/${res.data.next_step}`);
       }
-    } catch {
-      // navigation does not occur — user stays on step
+    } catch (err) {
+      console.error('Onboarding error:', err);
+      toast.error('Failed to save college choice. Please try again.');
     } finally {
       setSubmitting(false);
     }

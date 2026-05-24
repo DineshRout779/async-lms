@@ -183,8 +183,47 @@ export default function ResumeBuilder() {
   const [jdText, setJdText] = useState('');
   const [jdLoading, setJdLoading] = useState(false);
   const [sections, setSections] = useState<Section[]>(DEFAULT_SECTIONS);
+  const [eligibilityError, setEligibilityError] = useState<{ message: string; suggestion: any } | null>(null);
 
   const previewRef = useRef<HTMLDivElement>(null);
+
+  const handleExportPDF = useCallback(() => {
+    if (!previewRef.current) return;
+    const printId = 'resume-print-target';
+    previewRef.current.id = printId;
+
+    const style = document.createElement('style');
+    style.id = 'resume-print-style';
+    style.textContent = `
+      @media print {
+        body > *:not([data-resume-print-root]) { display: none !important; }
+        [data-resume-print-root] { display: block !important; position: fixed; inset: 0; z-index: 99999; background: white; padding: 32px; overflow: visible; }
+        [data-resume-print-root] * { visibility: visible !important; }
+        @page { margin: 0.5in; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-resume-print-root', '');
+    wrapper.style.cssText = 'display:none';
+    const clone = previewRef.current.cloneNode(true) as HTMLElement;
+    // Strip interactive hover/edit styles for print
+    clone.querySelectorAll('[title="Double-click to edit"]').forEach((el) => {
+      (el as HTMLElement).removeAttribute('title');
+    });
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    const cleanup = () => {
+      document.getElementById('resume-print-style')?.remove();
+      wrapper.remove();
+      previewRef.current && (previewRef.current.id = '');
+    };
+
+    window.addEventListener('afterprint', cleanup, { once: true });
+    window.print();
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -213,6 +252,14 @@ export default function ResumeBuilder() {
         extraSkills: values.extraSkills.filter(Boolean),
         workExperience: values.workExperience,
       });
+
+      if (res.data.success === false && res.data.eligible === false) {
+        setEligibilityError({ message: res.data.message, suggestion: res.data.suggestion });
+        setShowForm(false);
+        return;
+      }
+
+      setEligibilityError(null);
       const data = res.data.data as ResumeData;
       data.personalInfo = {
         ...data.personalInfo,
@@ -254,21 +301,6 @@ export default function ResumeBuilder() {
     } finally {
       setJdLoading(false);
     }
-  };
-
-  const handleExportPDF = async () => {
-    if (!previewRef.current) return;
-    const html2pdf = (await import('html2pdf.js')).default;
-    html2pdf()
-      .set({
-        margin: 14,
-        filename: `${resumeData?.personalInfo.name || 'resume'}_resume.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      })
-      .from(previewRef.current)
-      .save();
   };
 
   const localATS = atsResult ?? calcLocalATS(resumeData);
@@ -443,7 +475,39 @@ export default function ResumeBuilder() {
 
         {/* Resume Canvas */}
         <main className='flex-1 overflow-y-auto p-8'>
-          {resumeData ? (
+          {eligibilityError ? (
+            <div className='max-w-3xl mx-auto bg-white shadow-sm rounded-lg p-10 min-h-[400px] flex flex-col items-center justify-center border border-slate-100'>
+              <div className='w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mb-5'>
+                <X size={36} className='text-red-500' />
+              </div>
+              <h2 className='text-xl font-bold text-[#1e2653] mb-2 text-center'>
+                {eligibilityError.message}
+              </h2>
+              {typeof eligibilityError.suggestion === 'string' ? (
+                <p className='text-sm text-slate-500 text-center max-w-md mb-8 mt-2'>
+                  {eligibilityError.suggestion}
+                </p>
+              ) : (
+                <div className='w-full max-w-md mt-6'>
+                  <h3 className='text-sm font-semibold text-slate-700 mb-3 text-center'>Underperforming Projects</h3>
+                  <div className='space-y-3'>
+                    {eligibilityError.suggestion.map((proj: any, idx: number) => (
+                      <div key={idx} className='flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100'>
+                        <span className='font-medium text-slate-700 text-sm truncate pr-2'>{proj.name}</span>
+                        <span className='text-xs text-amber-600 font-semibold bg-amber-50 px-2 py-1 rounded-md shrink-0'>{proj.needed}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => setEligibilityError(null)}
+                className='mt-8 flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-6 py-2.5 rounded-xl transition-colors'
+              >
+                Go Back
+              </button>
+            </div>
+          ) : resumeData ? (
             <div
               className='max-w-3xl mx-auto bg-white shadow-sm rounded-lg p-10 min-h-225'
               ref={previewRef}

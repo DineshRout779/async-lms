@@ -18,6 +18,8 @@ export interface AiExercise {
   description: string;
   tasks: string[];
   starter_code: string;
+  resource_links?: string[];
+  reference_files?: string[];
 }
 
 export interface AiLesson {
@@ -34,12 +36,14 @@ export interface AiLesson {
   video_url: string | null;
   quiz_questions: AiQuizQuestion[];
   exercise_data: AiExercise | null;
+  resource_links?: string[];
 }
 
 export interface AiAssignment {
   title: string;
   instructions: string;
   max_score: number;
+  resources?: string[];
 }
 
 export interface AiCapstoneProject {
@@ -109,6 +113,8 @@ export interface AiCourse {
   subject_id: string | null;
   created_at: string;
   updated_at: string;
+  modules_count?: number;
+  topics_count?: number;
   modules: AiModule[];
   reviews: CourseReview[];
 }

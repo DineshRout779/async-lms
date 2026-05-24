@@ -3,6 +3,7 @@ const {
   generateCurriculum, regenerateLesson, extractSkillsFromJD,
   generateTopics, generateUnits, generateSubtopics,
   generateLessonContent, generateUnitQuiz, generateUnitAssignment,
+  generateExerciseTests,
 } = require('../services/aiCurriculumService');
 const { notify } = require('../services/notificationService');
 
@@ -31,6 +32,27 @@ exports.extractSkills = async (req, res) => {
     res.json({ success: true, data: skills });
   } catch (err) {
     console.error('extractSkills error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── Generate exercise tests via AI ──────────────────────────────────────────
+
+exports.generateTaskTests = async (req, res) => {
+  try {
+    const { instructions, language, role_focus, level } = req.body;
+    if (!instructions) return res.status(400).json({ success: false, message: 'instructions is required' });
+
+    const testCases = await generateExerciseTests({
+      instructions,
+      language: language || 'javascript',
+      roleFocus: role_focus || 'Software Engineer',
+      level: level || 'Beginner',
+    });
+
+    res.json({ success: true, data: testCases });
+  } catch (err) {
+    console.error('generateTaskTests error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -157,7 +179,9 @@ exports.listCourses = async (req, res) => {
     const { status } = req.query;
 
     let query = `
-      SELECT c.*, u.full_name AS creator_name
+      SELECT c.*, u.full_name AS creator_name,
+             (SELECT count(*)::int FROM ai_course_modules m WHERE m.course_id = c.id) as modules_count,
+             (SELECT count(*)::int FROM ai_course_topics t JOIN ai_course_modules m ON t.module_id = m.id WHERE m.course_id = c.id) as topics_count
       FROM ai_courses c
       JOIN users u ON c.created_by = u.id
     `;
@@ -612,7 +636,7 @@ exports.updateTopic = async (req, res) => {
 exports.updateLesson = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, explanation, example, activity, interview_questions, lesson_type, duration_mins, video_url } = req.body;
+    const { title, explanation, example, activity, interview_questions, lesson_type, duration_mins, video_url, resource_links, exercise_data } = req.body;
     const sets = [];
     const vals = [];
     let i = 1;
@@ -625,6 +649,8 @@ exports.updateLesson = async (req, res) => {
     if (lesson_type !== undefined)         add('lesson_type', lesson_type);
     if (duration_mins !== undefined)       add('duration_mins', duration_mins);
     if (video_url !== undefined)           add('video_url', video_url);
+    if (resource_links !== undefined)      add('resource_links', JSON.stringify(resource_links));
+    if (exercise_data !== undefined)       add('exercise_data', exercise_data);
     if (!sets.length) return res.status(400).json({ success: false, message: 'Nothing to update' });
     vals.push(id);
     await pool.query(`UPDATE ai_course_lessons SET ${sets.join(', ')} WHERE id = $${i}`, vals);
@@ -823,11 +849,17 @@ exports.duplicateTopic = async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const topicRes = await pool.query(`SELECT * FROM ai_course_topics WHERE id = $1`, [id]);
-    if (!topicRes.rows.length) return res.status(404).json({ success: false });
-    const t = topicRes.rows[0];
-    const orderRes = await pool.query(`SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_topics WHERE module_id = $1`, [t.module_id]);
     await client.query('BEGIN');
+
+    // Read inside transaction to prevent race conditions on order_index
+    const topicRes = await client.query(`SELECT * FROM ai_course_topics WHERE id = $1`, [id]);
+    if (!topicRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false });
+    }
+    const t = topicRes.rows[0];
+    const orderRes = await client.query(`SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_topics WHERE module_id = $1`, [t.module_id]);
+
     const newTopic = await client.query(
       `INSERT INTO ai_course_topics (module_id, title, description, order_index, assignment)
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
@@ -951,7 +983,27 @@ exports.generateAndSaveUnits = async (req, res) => {
     if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Module not found' });
     const { topic_title, course_title, role_focus, level } = ctxRes.rows[0];
 
+    // Check for existing topics to prevent duplication
+    const existingRes = await client.query(
+      `SELECT LOWER(title) as title FROM ai_course_topics WHERE module_id = $1`,
+      [module_id],
+    );
+    const existingTitles = new Set(existingRes.rows.map((r) => r.title));
+
     const result = await generateUnits({ courseTitle: course_title, roleFocus: role_focus, level, topicTitle: topic_title });
+
+    // Filter out duplicates (case-insensitive)
+    const newUnits = result.units.filter(
+      (unit) => !existingTitles.has(unit.title.toLowerCase())
+    );
+
+    if (newUnits.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: 'All units already exist. No new units generated.',
+      });
+    }
 
     // Get current max order_index
     const orderRes = await client.query(
@@ -962,7 +1014,7 @@ exports.generateAndSaveUnits = async (req, res) => {
 
     await client.query('BEGIN');
     const created = [];
-    for (const unit of result.units) {
+    for (const unit of newUnits) {
       const r = await client.query(
         `INSERT INTO ai_course_topics (module_id, title, description, order_index)
          VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -999,9 +1051,29 @@ exports.generateAndSaveSubtopics = async (req, res) => {
     if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Unit not found' });
     const { unit_title, topic_title, course_title, role_focus, level } = ctxRes.rows[0];
 
+    // Check for existing subtopics to prevent duplication
+    const existingRes = await client.query(
+      `SELECT LOWER(title) as title FROM ai_course_lessons WHERE topic_id = $1`,
+      [topic_id],
+    );
+    const existingTitles = new Set(existingRes.rows.map((r) => r.title));
+
     const result = await generateSubtopics({
       courseTitle: course_title, roleFocus: role_focus, level, topicTitle: topic_title, unitTitle: unit_title,
     });
+
+    // Filter out duplicates (case-insensitive)
+    const newSubtopics = result.subtopics.filter(
+      (sub) => !existingTitles.has(sub.title.toLowerCase())
+    );
+
+    if (newSubtopics.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: 'All subtopics already exist. No new subtopics generated.',
+      });
+    }
 
     const orderRes = await client.query(
       `SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM ai_course_lessons WHERE topic_id = $1`,
@@ -1011,7 +1083,7 @@ exports.generateAndSaveSubtopics = async (req, res) => {
 
     await client.query('BEGIN');
     const created = [];
-    for (const sub of result.subtopics) {
+    for (const sub of newSubtopics) {
       const r = await client.query(
         `INSERT INTO ai_course_lessons
            (topic_id, title, explanation, example, activity, interview_questions,

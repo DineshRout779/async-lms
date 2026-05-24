@@ -23,7 +23,7 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
       setStatus("running");
       setProgress(20);
 
-      const res = await fetch("http://localhost:3001/api/v1/evaluations/run", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/evaluations/run`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -128,8 +128,7 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
               {/* View Results */}
               <button
                 onClick={() => {
-                  // TODO: Navigate to results page with assignmentId
-                  navigate(`/dashboard/facilitator/results${evaluationId}`);
+                  navigate(`/dashboard/facilitator/results/${evaluationId}`);
                 }}
                 className="w-[167px] h-[40px] rounded-[4px] text-sm rounded bg-gray-200 hover:bg-gray-300"
               >

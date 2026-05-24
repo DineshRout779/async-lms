@@ -14,11 +14,14 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle2,
+  Download,
 } from 'lucide-react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
-import type { AiCourse, AiModule, AiTopic, AiLesson } from '@/features/aiCurriculum/types';
+import type { AiCourse, AiModule, AiTopic, AiLesson, AiExercise } from '@/features/aiCurriculum/types';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // ─── Week/day breakdown calculator ────────────────────────────────────────────
 
@@ -77,6 +80,23 @@ function buildLearningPath(modules: AiModule[], durationWeeks: number | null, da
 
 // ─── Lesson preview row ────────────────────────────────────────────────────────
 
+const getEmbedUrl = (url: string) => {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com')) {
+      const v = u.searchParams.get('v');
+      if (v) return `https://www.youtube.com/embed/${v}`;
+    }
+    if (u.hostname === 'youtu.be') {
+      const id = u.pathname.replace('/', '');
+      if (id) return `https://www.youtube.com/embed/${id}`;
+    }
+  } catch {
+    //
+  }
+  return url;
+};
+
 function LessonPreview({ lesson }: { lesson: AiLesson }) {
   const [open, setOpen] = useState(false);
   const quizCount = Array.isArray(lesson.quiz_questions) ? lesson.quiz_questions.length : 0;
@@ -102,30 +122,54 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
       {open && (
         <div className='border-t border-slate-100 px-4 py-4 space-y-4 bg-slate-50/50'>
           {lesson.video_url && (
-            <a href={lesson.video_url} target='_blank' rel='noopener noreferrer'
-              className='flex items-center gap-2 text-[13px] font-semibold text-red-600 hover:text-red-700'>
-              <MonitorPlay className='w-4 h-4' /> Watch Video on YouTube
-            </a>
+            <div className='not-prose mb-6'>
+              {lesson.video_url.includes('results?') ? (
+                <div className='bg-slate-100 rounded-xl p-6 text-center border border-slate-200'>
+                  <MonitorPlay className='w-8 h-8 text-slate-400 mx-auto mb-3' />
+                  <p className='text-sm font-semibold text-slate-700 mb-2'>AI suggested a YouTube search instead of a direct video.</p>
+                  <a href={lesson.video_url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold text-[13px] hover:bg-red-100 transition-colors'>
+                    View Search Results on YouTube
+                  </a>
+                </div>
+              ) : (
+                <div className='aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-black'>
+                  <iframe
+                    className='h-full w-full'
+                    src={getEmbedUrl(lesson.video_url)}
+                    title='Lesson video'
+                    allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+                    referrerPolicy='strict-origin-when-cross-origin'
+                    allowFullScreen
+                  />
+                </div>
+              )}
+            </div>
           )}
 
           {lesson.explanation && (
             <div>
               <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5'>Lesson Content</p>
-              <p className='text-[13px] text-slate-600 leading-relaxed whitespace-pre-wrap line-clamp-6'>{lesson.explanation}</p>
+              <div className='prose prose-slate prose-sm max-w-none prose-pre:whitespace-pre-wrap prose-pre:break-words'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.explanation}</ReactMarkdown>
+              </div>
             </div>
           )}
 
           {lesson.example && (
             <div>
               <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5'>Example</p>
-              <p className='text-[13px] text-slate-600 leading-relaxed'>{lesson.example}</p>
+              <div className='prose prose-slate prose-sm max-w-none prose-pre:whitespace-pre-wrap prose-pre:break-words'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.example}</ReactMarkdown>
+              </div>
             </div>
           )}
 
           {lesson.activity && (
             <div className='bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5'>
               <p className='text-[11px] font-semibold text-blue-600 mb-1'>Activity</p>
-              <p className='text-[13px] text-blue-700'>{lesson.activity}</p>
+              <div className='prose prose-slate prose-sm max-w-none text-blue-800 prose-p:text-blue-800 prose-headings:text-blue-900 prose-pre:whitespace-pre-wrap prose-pre:break-words'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lesson.activity}</ReactMarkdown>
+              </div>
             </div>
           )}
 
@@ -154,15 +198,99 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
           )}
 
           {hasExercise && (() => {
-            const ex = typeof lesson.exercise_data === 'string' ? JSON.parse(lesson.exercise_data) : lesson.exercise_data as { title: string; description: string; tasks: string[]; starter_code: string };
+            const parsedData = typeof lesson.exercise_data === 'string'
+              ? JSON.parse(lesson.exercise_data)
+              : lesson.exercise_data;
+            const ex = parsedData as AiExercise;
+            if (!ex) return null;
             return (
               <div>
                 <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1.5'>
-                  <Code2 className='w-3.5 h-3.5 text-indigo-400' /> Exercise
+                  <Code2 className='w-3.5 h-3.5 text-indigo-400' /> Exercise: {ex.title}
                 </p>
-                <div className='bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5'>
-                  <p className='text-[13px] font-semibold text-indigo-800'>{ex.title}</p>
-                  <p className='text-[12px] text-indigo-600 mt-1'>{ex.description}</p>
+                <div className='bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 space-y-4 text-[13px]'>
+                  {ex.description && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Description</h5>
+                      <div className='prose prose-slate prose-sm max-w-none text-slate-600'>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{ex.description}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+
+                  {ex.tasks && (Array.isArray(ex.tasks) ? ex.tasks.length > 0 : typeof (ex.tasks as any) === 'string' && (ex.tasks as any).trim() !== '') && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Tasks</h5>
+                      <ul className='list-disc pl-5 space-y-1 text-slate-600'>
+                        {Array.isArray(ex.tasks) ? (
+                          ex.tasks.filter(t => typeof t === 'string' && t.trim()).map((task, i) => (
+                            <li key={i}>{task}</li>
+                          ))
+                        ) : typeof (ex.tasks as any) === 'string' ? (
+                          ((ex.tasks as any) as string).split('\n').filter(Boolean).map((task, i) => (
+                            <li key={i}>{task}</li>
+                          ))
+                        ) : null}
+                      </ul>
+                    </div>
+                  )}
+
+                  {ex.starter_code && typeof ex.starter_code === 'string' && ex.starter_code.trim() && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Starter Code</h5>
+                      <pre className='bg-slate-100 p-3 rounded-lg overflow-auto text-[12px] font-mono text-slate-800 border border-slate-200'>
+                        <code>{ex.starter_code}</code>
+                      </pre>
+                    </div>
+                  )}
+
+                  {ex.resource_links && Array.isArray(ex.resource_links) && ex.resource_links.filter(l => typeof l === 'string' && l.trim()).length > 0 && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Resource Links</h5>
+                      <ul className='list-disc pl-5 space-y-1'>
+                        {ex.resource_links.filter(l => typeof l === 'string' && l.trim()).map((link, idx) => (
+                          <li key={idx}>
+                            <a href={link} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all'>
+                              {link}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {ex.reference_files && Array.isArray(ex.reference_files) && ex.reference_files.filter(f => typeof f === 'string' && f.trim()).length > 0 && (
+                    <div>
+                      <h5 className='font-bold text-slate-700 mb-1'>Zip Files</h5>
+                      <ul className='list-disc pl-5 space-y-1'>
+                        {ex.reference_files.filter(f => typeof f === 'string' && f.trim()).map((file, idx) => {
+                          const isUrl = typeof file === 'string' && (file.startsWith('http://') || file.startsWith('https://'));
+                          const displayName = isUrl ? (() => {
+                            try {
+                              const decoded = decodeURIComponent(file);
+                              const parts = decoded.split('/');
+                              const lastPart = parts[parts.length - 1];
+                              return lastPart.replace(/^\d+-/, '');
+                            } catch {
+                              return file;
+                            }
+                          })() : file;
+
+                          return (
+                            <li key={idx}>
+                              {isUrl ? (
+                                <a href={file} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all inline-flex items-center gap-1'>
+                                  <Download className='w-3 h-3' /> {displayName}
+                                </a>
+                              ) : (
+                                <span className='text-slate-700'>{file}</span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -247,7 +375,7 @@ export default function AiCurriculumPreview() {
         setModules(res.data.data.modules);
         setOpenModules(new Set([res.data.data.modules[0]?.id]));
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [id]);
 

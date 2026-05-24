@@ -7,23 +7,30 @@ const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const { registerWorker, heartbeat, deregisterWorker, releaseWorkspace, getStatus } = require('./services/workerRegistry');
+const {
+  registerWorker,
+  heartbeat,
+  deregisterWorker,
+  releaseWorkspace,
+  getStatus,
+} = require('./services/workerRegistry');
 require('./config/pg');
-const evaluationRoutes = require("./routes/evaluationRoutes");
+const evaluationRoutes = require('./routes/evaluationRoutes');
 
 const compression = require('compression');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(compression());
 app.use(cors());
 app.use(express.json());
 app.use(morgan('combined'));
 
-// Rate limiter for auth routes — 20 requests per 15 min per IP
+// Rate limiter for auth routes — 50 requests per 15 min per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 50,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
@@ -41,15 +48,22 @@ app.use('/api/v1/subjects', require('./routes/subject.routes'));
 app.use('/api/v1/admin', require('./routes/admin.routes'));
 app.use('/api/v1/facilitator', require('./routes/facilitator.routes'));
 app.use('/api/v1/assistant', require('./routes/assistant.routes'));
-app.use('/api/v1/college-assignments', require('./routes/collegeAssignment.routes'));
-app.use("/api/v1/evaluations", evaluationRoutes);
+app.use(
+  '/api/v1/college-assignments',
+  require('./routes/collegeAssignment.routes'),
+);
+app.use('/api/v1/evaluations', evaluationRoutes);
 
-app.use("/api/v1/analytics", analyticsRoutes);
+app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/notifications', require('./routes/notification.routes'));
 app.use('/api/v1/ai-curriculum', require('./routes/aiCurriculum.routes'));
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 const verifyToken = require('./middlewares/verfiyToken');
-app.use('/uploads', verifyToken, express.static(path.join(__dirname, 'public', 'uploads')));
+app.use(
+  '/uploads',
+  verifyToken,
+  express.static(path.join(__dirname, 'public', 'uploads')),
+);
 
 // ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
 const workerProxies = new Map(); // workerIp -> proxyInstance
@@ -81,7 +95,8 @@ app.use('/worker/:ip', (req, res, next) => {
 // ── Internal worker registry endpoints (no auth — internal network only) ────
 app.post('/api/v1/internal/workers/register', (req, res) => {
   const { id, url, capacity } = req.body;
-  if (!id || !url) return res.status(400).json({ error: 'id and url required' });
+  if (!id || !url)
+    return res.status(400).json({ error: 'id and url required' });
   registerWorker(id, url, capacity);
   res.json({ ok: true });
 });
@@ -114,14 +129,13 @@ app.use((req, res) => {
   res.status(404).json({ message: `Route ${req.originalUrl} not found` });
 });
 
-
 const { Server } = require('socket.io');
 
 const io = new Server(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
-  }
+    methods: ['GET', 'POST'],
+  },
 });
 
 io.on('connection', (socket) => {
@@ -157,4 +171,3 @@ server.listen(3001, () => {
   const ct = new Date().toLocaleTimeString();
   console.log('Backend (Orchestrator) running on http://localhost:3001', ct);
 });
-

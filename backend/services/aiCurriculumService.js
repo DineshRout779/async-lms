@@ -98,7 +98,7 @@ The JSON keys use "modules/topics/lessons" as internal names but they map to Top
                 "title": "Exercise title — a real coding/practical task for this subtopic",
                 "description": "Clear instructions for what the learner must build or do",
                 "tasks": ["Step 1", "Step 2", "Step 3"],
-                "starter_code": "// starter code, HTML scaffold, or pseudocode"
+                "starter_code": "// starter code, HTML scaffold, or empty string if non-technical"
               }
             }
           ]
@@ -117,10 +117,10 @@ Rules:
 - Every unit (topic) MUST have an assignment (graded, practical, max_score 100)
 - Every subtopic (lesson) MUST have ALL of: video_url, explanation, example, activity, interview_questions, exercise — NO quiz_questions inside lessons
 - quiz_questions belong ONLY at the unit (topic) level — each unit MUST have 5–10 MCQ questions covering all lessons in that unit
-- video_url must be a YouTube search URL: "https://www.youtube.com/results?search_query=" + URL-encoded terms specific to that subtopic and role
+- video_url must be a YouTube search URL: "https://www.youtube.com/results?search_query=" + URL-encoded terms. The search terms MUST strictly target the exact lesson topic using a natural, 3-to-6 word search phrase (e.g., "Excel Requirements Analysis tutorial"). Do NOT use complex academic phrases or negative keywords.
 - duration_mins: total estimated time for video + reading (15–45 mins)
 - quiz_questions: exactly 4 options per question, correct_index (0–3), and explanation
-- exercise: one hands-on exercise per subtopic with 3–5 concrete tasks and starter_code
+- exercise: one hands-on exercise per subtopic with 3–5 concrete tasks. Include starter_code ONLY if the topic involves programming or technical coding; otherwise, leave it as an empty string.
 - explanation must be rich markdown — use ## subheadings, bullet lists, and \`\`\`language code blocks\`\`\`
 - Level appropriateness: ${level} — calibrate depth and complexity accordingly
 - Avoid generic filler — every subtopic must teach something directly employable for ${roleFocus}`;
@@ -351,7 +351,7 @@ async function searchYouTubeVideo(query) {
     return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
   }
   try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=1&key=${apiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoDuration=medium&order=relevance&maxResults=1&key=${apiKey}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.items?.length) {
@@ -361,6 +361,33 @@ async function searchYouTubeVideo(query) {
     console.warn('YouTube API search failed, falling back to search URL:', err.message);
   }
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+}
+
+/**
+ * Search YouTube Data API v3 and return multiple results for user selection.
+ */
+async function searchYouTubeVideos(query, maxResults = 3) {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    return [];
+  }
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoDuration=medium&order=relevance&maxResults=${maxResults}&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.items?.length) {
+      return data.items.map((item) => ({
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+        thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+        channel: item.snippet.channelTitle,
+        url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      }));
+    }
+  } catch (err) {
+    console.warn('YouTube API multi-search failed:', err.message);
+  }
+  return [];
 }
 
 /**
@@ -377,9 +404,34 @@ async function generateLessonContent({
   lessonTitle,
 }) {
   if (type === 'video') {
-    const searchQuery = `${lessonTitle} ${unitTitle} ${roleFocus} tutorial`;
+    const prompt = `You are an expert at finding educational YouTube videos.
+We need to find a video for a lesson.
+Course: ${courseTitle}
+Topic: ${topicTitle}
+Unit: ${unitTitle}
+Lesson: ${lessonTitle}
+Role: ${roleFocus}
+
+Generate a natural, highly effective YouTube search query (3 to 6 words maximum) that will return a relevant tutorial video specifically for the lesson "${lessonTitle}" in the context of "${topicTitle}". 
+DO NOT use the exact academic lesson title if it's too long or complex. Instead, extract the core tool and concept (e.g., instead of "Leveraging Spreadsheets for Requirements Analysis", output "Excel Requirements Analysis tutorial").
+Do NOT use negative keywords or operators, just provide a clean, simple search phrase that a real human would type into YouTube to learn this specific skill.
+
+Return ONLY a valid JSON object:
+{ "search_query": "the best youtube search string" }`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      response_format: { type: 'json_object' }
+    });
+    
+    const parsed = JSON.parse(response.choices[0].message.content);
+    const searchQuery = parsed.search_query;
+    
     const video_url = await searchYouTubeVideo(searchQuery);
-    return { video_url };
+    const video_results = await searchYouTubeVideos(searchQuery);
+    return { video_url, video_results };
   }
 
   const context = `Course: ${courseTitle}\nTopic: ${topicTitle}\nUnit: ${unitTitle}\nSubtopic: ${lessonTitle}\nRole: ${roleFocus}\nLevel: ${level}`;
@@ -415,13 +467,14 @@ Return ONLY a valid JSON object:
     "title": "Exercise title",
     "description": "What the learner must build or do",
     "tasks": ["Step 1", "Step 2", "Step 3"],
-    "starter_code": "// starter code or HTML scaffold"
+    "starter_code": "// starter code, HTML scaffold, or empty string if non-technical"
   }
 }
 
 Rules:
 - Must be practical and directly related to ${roleFocus} work
-- 3–5 concrete, actionable task steps`;
+- 3–5 concrete, actionable task steps
+- Include starter_code ONLY if the topic involves programming or technical coding; otherwise, leave it as an empty string.`;
     maxTokens = 1000;
   } else {
     throw new Error(`Unknown content type: ${type}`);
@@ -547,6 +600,48 @@ Rules:
   return parsed;
 }
 
+async function generateExerciseTests({ instructions, language, roleFocus, level }) {
+  const prompt = `You are an expert software tester and curriculum designer.
+  
+Generate automated test cases for a coding task.
+Task Instructions:
+${instructions}
+
+Programming Language: ${language}
+Target Role: ${roleFocus}
+Complexity Level: ${level}
+
+Return ONLY a valid JSON object:
+{
+  "test_cases": [
+    {
+      "description": "Clear description of what this test verifies",
+      "test_code": "The grading code using the required syntax below",
+      "is_hidden": false
+    }
+  ]
+}
+
+Syntax Rules:
+1. Use \`__test(description, () => { ... })\` for the test block.
+2. Use \`__expect(actual).toBe(expected)\` for assertions.
+3. For JavaScript: The student's code is available in the scope. You can call their functions directly.
+4. For Python: Use similar \`__test\` and \`__expect\` wrappers.
+5. Generate 2-4 comprehensive test cases covering edge cases and main functionality.
+6. Return only the JSON, no markdown wrappers.`;
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.6,
+    max_tokens: 1500,
+    response_format: { type: 'json_object' },
+  });
+
+  const parsed = JSON.parse(response.choices[0].message.content);
+  return parsed.test_cases || [];
+}
+
 module.exports = {
   generateCurriculum,
   regenerateLesson,
@@ -557,4 +652,5 @@ module.exports = {
   generateLessonContent,
   generateUnitQuiz,
   generateUnitAssignment,
+  generateExerciseTests,
 };
