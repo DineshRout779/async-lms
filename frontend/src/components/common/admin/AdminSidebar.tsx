@@ -48,6 +48,15 @@ export default function AdminSidebar({
   isOpen: boolean;
   toggle: () => void;
 }) {
+  const currentUser = useAppSelector(selectUser);
+
+  const initials = currentUser?.full_name
+    ?.split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'A';
+
   return (
     <aside
       className={cn(
@@ -110,15 +119,15 @@ export default function AdminSidebar({
           className={cn('flex items-center gap-3', !isOpen && 'justify-center')}
         >
           <div className='w-10 h-10 rounded-full bg-[#3b82f6] flex items-center justify-center text-white font-bold shrink-0'>
-            AU
+            {initials}
           </div>
           {isOpen && (
             <div className='min-w-0'>
               <p className='text-sm font-bold text-white truncate'>
-                Admin User
+                {currentUser?.full_name || 'Admin'}
               </p>
               <p className='text-[11px] text-yellow-400 font-medium truncate leading-tight'>
-                Prog. Manager
+                {currentUser?.email}
               </p>
             </div>
           )}
