@@ -140,10 +140,22 @@ exports.manageAssignments = async (req, res) => {
         SELECT ca.id, ca.title, ca.description, ca.due_date, ca.course, ca.created_at, ca.updated_at,
                ca.instruction_file_url, ca.instruction_file_name,
                ca.college_id, c.name AS college_name,
-               u.full_name AS created_by_name
+               u.full_name AS created_by_name,
+               (
+                 SELECT COUNT(*)::int 
+                 FROM college_assignment_submissions cas 
+                 WHERE cas.assignment_id = ca.id
+               ) as submissions_count,
+               (
+                 SELECT COUNT(*)::int 
+                 FROM student_profiles sp 
+                 WHERE sp.college_id = ca.college_id
+               ) as submissions_total,
+               e.status as evaluation_status
         FROM college_assignments ca
         LEFT JOIN colleges c ON c.id = ca.college_id
         LEFT JOIN users u ON u.id = ca.created_by
+        LEFT JOIN evaluations e ON e.assignment_id = ca.id
         ORDER BY c.name ASC, ca.due_date ASC NULLS LAST`;
       values = [];
     } else {
@@ -152,10 +164,22 @@ exports.manageAssignments = async (req, res) => {
         SELECT ca.id, ca.title, ca.description, ca.due_date, ca.course, ca.created_at, ca.updated_at,
                ca.instruction_file_url, ca.instruction_file_name,
                ca.college_id, c.name AS college_name,
-               u.full_name AS created_by_name
+               u.full_name AS created_by_name,
+               (
+                 SELECT COUNT(*)::int 
+                 FROM college_assignment_submissions cas 
+                 WHERE cas.assignment_id = ca.id
+               ) as submissions_count,
+               (
+                 SELECT COUNT(*)::int 
+                 FROM student_profiles sp 
+                 WHERE sp.college_id = ca.college_id
+               ) as submissions_total,
+               e.status as evaluation_status
         FROM college_assignments ca
         LEFT JOIN colleges c ON c.id = ca.college_id
         LEFT JOIN users u ON u.id = ca.created_by
+        LEFT JOIN evaluations e ON e.assignment_id = ca.id
         WHERE ca.created_by = $1
         ORDER BY c.name ASC, ca.due_date ASC NULLS LAST`;
       values = [req.user.id];
