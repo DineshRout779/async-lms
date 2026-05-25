@@ -2637,34 +2637,37 @@ exports.setLockControlTopic = async (req, res) => {
       [collegeParam, batchParam, topicId, isUnlocked],
     );
 
-    // 2. Record admin intent so future enrollees inherit it correctly
-    await pool.query(
-      `INSERT INTO cohort_admin_locks (subtopic_id, college_id, year, is_locked)
-      SELECT st.id, sp.college_id, sp.year, $4
-      FROM subtopics st
-      INNER JOIN units u ON st.unit_id = u.id
-      CROSS JOIN (
-        SELECT DISTINCT sp2.college_id, sp2.year
-        FROM student_profiles sp2
-        WHERE ($1::uuid IS NULL OR sp2.college_id = $1)
-          AND ($2::int IS NULL OR sp2.year = $2)
-      ) sp
-      WHERE u.topic_id = $3
-      ON CONFLICT (subtopic_id, college_id, year)
-      DO UPDATE SET is_locked = EXCLUDED.is_locked, updated_at = NOW()`,
-      [collegeParam, batchParam, topicId, isLocked],
-    );
+    // 2. Record admin intent so future enrollees inherit it (best-effort)
+    try {
+      await pool.query(
+        `INSERT INTO cohort_admin_locks (subtopic_id, college_id, year, is_locked)
+        SELECT st.id, sp.college_id, sp.year, $4
+        FROM subtopics st
+        INNER JOIN units u ON st.unit_id = u.id
+        CROSS JOIN (
+          SELECT DISTINCT sp2.college_id, sp2.year
+          FROM student_profiles sp2
+          WHERE ($1::uuid IS NULL OR sp2.college_id = $1)
+            AND ($2::int IS NULL OR sp2.year = $2)
+        ) sp
+        WHERE u.topic_id = $3
+        ON CONFLICT (subtopic_id, college_id, year)
+        DO UPDATE SET is_locked = EXCLUDED.is_locked, updated_at = NOW()`,
+        [collegeParam, batchParam, topicId, isLocked],
+      );
+    } catch (intentErr) {
+      console.warn('cohort_admin_locks upsert skipped:', intentErr.message);
+    }
 
     res.json({
       success: true,
       message: `Topic ${action}ed successfully`,
     });
   } catch (error) {
-    console.error('Error updating topic lock:', error);
+    console.error('Error updating topic lock:', error.message, error.stack);
     res.status(500).json({
       success: false,
-      message: 'Failed to update topic lock',
-      error: error.message,
+      message: error.message || 'Failed to update topic lock',
     });
   }
 };
@@ -2708,31 +2711,34 @@ exports.setLockControlSubtopic = async (req, res) => {
       [collegeParam, batchParam, subtopicId, isUnlocked],
     );
 
-    // 2. Record admin intent so future enrollees inherit it correctly
-    await pool.query(
-      `INSERT INTO cohort_admin_locks (subtopic_id, college_id, year, is_locked)
-      SELECT $3, sp.college_id, sp.year, $4
-      FROM (
-        SELECT DISTINCT sp2.college_id, sp2.year
-        FROM student_profiles sp2
-        WHERE ($1::uuid IS NULL OR sp2.college_id = $1)
-          AND ($2::int IS NULL OR sp2.year = $2)
-      ) sp
-      ON CONFLICT (subtopic_id, college_id, year)
-      DO UPDATE SET is_locked = EXCLUDED.is_locked, updated_at = NOW()`,
-      [collegeParam, batchParam, subtopicId, isLocked],
-    );
+    // 2. Record admin intent so future enrollees inherit it (best-effort)
+    try {
+      await pool.query(
+        `INSERT INTO cohort_admin_locks (subtopic_id, college_id, year, is_locked)
+        SELECT $3, sp.college_id, sp.year, $4
+        FROM (
+          SELECT DISTINCT sp2.college_id, sp2.year
+          FROM student_profiles sp2
+          WHERE ($1::uuid IS NULL OR sp2.college_id = $1)
+            AND ($2::int IS NULL OR sp2.year = $2)
+        ) sp
+        ON CONFLICT (subtopic_id, college_id, year)
+        DO UPDATE SET is_locked = EXCLUDED.is_locked, updated_at = NOW()`,
+        [collegeParam, batchParam, subtopicId, isLocked],
+      );
+    } catch (intentErr) {
+      console.warn('cohort_admin_locks upsert skipped:', intentErr.message);
+    }
 
     res.json({
       success: true,
       message: `Subtopic ${action}ed successfully`,
     });
   } catch (error) {
-    console.error('Error updating subtopic lock:', error);
+    console.error('Error updating subtopic lock:', error.message, error.stack);
     res.status(500).json({
       success: false,
-      message: 'Failed to update subtopic lock',
-      error: error.message,
+      message: error.message || 'Failed to update subtopic lock',
     });
   }
 };
@@ -3060,6 +3066,53 @@ exports.getStudentProfile = async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching student profile:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.getFacilitatorProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [userRes, collegesRes, subjectsRes] = await Promise.all([
+      pool.query(
+        `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at
+         FROM users u
+         WHERE u.id = $1 AND u.role = 'facilitator'`,
+        [id],
+      ),
+      pool.query(
+        `SELECT c.id, c.name, c.short_code
+         FROM facilitator_colleges fc
+         JOIN colleges c ON fc.college_id = c.id
+         WHERE fc.facilitator_id = $1
+         ORDER BY c.name`,
+        [id],
+      ),
+      pool.query(
+        `SELECT DISTINCT s.id, s.name
+         FROM facilitator_subjects fs
+         JOIN subjects s ON fs.subject_id = s.id
+         WHERE fs.facilitator_id = $1
+         ORDER BY s.name`,
+        [id],
+      ),
+    ]);
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Facilitator not found' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...userRes.rows[0],
+        colleges: collegesRes.rows,
+        subjects: subjectsRes.rows,
+      },
+    });
+  } catch (err) {
+    console.error('Error fetching facilitator profile:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };

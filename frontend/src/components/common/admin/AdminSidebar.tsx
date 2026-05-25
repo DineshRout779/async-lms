@@ -11,8 +11,10 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { NavLink } from 'react-router'; // Switched to NavLink
+import { NavLink } from 'react-router';
 import Logo from '../Logo';
+import { useAppSelector } from '@/app/hooks';
+import { selectUser } from '@/features/auth/authSelectors';
 
 const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/admin' },
@@ -26,12 +28,16 @@ const menuItems = [
   { name: 'Lock Control', icon: Lock, path: '/dashboard/admin/lock-control' },
   { name: 'Users', icon: Users, path: '/dashboard/admin/users' },
   {
-    name: 'Assignment Management',
+    name: 'Assignments',
     icon: ClipboardCheck,
     path: '/dashboard/admin/assignment-management',
   },
 
-  { name: 'AI Curriculum', icon: Sparkles, path: '/dashboard/admin/ai-curriculum' },
+  {
+    name: 'AI Curriculum',
+    icon: Sparkles,
+    path: '/dashboard/admin/ai-curriculum',
+  },
   { name: 'Analytics', icon: BarChart3, path: '/dashboard/admin/analytics' },
   { name: 'Settings', icon: Settings, path: '/dashboard/admin/settings' },
 ];

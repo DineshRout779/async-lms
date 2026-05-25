@@ -9,8 +9,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useAppDispatch } from '@/app/hooks';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { logout } from '@/features/auth/authSlice';
+import { selectUser } from '@/features/auth/authSelectors';
 import { useLocation, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 
@@ -20,6 +21,7 @@ export default function AdminHeader({
   toggleSidebar: () => void;
 }) {
   const dispatch = useAppDispatch();
+  const currentUser = useAppSelector(selectUser);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const title =
@@ -80,15 +82,18 @@ export default function AdminHeader({
               <DropdownMenuLabel className='font-normal'>
                 <div className='flex flex-col space-y-1'>
                   <p className='text-sm font-medium leading-none text-[#1e2653]'>
-                    Admin User
+                    {currentUser?.full_name || 'Admin'}
                   </p>
                   <p className='text-xs leading-none text-muted-foreground'>
-                    admin@codeguru.com
+                    {currentUser?.email}
                   </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className='cursor-pointer gap-2'>
+              <DropdownMenuItem
+                className='cursor-pointer gap-2'
+                onClick={() => navigate('/dashboard/admin/profile')}
+              >
                 <Settings size={16} /> Account Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />

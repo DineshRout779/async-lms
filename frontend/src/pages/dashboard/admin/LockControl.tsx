@@ -484,27 +484,23 @@ const LockControl = () => {
                             style={{ width: `${progress}%` }}
                           />
                         </div>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          className={
-                            fullyUnlocked
-                              ? 'border-red-200 text-red-600 hover:bg-red-50'
-                              : 'border-[#333D7C]/30 text-[#333D7C] hover:bg-[#333D7C]/5'
-                          }
+                        <button
                           disabled={topicLoading}
-                          onClick={() =>
-                            handleTopicToggle(topic.id, !fullyUnlocked)
-                          }
+                          onClick={() => handleTopicToggle(topic.id, !fullyUnlocked)}
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none ${
+                            fullyUnlocked
+                              ? 'border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300'
+                              : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300'
+                          }`}
                         >
                           {topicLoading ? (
-                            <Loader2 className='w-4 h-4 animate-spin' />
+                            <Loader2 className='w-3.5 h-3.5 animate-spin' />
                           ) : fullyUnlocked ? (
                             'Lock Unit'
                           ) : (
                             'Unlock Unit'
                           )}
-                        </Button>
+                        </button>
                       </div>
                     </div>
                   </div>
