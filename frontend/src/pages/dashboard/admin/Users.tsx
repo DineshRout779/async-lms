@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Eye, Search, Loader2 } from 'lucide-react';
+import { Pencil, Eye, Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
+import FacilitatorProfileDialog from '@/components/common/FacilitatorProfileDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -80,9 +81,13 @@ const Users = () => {
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<ActiveTab>('student');
+  const [selectedCollegeId, setSelectedCollegeId] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 15;
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [facilitatorProfileId, setFacilitatorProfileId] = useState<string | null>(null);
   const [form, setForm] = useState<EditForm>({
     full_name: '',
     degree: '',
@@ -116,12 +121,24 @@ const Users = () => {
     const q = searchQuery.trim().toLowerCase();
     return users
       .filter((u) => u.role === activeTab)
+      .filter((u) => {
+        if (!selectedCollegeId) return true;
+        if (u.role === 'student') return u.college_id === selectedCollegeId;
+        return u.facilitator_college_ids?.includes(selectedCollegeId) ?? false;
+      })
       .filter(
         (u) =>
           u.full_name.toLowerCase().includes(q) ||
           u.email.toLowerCase().includes(q),
       );
-  }, [users, activeTab, searchQuery]);
+  }, [users, activeTab, searchQuery, selectedCollegeId]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+
+  const paginatedUsers = useMemo(
+    () => filteredUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredUsers, currentPage],
+  );
 
   const studentCount = useMemo(
     () => users.filter((u) => u.role === 'student').length,
@@ -260,16 +277,34 @@ const Users = () => {
   return (
     <div className='space-y-6 p-6 animate-in fade-in duration-500'>
       <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
-        <div className='relative w-full md:w-96'>
-          <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400' />
-          <Input
-            placeholder='Search by name or email...'
-            className='border-slate-200 bg-white pl-10'
-            value={searchQuery}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setSearchQuery(e.target.value)
-            }
-          />
+        <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+          <div className='relative w-full md:w-80'>
+            <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400' />
+            <Input
+              placeholder='Search by name or email...'
+              className='border-slate-200 bg-white pl-10'
+              value={searchQuery}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+          <select
+            className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 w-full sm:w-52'
+            value={selectedCollegeId}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              setSelectedCollegeId(e.target.value);
+              setCurrentPage(1);
+            }}
+          >
+            <option value=''>All Colleges</option>
+            {colleges.map((college) => (
+              <option key={college.id} value={college.id}>
+                {college.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <p className='text-sm font-medium text-slate-500'>
@@ -280,7 +315,11 @@ const Users = () => {
 
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as ActiveTab)}
+        onValueChange={(value) => {
+          setActiveTab(value as ActiveTab);
+          setSelectedCollegeId('');
+          setCurrentPage(1);
+        }}
       >
         <TabsList className='bg-slate-100'>
           <TabsTrigger value='student'>Students ({studentCount})</TabsTrigger>
@@ -308,7 +347,7 @@ const Users = () => {
                 </TableRow>
               </TableHeader>
               <TableBody className='bg-white'>
-                {filteredUsers.map((user) => (
+                {paginatedUsers.map((user) => (
                   <TableRow key={user.id} className='hover:bg-slate-50/60'>
                     <TableCell>
                       <p className='font-bold text-slate-900'>
@@ -389,6 +428,55 @@ const Users = () => {
                 No students found.
               </div>
             )}
+            {totalPages > 1 && (
+              <div className='flex items-center justify-between border-t border-slate-100 px-4 py-3'>
+                <p className='text-xs text-slate-500'>
+                  Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total
+                </p>
+                <div className='flex items-center gap-1'>
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='h-8 w-8'
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className='h-4 w-4' />
+                  </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('...');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      p === '...' ? (
+                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-sm'>…</span>
+                      ) : (
+                        <Button
+                          key={p}
+                          variant={currentPage === p ? 'default' : 'outline'}
+                          size='icon'
+                          className='h-8 w-8 text-xs'
+                          onClick={() => setCurrentPage(p as number)}
+                        >
+                          {p}
+                        </Button>
+                      )
+                    )}
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='h-8 w-8'
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                  >
+                    <ChevronRight className='h-4 w-4' />
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </TabsContent>
 
@@ -411,7 +499,7 @@ const Users = () => {
                 </TableRow>
               </TableHeader>
               <TableBody className='bg-white'>
-                {filteredUsers.map((user) => (
+                {paginatedUsers.map((user) => (
                   <TableRow key={user.id} className='hover:bg-slate-50/60'>
                     <TableCell>
                       <p className='font-bold text-slate-900'>
@@ -473,6 +561,14 @@ const Users = () => {
                         variant='ghost'
                         size='icon'
                         className='text-slate-500 hover:text-blue-600'
+                        onClick={() => setFacilitatorProfileId(user.id)}
+                      >
+                        <Eye className='h-4 w-4' />
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        className='text-slate-500 hover:text-blue-600'
                         onClick={() => openEditModal(user)}
                       >
                         <Pencil className='h-4 w-4' />
@@ -486,6 +582,55 @@ const Users = () => {
             {filteredUsers.length === 0 && (
               <div className='p-16 text-center text-slate-400'>
                 No facilitators found.
+              </div>
+            )}
+            {totalPages > 1 && (
+              <div className='flex items-center justify-between border-t border-slate-100 px-4 py-3'>
+                <p className='text-xs text-slate-500'>
+                  Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total
+                </p>
+                <div className='flex items-center gap-1'>
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='h-8 w-8'
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className='h-4 w-4' />
+                  </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('...');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      p === '...' ? (
+                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-sm'>…</span>
+                      ) : (
+                        <Button
+                          key={p}
+                          variant={currentPage === p ? 'default' : 'outline'}
+                          size='icon'
+                          className='h-8 w-8 text-xs'
+                          onClick={() => setCurrentPage(p as number)}
+                        >
+                          {p}
+                        </Button>
+                      )
+                    )}
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='h-8 w-8'
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                  >
+                    <ChevronRight className='h-4 w-4' />
+                  </Button>
+                </div>
               </div>
             )}
           </Card>
@@ -627,6 +772,11 @@ const Users = () => {
         studentId={profileId}
         apiPrefix='admin'
         onClose={() => setProfileId(null)}
+      />
+
+      <FacilitatorProfileDialog
+        facilitatorId={facilitatorProfileId}
+        onClose={() => setFacilitatorProfileId(null)}
       />
     </div>
   );
