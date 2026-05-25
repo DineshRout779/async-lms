@@ -69,19 +69,34 @@ export default function AssignmentManagement() {
     apiClient
       .get<{ success: boolean; data: any[] }>('/college-assignments/manage')
       .then((res) => {
-        const mapped = res.data.data.map((item) => ({
-          id: item.id,
-          name: item.title,
-          course: item.course || 'N/A',
-          college: item.college_name,
-          collegeId: item.college_id,
-          batch: item.batch || 'N/A',
-          submissionsCount: 0,
-          submissionsTotal: 0,
-          dueDate: item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Due Date',
-          rawDueDate: item.due_date ? item.due_date.split('T')[0] : '',
-          status: (item.due_date && new Date(item.due_date) < new Date() ? 'Overdue' : 'Active') as Assignment['status'],
-        }));
+        const mapped = res.data.data.map((item) => {
+          const subsCount = parseInt(item.submissions_count) || 0;
+          const subsTotal = parseInt(item.submissions_total) || 0;
+          const isOverdue = item.due_date && new Date(item.due_date) < new Date();
+          
+          let status: Assignment['status'] = 'Active';
+          if (item.evaluation_status === 'completed') {
+            status = 'Completed';
+          } else if (subsCount > 0) {
+            status = 'Submitted';
+          } else if (isOverdue) {
+            status = 'Overdue';
+          }
+
+          return {
+            id: item.id,
+            name: item.title,
+            course: item.course || 'N/A',
+            college: item.college_name,
+            collegeId: item.college_id,
+            batch: item.batch || 'N/A',
+            submissionsCount: subsCount,
+            submissionsTotal: subsTotal,
+            dueDate: item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Due Date',
+            rawDueDate: item.due_date ? item.due_date.split('T')[0] : '',
+            status,
+          };
+        });
         setAssignments(mapped);
       })
       .catch(() => {
