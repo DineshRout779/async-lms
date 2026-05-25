@@ -121,10 +121,10 @@ export default function AssignmentManagement() {
   const handleRunEvaluation = async (assignment: Assignment) => {
     try {
       setRunningEvalId(assignment.id);
-      const res = await apiClient.post<{ success: boolean; evaluationId: string }>(
-        '/evaluations/run',
-        { assignmentId: assignment.id },
-      );
+      const res = await apiClient.post<{
+        success: boolean;
+        evaluationId: string;
+      }>('/evaluations/run', { assignmentId: assignment.id });
       toast.success('Evaluation started');
       navigate(`${basePath}/results/${res.data.evaluationId}`);
     } catch (err) {
@@ -136,9 +136,10 @@ export default function AssignmentManagement() {
 
   const handleViewResults = async (assignment: Assignment) => {
     try {
-      const res = await apiClient.get<{ success: boolean; evaluationId: string }>(
-        `/evaluations/by-assignment/${assignment.id}`,
-      );
+      const res = await apiClient.get<{
+        success: boolean;
+        evaluationId: string;
+      }>(`/evaluations/by-assignment/${assignment.id}`);
       navigate(`${basePath}/results/${res.data.evaluationId}`);
     } catch {
       toast.error('No evaluation has been run for this assignment yet');
@@ -151,7 +152,11 @@ export default function AssignmentManagement() {
       setDeleting(true);
       await apiClient.delete(`/college-assignments/${deleteTarget.id}`);
       setAssignments((prev) => prev.filter((a) => a.id !== deleteTarget.id));
-      setSelectedIds((prev) => { const next = new Set(prev); next.delete(deleteTarget.id); return next; });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTarget.id);
+        return next;
+      });
       toast.success('Assignment deleted');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete assignment'));
@@ -165,10 +170,14 @@ export default function AssignmentManagement() {
     try {
       setDeleting(true);
       await Promise.all(
-        [...selectedIds].map((id) => apiClient.delete(`/college-assignments/${id}`)),
+        [...selectedIds].map((id) =>
+          apiClient.delete(`/college-assignments/${id}`),
+        ),
       );
       setAssignments((prev) => prev.filter((a) => !selectedIds.has(a.id)));
-      toast.success(`${selectedIds.size} assignment${selectedIds.size > 1 ? 's' : ''} deleted`);
+      toast.success(
+        `${selectedIds.size} assignment${selectedIds.size > 1 ? 's' : ''} deleted`,
+      );
       setSelectedIds(new Set());
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete assignments'));
@@ -186,7 +195,8 @@ export default function AssignmentManagement() {
         const mapped = res.data.data.map((item) => {
           const subsCount = parseInt(item.submissions_count) || 0;
           const subsTotal = parseInt(item.submissions_total) || 0;
-          const isOverdue = item.due_date && new Date(item.due_date) < new Date();
+          const isOverdue =
+            item.due_date && new Date(item.due_date) < new Date();
 
           let status: Assignment['status'] = 'Active';
           if (item.evaluation_status === 'completed') {
@@ -206,7 +216,9 @@ export default function AssignmentManagement() {
             batch: item.batch || 'N/A',
             submissionsCount: subsCount,
             submissionsTotal: subsTotal,
-            dueDate: item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Due Date',
+            dueDate: item.due_date
+              ? new Date(item.due_date).toLocaleDateString()
+              : 'No Due Date',
             rawDueDate: item.due_date ? item.due_date.split('T')[0] : '',
             status,
           };
@@ -349,7 +361,8 @@ export default function AssignmentManagement() {
       {selectedIds.size > 0 && (
         <div className='flex items-center justify-between rounded-lg bg-blue-50 border border-blue-200 px-4 py-2.5'>
           <span className='text-sm font-medium text-blue-800'>
-            {selectedIds.size} assignment{selectedIds.size > 1 ? 's' : ''} selected
+            {selectedIds.size} assignment{selectedIds.size > 1 ? 's' : ''}{' '}
+            selected
           </span>
           <div className='flex items-center gap-2'>
             <Button
@@ -400,7 +413,11 @@ export default function AssignmentManagement() {
                 <TableHead className='w-10 pl-4'>
                   <Checkbox
                     checked={allFilteredSelected}
-                    data-state={someFilteredSelected && !allFilteredSelected ? 'indeterminate' : undefined}
+                    data-state={
+                      someFilteredSelected && !allFilteredSelected
+                        ? 'indeterminate'
+                        : undefined
+                    }
                     onCheckedChange={toggleSelectAll}
                     disabled={filtered.length === 0}
                   />
@@ -512,9 +529,11 @@ export default function AssignmentManagement() {
                               disabled={runningEvalId === assignment.id}
                               onClick={() => handleRunEvaluation(assignment)}
                             >
-                              {runningEvalId === assignment.id
-                                ? <Loader2 className='w-3.5 h-3.5 animate-spin' />
-                                : <Play className='w-3.5 h-3.5' />}
+                              {runningEvalId === assignment.id ? (
+                                <Loader2 className='w-3.5 h-3.5 animate-spin' />
+                              ) : (
+                                <Play className='w-3.5 h-3.5' />
+                              )}
                               Run Evaluation
                             </button>
                             <button
@@ -561,12 +580,20 @@ export default function AssignmentManagement() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => !open && setBulkDeleteOpen(false)}>
+      <AlertDialog
+        open={bulkDeleteOpen}
+        onOpenChange={(open) => !open && setBulkDeleteOpen(false)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedIds.size} Assignment{selectedIds.size > 1 ? 's' : ''}</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete {selectedIds.size} Assignment
+              {selectedIds.size > 1 ? 's' : ''}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {selectedIds.size} selected assignment{selectedIds.size > 1 ? 's' : ''} and all their submissions. This action cannot be undone.
+              This will permanently delete {selectedIds.size} selected
+              assignment{selectedIds.size > 1 ? 's' : ''} and all their
+              submissions. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -576,7 +603,14 @@ export default function AssignmentManagement() {
               disabled={deleting}
               onClick={handleBulkDelete}
             >
-              {deleting ? <><Loader2 className='mr-2 h-4 w-4 animate-spin' />Deleting...</> : `Delete ${selectedIds.size}`}
+              {deleting ? (
+                <>
+                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                  Deleting...
+                </>
+              ) : (
+                `Delete ${selectedIds.size}`
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

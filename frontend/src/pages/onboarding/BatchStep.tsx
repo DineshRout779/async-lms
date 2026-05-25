@@ -35,12 +35,12 @@ export default function BatchStep() {
   };
 
   return (
-    <div 
+    <div
       className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
       style={{ fontFamily: "'Noto Sans', sans-serif" }}
     >
       <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
-        
+
         <div className="flex-1">
           <Stepper current='batch' />
 
@@ -62,7 +62,9 @@ export default function BatchStep() {
                   <SelectItem value='B.Tech'>B.Tech</SelectItem>
                   <SelectItem value='BCA'>BCA</SelectItem>
                   <SelectItem value='M.Tech'>M.Tech</SelectItem>
-                  <SelectItem value='MCA'>MCA</SelectItem>
+                  <SelectItem value='BSC'>BSC</SelectItem>
+                  <SelectItem value='BCOM'>BCOM</SelectItem>
+                  <SelectItem value='BA'>BA</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -76,10 +78,10 @@ export default function BatchStep() {
                   <SelectValue placeholder='Select Year' />
                 </SelectTrigger>
                 <SelectContent className='w-full'>
-                  <SelectItem value='1'>2024-2025 (1st Year)</SelectItem>
-                  <SelectItem value='2'>2023-2024 (2nd Year)</SelectItem>
-                  <SelectItem value='3'>2022-2023 (3rd Year)</SelectItem>
-                  <SelectItem value='4'>2021-2022 (4th Year)</SelectItem>
+                  <SelectItem value='4'>2026-2027 (4th Year)</SelectItem>
+                  <SelectItem value='3'>2025-2026 (3rd Year)</SelectItem>
+                  <SelectItem value='2'>2024-2025 (2nd Year)</SelectItem>
+                  <SelectItem value='1'>2023-2024 (1st Year)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -87,8 +89,8 @@ export default function BatchStep() {
         </div>
 
         <div className="flex justify-between items-center mt-10 pt-4">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={() => navigate(-1)}
             type="button"
             className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg transition-colors"
