@@ -3043,7 +3043,7 @@ exports.getStudentProfile = async (req, res) => {
          FROM user_subjects us
          JOIN subjects s ON us.subject_id = s.id
          WHERE us.user_id = $1
-         ORDER BY us.enrolled_at DESC`,
+         ORDER BY us.started_at DESC`,
         [id],
       ),
     ]);
@@ -3065,8 +3065,8 @@ exports.getStudentProfile = async (req, res) => {
       data: { ...userRes.rows[0], stats: statsRes.rows[0], subjects },
     });
   } catch (err) {
-    console.error('Error fetching student profile:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error fetching student profile:', err.message);
+    res.status(500).json({ message: err.message || 'Server error' });
   }
 };
 
