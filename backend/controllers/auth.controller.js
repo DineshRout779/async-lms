@@ -94,14 +94,15 @@ exports.login = async (req, res) => {
     );
 
     if (!userRes.rowCount) {
-      return res.status(401).json({ message: 'User doesnt exists' });
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     const user = userRes.rows[0];
     const valid = await bcrypt.compare(password, user.password_hash);
+    delete user.password_hash;
 
     if (!valid) {
-      return res.status(401).json({ message: 'Invalid password' });
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Fetch facilitator college scope if applicable
@@ -142,7 +143,7 @@ exports.login = async (req, res) => {
     });
   } catch (error) {
     console.error(`[${logID}] LOGIN ERROR:`, error);
-    res.status(500).json({ message: error.message || 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
