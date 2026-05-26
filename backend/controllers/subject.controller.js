@@ -51,13 +51,12 @@ exports.getAllSubjects = async (req, res) => {
   try {
     // Note: We use order_index to keep your curated order
     const { rows } = await pool.query(`
-      SELECT s.*, 
-             COUNT(DISTINCT u.id)::int as units_count, 
-             COUNT(DISTINCT st.id)::int as topics_count
+      SELECT s.*,
+             COUNT(DISTINCT t.id)::int as topics_count,
+             COUNT(DISTINCT st.id)::int as units_count
       FROM subjects s
       LEFT JOIN topics t ON s.id = t.subject_id
-      LEFT JOIN units u ON t.id = u.topic_id
-      LEFT JOIN subtopics st ON u.id = st.unit_id
+      LEFT JOIN subtopics st ON t.id = st.topic_id
       GROUP BY s.id
       ORDER BY s.order_index ASC
     `);
