@@ -42,18 +42,18 @@ exports.selectCollege = async (req, res) => {
 // 2. Batch Details Step
 exports.updateBatchDetails = async (req, res) => {
   const userId = req.user.id;
-  const { degree, year } = req.body;
+  const { degree, current_academic_year, expected_graduation_year } = req.body;
 
-  if (!degree || !year) {
-    return res.status(400).json({ message: 'degree and year are required' });
+  if (!degree || !current_academic_year || !expected_graduation_year) {
+    return res.status(400).json({ message: 'degree, current_academic_year, and expected_graduation_year are required' });
   }
 
   try {
     await pool.query(
       `UPDATE student_profiles 
-             SET degree = $1, year = $2 
-             WHERE user_id = $3`,
-      [degree, year, userId],
+             SET degree = $1, current_academic_year = $2, expected_graduation_year = $3 
+             WHERE user_id = $4`,
+      [degree, current_academic_year, expected_graduation_year, userId],
     );
 
     await pool.query(

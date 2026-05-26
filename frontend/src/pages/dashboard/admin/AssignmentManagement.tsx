@@ -255,7 +255,7 @@ export default function AssignmentManagement() {
       collegeFilter === 'all' || a.collegeId === collegeFilter;
     const matchesTab =
       activeTab === 'Active'
-        ? a.status === 'Active'
+        ? a.status === 'Active' || a.status === 'Submitted'
         : activeTab === 'Completed'
           ? a.status === 'Overdue' || a.status === 'Completed'
           : a.status === 'Submitted';
