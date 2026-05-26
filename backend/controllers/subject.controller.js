@@ -56,7 +56,8 @@ exports.getAllSubjects = async (req, res) => {
              COUNT(DISTINCT st.id)::int as units_count
       FROM subjects s
       LEFT JOIN topics t ON s.id = t.subject_id
-      LEFT JOIN subtopics st ON t.id = st.topic_id
+      LEFT JOIN units u ON t.id = u.topic_id
+      LEFT JOIN subtopics st ON u.id = st.unit_id
       GROUP BY s.id
       ORDER BY s.order_index ASC
     `);
