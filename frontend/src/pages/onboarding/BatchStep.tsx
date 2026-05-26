@@ -12,18 +12,48 @@ import {
 } from '@/components/ui/select';
 
 export default function BatchStep() {
-  const [year, setYear] = useState<string>('1');
+  const [currentAcademicYear, setCurrentAcademicYear] = useState<string>('1st year');
+  const [expectedGraduationYear, setExpectedGraduationYear] = useState<string>('2027-28');
   const [degree, setDegree] = useState<string>('B.Tech');
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  const getDuration = (deg: string) => {
+    if (['BCA', 'BSC', 'BCOM', 'BA'].includes(deg)) return 3;
+    if (deg === 'M.Tech') return 2;
+    return 4; // B.Tech and default
+  };
+
+  const calculateGradYear = (yearStr: string, deg: string) => {
+    const baseYear = 2024; // Fixed base year or new Date().getFullYear()
+    let currentYearNum = parseInt(yearStr.charAt(0)) || 1;
+    
+    const duration = getDuration(deg);
+    const yearsLeft = Math.max(0, duration - currentYearNum);
+    const gradYearNum = baseYear + yearsLeft; 
+    const nextYearNum = (gradYearNum + 1).toString().slice(2);
+    
+    return `${gradYearNum}-${nextYearNum}`;
+  };
+
+  const handleYearChange = (val: string) => {
+    setCurrentAcademicYear(val);
+    setExpectedGraduationYear(calculateGradYear(val, degree));
+  };
+
+  const handleDegreeChange = (val: string) => {
+    setDegree(val);
+    setExpectedGraduationYear(calculateGradYear(currentAcademicYear, val));
+  };
 
   const handleContinue = async () => {
     try {
       setLoading(true);
       await apiClient.post('/onboarding/batch', {
         degree: degree,
-        year: parseInt(year),
+        current_academic_year: currentAcademicYear,
+        expected_graduation_year: expectedGraduationYear
       });
 
       navigate('/onboarding/program');
@@ -54,7 +84,7 @@ export default function BatchStep() {
               <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
                 Degree Program
               </label>
-              <Select value={degree} onValueChange={setDegree}>
+              <Select value={degree} onValueChange={handleDegreeChange}>
                 <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                   <SelectValue placeholder='Select Degree' />
                 </SelectTrigger>
@@ -71,17 +101,40 @@ export default function BatchStep() {
 
             <div className='w-full'>
               <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
-                Academic year
+                Batch (Academic Year)
               </label>
-              <Select value={year} onValueChange={setYear}>
+              <Select value={currentAcademicYear} onValueChange={handleYearChange}>
                 <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
-                  <SelectValue placeholder='Select Year' />
+                  <SelectValue placeholder='Select Batch' />
                 </SelectTrigger>
                 <SelectContent className='w-full'>
-                  <SelectItem value='4'>2026-2027 (4th Year)</SelectItem>
-                  <SelectItem value='3'>2025-2026 (3rd Year)</SelectItem>
-                  <SelectItem value='2'>2024-2025 (2nd Year)</SelectItem>
-                  <SelectItem value='1'>2023-2024 (1st Year)</SelectItem>
+                  <SelectItem value='1st year'>1st year</SelectItem>
+                  <SelectItem value='2nd year'>2nd year</SelectItem>
+                  <SelectItem value='3rd year'>3rd year</SelectItem>
+                  <SelectItem value='4th year'>4th year</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className='w-full'>
+              <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
+                Expected Graduation Year
+              </label>
+              <Select value={expectedGraduationYear} onValueChange={setExpectedGraduationYear}>
+                <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
+                  <SelectValue placeholder='Select Graduation Year' />
+                </SelectTrigger>
+                <SelectContent className='w-full'>
+                  <SelectItem value='2024-25'>2024-25</SelectItem>
+                  <SelectItem value='2025-26'>2025-26</SelectItem>
+                  <SelectItem value='2026-27'>2026-27</SelectItem>
+                  <SelectItem value='2027-28'>2027-28</SelectItem>
+                  <SelectItem value='2028-29'>2028-29</SelectItem>
+                  <SelectItem value='2029-30'>2029-30</SelectItem>
+                  <SelectItem value='2030-31'>2030-31</SelectItem>
+                  <SelectItem value='2031-32'>2031-32</SelectItem>
+                  <SelectItem value='2032-33'>2032-33</SelectItem>
+                  <SelectItem value='2033-34'>2033-34</SelectItem>
                 </SelectContent>
               </Select>
             </div>
