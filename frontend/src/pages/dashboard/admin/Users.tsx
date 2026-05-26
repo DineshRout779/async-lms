@@ -241,34 +241,43 @@ const Users = () => {
           <Skeleton className='h-9 w-36 rounded-md' />
         </div>
         <Card className='border-none shadow-sm overflow-hidden'>
-          <div className='bg-slate-50/50 px-4 py-3 grid grid-cols-7 gap-4'>
-            {[...Array(7)].map((_, i) => (
-              <Skeleton key={i} className='h-3 w-full' />
-            ))}
-          </div>
-          {[...Array(8)].map((_, i) => (
-            <div
-              key={i}
-              className='px-4 py-4 border-t border-slate-100 grid grid-cols-7 gap-4 items-center'
-            >
-              <div className='space-y-1.5'>
-                <Skeleton className='h-3.5 w-full' />
-                <Skeleton className='h-3 w-3/4' />
-              </div>
-              <div className='space-y-1.5'>
-                <Skeleton className='h-3.5 w-16' />
-                <Skeleton className='h-3 w-full' />
-              </div>
-              <Skeleton className='h-6 w-20 rounded-full' />
-              <Skeleton className='h-4 w-full col-span-2' />
-              <Skeleton className='h-6 w-16 rounded-full' />
-              <Skeleton className='h-6 w-20 rounded-full' />
-              <div className='flex justify-end gap-1'>
-                <Skeleton className='h-8 w-8 rounded' />
-                <Skeleton className='h-8 w-8 rounded' />
-              </div>
-            </div>
-          ))}
+          <Table>
+            <TableHeader className='bg-slate-50/50'>
+              <TableRow>
+                {[...Array(7)].map((_, i) => (
+                  <TableHead key={i}><Skeleton className='h-3 w-20' /></TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody className='bg-white'>
+              {[...Array(8)].map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <div className='space-y-1.5'>
+                      <Skeleton className='h-3.5 w-32' />
+                      <Skeleton className='h-3 w-40' />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className='space-y-1.5'>
+                      <Skeleton className='h-3.5 w-8' />
+                      <Skeleton className='h-3 w-36' />
+                    </div>
+                  </TableCell>
+                  <TableCell><Skeleton className='h-6 w-20 rounded-full' /></TableCell>
+                  <TableCell><Skeleton className='h-4 w-40' /></TableCell>
+                  <TableCell><Skeleton className='h-6 w-14 rounded-full' /></TableCell>
+                  <TableCell><Skeleton className='h-6 w-16 rounded-full' /></TableCell>
+                  <TableCell>
+                    <div className='flex justify-end gap-1'>
+                      <Skeleton className='h-8 w-8 rounded' />
+                      <Skeleton className='h-8 w-8 rounded' />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </Card>
       </div>
     );
