@@ -38,7 +38,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 ======================= */
 
 type FlattenedItem = {
-  type: 'subtopic' | 'assignment' | 'quiz' | 'exercise';
+  type: 'subtopic' | 'assignment' | 'quiz';
   id: string;
   quiz_id?: string;
   slug?: string;
@@ -73,7 +73,6 @@ const Lesson = () => {
 
   const [isNavigating, setIsNavigating] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
-  const [lastQuizResults, setLastQuizResults] = useState<typeof quizResults>(null);
 
   const loading = status === 'loading';
 
@@ -157,13 +156,6 @@ const Lesson = () => {
       (topic.units || []).forEach((unit) => {
         (unit.subtopics || []).forEach((sub) => {
           flattened.push({ ...sub, type: 'subtopic' });
-          // Exercises are attached to subtopics — include them right after
-          ((sub as any).exercises || []).forEach((ex: any) => {
-            flattened.push({ ...ex, type: 'exercise' });
-          });
-        });
-        (unit.assignments || []).forEach((assignment) => {
-          flattened.push({ ...assignment, type: 'assignment' });
         });
         (unit.quizzes || []).forEach((quiz) => {
           flattened.push({
@@ -171,6 +163,9 @@ const Lesson = () => {
             type: 'quiz',
             title: `Unit Quiz: ${unit.title}`,
           });
+        });
+        (unit.assignments || []).forEach((assignment) => {
+          flattened.push({ ...assignment, type: 'assignment' });
         });
       });
     });
@@ -259,7 +254,6 @@ const Lesson = () => {
       const result = await dispatch(
         submitQuiz({ quizId: quiz.id, answers: quizAnswers }),
       ).unwrap();
-      setLastQuizResults(result); // preserve for retake view
       if (result.attempt.is_passed) {
         toast.success(`Quiz passed! 🎉`);
       } else {
@@ -645,8 +639,8 @@ const Lesson = () => {
                         </div>
                       )}
 
-                      {/* Explanation after submission — persists across retakes */}
-                      {(quizSubmitted || lastQuizResults) && question.explanation && (
+                      {/* Explanation after submission */}
+                      {quizSubmitted && question.explanation && (
                         <div className='rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm'>
                           <p className='font-semibold text-blue-900 mb-1'>
                             Explanation:
