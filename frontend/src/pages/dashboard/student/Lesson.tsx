@@ -6,7 +6,6 @@ import {
   XCircle,
   Award,
   TrendingUp,
-  MonitorPlay,
 } from 'lucide-react';
 import ExerciseEditor from '@/components/common/ExerciseEditor';
 import ReactMarkdown from 'react-markdown';
@@ -33,13 +32,14 @@ import {
 } from '@/features/lesson/lessonSlice';
 import type { Quiz, Topic, SubjectDetailResponse } from '@/utils/types';
 import apiClient from '@/services/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /* =======================
    Types
 ======================= */
 
 type FlattenedItem = {
-  type: 'subtopic' | 'assignment' | 'quiz';
+  type: 'subtopic' | 'assignment' | 'quiz' | 'exercise';
   id: string;
   quiz_id?: string;
   slug?: string;
@@ -74,6 +74,7 @@ const Lesson = () => {
 
   const [isNavigating, setIsNavigating] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [lastQuizResults, setLastQuizResults] = useState<typeof quizResults>(null);
 
   const loading = status === 'loading';
 
@@ -157,6 +158,10 @@ const Lesson = () => {
       (topic.units || []).forEach((unit) => {
         (unit.subtopics || []).forEach((sub) => {
           flattened.push({ ...sub, type: 'subtopic' });
+          // Exercises are attached to subtopics — include them right after
+          ((sub as any).exercises || []).forEach((ex: any) => {
+            flattened.push({ ...ex, type: 'exercise' });
+          });
         });
         (unit.assignments || []).forEach((assignment) => {
           flattened.push({ ...assignment, type: 'assignment' });
@@ -176,6 +181,8 @@ const Lesson = () => {
     const currentIndex = flattened.findIndex((item) => {
       if (subtopicSlug && item.type === 'subtopic')
         return item.slug === subtopicSlug;
+      if (exerciseId && item.type === 'exercise')
+        return item.id === exerciseId;
       if (quizId && item.type === 'quiz')
         return (item.id || item.quiz_id) === quizId;
       return false;
@@ -203,13 +210,11 @@ const Lesson = () => {
 
   const handleCompleteLesson = async () => {
     const lessonId = data?.lesson?.id;
-    setIsCompleting(true);
-
     if (!lessonId) {
-      toast.success('Lesson completed! 🎉');
+      toast.error('No lesson content to complete.');
       return;
     }
-
+    setIsCompleting(true);
     try {
       await dispatch(completeLesson(lessonId)).unwrap();
       toast.success('Lesson completed! +10 points 🎉');
@@ -242,6 +247,7 @@ const Lesson = () => {
   };
 
   const handleSubmitQuiz = async (quiz: Quiz) => {
+    if (submittingQuiz) return; // prevent double-submit
     const unanswered = quiz.questions.filter((q) => !quizAnswers[q.id]);
     if (unanswered.length > 0) {
       toast.error(
@@ -254,14 +260,11 @@ const Lesson = () => {
       const result = await dispatch(
         submitQuiz({ quizId: quiz.id, answers: quizAnswers }),
       ).unwrap();
-      const score = result.attempt.score;
-      const isPassed = result.attempt.is_passed;
-      if (isPassed) {
-        toast.success(`Quiz passed! Score: ${score}/${quiz.max_score} 🎉`);
+      setLastQuizResults(result); // preserve for retake view
+      if (result.attempt.is_passed) {
+        toast.success(`Quiz passed! 🎉`);
       } else {
-        toast.error(
-          `Quiz failed. Score: ${score}/${quiz.max_score}. Try again!`,
-        );
+        toast.error(`Not quite — review the explanations and try again.`);
       }
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit quiz'));
@@ -269,6 +272,7 @@ const Lesson = () => {
   };
 
   const handleRetakeQuiz = () => {
+    if (!window.confirm('Retake the quiz? Your current answers will be cleared.')) return;
     dispatch(resetQuiz());
   };
 
@@ -277,6 +281,7 @@ const Lesson = () => {
   ======================= */
 
   const handleSubmitExercise = async (exerciseId: string) => {
+    if (submittingExercise[exerciseId]) return; // prevent double-submit
     try {
       const result = await dispatch(submitExercise({ exerciseId })).unwrap();
       const score = result?.score ?? null;
@@ -299,8 +304,18 @@ const Lesson = () => {
 
   if (loading) {
     return (
-      <div className='flex h-[60vh] items-center justify-center'>
-        <Loader2 className='h-10 w-10 animate-spin text-indigo-600' />
+      <div className='mx-auto max-w-4xl space-y-8 p-6 md:p-10'>
+        <div className='space-y-3'>
+          <Skeleton className='h-10 w-2/3' />
+          <Skeleton className='h-4 w-1/3' />
+        </div>
+        <Skeleton className='h-64 w-full rounded-3xl' />
+        <div className='space-y-3'>
+          <Skeleton className='h-4 w-full' />
+          <Skeleton className='h-4 w-5/6' />
+          <Skeleton className='h-4 w-4/6' />
+        </div>
+        <Skeleton className='h-12 w-48 rounded-xl' />
       </div>
     );
   }
@@ -386,28 +401,18 @@ const Lesson = () => {
           </div>
 
           <div className='bg-white px-6 py-8'>
-            {lesson.video_url && (
+            {lesson.video_url && !lesson.video_url.includes('results?') && (
               <div className='not-prose mb-6'>
-                {lesson.video_url.includes('results?') ? (
-                  <div className='bg-slate-50 rounded-2xl p-8 text-center border border-slate-200'>
-                    <MonitorPlay className='w-10 h-10 text-slate-400 mx-auto mb-3' />
-                    <p className='text-base font-semibold text-slate-700 mb-3'>AI suggested a YouTube search instead of a direct video.</p>
-                    <a href={lesson.video_url} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-2 px-5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors'>
-                      View Search Results on YouTube
-                    </a>
-                  </div>
-                ) : (
-                  <div className='aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-black'>
-                    <iframe
-                      className='h-full w-full'
-                      src={getEmbedUrl(lesson.video_url)}
-                      title='Lesson video'
-                      allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
-                      referrerPolicy='strict-origin-when-cross-origin'
-                      allowFullScreen
-                    />
-                  </div>
-                )}
+                <div className='aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-black'>
+                  <iframe
+                    className='h-full w-full'
+                    src={getEmbedUrl(lesson.video_url)}
+                    title='Lesson video'
+                    allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+                    referrerPolicy='strict-origin-when-cross-origin'
+                    allowFullScreen
+                  />
+                </div>
               </div>
             )}
 
@@ -479,7 +484,7 @@ const Lesson = () => {
             const isPassed =
               quizSubmitted &&
               quizResults &&
-              quizResults.attempt.score >= quiz.passing_score;
+              (quizResults.attempt.is_passed ?? quizResults.attempt.score >= (quizResults.effective_passing_score ?? quiz.passing_score));
 
             return (
               <Card key={quiz.id} className='p-6'>
@@ -654,8 +659,8 @@ const Lesson = () => {
                         </div>
                       )}
 
-                      {/* Explanation after submission */}
-                      {quizSubmitted && question.explanation && (
+                      {/* Explanation after submission — persists across retakes */}
+                      {(quizSubmitted || lastQuizResults) && question.explanation && (
                         <div className='rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm'>
                           <p className='font-semibold text-blue-900 mb-1'>
                             Explanation:
@@ -705,17 +710,27 @@ const Lesson = () => {
                     >
                       {isPassed ? 'Quiz Passed! 🎉' : 'Not quite — try again!'}
                     </p>
-                    <p className='mt-2 text-4xl font-extrabold text-slate-900'>
-                      {quizResults.attempt.score}
-                      <span className='text-xl font-semibold text-slate-400'>
-                        /{effectiveMax}
-                      </span>
-                    </p>
-                    <p className='mt-1 text-sm text-slate-500'>
-                      Passing score: {quiz.passing_score} pts
-                      {quizResults.points_awarded > 0 &&
-                        ` • +${quizResults.points_awarded} XP earned`}
-                    </p>
+                    {(() => {
+                      const results = quizResults.question_results ?? {};
+                      const correctCount = Object.values(results).filter((r: any) => r.is_correct).length;
+                      const totalCount = quiz.questions.length;
+                      return (
+                        <>
+                          <p className='mt-2 text-4xl font-extrabold text-slate-900'>
+                            {correctCount}
+                            <span className='text-xl font-semibold text-slate-400'>
+                              /{totalCount} correct
+                            </span>
+                          </p>
+                          <p className='mt-1 text-sm text-slate-500'>
+                            {quizResults.attempt.score} pts
+                            {' · '}Passing: {quizResults.effective_passing_score ?? quiz.passing_score} pts
+                            {quizResults.points_awarded > 0 &&
+                              ` • +${quizResults.points_awarded} XP earned`}
+                          </p>
+                        </>
+                      );
+                    })()}
 
                     <div className='mt-6 flex gap-3'>
                       <Button

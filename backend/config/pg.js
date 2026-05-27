@@ -221,6 +221,10 @@ pool.on('error', (err, client) => {
     await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS audience TEXT[] DEFAULT '{}'`);
     await client.query(`ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`);
 
+    // Last accessed tracking for "Continue Learning"
+    await client.query(`ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_subtopic_slug TEXT`);
+    await client.query(`ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ`);
+
     client.release(); // Always release the client back to the pool
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);
