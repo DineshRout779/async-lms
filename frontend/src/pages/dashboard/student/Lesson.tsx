@@ -127,17 +127,15 @@ const Lesson = () => {
      Data Processing
   ======================= */
 
-  const buildNextUrl = (item: { type: 'subtopic' | 'exercise' | 'quiz' | 'assignment'; slug?: string; id?: string } | null, courseSlug: string | undefined): string => {
+  const buildNextUrl = (item: { type: 'subtopic' | 'quiz' | 'assignment'; slug?: string; id?: string } | null, courseSlug: string | undefined): string => {
     if (!item || !courseSlug) return `/dashboard/student/courses/${courseSlug ?? ''}`;
     if (item.type === 'subtopic') return `/dashboard/student/courses/${courseSlug}/lesson/${item.slug}`;
-    if (item.type === 'exercise') return `/dashboard/student/courses/${courseSlug}/exercise/${item.id}`;
     if (item.type === 'assignment') return `/dashboard/student/courses/${courseSlug}/assignment/${item.id}`;
     return `/dashboard/student/courses/${courseSlug}/quiz/${item.id}`;
   };
 
   const nextLabel = (type: string) => {
     if (type === 'subtopic') return 'Lesson';
-    if (type === 'exercise') return 'Exercise';
     if (type === 'assignment') return 'Assignment';
     return 'Quiz';
   };
@@ -146,7 +144,7 @@ const Lesson = () => {
     lessonIndex: number | null;
     totalLessons: number | null;
     nextItem: {
-      type: 'subtopic' | 'exercise' | 'quiz' | 'assignment';
+      type: 'subtopic' | 'quiz' | 'assignment';
       slug?: string;
       id?: string;
     } | null;
@@ -175,8 +173,6 @@ const Lesson = () => {
     const currentIndex = flattened.findIndex((item) => {
       if (subtopicSlug && item.type === 'subtopic')
         return item.slug === subtopicSlug;
-      if (exerciseId && item.type === 'exercise')
-        return item.id === exerciseId;
       if (quizId && item.type === 'quiz')
         return (item.id || item.quiz_id) === quizId;
       return false;
