@@ -423,19 +423,6 @@ const Lesson = () => {
               ) : null}
             </div>
 
-            {!lessonCompleted && (
-              <div className='mt-10 flex justify-center border-t border-slate-100 pt-8'>
-                <Button
-                  onClick={handleCompleteLesson}
-                  loading={isCompleting || isNavigating}
-                  size='lg'
-                  className='bg-emerald-600 px-8 py-6 text-lg font-bold shadow-lg hover:bg-emerald-700 transition-all'
-                >
-                  <CheckCircle2 className='mr-2 h-6 w-6' />
-                  Mark as Read & Next
-                </Button>
-              </div>
-            )}
 
             {lessonCompleted && (
               <div className='not-prose mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center'>
@@ -785,6 +772,21 @@ const Lesson = () => {
             </Tabs>
           )}
         </section>
+      )}
+
+      {/* Mark as Read & Next — shown after exercises (or after content if no exercises) */}
+      {!lessonCompleted && lesson.content_type !== 'quiz' && (
+        <div className='flex justify-center pb-4'>
+          <Button
+            onClick={handleCompleteLesson}
+            loading={isCompleting || isNavigating}
+            size='lg'
+            className='bg-emerald-600 px-8 py-6 text-lg font-bold shadow-lg hover:bg-emerald-700 transition-all'
+          >
+            <CheckCircle2 className='mr-2 h-6 w-6' />
+            Mark as Read & Next
+          </Button>
+        </div>
       )}
 
       <LessonAssistant
