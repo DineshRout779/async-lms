@@ -177,6 +177,8 @@ export interface QuizAttemptResult {
     correct_option_id: string | null;
     correct_option_text: string | null;
   }>;
+  effective_passing_score?: number;
+  actual_max_score?: number;
 }
 
 // Modal Components

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import {
-  Loader2,
   CheckCircle2,
   XCircle,
   Award,
