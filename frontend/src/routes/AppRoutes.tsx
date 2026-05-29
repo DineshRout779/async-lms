@@ -5,133 +5,151 @@ import App from '@/App';
 import PrivateRoute from './PrivateRoute';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 
+// Reload once on chunk load failure (stale CloudFront deployment)
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+): React.LazyExoticComponent<T> {
+  return lazy(() =>
+    factory().catch(() => {
+      if (!sessionStorage.getItem('chunk_reload')) {
+        sessionStorage.setItem('chunk_reload', '1');
+        window.location.reload();
+      }
+      return new Promise(() => {});
+    }),
+  );
+}
+
 // ---------- Lazy Imports ----------
 
 // Public
-const Home = lazy(() => import('@/pages/Home'));
-const Login = lazy(() => import('@/pages/Login'));
-const Signup = lazy(() => import('@/pages/Signup'));
-const CodeEditor = lazy(() => import('@/pages/CodeEditor'));
-const NotFound = lazy(() => import('@/pages/NotFound'));
-const PendingVerification = lazy(() => import('@/pages/PendingVerification'));
-const AuthCallback = lazy(() => import('@/pages/AuthCallback'));
+const Home = lazyWithRetry(() => import('@/pages/Home'));
+const Login = lazyWithRetry(() => import('@/pages/Login'));
+const Signup = lazyWithRetry(() => import('@/pages/Signup'));
+const CodeEditor = lazyWithRetry(() => import('@/pages/CodeEditor'));
+const NotFound = lazyWithRetry(() => import('@/pages/NotFound'));
+const PendingVerification = lazyWithRetry(() => import('@/pages/PendingVerification'));
+const AuthCallback = lazyWithRetry(() => import('@/pages/AuthCallback'));
 
 // Onboarding
-const CollegeStep = lazy(() => import('@/pages/onboarding/CollegeStep'));
-const BatchStep = lazy(() => import('@/pages/onboarding/BatchStep'));
-const ProgramStep = lazy(() => import('@/pages/onboarding/ProgramStep'));
-const FacilitatorOnboarding = lazy(
+const CollegeStep = lazyWithRetry(() => import('@/pages/onboarding/CollegeStep'));
+const BatchStep = lazyWithRetry(() => import('@/pages/onboarding/BatchStep'));
+const ProgramStep = lazyWithRetry(() => import('@/pages/onboarding/ProgramStep'));
+const FacilitatorOnboarding = lazyWithRetry(
   () => import('@/pages/onboarding/FacilitatorOnboarding'),
 );
-const ConfirmStep = lazy(() => import('@/pages/onboarding/ConfirmStep'));
-const SuccessStep = lazy(() => import('@/pages/onboarding/SuccessStep'));
+const ConfirmStep = lazyWithRetry(() => import('@/pages/onboarding/ConfirmStep'));
+const SuccessStep = lazyWithRetry(() => import('@/pages/onboarding/SuccessStep'));
 
 // Student Dashboard
-const StudentDashboardLayout = lazy(
+const StudentDashboardLayout = lazyWithRetry(
   () => import('@/layouts/StudentDashboardLayout'),
 );
-const StudentDashboardHome = lazy(
+const StudentDashboardHome = lazyWithRetry(
   () => import('@/pages/dashboard/student/StudentDashboardHome'),
 );
-const MyCourses = lazy(() => import('@/pages/dashboard/student/MyCourses'));
-const LessonView = lazy(() => import('@/pages/dashboard/student/Lesson'));
-const AssignmentView = lazy(
+const MyCourses = lazyWithRetry(() => import('@/pages/dashboard/student/MyCourses'));
+const LessonView = lazyWithRetry(() => import('@/pages/dashboard/student/Lesson'));
+const AssignmentView = lazyWithRetry(
   () => import('@/pages/dashboard/student/AssignmentView'),
 );
-const CapstoneView = lazy(
+const CapstoneView = lazyWithRetry(
   () => import('@/pages/dashboard/student/CapstoneView'),
 );
-const CourseIntro = lazy(() => import('@/pages/dashboard/student/CourseIntro'));
-const CollegeAssignmentView = lazy(
+const CourseIntro = lazyWithRetry(() => import('@/pages/dashboard/student/CourseIntro'));
+const CollegeAssignmentView = lazyWithRetry(
   () => import('@/pages/dashboard/student/CollegeAssignmentView'),
 );
-const EditorProfile = lazy(() => import('@/pages/playground/EditorProfile'));
-const Assignments = lazy(() => import('@/pages/dashboard/student/Assignments'));
-const Assistant = lazy(() => import('@/pages/dashboard/student/Assistant'));
-const Leaderboard = lazy(() => import('@/pages/dashboard/student/Leaderboard'));
-const StudentProfile = lazy(
+const EditorProfile = lazyWithRetry(() => import('@/pages/playground/EditorProfile'));
+const Assignments = lazyWithRetry(() => import('@/pages/dashboard/student/Assignments'));
+const Assistant = lazyWithRetry(() => import('@/pages/dashboard/student/Assistant'));
+const Leaderboard = lazyWithRetry(() => import('@/pages/dashboard/student/Leaderboard'));
+const StudentProfile = lazyWithRetry(
   () => import('@/pages/dashboard/student/StudentProfile'),
 );
-const StudentSettings = lazy(
+const StudentSettings = lazyWithRetry(
   () => import('@/pages/dashboard/student/StudentSettings'),
 );
-const ResumeBuilder = lazy(
+const ResumeBuilder = lazyWithRetry(
   () => import('@/pages/dashboard/student/ResumeBuilder'),
 );
-const CourseViewLayout = lazy(() => import('@/layouts/CourseLayout'));
+const CourseViewLayout = lazyWithRetry(() => import('@/layouts/CourseLayout'));
 
 // Facilitator Dashboard
-const FacilitatorDashboardLayout = lazy(
+const FacilitatorDashboardLayout = lazyWithRetry(
   () => import('@/layouts/FacilitatorDashboardLayout'),
 );
-const FacilitatorHome = lazy(
+const FacilitatorHome = lazyWithRetry(
   () => import('@/pages/dashboard/facilitator/FacilitatorHome'),
 );
-const FacilitatorStudents = lazy(
+const FacilitatorStudents = lazyWithRetry(
   () => import('@/pages/dashboard/facilitator/FacilitatorUsers'),
 );
-const FacilitatorEvaluations = lazy(
+const FacilitatorEvaluations = lazyWithRetry(
   () => import('@/pages/dashboard/facilitator/FacilitatorEvaluations'),
 );
-const ResultsPage = lazy(
+const ResultsPage = lazyWithRetry(
   () => import('@/pages/dashboard/facilitator/ResultsPage'),
 );
-const FacilitatorAnalytics = lazy(
+const FacilitatorAnalytics = lazyWithRetry(
   () => import('@/pages/dashboard/facilitator/FacilitatorAnalytics'),
 );
-const FacilitatorStudentGrowth = lazy(
+const FacilitatorStudentGrowth = lazyWithRetry(
   () => import('@/pages/dashboard/facilitator/FacilitatorStudentGrowth'),
 );
-const FacilitatorReports = lazy(
+const FacilitatorReports = lazyWithRetry(
   () => import('@/pages/dashboard/facilitator/FacilitatorReports'),
 );
-const FacilitatorSettings = lazy(
+const FacilitatorSettings = lazyWithRetry(
   () => import('@/pages/dashboard/facilitator/FacilitatorSettings'),
 );
 
 // Admin Dashboard
-const AdminDashboardLayout = lazy(
+const AdminDashboardLayout = lazyWithRetry(
   () => import('@/layouts/AdminDashboardLayout'),
 );
-const AdminHome = lazy(() => import('@/pages/dashboard/admin/AdminHome'));
-const AdminColleges = lazy(
+const AdminHome = lazyWithRetry(() => import('@/pages/dashboard/admin/AdminHome'));
+const AdminColleges = lazyWithRetry(
   () => import('@/pages/dashboard/admin/AdminColleges'),
 );
-const AdminCourses = lazy(() => import('@/pages/dashboard/admin/AdminCourses'));
-const LearningFlow = lazy(() => import('@/pages/dashboard/admin/LearningFlow'));
-const LockControl = lazy(() => import('@/pages/dashboard/admin/LockControl'));
-const Students = lazy(() => import('@/pages/dashboard/admin/Users'));
-const Analytics = lazy(() => import('@/pages/dashboard/admin/Analytics'));
-const AdminSettings = lazy(
+const AdminCourses = lazyWithRetry(() => import('@/pages/dashboard/admin/AdminCourses'));
+const LearningFlow = lazyWithRetry(() => import('@/pages/dashboard/admin/LearningFlow'));
+const LockControl = lazyWithRetry(() => import('@/pages/dashboard/admin/LockControl'));
+const Students = lazyWithRetry(() => import('@/pages/dashboard/admin/Users'));
+const Analytics = lazyWithRetry(() => import('@/pages/dashboard/admin/Analytics'));
+const AdminSettings = lazyWithRetry(
   () => import('@/pages/dashboard/admin/AdminSettings'),
 );
-const AssignmentManagement = lazy(
+const AssignmentManagement = lazyWithRetry(
   () => import('@/pages/dashboard/admin/AssignmentManagement'),
 );
-const CreateAssignment = lazy(
+const CreateAssignment = lazyWithRetry(
   () => import('@/pages/dashboard/admin/CreateAssignment'),
 );
-const AssignmentSuccess = lazy(
+const AssignmentSuccess = lazyWithRetry(
   () => import('@/pages/dashboard/admin/AssignmentSuccess'),
 );
-const Evaluations = lazy(
+const Evaluations = lazyWithRetry(
   () => import('@/pages/dashboard/admin/Evaluations'),
+);
+const AdminProfile = lazyWithRetry(
+  () => import('@/pages/dashboard/admin/AdminProfile'),
 );
 
 // AI Curriculum Builder (shared)
-const AiCurriculumList = lazy(
+const AiCurriculumList = lazyWithRetry(
   () => import('@/pages/dashboard/shared/AiCurriculumList'),
 );
-const AiCurriculumBuilder = lazy(
+const AiCurriculumBuilder = lazyWithRetry(
   () => import('@/pages/dashboard/shared/AiCurriculumBuilder'),
 );
-const AiCurriculumEditor = lazy(
+const AiCurriculumEditor = lazyWithRetry(
   () => import('@/pages/dashboard/shared/AiCurriculumEditor'),
 );
-const AiCurriculumReview = lazy(
+const AiCurriculumReview = lazyWithRetry(
   () => import('@/pages/dashboard/shared/AiCurriculumReview'),
 );
-const AiCurriculumPreview = lazy(
+const AiCurriculumPreview = lazyWithRetry(
   () => import('@/pages/dashboard/shared/AiCurriculumPreview'),
 );
 
@@ -256,6 +274,8 @@ const router = createBrowserRouter([
                 element: <AssignmentSuccess />,
               },
               { path: 'evaluations', element: <Evaluations /> },
+              { path: 'results/:id', element: <ResultsPage /> },
+              { path: 'profile', element: <AdminProfile /> },
               { path: 'ai-curriculum', element: <AiCurriculumList /> },
               { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
               { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },

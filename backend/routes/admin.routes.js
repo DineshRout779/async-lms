@@ -9,6 +9,7 @@ const {
   getAllStudents,
   getProjectSubmissions,
   getStudentProfile,
+  getFacilitatorProfile,
   uploadLessonMarkdown,
   uploadFile,
   createTopic,
@@ -236,6 +237,7 @@ router.post('/leaderboard/update', verifyToken, isAdmin, updateLeaderboards);
 
 // ===== USER MANAGEMENT =====
 router.get('/students/:id', verifyToken, isAdmin, getStudentProfile);
+router.get('/facilitators/:id', verifyToken, isAdmin, getFacilitatorProfile);
 router.patch('/users/:id/verify', verifyToken, isAdmin, verifyUser);
 
 module.exports = router;

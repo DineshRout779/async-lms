@@ -29,9 +29,10 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url ?? "";
+    const isAuthEndpoint = url.includes("/auth/");
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("token");
-      // Only redirect if not already on the home/login page
       if (window.location.pathname !== "/") {
         window.location.href = "/";
       }

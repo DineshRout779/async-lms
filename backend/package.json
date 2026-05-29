@@ -12,6 +12,7 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.882.0",
+    "@aws-sdk/s3-request-presigner": "^3.1053.0",
     "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.76.5",

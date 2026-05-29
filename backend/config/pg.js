@@ -65,6 +65,18 @@ pool.on('error', (err, client) => {
     `);
 
     await client.query(`
+      ALTER TABLE student_profiles
+      ADD COLUMN IF NOT EXISTS current_academic_year TEXT,
+      ADD COLUMN IF NOT EXISTS expected_graduation_year TEXT
+    `);
+
+    // Ensure it's casted to TEXT if it was previously created as INTEGER
+    await client.query(`
+      ALTER TABLE student_profiles 
+      ALTER COLUMN expected_graduation_year TYPE TEXT USING expected_graduation_year::TEXT
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS college_assignment_submissions (
         id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         assignment_id         UUID NOT NULL REFERENCES college_assignments(id) ON DELETE CASCADE,
@@ -208,6 +220,10 @@ pool.on('error', (err, client) => {
     await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS capstone_project JSONB`);
     await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS audience TEXT[] DEFAULT '{}'`);
     await client.query(`ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`);
+
+    // Last accessed tracking for "Continue Learning"
+    await client.query(`ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_subtopic_slug TEXT`);
+    await client.query(`ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ`);
 
     client.release(); // Always release the client back to the pool
   } catch (error) {

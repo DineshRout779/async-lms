@@ -173,26 +173,51 @@ export const submitExercise = createAsyncThunk<
   }
 });
 
+const QUIZ_STORAGE_KEY = 'lesson_quiz_answers';
+const EXERCISE_STORAGE_KEY = 'lesson_exercise_code';
+
+function loadFromStorage<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveToStorage(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
 const lessonSlice = createSlice({
   name: 'lesson',
-  initialState,
+  initialState: {
+    ...initialState,
+    quizAnswers: loadFromStorage<Record<string, string>>(QUIZ_STORAGE_KEY) ?? {},
+    exerciseCode: loadFromStorage<Record<string, string>>(EXERCISE_STORAGE_KEY) ?? {},
+  },
   reducers: {
     setQuizAnswer(
       state,
       action: PayloadAction<{ questionId: string; value: string }>,
     ) {
       state.quizAnswers[action.payload.questionId] = action.payload.value;
+      saveToStorage(QUIZ_STORAGE_KEY, state.quizAnswers);
     },
     resetQuiz(state) {
       state.quizAnswers = {};
       state.quizSubmitted = false;
       state.quizResults = null;
+      localStorage.removeItem(QUIZ_STORAGE_KEY);
     },
     setExerciseCode(
       state,
       action: PayloadAction<{ exerciseId: string; code: string }>,
     ) {
       state.exerciseCode[action.payload.exerciseId] = action.payload.code;
+      saveToStorage(EXERCISE_STORAGE_KEY, state.exerciseCode);
     },
     setSubmittingExercise(
       state,
@@ -205,7 +230,8 @@ const lessonSlice = createSlice({
       state.lessonCompleted = action.payload;
     },
     resetLessonState() {
-      // Reset everything when leaving page
+      localStorage.removeItem(QUIZ_STORAGE_KEY);
+      localStorage.removeItem(EXERCISE_STORAGE_KEY);
       return initialState;
     },
   },
@@ -215,12 +241,13 @@ const lessonSlice = createSlice({
       .addCase(fetchLesson.pending, (state) => {
         state.status = 'loading';
         state.error = null;
-        // Reset transient states on new fetch
         state.quizAnswers = {};
         state.quizSubmitted = false;
         state.quizResults = null;
         state.exerciseCode = {};
         state.lessonCompleted = false;
+        localStorage.removeItem(QUIZ_STORAGE_KEY);
+        localStorage.removeItem(EXERCISE_STORAGE_KEY);
       })
       .addCase(fetchLesson.fulfilled, (state, action) => {
         state.status = 'succeeded';

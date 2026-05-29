@@ -240,6 +240,22 @@ exports.runEvaluation = async (req, res) => {
 };
 
 
+exports.getLatestEvaluationByAssignment = async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const { rows } = await pool.query(
+      `SELECT id FROM evaluations WHERE assignment_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [assignmentId],
+    );
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: 'No evaluation found for this assignment' });
+    }
+    res.json({ success: true, evaluationId: rows[0].id });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.getEvaluationResults = async (req, res) => {
   try {
     const { id } = req.params;

@@ -4,6 +4,29 @@ const fs = require('fs').promises;
 const https = require('https');
 const http = require('http');
 const slugify = require('../utils/slugify');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+async function presignIfS3(url) {
+  if (!url || !url.includes('.amazonaws.com/')) return url;
+  try {
+    const { hostname, pathname } = new URL(url);
+    const bucket = hostname.split('.')[0];
+    const key = decodeURIComponent(pathname.slice(1));
+    const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
+    return await getSignedUrl(s3, cmd, { expiresIn: 3600 });
+  } catch {
+    return url;
+  }
+}
 
 const fetchTextFromUrl = (url) =>
   new Promise((resolve, reject) => {
@@ -28,9 +51,9 @@ exports.getAllSubjects = async (req, res) => {
   try {
     // Note: We use order_index to keep your curated order
     const { rows } = await pool.query(`
-      SELECT s.*, 
-             COUNT(DISTINCT u.id)::int as units_count, 
-             COUNT(DISTINCT st.id)::int as topics_count
+      SELECT s.*,
+             COUNT(DISTINCT t.id)::int as topics_count,
+             COUNT(DISTINCT st.id)::int as units_count
       FROM subjects s
       LEFT JOIN topics t ON s.id = t.subject_id
       LEFT JOIN units u ON t.id = u.topic_id
@@ -424,14 +447,19 @@ exports.getSubtopicContent = async (req, res) => {
         if (markdownRow.markdown_path.startsWith('ai-generated:')) {
           markdownContent = markdownRow.markdown_path.slice('ai-generated:'.length);
         } else if (markdownRow.markdown_path.startsWith('http')) {
-          markdownContent = await fetchTextFromUrl(markdownRow.markdown_path);
+          const fetchUrl = await presignIfS3(markdownRow.markdown_path);
+          markdownContent = await fetchTextFromUrl(fetchUrl);
         } else {
           const relativePath = markdownRow.markdown_path.replace(/^\/+/, '');
           const filePath = path.join(__dirname, '..', 'data', relativePath);
           markdownContent = await fs.readFile(filePath, 'utf8');
         }
       } catch (err) {
-        console.error('Error reading markdown file:', err.message);
+        console.error('[lesson-content] Failed to load markdown');
+        console.error('  subtopic_id :', base?.subtopic_id ?? 'unknown');
+        console.error('  lesson_id   :', markdownRow?.lesson_id ?? 'unknown');
+        console.error('  path        :', markdownRow?.markdown_path);
+        console.error('  error       :', err.message);
         markdownContent = markdownRow.markdown_path.startsWith('http')
           ? '_Lesson content is temporarily unavailable. Please try again later._'
           : '';

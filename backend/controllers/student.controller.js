@@ -233,6 +233,14 @@ exports.getMyProgress = async (req, res) => {
     const userId = req.user.id;
     const { subjectId } = req.query;
 
+    const enrollment = await pool.query(
+      'SELECT 1 FROM user_subjects WHERE user_id = $1 AND subject_id = $2',
+      [userId, subjectId],
+    );
+    if (enrollment.rows.length === 0) {
+      return res.status(403).json({ success: false, message: 'Not enrolled in this subject' });
+    }
+
     const query = `
       SELECT 
         -- Topic
@@ -424,15 +432,20 @@ exports.getMyProgress = async (req, res) => {
       total_points: 0,
     };
 
+    const enrollmentRow = await pool.query(
+      `SELECT last_accessed_subtopic_slug FROM user_subjects WHERE user_id = $1 AND subject_id = $2`,
+      [userId, subjectId],
+    ).catch(() => ({ rows: [] }));
+    const lastAccessedSlug = enrollmentRow.rows[0]?.last_accessed_subtopic_slug ?? null;
+
     res.json({
       success: true,
       data: {
         overall_progress: overallProgress,
         total_subtopics: totalSubtopics,
         completed_subtopics: completedSubtopics,
-        total_points: totalPoints, // This is calculated from fetched rows, but user stats has total_points too.
-        // Note: The original code returned 'totalPoints' from the loop and 'stats' object.
-        // We keep both to match API signature.
+        total_points: totalPoints,
+        last_accessed_subtopic_slug: lastAccessedSlug,
         stats: stats,
         topics: topics,
       },
@@ -457,12 +470,14 @@ exports.startSubtopic = async (req, res) => {
     const { subtopicId } = req.params;
 
     const lockCheck = await pool.query(
-      `
-        SELECT is_unlocked
-        FROM user_subtopic_progress
-        WHERE user_id = $1 AND subtopic_id = $2
-        LIMIT 1;
-      `,
+      `SELECT usp.is_unlocked, st.slug, st.unit_id,
+              u.topic_id, t.subject_id
+       FROM user_subtopic_progress usp
+       JOIN subtopics st ON st.id = usp.subtopic_id
+       JOIN units u ON u.id = st.unit_id
+       JOIN topics t ON t.id = u.topic_id
+       WHERE usp.user_id = $1 AND usp.subtopic_id = $2
+       LIMIT 1`,
       [userId, subtopicId],
     );
 
@@ -471,6 +486,16 @@ exports.startSubtopic = async (req, res) => {
         success: false,
         message: 'This subtopic is locked by your admin.',
       });
+    }
+
+    // Track last accessed subtopic for "Continue Learning"
+    if (lockCheck.rows[0]?.subject_id && lockCheck.rows[0]?.slug) {
+      await pool.query(
+        `UPDATE user_subjects
+         SET last_accessed_subtopic_slug = $1, last_accessed_at = NOW()
+         WHERE user_id = $2 AND subject_id = $3`,
+        [lockCheck.rows[0].slug, userId, lockCheck.rows[0].subject_id],
+      ).catch(() => {}); // non-critical — column may not exist yet
     }
 
     res.json({
@@ -604,8 +629,10 @@ exports.submitQuizAttempt = async (req, res) => {
 
     // Score each answer and build per-question result for feedback
     let score = 0;
+    let actual_max_score = 0;
     const question_results = {};
     for (const [questionId, question] of questionsMap) {
+      actual_max_score += question.points;
       const userAnswer = answers[questionId];
       let correctOption = null;
       let userIsCorrect = false;
@@ -632,7 +659,13 @@ exports.submitQuizAttempt = async (req, res) => {
       };
     }
 
-    const isPassed = score >= passing_score;
+    // Derive passing threshold from actual question points to handle cases where
+    // the stored max_score is out of sync with real question points.
+    const passingRatio = max_score > 0 ? passing_score / max_score : 0.7;
+    const effectivePassingScore = actual_max_score > 0
+      ? Math.ceil(actual_max_score * passingRatio)
+      : passing_score;
+    const isPassed = score >= effectivePassingScore;
 
     const result = await pool.query(
       `INSERT INTO quiz_attempts (quiz_id, user_id, score, is_passed)
@@ -641,29 +674,29 @@ exports.submitQuizAttempt = async (req, res) => {
       [quizId, userId, score, isPassed],
     );
 
-    // Award flat 15 points for quiz completion
-    const pointsAwarded = 15;
-    await pool.query(
-      'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
-      [userId, 'quiz_completion', pointsAwarded],
-    );
-    await updateStreak(userId);
-    await checkAndAwardBadges(userId);
+    // Award XP only when quiz is passed
+    const pointsAwarded = isPassed ? 15 : 0;
+    if (isPassed) {
+      await pool.query(
+        'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
+        [userId, 'quiz_completion', pointsAwarded],
+      );
+      await updateStreak(userId);
+      await checkAndAwardBadges(userId);
+    }
 
-    const subtopicResult = await pool.query(
+    // Trigger completion check for ALL subtopics in the unit (not just the first)
+    const unitResult = await pool.query(
       'SELECT unit_id FROM quizzes WHERE id = $1 LIMIT 1',
       [quizId],
     );
-    if (subtopicResult.rows[0]?.unit_id) {
-      // Need to find a subtopic in this unit to trigger checkAndCompleteSubtopic
-      // OR better, we should have a checkAndCompleteUnit function.
-      // For now, let's find the first subtopic of this unit.
-      const firstSubtopic = await pool.query(
-        'SELECT id FROM subtopics WHERE unit_id = $1 ORDER BY order_index LIMIT 1',
-        [subtopicResult.rows[0].unit_id],
+    if (unitResult.rows[0]?.unit_id) {
+      const allSubtopics = await pool.query(
+        'SELECT id FROM subtopics WHERE unit_id = $1 ORDER BY order_index',
+        [unitResult.rows[0].unit_id],
       );
-      if (firstSubtopic.rows[0]?.id) {
-        await checkAndCompleteSubtopic(userId, firstSubtopic.rows[0].id);
+      for (const row of allSubtopics.rows) {
+        await checkAndCompleteSubtopic(userId, row.id);
       }
     }
 
@@ -674,6 +707,8 @@ exports.submitQuizAttempt = async (req, res) => {
         attempt: result.rows[0],
         points_awarded: pointsAwarded,
         question_results,
+        effective_passing_score: effectivePassingScore,
+        actual_max_score,
       },
     });
   } catch (error) {

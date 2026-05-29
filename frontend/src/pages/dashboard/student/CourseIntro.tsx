@@ -11,6 +11,8 @@ import {
 import apiClient from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { useAppSelector } from '@/app/hooks';
+import { selectUser } from '@/features/auth/authSelectors';
 
 interface SubjectInfo {
   name: string;
@@ -18,6 +20,7 @@ interface SubjectInfo {
   total_topics: number;
   total_subtopics: number;
   first_lesson_slug?: string;
+  subject_id?: string;
 }
 
 interface Subtopic {
@@ -39,6 +42,7 @@ interface Module {
 }
 
 interface CourseData {
+  id: string;
   name: string;
   description: string;
   data: Module[];
@@ -47,15 +51,17 @@ interface CourseData {
 const CourseIntro = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const currentUser = useAppSelector(selectUser);
   const [course, setCourse] = useState<SubjectInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [progressPercent, setProgressPercent] = useState<number>(0);
+  const [lastAccessedSlug, setLastAccessedSlug] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCourseDetails = async () => {
       try {
         const { data } = await apiClient.get<CourseData>(`/subjects/${slug}`);
 
-        // Helper to count all subtopics across all modules and units
         const totalSubtopics = data.data.reduce((total, module) => {
           return (
             total +
@@ -66,32 +72,59 @@ const CourseIntro = () => {
           );
         }, 0);
 
-        // Find the first lesson slug for "Start Learning"
-        // Traverse: First Module -> First Unit -> First Subtopic
         const firstLesson = data.data[0]?.units[0]?.subtopics[0]?.slug;
+
+        // Guard: empty course — no topics/units/subtopics
+        if (totalSubtopics === 0) {
+          setCourse({
+            name: data.name || 'Course Overview',
+            description: data.description || '',
+            total_topics: data.data.length,
+            total_subtopics: 0,
+            first_lesson_slug: undefined,
+            subject_id: data.id,
+          });
+          return;
+        }
 
         setCourse({
           name: data.name || 'Course Overview',
-          description:
-            data.description || "Welcome to this course. Let's get started!",
-          total_topics: data.data.length, // Counting Modules as "Chapters"
+          description: data.description || "Welcome to this course. Let's get started!",
+          total_topics: data.data.length,
           total_subtopics: totalSubtopics,
           first_lesson_slug: firstLesson,
+          subject_id: data.id,
         });
+
+        // Fetch real progress if enrolled
+        if (data.id) {
+          apiClient
+            .get(`/students/progress?subjectId=${data.id}`)
+            .then((res) => {
+              const d = res.data?.data;
+              if (d) {
+                const pct = d.total_subtopics > 0
+                  ? Math.round((d.completed_subtopics / d.total_subtopics) * 100)
+                  : 0;
+                setProgressPercent(pct);
+                setLastAccessedSlug(d.last_accessed_subtopic_slug ?? null);
+              }
+            })
+            .catch(() => {}); // not enrolled — 403 is fine, progress stays 0
+        }
       } catch {
-        // course remains null — the null check below shows a fallback UI
+        // course remains null — fallback UI below
       } finally {
         setLoading(false);
       }
     };
     fetchCourseDetails();
-  }, [slug]);
+  }, [slug, currentUser]);
 
-  const startLearning = () => {
-    if (course?.first_lesson_slug) {
-      navigate(
-        `/dashboard/student/courses/${slug}/lesson/${course.first_lesson_slug}`,
-      );
+  const continueLearning = () => {
+    const target = lastAccessedSlug ?? course?.first_lesson_slug;
+    if (target) {
+      navigate(`/dashboard/student/courses/${slug}/lesson/${target}`);
     }
   };
 
@@ -101,6 +134,19 @@ const CourseIntro = () => {
         <Loader2 className='animate-spin text-blue-600' />
       </div>
     );
+
+  // Empty course guard
+  if (!course || course.total_subtopics === 0) {
+    return (
+      <div className='max-w-2xl mx-auto p-8 text-center space-y-4'>
+        <BookOpen className='w-12 h-12 text-slate-300 mx-auto' />
+        <h2 className='text-2xl font-bold text-slate-700'>{course?.name ?? 'Course'}</h2>
+        <p className='text-slate-500'>This course has no content yet. Check back soon!</p>
+      </div>
+    );
+  }
+
+  const isInProgress = progressPercent > 0;
 
   return (
     <div className='max-w-5xl mx-auto p-8 space-y-10 animate-in fade-in duration-700'>
@@ -116,14 +162,15 @@ const CourseIntro = () => {
           <div className='flex flex-wrap gap-4 pt-4'>
             <Button
               size='lg'
-              onClick={startLearning}
+              onClick={continueLearning}
+              disabled={!course?.first_lesson_slug}
               className='bg-blue-600 hover:bg-blue-700 text-white font-bold h-14 px-8 rounded-xl shadow-lg shadow-blue-900/20 gap-2'
             >
-              <Play className='w-5 h-5 fill-current' /> Start Learning
+              <Play className='w-5 h-5 fill-current' />
+              {isInProgress ? 'Continue Learning' : 'Start Learning'}
             </Button>
           </div>
         </div>
-        {/* Decorative Graphic */}
         <div className='absolute top-0 right-0 w-1/3 h-full bg-linear-to-l from-blue-500/10 to-transparent pointer-events-none' />
       </div>
 
@@ -153,25 +200,26 @@ const CourseIntro = () => {
             <span className='text-slate-500 uppercase tracking-wider'>
               Your Progress
             </span>
-            <span className='text-blue-600'>0%</span>
+            <span className='text-blue-600'>{progressPercent}%</span>
           </div>
-          <Progress value={0} className='h-3 bg-slate-100' />
+          <Progress value={progressPercent} className='h-3 bg-slate-100' />
         </div>
         <div className='flex items-center gap-4'>
           <div className='text-right hidden sm:block'>
             <p className='text-xs font-bold text-slate-400 uppercase tracking-widest'>
-              Last Activity
+              {isInProgress ? 'Last Activity' : 'Status'}
             </p>
             <p className='text-sm font-semibold text-slate-700'>
-              Not started yet
+              {isInProgress ? 'In progress' : 'Not started yet'}
             </p>
           </div>
           <Button
             variant='outline'
             className='rounded-xl border-slate-200 font-bold'
-            onClick={startLearning}
+            onClick={continueLearning}
+            disabled={!course?.first_lesson_slug}
           >
-            View Syllabus <ChevronRight className='w-4 h-4 ml-1' />
+            {isInProgress ? 'Continue' : 'View Syllabus'} <ChevronRight className='w-4 h-4 ml-1' />
           </Button>
         </div>
       </div>
