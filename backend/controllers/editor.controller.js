@@ -12,15 +12,10 @@ exports.startEditor = async (req, res) => {
     const config = editorProfiles[profile];
     if (!config) return res.status(400).json({ error: 'Invalid profile' });
 
-    // Provision workspace on disk (copies template if first time, no-op otherwise).
-    // Done for all engines so files are always persisted server-side.
-    const workspacePath = provisionWorkspace(userId, projectId, profile);
-    
-    // Sync initial template to S3 so remote worker instances can pull the code on boot
-    await pushWorkspace(userId, projectId);
-
     // WebContainer runs entirely in the browser — no Docker worker needed.
+    // Provision it locally on the Orchestrator so the frontend can fetch the files.
     if (config.engine === 'webcontainer') {
+      const workspacePath = provisionWorkspace(userId, projectId, profile);
       return res.json({
         projectId,
         workspacePath,

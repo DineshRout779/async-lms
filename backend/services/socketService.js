@@ -143,6 +143,12 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
     socket.emit('workspace:status', { message: 'Starting container…' });
 
     await pullWorkspace(userId, projectId);
+    
+    // In a distributed environment, the worker node must provision the template
+    // (or update config files) before mounting it into the container.
+    const { provisionWorkspace } = require('./workspaceService');
+    provisionWorkspace(userId, projectId, profile);
+
     await ensureWorkspaceContainer({ userId, projectId, image, profile });
 
     const workspacePath = path.join(
