@@ -29,7 +29,7 @@ exports.startEditor = async (req, res) => {
     const workerUrl = assignWorker(userId, projectId);
     res.json({
       projectId,
-      workspacePath,
+      workspacePath: null, // Docker handles its own workspace path on the Worker node
       engine: 'docker',
       profile: config,
       workerUrl,
