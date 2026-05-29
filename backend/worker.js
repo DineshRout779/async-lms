@@ -150,6 +150,8 @@ server.listen(WORKER_PORT, () => {
   initPools().catch(err => console.error('[pool] Failed to initialize runner pools:', err));
 });
 
+let heartbeatInterval = null;
+
 async function registerWithOrchestrator(retries = 0) {
   try {
     await axios.post(`${ORCHESTRATOR_URL}/api/v1/internal/workers/register`, {
@@ -159,15 +161,24 @@ async function registerWithOrchestrator(retries = 0) {
     });
     console.log(`[worker] Registered with orchestrator at ${ORCHESTRATOR_URL}`);
 
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+
     // Heartbeat every 30 s to stay in the registry
-    setInterval(async () => {
+    heartbeatInterval = setInterval(async () => {
       try {
         await axios.post(`${ORCHESTRATOR_URL}/api/v1/internal/workers/heartbeat`, {
           id: WORKER_ID,
           freeMemory: Math.round(os.freemem() / 1024 / 1024),
           totalMemory: Math.round(os.totalmem() / 1024 / 1024),
         });
-      } catch { /* orchestrator temporarily unreachable — will retry next tick */ }
+      } catch (err) {
+        // If Orchestrator returns 404, it lost our registration (e.g. it restarted, or we timed out)
+        if (err.response?.status === 404) {
+          console.warn(`[worker] Orchestrator lost our registration! Re-registering...`);
+          clearInterval(heartbeatInterval);
+          registerWithOrchestrator();
+        }
+      }
     }, 30_000);
   } catch (err) {
     const delay = Math.min(10_000 * (retries + 1), 60_000);

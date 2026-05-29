@@ -28,7 +28,9 @@ function heartbeat(id, stats = {}) {
     w.lastSeen = Date.now();
     if (stats.freeMemory !== undefined) w.freeMemory = stats.freeMemory;
     if (stats.totalMemory !== undefined) w.totalMemory = stats.totalMemory;
+    return true;
   }
+  return false;
 }
 
 function deregisterWorker(id) {

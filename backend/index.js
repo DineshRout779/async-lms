@@ -104,7 +104,12 @@ app.post('/api/v1/internal/workers/register', (req, res) => {
 app.post('/api/v1/internal/workers/heartbeat', (req, res) => {
   const { id, freeMemory, totalMemory } = req.body;
   if (!id) return res.status(400).json({ error: 'id required' });
-  heartbeat(id, { freeMemory, totalMemory });
+  
+  const known = heartbeat(id, { freeMemory, totalMemory });
+  if (!known) {
+    return res.status(404).json({ error: 'Worker not registered' });
+  }
+  
   res.json({ ok: true });
 });
 
