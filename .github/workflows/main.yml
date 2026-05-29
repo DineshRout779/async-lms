@@ -168,11 +168,12 @@ jobs:
             git reset --hard origin/${{ github.ref_name }}
             cd backend
 
-            # Generate .env file automatically with Dynamic IP Detection
-            PUBLIC_IP=$(curl -s ifconfig.me)
+            # Generate .env file automatically using the Private IP
+            PRIVATE_IP=$(hostname -I | awk '{print $1}')
             echo "WORKER_PORT=4000" > .env
             echo "WORKER_ID=worker-$(hostname)" >> .env
-            echo "WORKER_URL=http://$PUBLIC_IP:4000" >> .env
+            echo "WORKER_URL=http://$PRIVATE_IP:4000" >> .env
+            echo "REDIS_URL=redis://172.31.46.237:6379" >> .env
             echo "ORCHESTRATOR_URL=${{ secrets.ORCHESTRATOR_URL }}" >> .env
             echo "PGHOST=${{ secrets.PGHOST }}" >> .env
             echo "PGDATABASE=${{ secrets.PGDATABASE }}" >> .env
