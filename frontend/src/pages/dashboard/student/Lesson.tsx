@@ -424,25 +424,6 @@ const Lesson = () => {
             </div>
 
 
-            {lessonCompleted && (
-              <div className='not-prose mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center'>
-                <CheckCircle2 className='mx-auto mb-2 h-7 w-7 text-emerald-600' />
-                <p className='font-semibold text-emerald-800'>
-                  {lesson.content_type === 'exercise'
-                    ? 'Exercise Completed!'
-                    : 'Lesson Completed!'}
-                </p>
-                {nextItem && slug && (
-                  <Button
-                    variant='outline'
-                    className='mt-4 border-emerald-300 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700'
-                    onClick={() => navigate(buildNextUrl(nextItem, slug))}
-                  >
-                    Next {nextLabel(nextItem.type)}
-                  </Button>
-                )}
-              </div>
-            )}
           </div>
         </Card>
       )}
@@ -774,18 +755,38 @@ const Lesson = () => {
         </section>
       )}
 
-      {/* Mark as Read & Next — shown after exercises (or after content if no exercises) */}
-      {!lessonCompleted && lesson.content_type !== 'quiz' && (
+      {/* Completion banner & Mark as Read — shown after exercises */}
+      {lesson.content_type !== 'quiz' && (
         <div className='flex justify-center pb-4'>
-          <Button
-            onClick={handleCompleteLesson}
-            loading={isCompleting || isNavigating}
-            size='lg'
-            className='bg-emerald-600 px-8 py-6 text-lg font-bold shadow-lg hover:bg-emerald-700 transition-all'
-          >
-            <CheckCircle2 className='mr-2 h-6 w-6' />
-            Mark as Read & Next
-          </Button>
+          {lessonCompleted ? (
+            <div className='w-full rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center'>
+              <CheckCircle2 className='mx-auto mb-2 h-7 w-7 text-emerald-600' />
+              <p className='font-semibold text-emerald-800'>
+                {lesson.content_type === 'exercise'
+                  ? 'Exercise Completed!'
+                  : 'Lesson Completed!'}
+              </p>
+              {nextItem && slug && (
+                <Button
+                  variant='outline'
+                  className='mt-4 border-emerald-300 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700'
+                  onClick={() => navigate(buildNextUrl(nextItem, slug))}
+                >
+                  Next {nextLabel(nextItem.type)}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Button
+              onClick={handleCompleteLesson}
+              loading={isCompleting || isNavigating}
+              size='lg'
+              className='bg-emerald-600 px-8 py-6 text-lg font-bold shadow-lg hover:bg-emerald-700 transition-all'
+            >
+              <CheckCircle2 className='mr-2 h-6 w-6' />
+              Mark as Read & Next
+            </Button>
+          )}
         </div>
       )}
 
