@@ -600,6 +600,48 @@ Rules:
   return parsed;
 }
 
+/**
+ * Generate a capstone project for a course.
+ */
+async function generateCapstone({ courseTitle, roleFocus, level, moduleTitle, unitTitles }) {
+  const prompt = `You are an expert curriculum designer.
+
+Create a capstone project for this topic:
+Course: ${courseTitle}
+Topic: ${moduleTitle}
+Units covered: ${unitTitles.join(', ')}
+Role: ${roleFocus}
+Level: ${level}
+
+Return ONLY a valid JSON object:
+{
+  "capstone_project": {
+    "title": "Capstone project title — a compelling real-world deliverable",
+    "description": "What the learner builds to prove mastery of all units in this topic (2-3 sentences)",
+    "instructions": "Detailed step-by-step instructions: what to build, acceptance criteria, deliverables, submission format, and evaluation rubric"
+  }
+}
+
+Rules:
+- Must integrate skills from ALL units in the topic
+- Must be a realistic, portfolio-worthy project for a ${roleFocus}
+- Instructions must be clear and self-contained`;
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.7,
+    max_tokens: 1000,
+    response_format: { type: 'json_object' },
+  });
+
+  const parsed = JSON.parse(response.choices[0].message.content);
+  if (!parsed.capstone_project) {
+    throw new Error('AI returned invalid capstone structure');
+  }
+  return parsed;
+}
+
 async function generateExerciseTests({ instructions, language, roleFocus, level }) {
   const prompt = `You are an expert software tester and curriculum designer.
   
@@ -652,5 +694,6 @@ module.exports = {
   generateLessonContent,
   generateUnitQuiz,
   generateUnitAssignment,
+  generateCapstone,
   generateExerciseTests,
 };

@@ -35,6 +35,7 @@ router.post('/lessons/:id/regenerate', isAdminOrFacilitator, ctrl.regenerateLess
 router.post('/lessons/:id/generate-content', isAdminOrFacilitator, ctrl.generateAndSaveLessonContent);
 router.post('/topics/:id/generate-quiz', isAdminOrFacilitator, ctrl.generateAndSaveUnitQuiz);
 router.post('/topics/:id/generate-assignment', isAdminOrFacilitator, ctrl.generateAndSaveUnitAssignment);
+router.post('/modules/:id/generate-capstone', isAdminOrFacilitator, ctrl.generateAndSaveCapstone);
 router.put('/:courseId/reorder-topics', isAdminOrFacilitator, ctrl.reorderTopics);
 
 // Course CRUD
