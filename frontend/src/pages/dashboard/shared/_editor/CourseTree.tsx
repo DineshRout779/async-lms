@@ -11,9 +11,11 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  Trophy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
+  AiCapstoneProject,
   AiLesson,
   AiModule,
   AiTopic,
@@ -137,7 +139,10 @@ export const LessonItem = memo(function LessonItem({
       {canEdit && (
         <div className='flex items-center gap-0.5 shrink-0'>
           <button
-            onClick={(e) => { e.stopPropagation(); setRenaming(true); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setRenaming(true);
+            }}
             className='p-1 text-slate-300 hover:text-indigo-500 transition-colors'
           >
             <Pencil className='w-3 h-3' />
@@ -303,7 +308,10 @@ export function TopicItem({
                 />
               )}
               <button
-                onClick={(e) => { e.stopPropagation(); setRenaming(true); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRenaming(true);
+                }}
                 className='p-1 text-slate-300 hover:text-indigo-500 transition-colors'
               >
                 <Pencil className='w-3 h-3' />
@@ -487,6 +495,8 @@ export function ModuleItem({
   onGenerateSubtopics,
   onGenerateTopicQuiz,
   onGenerateTopicAssignment,
+  onGenerateCapstone,
+  onUpdateModule,
   isDragOver,
   dragHandlers,
 }: {
@@ -509,6 +519,8 @@ export function ModuleItem({
   onGenerateSubtopics: (topicId: string) => Promise<void>;
   onGenerateTopicQuiz: (topicId: string) => Promise<void>;
   onGenerateTopicAssignment: (topicId: string) => Promise<void>;
+  onGenerateCapstone: (moduleId: string) => Promise<void>;
+  onUpdateModule: (moduleId: string, data: Partial<AiModule>) => void;
   isDragOver: boolean;
   dragHandlers: React.HTMLAttributes<HTMLDivElement>;
 }) {
@@ -518,6 +530,14 @@ export function ModuleItem({
   const [addingTopic, setAddingTopic] = useState(false);
   const [savingTopic, setSavingTopic] = useState(false);
   const [generatingUnits, setGeneratingUnits] = useState(false);
+  const [generatingCapstone, setGeneratingCapstone] = useState(false);
+  const [capstoneEditOpen, setCapstoneEditOpen] = useState(false);
+  const [capstoneForm, setCapstoneForm] = useState<AiCapstoneProject>({
+    title: '',
+    description: '',
+    instructions: '',
+  });
+  const [capstoneFormSaving, setCapstoneFormSaving] = useState(false);
   const [dragTopicIdx, setDragTopicIdx] = useState<number | null>(null);
   const [dragTopicOver, setDragTopicOver] = useState<number | null>(null);
 
@@ -555,6 +575,32 @@ export function ModuleItem({
       await onGenerateUnits(mod.id);
     } finally {
       setGeneratingUnits(false);
+    }
+  };
+
+  const handleGenerateCapstone = async () => {
+    setGeneratingCapstone(true);
+    try {
+      await onGenerateCapstone(mod.id);
+    } finally {
+      setGeneratingCapstone(false);
+    }
+  };
+
+  const handleSaveCapstone = async () => {
+    if (!capstoneForm.title.trim()) return;
+    setCapstoneFormSaving(true);
+    try {
+      await aiCurriculumApi.updateModule(mod.id, {
+        capstone_project: capstoneForm,
+      } as any);
+      onUpdateModule(mod.id, { capstone_project: capstoneForm });
+      setCapstoneEditOpen(false);
+      toast.success('Capstone saved');
+    } catch {
+      toast.error('Failed to save capstone');
+    } finally {
+      setCapstoneFormSaving(false);
     }
   };
 
@@ -622,7 +668,10 @@ export function ModuleItem({
               </button>
             )}
             <button
-              onClick={(e) => { e.stopPropagation(); setRenaming(true); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setRenaming(true);
+              }}
               className='p-1.5 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-all'
             >
               <Pencil className='w-3.5 h-3.5' />
@@ -726,6 +775,110 @@ export function ModuleItem({
                 <Plus className='w-3.5 h-3.5 shrink-0' /> Add Unit
               </button>
             ))}
+
+          {/* Capstone section */}
+          {canEdit && !mod.capstone_project && !capstoneEditOpen && (
+            <button
+              disabled={generatingCapstone}
+              onClick={handleGenerateCapstone}
+              className='w-full flex items-center gap-2 py-2 px-3 text-[12px] text-indigo-400 border border-dashed border-indigo-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-400 disabled:opacity-50 transition-colors'
+            >
+              {generatingCapstone ? (
+                <Loader2 className='w-3.5 h-3.5 animate-spin shrink-0' />
+              ) : (
+                <Sparkles className='w-3.5 h-3.5 shrink-0' />
+              )}
+              {generatingCapstone
+                ? 'Generating Capstone Project...'
+                : 'Generate Capstone Project with AI'}
+            </button>
+          )}
+
+          {mod.capstone_project && !capstoneEditOpen && (
+            <div className='flex items-start gap-2.5 px-3 py-3 rounded-xl bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200'>
+              <Trophy className='w-4 h-4 text-indigo-500 shrink-0 mt-0.5' />
+              <div className='flex-1 min-w-0'>
+                <p className='text-[10px] font-bold text-indigo-400 uppercase tracking-wide mb-0.5'>
+                  Capstone Project
+                </p>
+                <p className='text-[13px] font-bold text-indigo-800 line-clamp-1'>
+                  {mod.capstone_project.title}
+                </p>
+                <p className='text-[11px] text-indigo-500 mt-0.5 line-clamp-2'>
+                  {mod.capstone_project.description}
+                </p>
+              </div>
+              {canEdit && (
+                <button
+                  onClick={() => {
+                    setCapstoneForm({ ...mod.capstone_project! });
+                    setCapstoneEditOpen(true);
+                  }}
+                  className='shrink-0 p-1 text-indigo-300 hover:text-indigo-600 rounded transition-colors'
+                >
+                  <Pencil className='w-3.5 h-3.5' />
+                </button>
+              )}
+            </div>
+          )}
+
+          {capstoneEditOpen && (
+            <div className='border border-indigo-200 rounded-xl p-3 space-y-2 bg-white'>
+              <p className='text-[11px] font-bold text-indigo-600 flex items-center gap-1.5'>
+                <Trophy className='w-3.5 h-3.5' /> Capstone Project
+              </p>
+              <input
+                className='w-full border border-slate-200 rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-300'
+                placeholder='Title...'
+                value={capstoneForm.title}
+                onChange={(e) =>
+                  setCapstoneForm((f) => ({ ...f, title: e.target.value }))
+                }
+              />
+              <textarea
+                className='w-full border border-slate-200 rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none'
+                placeholder='Description...'
+                rows={2}
+                value={capstoneForm.description}
+                onChange={(e) =>
+                  setCapstoneForm((f) => ({
+                    ...f,
+                    description: e.target.value,
+                  }))
+                }
+              />
+              <textarea
+                className='w-full border border-slate-200 rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none'
+                placeholder='Instructions...'
+                rows={3}
+                value={capstoneForm.instructions}
+                onChange={(e) =>
+                  setCapstoneForm((f) => ({
+                    ...f,
+                    instructions: e.target.value,
+                  }))
+                }
+              />
+              <div className='flex gap-2'>
+                <button
+                  onClick={handleSaveCapstone}
+                  disabled={capstoneFormSaving || !capstoneForm.title.trim()}
+                  className='flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors'
+                >
+                  {capstoneFormSaving ? (
+                    <Loader2 className='w-3 h-3 animate-spin' />
+                  ) : null}{' '}
+                  Save
+                </button>
+                <button
+                  onClick={() => setCapstoneEditOpen(false)}
+                  className='px-3 py-1.5 text-[12px] text-slate-500 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors'
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

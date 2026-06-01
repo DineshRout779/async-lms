@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import {
   Loader2,
   Trash2,
-  ShieldCheck,
   Search,
   Plus,
   Pencil,
@@ -165,13 +164,6 @@ function CourseCard({
 
       {/* Actions */}
       <div className='mt-3 flex items-center gap-2.5'>
-        <button
-          onClick={() => navigate(editPath)}
-          className='flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 rounded-full text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors'
-        >
-          <ShieldCheck className='w-4 h-4 text-slate-400' />
-          {isAdmin && course.status === 'in_review' ? 'Review' : 'Access'}
-        </button>
         <button
           onClick={() => navigate(editPath)}
           className='flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 rounded-full text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors'

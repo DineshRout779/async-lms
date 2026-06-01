@@ -336,14 +336,44 @@ function TopicPreview({ topic }: { topic: AiTopic }) {
             <LessonPreview key={lesson.id} lesson={lesson} />
           ))}
 
-          {topic.assignment && (
-            <div className='flex items-center gap-2.5 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl mt-3'>
-              <ClipboardList className='w-4 h-4 text-amber-500 shrink-0' />
-              <div>
-                <p className='text-[12px] font-bold text-amber-800'>Assignment: {topic.assignment.title}</p>
-                <p className='text-[11px] text-amber-600'>{topic.assignment.instructions?.substring(0, 100)}...</p>
+          {Array.isArray(topic.quiz_questions) && topic.quiz_questions.length > 0 && (
+            <div className='mt-3'>
+              <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5'>
+                <ListChecks className='w-3.5 h-3.5 text-orange-400' /> Unit Quiz · {topic.quiz_questions.length} Questions
+              </p>
+              <div className='space-y-2'>
+                {(topic.quiz_questions as { question: string; options: string[]; correct_index: number }[]).slice(0, 3).map((q, qi) => (
+                  <div key={qi} className='border border-slate-200 rounded-lg overflow-hidden'>
+                    <div className='bg-slate-50 px-3 py-2 text-[12px] text-slate-700 font-medium'>{q.question}</div>
+                    <div className='divide-y divide-slate-100'>
+                      {q.options.map((opt, oi) => (
+                        <div key={oi} className={`flex items-center gap-2 px-3 py-1.5 text-[12px] ${oi === q.correct_index ? 'bg-green-50 text-green-700' : 'text-slate-500'}`}>
+                          <CheckCircle2 className={`w-3 h-3 shrink-0 ${oi === q.correct_index ? 'text-green-500' : 'text-slate-200'}`} />
+                          {opt}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {topic.quiz_questions.length > 3 && (
+                  <p className='text-[12px] text-slate-400'>+{topic.quiz_questions.length - 3} more questions</p>
+                )}
               </div>
-              <span className='ml-auto text-[12px] font-bold text-amber-600 shrink-0'>{topic.assignment.max_score} pts</span>
+            </div>
+          )}
+
+          {topic.assignment && (
+            <div className='mt-3'>
+              <p className='text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5'>
+                <ClipboardList className='w-3.5 h-3.5 text-amber-500' /> Unit Assignment
+              </p>
+              <div className='flex items-start gap-2.5 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl'>
+                <div className='flex-1'>
+                  <p className='text-[12px] font-bold text-amber-800'>{topic.assignment.title}</p>
+                  <p className='text-[11px] text-amber-600 mt-0.5'>{topic.assignment.instructions}</p>
+                </div>
+                <span className='text-[12px] font-bold text-amber-600 shrink-0 bg-white border border-amber-200 px-2 py-0.5 rounded-full'>{topic.assignment.max_score} pts</span>
+              </div>
             </div>
           )}
         </div>
@@ -478,32 +508,26 @@ export default function AiCurriculumPreview() {
                       {mod.topics.map((topic) => (
                         <TopicPreview key={topic.id} topic={topic} />
                       ))}
+
+                      {mod.capstone_project && (
+                        <div className='mt-4 flex items-start gap-3 px-5 py-4 rounded-xl bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200'>
+                          <Trophy className='w-5 h-5 text-indigo-500 shrink-0 mt-0.5' />
+                          <div>
+                            <p className='text-[10px] font-bold text-indigo-400 uppercase tracking-wide mb-1'>Capstone Project</p>
+                            <p className='text-sm font-bold text-indigo-800'>{mod.capstone_project.title}</p>
+                            <p className='text-[12px] text-indigo-600 mt-1'>{mod.capstone_project.description}</p>
+                            {mod.capstone_project.instructions && (
+                              <p className='text-[11px] text-indigo-500 mt-2 border-t border-indigo-100 pt-2'>{mod.capstone_project.instructions}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               );
             })}
 
-            {/* Final Capstone */}
-            {course.capstone_project && (
-              <div className='bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 text-white'>
-                <div className='flex items-center gap-3 mb-3'>
-                  <Trophy className='w-6 h-6 text-yellow-300' />
-                  <span className='text-[12px] font-bold uppercase tracking-widest text-indigo-200'>Final Capstone Project</span>
-                </div>
-                <h3 className='text-xl font-bold mb-2'>{course.capstone_project.title}</h3>
-                <p className='text-indigo-100 text-[14px] leading-relaxed mb-4'>{course.capstone_project.description}</p>
-                {course.capstone_project.instructions && (
-                  <div className='bg-white/10 rounded-xl p-4'>
-                    <p className='text-[12px] font-semibold text-indigo-200 mb-2'>Instructions</p>
-                    <p className='text-[13px] text-indigo-100 leading-relaxed'>{course.capstone_project.instructions}</p>
-                  </div>
-                )}
-                <div className='mt-4 inline-flex items-center gap-2 bg-yellow-400 text-yellow-900 px-4 py-2 rounded-full text-[13px] font-bold'>
-                  <Trophy className='w-4 h-4' /> Complete to earn your Certificate
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -544,12 +568,12 @@ export default function AiCurriculumPreview() {
               </div>
             ))}
 
-            {course.capstone_project && (
-              <div className='flex items-center gap-4 px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl'>
+            {modules.some(m => m.capstone_project) && (
+              <div className='flex items-center gap-4 px-6 py-4 bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl'>
                 <Trophy className='w-5 h-5 text-indigo-500 shrink-0' />
                 <div>
-                  <p className='text-[13px] font-bold text-indigo-800'>Final Week: Capstone Project</p>
-                  <p className='text-[12px] text-indigo-500'>{course.capstone_project.title}</p>
+                  <p className='text-[13px] font-bold text-indigo-800'>Capstone Projects</p>
+                  <p className='text-[12px] text-indigo-500'>{modules.filter(m => m.capstone_project).map(m => m.capstone_project!.title).join(' · ')}</p>
                 </div>
               </div>
             )}

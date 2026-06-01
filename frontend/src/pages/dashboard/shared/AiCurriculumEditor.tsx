@@ -8,7 +8,6 @@ import {
   Plus,
   Save,
   Sparkles,
-  Trophy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -325,6 +324,25 @@ export default function AiCurriculumEditor() {
       }
     },
     [handleUpdateTopic],
+  );
+
+  const handleUpdateModule = useCallback(
+    (moduleId: string, data: Partial<AiModule>) =>
+      setModules((ms) => ms.map((m) => m.id === moduleId ? { ...m, ...data } : m)),
+    [],
+  );
+
+  const handleGenerateModuleCapstone = useCallback(
+    async (moduleId: string) => {
+      try {
+        const res = await aiCurriculumApi.generateCapstone(moduleId);
+        handleUpdateModule(moduleId, { capstone_project: res.data.data });
+        toast.success('Capstone project generated');
+      } catch {
+        toast.error('Failed to generate capstone');
+      }
+    },
+    [handleUpdateModule],
   );
 
   const handleGenerateLessonContent = useCallback(
@@ -681,6 +699,8 @@ export default function AiCurriculumEditor() {
                 onGenerateSubtopics={handleGenerateSubtopics}
                 onGenerateTopicQuiz={handleGenerateTopicQuiz}
                 onGenerateTopicAssignment={handleGenerateTopicAssignment}
+                onGenerateCapstone={handleGenerateModuleCapstone}
+                onUpdateModule={handleUpdateModule}
                 isDragOver={dragModuleOver === i && dragModuleIdx !== i}
                 dragHandlers={
                   canEdit
@@ -724,25 +744,6 @@ export default function AiCurriculumEditor() {
                 </button>
               ))}
 
-            {course.capstone_project && (
-              <div className='flex items-start gap-3 px-5 py-4 rounded-xl bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200'>
-                <Trophy className='w-5 h-5 text-indigo-500 shrink-0 mt-0.5' />
-                <div className='min-w-0'>
-                  <p className='text-[11px] font-bold text-indigo-400 uppercase tracking-wide mb-0.5'>
-                    Final Capstone Project
-                  </p>
-                  <p className='text-sm font-bold text-indigo-800'>
-                    {course.capstone_project.title}
-                  </p>
-                  <p className='text-[12px] text-indigo-500 mt-1 line-clamp-2'>
-                    {course.capstone_project.description}
-                  </p>
-                  <p className='text-[11px] text-indigo-400 mt-1.5 font-medium'>
-                    🏆 Complete this to earn your certificate
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
           {/* end flex-1 tree column */}
 

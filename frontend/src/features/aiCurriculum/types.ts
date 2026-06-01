@@ -71,6 +71,7 @@ export interface AiModule {
   order_index: number;
   practice_tasks: string[];
   case_studies: string[];
+  capstone_project: AiCapstoneProject | null;
   topics: AiTopic[];
 }
 

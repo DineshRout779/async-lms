@@ -2,7 +2,7 @@ import apiClient from '@/services/api';
 import type {
   AiCourse, CourseFormData, GeneratedCurriculum, Skill,
   CourseAction, ReviewFeedback, AiModule, AiTopic, AiLesson,
-  TopicSuggestion, AiQuizQuestion, AiAssignment,
+  TopicSuggestion, AiQuizQuestion, AiAssignment, AiCapstoneProject,
 } from './types';
 
 export const aiCurriculumApi = {
@@ -101,6 +101,9 @@ export const aiCurriculumApi = {
 
   generateUnitAssignment: (topic_id: string) =>
     apiClient.post<{ success: boolean; data: AiAssignment }>(`/ai-curriculum/topics/${topic_id}/generate-assignment`),
+
+  generateCapstone: (module_id: string) =>
+    apiClient.post<{ success: boolean; data: AiCapstoneProject }>(`/ai-curriculum/modules/${module_id}/generate-capstone`),
 
   generateTaskTests: (data: { instructions: string; language?: string; role_focus?: string; level?: string }) =>
     apiClient.post<{ success: boolean; data: any[] }>('/ai-curriculum/exercises/generate-tests', data),
