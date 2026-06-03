@@ -16,6 +16,10 @@ RUN deluser node || true \
     && echo "playground ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER playground
-WORKDIR /workspace
+# Pre-bake node_modules for instant workspace boot
+WORKDIR /prebaked_modules
+COPY package.json .
+RUN npm install
 
+WORKDIR /workspace
 CMD ["bash"]

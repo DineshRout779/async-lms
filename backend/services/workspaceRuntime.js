@@ -141,8 +141,11 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
       '-w',
       '/workspace',
       image,
-      'sleep',
-      'infinity'
+      'bash',
+      '-c',
+      profile === 'mern'
+        ? 'cp -al /prebaked_modules/node_modules /workspace/node_modules 2>/dev/null || true && sleep infinity'
+        : 'sleep infinity'
     );
 
     await runDockerAsync(dockerArgs);
