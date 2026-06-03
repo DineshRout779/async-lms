@@ -144,7 +144,7 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
       'bash',
       '-c',
       profile === 'mern'
-        ? 'cp -al /prebaked_modules/node_modules /workspace/node_modules 2>/dev/null || true && cp -al /prebaked_modules/package-lock.json /workspace/package-lock.json 2>/dev/null || true && sleep infinity'
+        ? 'cp -a /prebaked_modules/node_modules /workspace/node_modules 2>/dev/null || true && cp -a /prebaked_modules/package-lock.json /workspace/package-lock.json 2>/dev/null || true && sleep infinity'
         : 'sleep infinity'
     );
 
