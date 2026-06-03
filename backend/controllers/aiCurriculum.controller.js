@@ -3,7 +3,7 @@ const {
   generateCurriculum, regenerateLesson, extractSkillsFromJD,
   generateTopics, generateUnits, generateSubtopics,
   generateLessonContent, generateUnitQuiz, generateUnitAssignment,
-  generateExerciseTests,
+  generateCapstone, generateExerciseTests,
 } = require('../services/aiCurriculumService');
 const { notify } = require('../services/notificationService');
 
@@ -1230,6 +1230,45 @@ exports.generateAndSaveUnitAssignment = async (req, res) => {
     res.json({ success: true, data: result.assignment });
   } catch (err) {
     console.error('generateAndSaveUnitAssignment error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Generate and save capstone project for a module (topic)
+exports.generateAndSaveCapstone = async (req, res) => {
+  try {
+    const { id } = req.params; // module id
+
+    const ctxRes = await pool.query(
+      `SELECT m.title AS module_title, c.title AS course_title, c.role_focus, c.level,
+              ARRAY_AGG(t.title ORDER BY t.order_index) AS unit_titles
+       FROM ai_course_modules m
+       JOIN ai_courses c ON m.course_id = c.id
+       LEFT JOIN ai_course_topics t ON t.module_id = m.id
+       WHERE m.id = $1
+       GROUP BY m.id, m.title, c.title, c.role_focus, c.level`,
+      [id],
+    );
+    if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Module not found' });
+
+    const { module_title, course_title, role_focus, level, unit_titles } = ctxRes.rows[0];
+
+    const result = await generateCapstone({
+      courseTitle: course_title,
+      roleFocus: role_focus,
+      level,
+      moduleTitle: module_title,
+      unitTitles: (unit_titles || []).filter(Boolean),
+    });
+
+    await pool.query(
+      `UPDATE ai_course_modules SET capstone_project = $1 WHERE id = $2`,
+      [JSON.stringify(result.capstone_project), id],
+    );
+
+    res.json({ success: true, data: result.capstone_project });
+  } catch (err) {
+    console.error('generateAndSaveCapstone error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
