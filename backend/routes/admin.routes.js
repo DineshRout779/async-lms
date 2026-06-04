@@ -10,6 +10,7 @@ const {
   getProjectSubmissions,
   getStudentProfile,
   getFacilitatorProfile,
+  getCollegeDetail,
   uploadLessonMarkdown,
   uploadFile,
   createTopic,
@@ -236,6 +237,7 @@ router.get(
 router.post('/leaderboard/update', verifyToken, isAdmin, updateLeaderboards);
 
 // ===== USER MANAGEMENT =====
+router.get('/colleges/:id', verifyToken, isAdmin, getCollegeDetail);
 router.get('/students/:id', verifyToken, isAdmin, getStudentProfile);
 router.get('/facilitators/:id', verifyToken, isAdmin, getFacilitatorProfile);
 router.patch('/users/:id/verify', verifyToken, isAdmin, verifyUser);
