@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 'use strict';
 const pool = require('../config/pg');
 
@@ -16,7 +17,7 @@ exports.list = async (req, res) => {
     const unreadCount = rows.filter((n) => !n.is_read).length;
     res.json({ success: true, data: rows, unread_count: unreadCount });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -31,7 +32,7 @@ exports.markRead = async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -45,7 +46,7 @@ exports.markAllRead = async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -60,6 +61,6 @@ exports.remove = async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
