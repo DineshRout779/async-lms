@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 
 // GET all colleges
@@ -12,11 +13,7 @@ exports.getAllColleges = async (req, res) => {
     res.status(200).json({ success: true, data: result.rows });
   } catch (error) {
     console.log(`Error || getAllColleges: `, error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching colleges',
-      error: error.message,
-    });
+    serverError(res, error);
   }
 };
 
@@ -76,11 +73,7 @@ exports.deleteCollege = async (req, res) => {
       .status(200)
       .json({ success: true, message: 'College deleted successfully' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error deleting college',
-      error: error.message,
-    });
+    serverError(res, error);
   }
 };
 
@@ -101,7 +94,7 @@ exports.getCollegesBySubject = async (req, res) => {
     const { rows } = await pool.query(query, [subjectId]);
     res.json({ success: true, data: rows });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -134,7 +127,7 @@ exports.toggleSubjectAccess = async (req, res) => {
     }
     res.json({ success: true, message: `Subject assigned!` });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -160,7 +153,7 @@ exports.assignFacilitator = async (req, res) => {
       .json({ success: true, message: 'Colleges assigned successfully' });
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(400).json({ success: false, error: error.message });
+    res.status(400).json({ success: false, message: 'Bad request' });
   } finally {
     client.release();
   }

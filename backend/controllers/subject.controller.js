@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const path = require('path');
 const fs = require('fs').promises;
@@ -620,7 +621,7 @@ exports.updateSubject = async (req, res) => {
       return res.status(404).json({ message: 'Subject not found' });
     res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -639,7 +640,7 @@ exports.deleteSubject = async (req, res) => {
       .status(200)
       .json({ success: true, message: 'Subject deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 // 5. Get a specific exercise content
