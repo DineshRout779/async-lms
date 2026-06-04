@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const {
   generateCurriculum, regenerateLesson, extractSkillsFromJD,
@@ -32,7 +33,7 @@ exports.extractSkills = async (req, res) => {
     res.json({ success: true, data: skills });
   } catch (err) {
     console.error('extractSkills error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -53,7 +54,7 @@ exports.generateTaskTests = async (req, res) => {
     res.json({ success: true, data: testCases });
   } catch (err) {
     console.error('generateTaskTests error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -82,7 +83,7 @@ exports.generate = async (req, res) => {
     res.json({ success: true, data: curriculum });
   } catch (err) {
     console.error('generate error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -164,7 +165,7 @@ exports.saveCourse = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('saveCourse error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -202,7 +203,7 @@ exports.listCourses = async (req, res) => {
     res.json({ success: true, data: result.rows });
   } catch (err) {
     console.error('listCourses error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -259,7 +260,7 @@ exports.getCourse = async (req, res) => {
     res.json({ success: true, data: { ...course, modules, reviews: reviewsRes.rows } });
   } catch (err) {
     console.error('getCourse error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -286,7 +287,7 @@ exports.updateCourse = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('updateCourse error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -324,7 +325,7 @@ exports.submitForReview = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('submitForReview error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -382,7 +383,7 @@ exports.reviewCourse = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('reviewCourse error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -584,7 +585,7 @@ exports.publishCourse = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('publishCourse error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -609,7 +610,7 @@ exports.updateModule = async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -629,7 +630,7 @@ exports.updateTopic = async (req, res) => {
     await pool.query(`UPDATE ai_course_topics SET ${sets.join(', ')} WHERE id = $${i}`, vals);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -656,7 +657,7 @@ exports.updateLesson = async (req, res) => {
     await pool.query(`UPDATE ai_course_lessons SET ${sets.join(', ')} WHERE id = $${i}`, vals);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -678,7 +679,7 @@ exports.addModule = async (req, res) => {
     );
     res.status(201).json({ success: true, data: { ...result.rows[0], topics: [] } });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -698,7 +699,7 @@ exports.addTopic = async (req, res) => {
     );
     res.status(201).json({ success: true, data: { ...result.rows[0], lessons: [] } });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -720,7 +721,7 @@ exports.addLesson = async (req, res) => {
     );
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -732,7 +733,7 @@ exports.deleteModule = async (req, res) => {
     await pool.query(`DELETE FROM ai_course_modules WHERE id = $1`, [id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -742,7 +743,7 @@ exports.deleteTopic = async (req, res) => {
     await pool.query(`DELETE FROM ai_course_topics WHERE id = $1`, [id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -752,7 +753,7 @@ exports.deleteLesson = async (req, res) => {
     await pool.query(`DELETE FROM ai_course_lessons WHERE id = $1`, [id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -771,7 +772,7 @@ exports.reorderModules = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -791,7 +792,7 @@ exports.reorderTopics = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -839,7 +840,7 @@ exports.duplicateModule = async (req, res) => {
     res.status(201).json({ success: true, data: { ...newMod.rows[0], topics: newTopics } });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -880,7 +881,7 @@ exports.duplicateTopic = async (req, res) => {
     res.status(201).json({ success: true, data: { ...newTopic.rows[0], lessons: newLessons } });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -900,7 +901,7 @@ exports.duplicateLesson = async (req, res) => {
     );
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -943,7 +944,7 @@ exports.regenerateLesson = async (req, res) => {
     res.json({ success: true, data: updated });
   } catch (err) {
     console.error('regenerateLesson error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -961,7 +962,7 @@ exports.generateTopics = async (req, res) => {
     res.json({ success: true, data: result.topics });
   } catch (err) {
     console.error('generateTopics error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -1027,7 +1028,7 @@ exports.generateAndSaveUnits = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('generateAndSaveUnits error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -1098,7 +1099,7 @@ exports.generateAndSaveSubtopics = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('generateAndSaveSubtopics error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   } finally {
     client.release();
   }
@@ -1155,7 +1156,7 @@ exports.generateAndSaveLessonContent = async (req, res) => {
     res.json({ success: true, data: result });
   } catch (err) {
     console.error('generateAndSaveLessonContent error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -1196,7 +1197,7 @@ exports.generateAndSaveUnitQuiz = async (req, res) => {
     res.json({ success: true, data: result.quiz_questions });
   } catch (err) {
     console.error('generateAndSaveUnitQuiz error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -1230,7 +1231,7 @@ exports.generateAndSaveUnitAssignment = async (req, res) => {
     res.json({ success: true, data: result.assignment });
   } catch (err) {
     console.error('generateAndSaveUnitAssignment error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -1269,7 +1270,7 @@ exports.generateAndSaveCapstone = async (req, res) => {
     res.json({ success: true, data: result.capstone_project });
   } catch (err) {
     console.error('generateAndSaveCapstone error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
@@ -1295,6 +1296,6 @@ exports.deleteCourse = async (req, res) => {
     await pool.query(`DELETE FROM ai_courses WHERE id = $1`, [id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };

@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const { notify } = require('../services/notificationService');
 
@@ -452,11 +453,7 @@ exports.getMyProgress = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching student progress:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch progress',
-      error: error.message,
-    });
+    serverError(res, error);
   }
 };
 
@@ -505,11 +502,7 @@ exports.startSubtopic = async (req, res) => {
     });
   } catch (error) {
     console.error('Error starting subtopic:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to start subtopic',
-      error: error.message,
-    });
+    serverError(res, error);
   }
 };
 
@@ -561,11 +554,7 @@ exports.completeLesson = async (req, res) => {
     });
   } catch (error) {
     console.error('Error completing lesson:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to complete lesson',
-      error: error.message,
-    });
+    serverError(res, error);
   }
 };
 
@@ -713,11 +702,7 @@ exports.submitQuizAttempt = async (req, res) => {
     });
   } catch (error) {
     console.error('Error submitting quiz:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to submit quiz',
-      error: error.message,
-    });
+    serverError(res, error);
   }
 };
 
@@ -783,7 +768,7 @@ exports.submitExercise = async (req, res) => {
           ? Math.round((testResults.passed / testResults.total) * exercise.max_score)
           : 0;
       } catch (err) {
-        return res.status(500).json({ success: false, message: `Test runner failed: ${err.message}` });
+        return serverError(res, err);
       }
     } else {
       // No test cases — accept manual score from body (legacy behaviour)
@@ -822,7 +807,7 @@ exports.submitExercise = async (req, res) => {
     });
   } catch (error) {
     console.error('Error submitting exercise:', error);
-    res.status(500).json({ success: false, message: 'Failed to submit exercise', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1007,7 +992,7 @@ exports.initExerciseWorkspace = async (req, res) => {
     res.json({ success: true, data: { language, files, projectId } });
   } catch (error) {
     console.error('Error initialising exercise workspace:', error);
-    res.status(500).json({ success: false, message: 'Failed to init workspace', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1043,7 +1028,7 @@ exports.runExercise = async (req, res) => {
     res.json({ success: true, data: { output, exitCode } });
   } catch (error) {
     console.error('Error running exercise:', error);
-    res.status(500).json({ success: false, message: 'Failed to run exercise', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1089,7 +1074,7 @@ exports.runExerciseTests = async (req, res) => {
     res.json({ success: true, data: testResult });
   } catch (error) {
     console.error('Error running exercise tests:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to run tests' });
+    serverError(res, error);
   }
 };
 
@@ -1145,7 +1130,7 @@ exports.getOverallLeaderboard = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch leaderboard', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1207,7 +1192,7 @@ exports.getWeeklyLeaderboard = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching weekly leaderboard:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch weekly leaderboard', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1266,7 +1251,7 @@ exports.getCollegeLeaderboard = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching college leaderboard:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch college leaderboard', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1291,7 +1276,7 @@ exports.getStudentProjects = async (req, res) => {
     res.json({ success: true, data: result.rows });
   } catch (error) {
     console.error('Error fetching student projects:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch projects', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1319,7 +1304,7 @@ exports.createStudentProject = async (req, res) => {
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error creating student project:', error);
-    res.status(500).json({ success: false, message: 'Failed to create project', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1344,7 +1329,7 @@ exports.deleteStudentProject = async (req, res) => {
     res.json({ success: true, message: 'Project deleted' });
   } catch (error) {
     console.error('Error deleting student project:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete project', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1389,7 +1374,7 @@ exports.getAssignmentById = async (req, res) => {
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error fetching assignment:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch assignment', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1434,7 +1419,7 @@ exports.submitAssignment = async (req, res) => {
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting assignment:', error);
-    res.status(500).json({ success: false, message: 'Failed to submit assignment', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1468,7 +1453,7 @@ exports.getStudentAssignments = async (req, res) => {
     res.json({ success: true, data: result.rows });
   } catch (error) {
     console.error('Error fetching student assignments:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch assignments', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1505,7 +1490,7 @@ exports.getCapstone = async (req, res) => {
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error fetching capstone:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch capstone', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1564,7 +1549,7 @@ exports.submitCapstone = async (req, res) => {
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting capstone:', error);
-    res.status(500).json({ success: false, message: 'Failed to submit capstone', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -1642,11 +1627,7 @@ exports.enrollInSubject = async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error enrolling in subject:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to enroll',
-      error: error.message,
-    });
+    serverError(res, error);
   } finally {
     client.release();
   }

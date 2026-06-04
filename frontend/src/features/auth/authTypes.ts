@@ -6,6 +6,8 @@ export interface User {
   is_verified: boolean;
   college_id?: string | number;
   college_ids?: (string | number)[];
+  college_is_verified?: boolean;
+  college_name?: string;
   degree?: string;
   year?: number;
   onboarding_step: string;

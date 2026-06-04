@@ -28,6 +28,17 @@ const PrivateRoute = () => {
     if (user.role === 'facilitator' && user.onboarding_step !== 'done') {
       return <Navigate to='/onboarding/facilitator' replace />;
     }
+    if (user.role === 'student' && user.onboarding_step === 'done') {
+      if (!user.is_verified) {
+        return <Navigate to='/pending-verification' replace />;
+      }
+      if (user.college_is_verified === false) {
+        return <Navigate to='/college-under-verification' replace />;
+      }
+    }
+    if (user.role === 'facilitator' && user.onboarding_step === 'done' && !user.is_verified) {
+      return <Navigate to='/pending-verification' replace />;
+    }
   }
 
   return <Outlet />;

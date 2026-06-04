@@ -95,12 +95,16 @@ app.get('/api/v1/internal/workers/status', (req, res) => {
   res.json(getStatus());
 });
 
-//  404 Catch-all (Place this at the very bottom)
+//  404 Catch-all
 app.use((req, res) => {
   res.status(404).json({ message: `Route ${req.originalUrl} not found` });
 });
 
+// Global error handler — must be after all routes
+app.use(require('./middlewares/errorHandler'));
+
 const { Server } = require('socket.io');
+const notificationService = require('./services/notificationService');
 
 const io = new Server(server, {
   cors: {
@@ -109,8 +113,12 @@ const io = new Server(server, {
   },
 });
 
+notificationService.setIo(io);
+
 io.on('connection', (socket) => {
-  // Minimal socket handler for frontend notifications/collaboration
+  socket.on('notification:subscribe', (userId) => {
+    if (userId) socket.join(`user:${userId}`);
+  });
   socket.on('disconnect', () => {});
 });
 

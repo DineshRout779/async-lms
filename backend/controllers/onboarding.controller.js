@@ -1,4 +1,6 @@
+const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
+const { notify } = require('../services/notificationService');
 
 // 1. College Selection Step
 exports.selectCollege = async (req, res) => {
@@ -35,7 +37,7 @@ exports.selectCollege = async (req, res) => {
     res.json({ message: 'College added successfully', next_step: 'batch' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    serverError(res, err);
   }
 };
 
@@ -48,12 +50,15 @@ exports.updateBatchDetails = async (req, res) => {
     return res.status(400).json({ message: 'degree, current_academic_year, and expected_graduation_year are required' });
   }
 
+  // Parse "1st year" → 1, "2nd year" → 2, etc.
+  const year = parseInt(current_academic_year) || null;
+
   try {
     await pool.query(
-      `UPDATE student_profiles 
-             SET degree = $1, current_academic_year = $2, expected_graduation_year = $3 
-             WHERE user_id = $4`,
-      [degree, current_academic_year, expected_graduation_year, userId],
+      `UPDATE student_profiles
+             SET degree = $1, current_academic_year = $2, expected_graduation_year = $3, year = $4
+             WHERE user_id = $5`,
+      [degree, current_academic_year, expected_graduation_year, year, userId],
     );
 
     await pool.query(
@@ -140,6 +145,39 @@ exports.selectSubjects = async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    // Notify all facilitators assigned to this student's college (best-effort, after commit)
+    try {
+      const studentRes = await pool.query(
+        `SELECT u.full_name, sp.college_id
+         FROM users u JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE u.id = $1`,
+        [userId],
+      );
+      const { full_name, college_id } = studentRes.rows[0] || {};
+      if (college_id) {
+        const facRes = await pool.query(
+          `SELECT fc.facilitator_id FROM facilitator_colleges fc
+           JOIN users u ON u.id = fc.facilitator_id
+           WHERE fc.college_id = $1 AND u.is_verified = true`,
+          [college_id],
+        );
+        await Promise.all(
+          facRes.rows.map(({ facilitator_id }) =>
+            notify({
+              userId: facilitator_id,
+              type: 'general',
+              title: 'New student requires verification',
+              body: `${full_name} has completed onboarding and is awaiting your verification.`,
+              link: '/dashboard/facilitator/students',
+            }),
+          ),
+        );
+      }
+    } catch (notifyErr) {
+      console.error('[onboarding] facilitator notify failed:', notifyErr.message);
+    }
+
     res.json({
       success: true,
       message: 'Learning path created!',

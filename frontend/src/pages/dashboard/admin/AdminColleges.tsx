@@ -24,6 +24,7 @@ import {
 import apiClient from '@/services/api';
 import DeleteCollegeDialog from '@/components/common/admin/DeleteCollegeDialog';
 import CollegeFormDialog from '@/components/common/admin/CollegeFormDialog';
+import CollegeDetailSheet from '@/components/common/admin/CollegeDetailSheet';
 
 /* ======================
    Types (API aligned)
@@ -50,6 +51,7 @@ export default function AdminColleges() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingCollege, setEditingCollege] = useState<College | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   /* ======================
      Fetch Colleges
@@ -200,7 +202,9 @@ export default function AdminColleges() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align='end'>
-                          {/* TODO: Show Details */}
+                          <DropdownMenuItem onClick={() => setDetailId(college.id)}>
+                            View Details
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
                               setEditingCollege(college);
@@ -246,6 +250,12 @@ export default function AdminColleges() {
           onSuccess={fetchColleges}
         />
       )}
+
+      {/* College Detail Sheet */}
+      <CollegeDetailSheet
+        collegeId={detailId}
+        onClose={() => setDetailId(null)}
+      />
     </div>
   );
 }

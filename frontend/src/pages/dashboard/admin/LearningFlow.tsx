@@ -865,8 +865,7 @@ const LearningFlow: React.FC = () => {
           markdownPathURL: content.markdown_path,
         });
         setLessonPreviewContent(res.data.data);
-      } catch (error) {
-      }
+      } catch (error) {}
     }
   };
 
@@ -956,14 +955,16 @@ const LearningFlow: React.FC = () => {
                                 <ChevronRight className='h-4 w-4' />
                               )}
                             </button>
-                            <span className='font-semibold text-slate-800'>
-                              {topic.title}
-                            </span>
-                            {topic.description && (
-                              <span className='text-xs text-slate-500'>
-                                • {topic.description}
-                              </span>
-                            )}
+                            <div className='flex flex-col'>
+                              <p className='font-semibold text-slate-800'>
+                                {topic.title}
+                              </p>
+                              {topic.description && (
+                                <p className='text-xs text-slate-500 truncate max-w-xs' title={topic.description}>
+                                  {topic.description}
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <div className='flex items-center gap-3 text-slate-300'>
                             <span
@@ -1059,14 +1060,16 @@ const LearningFlow: React.FC = () => {
                                           >
                                             {uIndex + 1}
                                           </div>
-                                          <span className='font-semibold text-slate-800 truncate'>
-                                            {unit.title}
-                                          </span>
-                                          {unit.description && (
-                                            <span className='hidden text-xs text-slate-400 md:block truncate'>
-                                              {unit.description}
-                                            </span>
-                                          )}
+                                          <div className='flex flex-col'>
+                                            <h2 className='font-semibold text-slate-800 truncate'>
+                                              {unit.title}
+                                            </h2>
+                                            {unit.description && (
+                                              <p className='hidden text-xs text-slate-400 md:block truncate max-w-xs' title={unit.description}>
+                                                {unit.description}
+                                              </p>
+                                            )}
+                                          </div>
                                         </div>
                                         <div className='flex items-center gap-1 shrink-0 ml-2'>
                                           {/* Reorder */}
@@ -1316,7 +1319,7 @@ const LearningFlow: React.FC = () => {
                                                             {sub.title}
                                                           </span>
                                                           {sub.description && (
-                                                            <p className='text-xs text-slate-400 truncate'>
+                                                            <p className='text-xs text-slate-400 truncate max-w-xs' title={sub.description}>
                                                               {sub.description}
                                                             </p>
                                                           )}
@@ -1571,13 +1574,29 @@ const LearningFlow: React.FC = () => {
                                                                         {
                                                                           ...exercise,
                                                                           instructions:
-                                                                            res.data.data.instructions ?? '',
+                                                                            res
+                                                                              .data
+                                                                              .data
+                                                                              .instructions ??
+                                                                            '',
                                                                           initial_files:
-                                                                            res.data.data.initial_files ?? [],
+                                                                            res
+                                                                              .data
+                                                                              .data
+                                                                              .initial_files ??
+                                                                            [],
                                                                           test_cases:
-                                                                            res.data.data.test_cases ?? [],
+                                                                            res
+                                                                              .data
+                                                                              .data
+                                                                              .test_cases ??
+                                                                            [],
                                                                           tasks:
-                                                                            res.data.data.tasks ?? [],
+                                                                            res
+                                                                              .data
+                                                                              .data
+                                                                              .tasks ??
+                                                                            [],
                                                                         },
                                                                       );
                                                                     } catch (error) {
