@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
@@ -18,6 +18,18 @@ export default function BatchStep() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    apiClient.get('/users/profile').then((res) => {
+      const p = res.data.data;
+      if (p?.degree) setDegree(p.degree);
+      if (p?.current_academic_year) {
+        setCurrentAcademicYear(p.current_academic_year);
+        setExpectedGraduationYear(calculateGradYear(p.current_academic_year, p.degree || degree));
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getDuration = (deg: string) => {
     if (['BCA', 'BSC', 'BCOM', 'BA'].includes(deg)) return 3;
@@ -67,7 +79,6 @@ export default function BatchStep() {
   return (
     <div
       className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
-      style={{ fontFamily: "'Noto Sans', sans-serif" }}
     >
       <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
 
@@ -81,7 +92,7 @@ export default function BatchStep() {
 
           <div className='space-y-5 w-full'>
             <div className='w-full'>
-              <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
+              <label className="text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block">
                 Degree Program
               </label>
               <Select value={degree} onValueChange={handleDegreeChange}>
@@ -100,7 +111,7 @@ export default function BatchStep() {
             </div>
 
             <div className='w-full'>
-              <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
+              <label className="text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block">
                 Batch (Academic Year)
               </label>
               <Select value={currentAcademicYear} onValueChange={handleYearChange}>
@@ -117,7 +128,7 @@ export default function BatchStep() {
             </div>
 
             <div className='w-full'>
-              <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
+              <label className="text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block">
                 Expected Graduation Year
               </label>
               <Select value={expectedGraduationYear} onValueChange={setExpectedGraduationYear}>
@@ -146,13 +157,13 @@ export default function BatchStep() {
             variant="ghost"
             onClick={() => navigate(-1)}
             type="button"
-            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg transition-colors"
+            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg transition-colors"
           >
             Back
           </Button>
           <Button
             type="button"
-            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg shadow-md transition-colors"
+            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg shadow-md transition-colors"
             disabled={loading}
             onClick={handleContinue}
           >

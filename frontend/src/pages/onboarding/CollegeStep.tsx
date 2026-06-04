@@ -88,7 +88,6 @@ export default function CollegeStep() {
   return (
     <div 
       className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
-      style={{ fontFamily: "'Noto Sans', sans-serif" }}
     >
       <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
         
@@ -101,8 +100,8 @@ export default function CollegeStep() {
           </div>
 
           <div className="space-y-2 mb-6">
-            <label className="text-xs font-bold text-[#344499] tracking-wide">College name</label>
-            <Select onValueChange={setCollegeId} disabled={isLoading || submitting}>
+            <label className="text-[13px] font-semibold text-[#344499] tracking-wide">College name</label>
+            <Select value={collegeId || ''} onValueChange={setCollegeId} disabled={isLoading || submitting}>
               <SelectTrigger className='w-full h-11 text-[13px] text-slate-500 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                 <SelectValue
                   placeholder={isLoading ? 'Loading colleges...' : 'Search or select your college'}
@@ -129,7 +128,7 @@ export default function CollegeStep() {
           {isOtherSelected && (
              <div className='space-y-4 mb-6 border-t border-slate-100 pt-6 mt-6'>
               <div className="space-y-1.5">
-                 <label className="text-xs font-bold text-[#344499] tracking-wide">Enter college name</label>
+                 <label className="text-[13px] font-semibold text-[#344499] tracking-wide">Enter college name</label>
                  <Input
                    className="h-11 border-slate-200 text-sm shadow-sm"
                    placeholder='e.g. Stanford University'
@@ -139,7 +138,7 @@ export default function CollegeStep() {
               </div>
 
               <div className="space-y-1.5">
-                 <label className="text-xs font-bold text-[#344499] tracking-wide">Enter college address (City)</label>
+                 <label className="text-[13px] font-semibold text-[#344499] tracking-wide">Enter college address (City)</label>
                  <Input
                    className="h-11 border-slate-200 text-sm shadow-sm"
                    placeholder='e.g. Stanford, California'
@@ -157,13 +156,13 @@ export default function CollegeStep() {
             variant="ghost" 
             onClick={() => navigate(-1)}
             type="button"
-            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg transition-colors"
+            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg transition-colors"
           >
             Back
           </Button>
           <Button
             type="button"
-            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg shadow-md transition-colors"
+            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg shadow-md transition-colors"
             disabled={
               isLoading ||
               submitting ||

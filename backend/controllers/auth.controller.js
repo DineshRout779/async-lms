@@ -45,7 +45,7 @@ exports.signup = async (req, res) => {
         email,
         passwordHash,
         role || 'student',
-        role === 'student' ? true : false,
+        false,
       ],
     );
 
@@ -86,9 +86,11 @@ exports.login = async (req, res) => {
   try {
     const userRes = await pool.query(
       `SELECT u.id, u.full_name, u.email, u.password_hash, u.role, u.onboarding_step, u.is_verified,
-              sp.college_id, sp.degree, sp.year
+              sp.college_id, sp.degree, sp.year,
+              c.is_verified AS college_is_verified
        FROM users u
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+       LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1`,
       [email],
     );
@@ -137,6 +139,7 @@ exports.login = async (req, res) => {
         is_verified: user.is_verified,
         college_id: user.college_id,
         college_ids: collegeIds,
+        college_is_verified: user.college_is_verified,
         degree: user.degree,
         year: user.year,
       },
@@ -188,9 +191,11 @@ exports.googleCallback = async (req, res) => {
     // Upsert user
     const existingRes = await pool.query(
       `SELECT u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified, u.google_id,
-              sp.college_id, sp.degree, sp.year
+              sp.college_id, sp.degree, sp.year,
+              c.is_verified AS college_is_verified
        FROM users u
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+       LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1`,
       [email],
     );
@@ -208,7 +213,7 @@ exports.googleCallback = async (req, res) => {
     } else {
       const insertRes = await pool.query(
         `INSERT INTO users (full_name, email, google_id, role, onboarding_step, is_verified)
-         VALUES ($1, $2, $3, 'student', 'college', true)
+         VALUES ($1, $2, $3, 'student', 'college', false)
          RETURNING id, full_name, email, role, onboarding_step, is_verified`,
         [name, email, googleId],
       );
@@ -253,15 +258,18 @@ exports.getMe = async (req, res) => {
     const userRes = await pool.query(
       `SELECT u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified,
               sp.college_id, sp.degree, sp.year,
+              c.is_verified AS college_is_verified,
+              c.name AS college_name,
               COALESCE(us.current_streak, 0) AS current_streak,
               COALESCE(SUM(pl.points), 0)::integer AS total_points
        FROM users u
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+       LEFT JOIN colleges c ON c.id = sp.college_id
        LEFT JOIN user_streaks us ON us.user_id = u.id
        LEFT JOIN points_log pl ON pl.user_id = u.id
        WHERE u.id = $1
        GROUP BY u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified,
-                sp.college_id, sp.degree, sp.year, us.current_streak`,
+                sp.college_id, sp.degree, sp.year, c.is_verified, c.name, us.current_streak`,
       [userID],
     );
 

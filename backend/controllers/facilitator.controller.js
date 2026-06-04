@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 
 /**
@@ -196,7 +197,7 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
          FROM user_subjects us
          JOIN subjects s ON us.subject_id = s.id
          WHERE us.user_id = $1
-         ORDER BY us.enrolled_at DESC`,
+         ORDER BY us.started_at DESC`,
         [id],
       ),
     ]);
@@ -244,7 +245,112 @@ exports.getBatches = async (req, res) => {
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('getBatches error:', err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };
 
+
+
+/**
+ * Verify or unverify a student — scoped to facilitator's assigned colleges
+ */
+exports.verifyStudent = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { id } = req.params;
+    const { is_verified } = req.body;
+
+    if (is_verified === undefined) {
+      return res.status(400).json({ message: 'is_verified is required' });
+    }
+
+    const colRes = await pool.query(
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      [facilitatorId],
+    );
+    const collegeIds = colRes.rows.map((r) => r.college_id);
+
+    if (collegeIds.length === 0) {
+      return res.status(403).json({ message: 'No colleges assigned to you' });
+    }
+
+    const studentRes = await pool.query(
+      `SELECT u.id FROM users u
+       JOIN student_profiles sp ON sp.user_id = u.id
+       WHERE u.id = $1 AND u.role = 'student' AND sp.college_id = ANY($2::uuid[])`,
+      [id, collegeIds],
+    );
+
+    if (!studentRes.rowCount) {
+      return res.status(404).json({ message: 'Student not found in your colleges' });
+    }
+
+    const result = await pool.query(
+      `UPDATE users SET is_verified = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, full_name, role, is_verified`,
+      [is_verified, id],
+    );
+
+    res.json({
+      success: true,
+      message: `Student ${is_verified ? 'verified' : 'unverified'} successfully`,
+      data: result.rows[0],
+    });
+  } catch (err) {
+    console.error('verifyStudent error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Edit limited student profile fields — scoped to facilitator's colleges
+ */
+exports.editStudent = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { id } = req.params;
+    const { degree, current_academic_year, expected_graduation_year } = req.body;
+
+    const colRes = await pool.query(
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      [facilitatorId],
+    );
+    const collegeIds = colRes.rows.map((r) => r.college_id);
+    if (collegeIds.length === 0) {
+      return res.status(403).json({ message: 'No colleges assigned to you' });
+    }
+
+    const studentRes = await pool.query(
+      `SELECT u.id FROM users u
+       JOIN student_profiles sp ON sp.user_id = u.id
+       WHERE u.id = $1 AND u.role = 'student' AND sp.college_id = ANY($2::uuid[])`,
+      [id, collegeIds],
+    );
+    if (!studentRes.rowCount) {
+      return res.status(404).json({ message: 'Student not found in your colleges' });
+    }
+
+    const fields = [];
+    const values = [];
+    let i = 1;
+    if (degree !== undefined)                   { fields.push(`degree = $${i++}`);                    values.push(degree); }
+    if (current_academic_year !== undefined)    { fields.push(`current_academic_year = $${i++}`);     values.push(current_academic_year); }
+    if (expected_graduation_year !== undefined) { fields.push(`expected_graduation_year = $${i++}`);  values.push(expected_graduation_year); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ message: 'No fields to update' });
+    }
+
+    values.push(id);
+    await pool.query(
+      `UPDATE student_profiles SET ${fields.join(', ')} WHERE user_id = $${i}`,
+      values,
+    );
+
+    res.json({ success: true, message: 'Student profile updated' });
+  } catch (err) {
+    console.error('editStudent error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

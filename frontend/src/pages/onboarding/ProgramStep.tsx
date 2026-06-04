@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
@@ -21,6 +21,13 @@ export default function ProgramStep() {
   // React Query — cached, shared with MyCourses if already fetched
   const { data: subjects = [], isLoading } = usePublishedSubjects();
 
+  useEffect(() => {
+    apiClient.get('/users/subjects').then((res) => {
+      const saved = res.data.data;
+      if (saved?.length > 0) setSelected(saved[0].id.toString());
+    }).catch(() => {});
+  }, []);
+
   const handleContinue = async () => {
     if (!selected) return;
 
@@ -40,7 +47,6 @@ export default function ProgramStep() {
   return (
     <div 
       className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
-      style={{ fontFamily: "'Noto Sans', sans-serif" }}
     >
       <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
         
@@ -54,7 +60,7 @@ export default function ProgramStep() {
 
           <div className='space-y-5 w-full'>
             <div className='w-full'>
-              <label className="text-xs font-bold text-[#344499] tracking-wide mb-1.5 block">
+              <label className="text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block">
                 Program / Course
               </label>
               <Select value={selected} onValueChange={setSelected} disabled={isLoading}>
@@ -78,7 +84,7 @@ export default function ProgramStep() {
             </div>
 
             <div className="bg-[#fffbeb] border-l-[3px] border-[#f59e0b] p-3.5 rounded-r-md mt-8 shadow-sm">
-              <p className="text-[11px] font-bold text-slate-800 tracking-wide">You can change this after onboarding</p>
+              <p className="text-[11px] font-medium text-slate-800 tracking-wide">You can change this after onboarding</p>
             </div>
           </div>
         </div>
@@ -88,13 +94,13 @@ export default function ProgramStep() {
             variant="ghost" 
             onClick={() => navigate(-1)}
             type="button"
-            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg transition-colors"
+            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg transition-colors"
           >
             Back
           </Button>
           <Button
             type="button"
-            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-extrabold tracking-wide rounded-lg shadow-md transition-colors"
+            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg shadow-md transition-colors"
             disabled={submitting || !selected}
             onClick={handleContinue}
           >

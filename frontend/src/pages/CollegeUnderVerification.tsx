@@ -1,30 +1,21 @@
 import { useEffect } from 'react';
-import { ShieldAlert, Clock, GraduationCap } from 'lucide-react';
+import { Building2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { logout } from '@/features/auth/authSlice';
 import { useNavigate } from 'react-router';
 import { selectUser } from '@/features/auth/authSelectors';
 
-export default function PendingVerification() {
+export default function CollegeUnderVerification() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
-  const isStudent = user?.role === 'student';
 
   useEffect(() => {
-    if (!user?.is_verified) return;
-    if (isStudent) {
-      // College also needs to be verified — if it's not, the other page handles it
-      if (user.college_is_verified === false) {
-        navigate('/college-under-verification', { replace: true });
-      } else {
-        navigate('/dashboard/student', { replace: true });
-      }
-    } else if (user.role === 'facilitator') {
-      navigate('/dashboard/facilitator', { replace: true });
+    if (user?.is_verified && user.college_is_verified !== false) {
+      navigate('/dashboard/student', { replace: true });
     }
-  }, [user?.is_verified, user?.college_is_verified, isStudent, navigate, user?.role]);
+  }, [user?.college_is_verified, user?.is_verified, navigate]);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -40,29 +31,29 @@ export default function PendingVerification() {
           </div>
           <div className='space-y-2'>
             <h1 className='text-2xl font-bold tracking-tight'>
-              Verification Pending
+              College Under Verification
             </h1>
+            {user?.college_name && (
+              <p className='text-sm font-semibold text-foreground'>
+                {user.college_name}
+              </p>
+            )}
             <p className='text-muted-foreground'>
-              {isStudent
-                ? 'Your student account has been created successfully, but requires approval from your college facilitator before you can access the dashboard.'
-                : 'Your facilitator account has been created successfully, but requires administrator approval before you can access the dashboard.'}
+              Your account is active, but the college you registered under is
+              currently being reviewed by our team.
             </p>
           </div>
         </div>
 
         <div className='space-y-4 rounded-xl bg-muted/50 p-6'>
           <div className='flex gap-4'>
-            {isStudent ? (
-              <GraduationCap className='h-6 w-6 text-primary shrink-0' />
-            ) : (
-              <ShieldAlert className='h-6 w-6 text-primary shrink-0' />
-            )}
+            <Building2 className='h-6 w-6 text-primary shrink-0' />
             <div className='space-y-1'>
               <p className='text-sm font-semibold'>Why is this required?</p>
               <p className='text-xs text-muted-foreground'>
-                {isStudent
-                  ? 'To ensure only enrolled students gain access, your account must be verified by your college facilitator or an administrator.'
-                  : 'To maintain the integrity of our educational platform, all facilitator accounts must be manually verified by the CodeGuru team.'}
+                To ensure quality and authenticity, newly registered colleges
+                are manually reviewed before students can access course content.
+                This usually takes 1–2 business days.
               </p>
             </div>
           </div>
