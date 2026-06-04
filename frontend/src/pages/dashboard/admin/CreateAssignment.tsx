@@ -57,8 +57,9 @@ export default function CreateAssignment() {
   const [type, setType] = useState(editData.type || '');
   const [deadline, setDeadline] = useState(editData.deadline || '');
 
-  // ── Colleges from API ──
+  // ── Colleges & Evaluators from API ──
   const [colleges, setColleges] = useState<College[]>([]);
+  const [evaluators, setEvaluators] = useState<{id: string; name: string}[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   // ── Instruction Document Upload ──
@@ -99,8 +100,13 @@ export default function CreateAssignment() {
   useEffect(() => {
     apiClient
       .get<{ data: College[] }>('/colleges')
-      .then((res) => setColleges(res.data.data))
+      .then((res) => setColleges(res.data.data || (res.data as any) || []))
       .catch((error) => toast.error(getErrorMessage(error, 'Failed to load colleges')));
+
+    apiClient
+      .get<{ data: { id: string; name: string }[] }>('/evaluations/evaluators')
+      .then((res) => setEvaluators(res.data.data || (res.data as any) || []))
+      .catch((error) => toast.error(getErrorMessage(error, 'Failed to load evaluators')));
   }, []);
 
   // ── Evaluation Setup ──
@@ -111,6 +117,9 @@ export default function CreateAssignment() {
 
   // ── Rubrics ──
   const [rubrics, setRubrics] = useState<RubricItem[]>(editData.rubricsList || []);
+
+  // ── Test Cases ──
+  const [testCases, setTestCases] = useState<{id: number; input: string; output: string; score: number}[]>(editData.testCasesList || []);
 
   // ── Submission Settings ──
   const [allowFileUpload, setAllowFileUpload] = useState(editData.allowFileUpload ?? true);
@@ -136,6 +145,28 @@ export default function CreateAssignment() {
       prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
     );
   };
+
+  // ── Test Cases helpers ──
+  const totalTestCaseScore = testCases.reduce((sum, tc) => sum + tc.score, 0);
+
+  const addTestCase = () => {
+    setTestCases((prev) => [
+      ...prev,
+      { id: Date.now(), input: '', output: '', score: 10 },
+    ]);
+  };
+
+  const removeTestCase = (id: number) => {
+    setTestCases((prev) => prev.filter((tc) => tc.id !== id));
+  };
+
+  const updateTestCase = (id: number, field: keyof typeof testCases[0], value: string | number) => {
+    setTestCases((prev) =>
+      prev.map((tc) => (tc.id === id ? { ...tc, [field]: value } : tc))
+    );
+  };
+
+  const isCodeEvaluator = ['JS', 'PYTHON', 'JAVA'].includes(aiEvaluationType);
 
   // ── Validation & Submit ──
   const handleCreate = async () => {
@@ -172,6 +203,10 @@ export default function CreateAssignment() {
           course: course || null,
           instruction_file_url: instructionUrl || null,
           instruction_file_name: instructionName || null,
+          test_cases: testCases.map((t) => ({ input: t.input, output: t.output, score: t.score })),
+          rubric: rubrics.map((r) => ({ name: r.criteria, score: r.maxScore })),
+          evaluator_type: aiEvaluationType || null,
+          assignment_description: assignmentDescription.trim() || null,
         });
         toast.success('Assignment updated successfully!');
       } else {
@@ -183,6 +218,10 @@ export default function CreateAssignment() {
           course: course || null,
           instruction_file_url: instructionUrl || null,
           instruction_file_name: instructionName || null,
+          test_cases: testCases.map((t) => ({ input: t.input, output: t.output, score: t.score })),
+          rubric: rubrics.map((r) => ({ name: r.criteria, score: r.maxScore })),
+          evaluator_type: aiEvaluationType || null,
+          assignment_description: assignmentDescription.trim() || null,
         });
         resId = res.data.data.id;
         toast.success('Assignment created successfully!');
@@ -206,8 +245,9 @@ export default function CreateAssignment() {
           allowFileUpload,
           allowGithubLink,
           allowCodeEditor,
-          totalMarks: totalScore,
+          totalMarks: isCodeEvaluator ? totalTestCaseScore : totalScore,
           rubricsList: rubrics,
+          testCasesList: testCases,
           rubrics: rubrics.map((r) => ({
             name: r.criteria,
             score: r.maxScore,
@@ -281,6 +321,9 @@ export default function CreateAssignment() {
                     <SelectValue placeholder='Select Course' />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value='js-fundamentals'>Java Script Fundamentals</SelectItem>
+                    <SelectItem value='html-css'>HTML & CSS</SelectItem>
+                    <SelectItem value='js-dom'>JS DOM</SelectItem>
                     <SelectItem value='react'>React</SelectItem>
                     <SelectItem value='node'>Node.js</SelectItem>
                     <SelectItem value='python'>Python</SelectItem>
@@ -296,8 +339,8 @@ export default function CreateAssignment() {
                     <SelectValue placeholder='Select College' />
                   </SelectTrigger>
                   <SelectContent>
-                    {colleges.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
+                    {colleges?.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
                         {c.name}
                       </SelectItem>
                     ))}
@@ -428,15 +471,17 @@ export default function CreateAssignment() {
             {/* AI Evaluation Type & Weightage */}
             <div className='grid grid-cols-2 gap-4'>
               <div className='space-y-1.5'>
-                <Label className='text-sm text-slate-600'>AI Evaluation Type</Label>
+                <Label className='text-sm text-slate-600'>Evaluator</Label>
                 <Select value={aiEvaluationType} onValueChange={setAiEvaluationType}>
                   <SelectTrigger className='w-full'>
                     <SelectValue placeholder='Select' />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='auto'>Auto</SelectItem>
-                    <SelectItem value='manual'>Manual</SelectItem>
-                    <SelectItem value='hybrid'>Hybrid</SelectItem>
+                    {evaluators?.map((ev) => (
+                      <SelectItem key={ev.id} value={String(ev.id)}>
+                        {ev.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -464,12 +509,79 @@ export default function CreateAssignment() {
         </Card>
 
         {/* ================================================================
-            SECTION 3 — Evaluation Rubrics
+            SECTION 3 — Evaluation Rubrics / Test Cases
         ================================================================ */}
-        <Card className='border-none shadow-sm'>
-          <CardHeader className='pb-2'>
-            <div className='flex items-center justify-between'>
-              <CardTitle className='text-base font-semibold text-slate-900'>Evaluation Rubrics</CardTitle>
+        {isCodeEvaluator ? (
+          <Card className='border-none shadow-sm'>
+            <CardHeader className='pb-2'>
+              <div className='flex items-center justify-between'>
+                <CardTitle className='text-base font-semibold text-slate-900'>Test Cases Builder</CardTitle>
+                <div className='flex items-center gap-3'>
+                  <span className='text-sm text-slate-500'>
+                    Total: <span className='font-semibold text-blue-600'>{totalTestCaseScore}</span> Points
+                  </span>
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    className='gap-1 text-blue-600 border-blue-200 hover:bg-blue-50'
+                    onClick={addTestCase}
+                  >
+                    <Plus className='w-3.5 h-3.5' /> Add Test Case
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className='space-y-3'>
+              {testCases.map((tc) => (
+                <div
+                  key={tc.id}
+                  className='grid grid-cols-[1fr_1fr_80px_40px] gap-3 items-center'
+                >
+                  <div className='space-y-1'>
+                    <Label className='text-xs text-slate-400'>Input (Arguments)</Label>
+                    <Input
+                      value={tc.input}
+                      onChange={(e) => updateTestCase(tc.id, 'input', e.target.value)}
+                      className='text-sm font-mono'
+                      placeholder='e.g. 5, 10'
+                    />
+                  </div>
+                  <div className='space-y-1'>
+                    <Label className='text-xs text-slate-400'>Expected Output</Label>
+                    <Input
+                      value={tc.output}
+                      onChange={(e) => updateTestCase(tc.id, 'output', e.target.value)}
+                      className='text-sm font-mono'
+                      placeholder='e.g. 15'
+                    />
+                  </div>
+                  <div className='space-y-1'>
+                    <Label className='text-xs text-slate-400'>Score</Label>
+                    <Input
+                      type='number'
+                      value={tc.score}
+                      onChange={(e) => updateTestCase(tc.id, 'score', Number(e.target.value))}
+                      className='text-sm'
+                    />
+                  </div>
+                  <div className='pt-5'>
+                    <button
+                      className='text-slate-400 hover:text-red-500 transition'
+                      onClick={() => removeTestCase(tc.id)}
+                    >
+                      <Trash2 className='w-4 h-4' />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className='border-none shadow-sm'>
+            <CardHeader className='pb-2'>
+              <div className='flex items-center justify-between'>
+                <CardTitle className='text-base font-semibold text-slate-900'>Evaluation Rubrics</CardTitle>
               <div className='flex items-center gap-3'>
                 <span className='text-sm text-slate-500'>
                   Total: <span className='font-semibold text-blue-600'>{totalScore}</span> Points
@@ -529,6 +641,7 @@ export default function CreateAssignment() {
             ))}
           </CardContent>
         </Card>
+        )}
 
         {/* ================================================================
             SECTION 4 — Submission Settings
