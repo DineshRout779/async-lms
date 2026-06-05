@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const fsService = require('../services/fileSystemService');
 
 // Helper: returns 403 if the requesting user is not the workspace owner
@@ -14,7 +15,7 @@ exports.getTree = (req, res) => {
   try {
     res.json(fsService.getTree(userId, projectId));
   } catch (err) {
-    res.status(404).json({ message: err.message });
+    res.status(404).json({ message: 'Resource not found' });
   }
 };
 
@@ -23,7 +24,7 @@ exports.readFile = (req, res) => {
   try {
     res.json({ content: fsService.readFile(userId, projectId, filePath) });
   } catch (err) {
-    res.status(404).json({ message: err.message });
+    res.status(404).json({ message: 'Resource not found' });
   }
 };
 

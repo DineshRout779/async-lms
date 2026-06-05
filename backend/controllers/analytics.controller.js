@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require("../config/pg");
 
 exports.getAnalytics = async (req, res) => {
@@ -117,6 +118,6 @@ ORDER BY month;
     });
   } catch (err) {
     console.error("Analytics Error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    serverError(res, err);
   }
 };

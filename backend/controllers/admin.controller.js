@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const path = require('path');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -2145,21 +2146,28 @@ exports.uploadFile = async (req, res) => {
       });
     }
 
-    const bucket = process.env.AWS_S3_BUCKET;
     const region = process.env.AWS_REGION;
-    const prefix = process.env.AWS_S3_PREFIX_FILES || 'uploads/';
+    const privateBucket = process.env.AWS_S3_BUCKET;
+    const publicBucket = process.env.AWS_S3_PUBLIC_BUCKET;
 
-    if (!bucket || !region) {
+    if (!privateBucket || !region) {
       return res.status(500).json({
         success: false,
         message: 'S3 is not configured (AWS_S3_BUCKET/AWS_REGION)',
       });
     }
 
+    const isImage = req.file.mimetype.startsWith('image/');
+    const bucket = (isImage && publicBucket) ? publicBucket : privateBucket;
+    const prefix = isImage
+      ? (process.env.AWS_S3_PREFIX_PUBLIC_IMAGES || 'uploads/')
+      : (process.env.AWS_S3_PREFIX_FILES || 'uploads/');
+
     const originalExt = path.extname(req.file.originalname) || '';
-    const key = `${prefix}${Date.now()}-${req.file.originalname
+    const baseName = path.basename(req.file.originalname, originalExt)
       .replace(/\s+/g, '-')
-      .replace(/[^a-zA-Z0-9._-]/g, '')}${originalExt}`;
+      .replace(/[^a-zA-Z0-9_-]/g, '');
+    const key = `${prefix}${Date.now()}-${baseName}${originalExt}`;
 
     const s3 = new S3Client({ region });
     await s3.send(
@@ -3066,7 +3074,7 @@ exports.getStudentProfile = async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching student profile:', err.message);
-    res.status(500).json({ message: err.message || 'Server error' });
+    serverError(res, err);
   }
 };
 
@@ -3113,6 +3121,51 @@ exports.getFacilitatorProfile = async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching facilitator profile:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.getCollegeDetail = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [collegeRes, studentsRes, facilitatorsRes] = await Promise.all([
+      pool.query(
+        `SELECT id, name, short_code, city, state, is_verified, created_at FROM colleges WHERE id = $1`,
+        [id],
+      ),
+      pool.query(
+        `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at,
+                sp.degree, sp.current_academic_year, sp.year
+         FROM users u
+         JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE sp.college_id = $1 AND u.role = 'student'
+         ORDER BY u.created_at DESC`,
+        [id],
+      ),
+      pool.query(
+        `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at
+         FROM users u
+         JOIN facilitator_colleges fc ON fc.facilitator_id = u.id
+         WHERE fc.college_id = $1 AND u.role = 'facilitator'
+         ORDER BY u.created_at DESC`,
+        [id],
+      ),
+    ]);
+
+    if (!collegeRes.rowCount) {
+      return res.status(404).json({ message: 'College not found' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...collegeRes.rows[0],
+        students: studentsRes.rows,
+        facilitators: facilitatorsRes.rows,
+      },
+    });
+  } catch (err) {
+    console.error('getCollegeDetail error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };

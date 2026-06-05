@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ArrowLeft, Upload, Plus, Trash2, Loader2, FileText, X } from 'lucide-react';
+import RichTextEditor from '@/components/common/RichTextEditor';
 import toast from 'react-hot-toast';
 import apiClient from '@/services/api';
 import { getErrorMessage } from '@/lib/utils';
@@ -263,11 +264,11 @@ export default function CreateAssignment() {
             {/* Description */}
             <div className='space-y-1.5'>
               <Label className='text-sm text-slate-600'>Description</Label>
-              <textarea
-                className='w-full min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]'
+              <RichTextEditor
+                minHeight='80px'
                 placeholder='Describe the assignment objectives...'
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={setDescription}
               />
             </div>
 
@@ -416,11 +417,11 @@ export default function CreateAssignment() {
             {/* Assignment Description */}
             <div className='space-y-1.5'>
               <Label className='text-sm text-slate-600'>Assignment Description</Label>
-              <textarea
-                className='w-full min-h-[100px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]'
+              <RichTextEditor
+                minHeight='100px'
                 placeholder='Describe the assignment objectives, requirements, and expectations...'
                 value={assignmentDescription}
-                onChange={(e) => setAssignmentDescription(e.target.value)}
+                onChange={setAssignmentDescription}
               />
             </div>
 

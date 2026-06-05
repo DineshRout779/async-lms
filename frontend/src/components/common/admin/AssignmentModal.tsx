@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Save, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import RichTextEditor from '@/components/common/RichTextEditor';
 import toast from 'react-hot-toast';
 
 interface AssignmentModalProps {
@@ -65,7 +66,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
 
   return (
     <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
-      <div className='w-full max-w-lg rounded-xl bg-white p-6 shadow-xl'>
+      <div className='w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl'>
         <div className='mb-4 flex items-center justify-between'>
           <div>
             <h3 className='text-lg font-bold text-slate-900'>
@@ -99,12 +100,11 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
             <label className='mb-2 block text-sm font-medium text-slate-700'>
               Instructions
             </label>
-            <textarea
+            <RichTextEditor
               value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
+              onChange={setInstructions}
               placeholder='Detailed instructions for the assignment...'
-              rows={4}
-              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+              minHeight='140px'
             />
           </div>
 

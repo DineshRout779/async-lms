@@ -81,7 +81,8 @@ export default function FacilitatorSidebar({
             end={item.path === '/dashboard/facilitator'}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-3 py-3 rounded-lg transition-all group',
+                'flex items-center py-3 rounded-lg transition-all group',
+                isOpen ? 'gap-3 px-3' : 'justify-center px-0',
                 isActive
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'hover:bg-slate-800 hover:text-white',

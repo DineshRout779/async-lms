@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require("../config/pg");
 const axios = require("axios");
 const { notify } = require('../services/notificationService');
@@ -84,11 +85,17 @@ exports.runEvaluation = async (req, res) => {
     }
 
     //  Create evaluation
+    // college assignments use a separate FK column to avoid violating assignments FK
     const evalRes = await client.query(
-      `INSERT INTO evaluations 
-       (assignment_id, evaluator_type, status, total_submissions)
-       VALUES ($1, $2, 'running', $3)
-       RETURNING *`,
+      isCollegeAssignment
+        ? `INSERT INTO evaluations
+           (college_assignment_id, evaluator_type, status, total_submissions)
+           VALUES ($1, $2, 'running', $3)
+           RETURNING *`
+        : `INSERT INTO evaluations
+           (assignment_id, evaluator_type, status, total_submissions)
+           VALUES ($1, $2, 'running', $3)
+           RETURNING *`,
       [
         assignmentId,
         assignment.evaluator_type || "JS",
@@ -230,10 +237,7 @@ exports.runEvaluation = async (req, res) => {
 
     console.log("Evaluation Error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return serverError(res, error);
   } finally {
     client.release();
   }
@@ -244,7 +248,9 @@ exports.getLatestEvaluationByAssignment = async (req, res) => {
   try {
     const { assignmentId } = req.params;
     const { rows } = await pool.query(
-      `SELECT id FROM evaluations WHERE assignment_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT id FROM evaluations
+       WHERE assignment_id = $1 OR college_assignment_id = $1
+       ORDER BY created_at DESC LIMIT 1`,
       [assignmentId],
     );
     if (!rows.length) {
@@ -252,7 +258,7 @@ exports.getLatestEvaluationByAssignment = async (req, res) => {
     }
     res.json({ success: true, evaluationId: rows[0].id });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -277,9 +283,6 @@ exports.getEvaluationResults = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    serverError(res, error);
   }
 };

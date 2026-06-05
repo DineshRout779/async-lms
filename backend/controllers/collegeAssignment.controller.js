@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const { notifyCollege } = require('../services/notificationService');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
@@ -112,7 +113,7 @@ exports.uploadInstructionDoc = async (req, res) => {
     res.json({ success: true, url, filename: name });
   } catch (error) {
     console.error('uploadInstructionDoc error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -146,7 +147,7 @@ exports.getMyCollegeAssignments = async (req, res) => {
     res.json({ success: true, data });
   } catch (error) {
     console.error('getMyCollegeAssignments:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -214,7 +215,7 @@ exports.manageAssignments = async (req, res) => {
     res.json({ success: true, data });
   } catch (error) {
     console.error('manageAssignments:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -270,7 +271,7 @@ exports.createAssignment = async (req, res) => {
     res.status(201).json({ success: true, data: assignment });
   } catch (error) {
     console.error('createAssignment:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -326,7 +327,7 @@ exports.updateAssignment = async (req, res) => {
     res.json({ success: true, data: rows[0] });
   } catch (error) {
     console.error('updateAssignment:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -359,7 +360,7 @@ exports.deleteAssignment = async (req, res) => {
     res.json({ success: true, message: 'Assignment deleted' });
   } catch (error) {
     console.error('deleteAssignment:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -418,7 +419,7 @@ exports.submitCollegeAssignment = async (req, res) => {
     });
   } catch (error) {
     console.error('submitCollegeAssignment ERROR:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -450,7 +451,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
     res.json({ success: true, data: await presignRow(rows[0]) });
   } catch (error) {
     console.error('getCollegeAssignmentById:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -509,7 +510,7 @@ exports.submitCollegeAssignment = async (req, res) => {
     });
   } catch (error) {
     console.error('submitCollegeAssignment ERROR:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -541,7 +542,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
     res.json({ success: true, data: await presignRow(rows[0]) });
   } catch (error) {
     console.error('getCollegeAssignmentById:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -628,7 +629,7 @@ exports.getAssignmentSubmissions = async (req, res) => {
     res.json({ success: true, data: rows, type: isUnitAssignment ? 'unit' : 'college' });
   } catch (error) {
     console.error('getAssignmentSubmissions error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };
 
@@ -739,6 +740,6 @@ exports.getFilteredAssignments = async (req, res) => {
     res.json({ success: true, data: rows });
   } catch (error) {
     console.error('getFilteredAssignments Error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 };

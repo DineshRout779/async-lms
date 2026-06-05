@@ -59,7 +59,7 @@ exports.getUserProfile = async (req, res) => {
     const result = await pool.query(
       `SELECT
          u.id, u.full_name, u.email, u.role, u.created_at,
-         sp.degree, sp.year,
+         sp.degree, sp.year, sp.current_academic_year,
          COALESCE(c.id, fc_c.id) AS college_id,
          COALESCE(c.name, fc_c.name) AS college_name,
          COALESCE(SUM(pl.points), 0)::integer AS total_points,
@@ -76,7 +76,7 @@ exports.getUserProfile = async (req, res) => {
        LEFT JOIN public.user_badges ub ON ub.user_id = u.id
        WHERE u.id = $1
        GROUP BY u.id, u.full_name, u.email, u.role, u.created_at,
-         sp.degree, sp.year, c.id, c.name, fc_c.id, fc_c.name,
+         sp.degree, sp.year, sp.current_academic_year, c.id, c.name, fc_c.id, fc_c.name,
          us.current_streak, us.longest_streak`,
       [userId],
     );

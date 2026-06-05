@@ -1,3 +1,4 @@
+const serverError = require('../utils/serverError');
 // editorController.js
 const { provisionWorkspace } = require('../services/workspaceService');
 const { assignWorker } = require('../services/workerRegistry');
@@ -36,6 +37,6 @@ exports.startEditor = async (req, res) => {
     });
   } catch (err) {
     console.error('Editor start error:', err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 };
