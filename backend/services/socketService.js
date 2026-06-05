@@ -15,6 +15,8 @@ const nginxEnabled = true; // Native proxy is always available
 const { createPortProxy, destroyPortProxies } = require('./portProxyService');
 const { Queue, Worker } = require('bullmq');
 const Redis = require('ioredis');
+const { pushQueueMetric } = require('./cloudwatchService');
+const { setInstanceProtection } = require('./instanceProtectionService');
 
 // ---------- Redis & BullMQ Queue ----------
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -56,15 +58,16 @@ const CLEANUP_INTERVAL_MS =  5 * 60 * 1000; // check every 5 minutes
 
 // ---------- Capacity & queue ----------
 const SAFETY_BUFFER_MB = 50; 
+let allocatedMemoryMB = 0;
+const MAX_SERVER_MEMORY_MB = (os.totalmem() / (1024 * 1024)) - 500;
+const activeProfiles = new Map(); // key -> requiredMB
 
 function hasCapacity(profile) {
-  const freeMB = os.freemem() / (1024 * 1024);
   const requiredMB = getProfileMemoryLimit(profile);
-  
-  const canFit = (freeMB - requiredMB) > SAFETY_BUFFER_MB;
+  const canFit = (allocatedMemoryMB + requiredMB) <= MAX_SERVER_MEMORY_MB;
   
   if (!canFit) {
-    console.log(`[capacity] Rejecting ${profile}: Free=${Math.round(freeMB)}MB, Req=${requiredMB}MB, Buffer=${SAFETY_BUFFER_MB}MB`);
+    console.log(`[capacity] Rejecting ${profile}: Allocated=${allocatedMemoryMB}MB, Req=${requiredMB}MB, Max=${Math.round(MAX_SERVER_MEMORY_MB)}MB`);
   }
   
   return canFit;
@@ -91,6 +94,15 @@ const cleanupTimer = setInterval(() => {
       activePorts.delete(key);
       outputBuffers.delete(key);
       lastActivity.delete(key);
+
+      const requiredMB = activeProfiles.get(key);
+      if (requiredMB) {
+        allocatedMemoryMB -= requiredMB;
+        activeProfiles.delete(key);
+        if (activeProfiles.size === 0) {
+          setInstanceProtection(false);
+        }
+      }
 
       // Slot freed — promote next queued user immediately (before async teardown)
       promoteFromQueue();
@@ -129,6 +141,13 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
     
     // Synchronously occupy the slot to prevent concurrency race conditions
     lastActivity.set(key, Date.now());
+    
+    if (!activeProfiles.has(key)) {
+      const requiredMB = getProfileMemoryLimit(profile);
+      activeProfiles.set(key, requiredMB);
+      allocatedMemoryMB += requiredMB;
+      setInstanceProtection(true);
+    }
     
     socket.join(`ws:${key}`);
 
@@ -170,6 +189,15 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
     const key = `${userId}:${projectId}`;
     lastActivity.delete(key);
     
+    const reqMB = activeProfiles.get(key);
+    if (reqMB) {
+      allocatedMemoryMB -= reqMB;
+      activeProfiles.delete(key);
+      if (activeProfiles.size === 0) {
+        setInstanceProtection(false);
+      }
+    }
+    
     // Release the slot so the queue can advance
     promoteFromQueue();
   }
@@ -182,7 +210,19 @@ async function promoteFromQueue() {
   if (waitingCount > 0) {
     console.log(`[queue] ${waitingCount} jobs waiting in Redis`);
   }
+  // Push the latest queue count to CloudWatch so ASG knows the current demand
+  pushQueueMetric(waitingCount);
 }
+
+// Ensure CloudWatch always has recent data (even if 0) for stable Auto Scaling
+setInterval(async () => {
+  try {
+    const waitingCount = await workspaceQueue.getWaitingCount();
+    pushQueueMetric(waitingCount);
+  } catch (err) {
+    console.error('[queue:metric] Failed to poll queue count', err.message);
+  }
+}, 60000);
 
 // ---------- BullMQ Worker ----------
 // Processes jobs when capacity is available
@@ -280,6 +320,8 @@ module.exports = function setupSocket(io) {
           const waitingCount = await workspaceQueue.getWaitingCount();
           socket.emit('workspace:queued', { position: waitingCount, total: waitingCount });
           console.log(`[queue] ${key} added to Redis queue (Position: ${waitingCount})`);
+          // Instant CloudWatch push for 0-second Auto Scaling delay!
+          pushQueueMetric(waitingCount);
           return;
         }
 

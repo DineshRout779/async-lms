@@ -11,6 +11,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-auto-scaling": "^3.1062.0",
+    "@aws-sdk/client-cloudwatch": "^3.1062.0",
     "@aws-sdk/client-s3": "^3.882.0",
     "@aws-sdk/s3-request-presigner": "^3.1053.0",
     "axios": "^1.13.6",
