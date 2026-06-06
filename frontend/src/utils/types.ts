@@ -88,6 +88,10 @@ export interface CollegeAssignment {
   submission_file_url?: string | null;
   submission_file_name?: string | null;
   submitted_at?: string | null;
+  test_cases?: TestCase[];
+  rubric?: { name: string; score: number }[];
+  evaluator_type?: string | null;
+  assignment_description?: string | null;
 }
 
 export interface Assignment {

@@ -6,9 +6,7 @@ const pool = new Pool({
   user: process.env.PGUSER,
   password: process.env.PGPASSWORD,
   port: process.env.PGPORT,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  ssl: { rejectUnauthorized: false },
   family: 4,
 });
 
@@ -61,7 +59,11 @@ pool.on('error', (err, client) => {
       ALTER TABLE college_assignments 
       ADD COLUMN IF NOT EXISTS instruction_file_url TEXT,
       ADD COLUMN IF NOT EXISTS instruction_file_name TEXT,
-      ADD COLUMN IF NOT EXISTS course TEXT DEFAULT 'General'
+      ADD COLUMN IF NOT EXISTS course TEXT DEFAULT 'General',
+      ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS rubric JSONB,
+      ADD COLUMN IF NOT EXISTS evaluator_type TEXT,
+      ADD COLUMN IF NOT EXISTS assignment_description TEXT
     `);
 
     await client.query(`
