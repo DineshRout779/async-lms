@@ -105,6 +105,7 @@ app.use(require('./middlewares/errorHandler'));
 
 const { Server } = require('socket.io');
 const notificationService = require('./services/notificationService');
+const { initPools } = require('./services/runnerService');
 
 const io = new Server(server, {
   cors: {
@@ -122,7 +123,14 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {});
 });
 
-server.listen(3001, () => {
-  const ct = new Date().toLocaleTimeString();
-  console.log('Backend (Orchestrator) running on http://localhost:3001', ct);
-});
+initPools()
+  .then(() => {
+    server.listen(3001, () => {
+      const ct = new Date().toLocaleTimeString();
+      console.log('Backend (Orchestrator) running on http://localhost:3001', ct);
+    });
+  })
+  .catch((err) => {
+    console.error('[FATAL] Runner pool init failed:', err);
+    process.exit(1);
+  });
