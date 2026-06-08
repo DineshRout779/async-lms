@@ -153,20 +153,18 @@ async function initPools() {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-// Run the student's main file and return { output, exitCode }.
 function execute(workspaceDir, language) {
+  const pool = pools[language] ?? pools.javascript;
+  if (!pool) return Promise.resolve({ output: 'Code execution is unavailable (runner not initialised).', exitCode: -1 });
   const profile = LANGUAGE_PROFILES[language] ?? LANGUAGE_PROFILES.javascript;
-  const pool    = pools[language]             ?? pools.javascript;
   return pool.run(workspaceDir, profile.cmd, 15000);
 }
 
-// Run the pre-written test file and return raw { output, exitCode }.
-// Caller is responsible for writing the test file first.
-// Returns null if the language does not support test execution.
 function executeTests(workspaceDir, language) {
   const cmd = TEST_CMDS[language];
   if (!cmd) return null;
   const pool = pools[language] ?? pools.javascript;
+  if (!pool) return Promise.resolve({ output: 'Test execution is unavailable (runner not initialised).', exitCode: -1 });
   return pool.run(workspaceDir, cmd, 20000);
 }
 

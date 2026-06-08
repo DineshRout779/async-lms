@@ -123,14 +123,11 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {});
 });
 
-initPools()
-  .then(() => {
-    server.listen(3001, () => {
-      const ct = new Date().toLocaleTimeString();
-      console.log('Backend (Orchestrator) running on http://localhost:3001', ct);
-    });
-  })
-  .catch((err) => {
-    console.error('[FATAL] Runner pool init failed:', err);
-    process.exit(1);
-  });
+server.listen(3001, () => {
+  const ct = new Date().toLocaleTimeString();
+  console.log('Backend (Orchestrator) running on http://localhost:3001', ct);
+});
+
+initPools().catch((err) => {
+  console.error('[WARN] Runner pool init failed (exercise run/test unavailable):', err.message);
+});
