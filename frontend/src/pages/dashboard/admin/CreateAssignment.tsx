@@ -153,6 +153,9 @@ export default function CreateAssignment() {
   // ── Editor Type ──
   const [editorType, setEditorType] = useState<'rich' | 'markdown'>(editData.editorType || 'rich');
 
+  // ── Test Cases ──
+  const [testCases, setTestCases] = useState<{ id: number; input: string; output: string; score: number }[]>(editData.testCasesList || []);
+
   // ── Submission Settings ──
   const [allowFileUpload, setAllowFileUpload] = useState(editData.allowFileUpload ?? true);
   const [allowGithubLink, setAllowGithubLink] = useState(editData.allowGithubLink ?? true);
