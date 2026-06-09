@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ArrowLeft, Upload, Plus, Trash2, Loader2, FileText, X } from 'lucide-react';
 import RichTextEditor from '@/components/common/RichTextEditor';
+import MarkdownEditor from '@/components/common/MarkdownEditor';
 import toast from 'react-hot-toast';
 import apiClient from '@/services/api';
 import { getErrorMessage } from '@/lib/utils';
@@ -18,6 +19,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+/* ======================
+   Editor Toggle
+====================== */
+
+function EditorToggle({
+  value,
+  onChange,
+}: {
+  value: 'rich' | 'markdown';
+  onChange: (v: 'rich' | 'markdown') => void;
+}) {
+  return (
+    <div className='flex items-center gap-1 border border-slate-200 rounded-md p-0.5 bg-slate-50'>
+      <button
+        type='button'
+        onClick={() => onChange('rich')}
+        className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${value === 'rich' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+      >
+        Rich Text
+      </button>
+      <button
+        type='button'
+        onClick={() => onChange('markdown')}
+        className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${value === 'markdown' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+      >
+        Markdown
+      </button>
+    </div>
+  );
+}
 
 /* ======================
    Types
@@ -118,8 +150,8 @@ export default function CreateAssignment() {
   // ── Rubrics ──
   const [rubrics, setRubrics] = useState<RubricItem[]>(editData.rubricsList || []);
 
-  // ── Test Cases ──
-  const [testCases, setTestCases] = useState<{id: number; input: string; output: string; score: number}[]>(editData.testCasesList || []);
+  // ── Editor Type ──
+  const [editorType, setEditorType] = useState<'rich' | 'markdown'>(editData.editorType || 'rich');
 
   // ── Submission Settings ──
   const [allowFileUpload, setAllowFileUpload] = useState(editData.allowFileUpload ?? true);
@@ -303,13 +335,25 @@ export default function CreateAssignment() {
 
             {/* Description */}
             <div className='space-y-1.5'>
-              <Label className='text-sm text-slate-600'>Description</Label>
-              <RichTextEditor
-                minHeight='80px'
-                placeholder='Describe the assignment objectives...'
-                value={description}
-                onChange={setDescription}
-              />
+              <div className='flex items-center justify-between'>
+                <Label className='text-sm text-slate-600'>Description</Label>
+                <EditorToggle value={editorType} onChange={setEditorType} />
+              </div>
+              {editorType === 'rich' ? (
+                <RichTextEditor
+                  minHeight='80px'
+                  placeholder='Describe the assignment objectives...'
+                  value={description}
+                  onChange={setDescription}
+                />
+              ) : (
+                <MarkdownEditor
+                  minHeight='80px'
+                  placeholder='Describe the assignment objectives...'
+                  value={description}
+                  onChange={setDescription}
+                />
+              )}
             </div>
 
             {/* Course & College */}
@@ -460,12 +504,21 @@ export default function CreateAssignment() {
             {/* Assignment Description */}
             <div className='space-y-1.5'>
               <Label className='text-sm text-slate-600'>Assignment Description</Label>
-              <RichTextEditor
-                minHeight='100px'
-                placeholder='Describe the assignment objectives, requirements, and expectations...'
-                value={assignmentDescription}
-                onChange={setAssignmentDescription}
-              />
+              {editorType === 'rich' ? (
+                <RichTextEditor
+                  minHeight='100px'
+                  placeholder='Describe the assignment objectives, requirements, and expectations...'
+                  value={assignmentDescription}
+                  onChange={setAssignmentDescription}
+                />
+              ) : (
+                <MarkdownEditor
+                  minHeight='100px'
+                  placeholder='Describe the assignment objectives, requirements, and expectations...'
+                  value={assignmentDescription}
+                  onChange={setAssignmentDescription}
+                />
+              )}
             </div>
 
             {/* AI Evaluation Type & Weightage */}

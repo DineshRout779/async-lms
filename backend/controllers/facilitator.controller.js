@@ -249,8 +249,6 @@ exports.getBatches = async (req, res) => {
   }
 };
 
-
-
 /**
  * Verify or unverify a student — scoped to facilitator's assigned colleges
  */
@@ -282,7 +280,9 @@ exports.verifyStudent = async (req, res) => {
     );
 
     if (!studentRes.rowCount) {
-      return res.status(404).json({ message: 'Student not found in your colleges' });
+      return res
+        .status(404)
+        .json({ message: 'Student not found in your colleges' });
     }
 
     const result = await pool.query(
@@ -310,7 +310,8 @@ exports.editStudent = async (req, res) => {
   try {
     const facilitatorId = req.user.id;
     const { id } = req.params;
-    const { degree, current_academic_year, expected_graduation_year } = req.body;
+    const { degree, current_academic_year, expected_graduation_year } =
+      req.body;
 
     const colRes = await pool.query(
       'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
@@ -328,15 +329,26 @@ exports.editStudent = async (req, res) => {
       [id, collegeIds],
     );
     if (!studentRes.rowCount) {
-      return res.status(404).json({ message: 'Student not found in your colleges' });
+      return res
+        .status(404)
+        .json({ message: 'Student not found in your colleges' });
     }
 
     const fields = [];
     const values = [];
     let i = 1;
-    if (degree !== undefined)                   { fields.push(`degree = $${i++}`);                    values.push(degree); }
-    if (current_academic_year !== undefined)    { fields.push(`current_academic_year = $${i++}`);     values.push(current_academic_year); }
-    if (expected_graduation_year !== undefined) { fields.push(`expected_graduation_year = $${i++}`);  values.push(expected_graduation_year); }
+    if (degree !== undefined) {
+      fields.push(`degree = $${i++}`);
+      values.push(degree);
+    }
+    if (current_academic_year !== undefined) {
+      fields.push(`current_academic_year = $${i++}`);
+      values.push(current_academic_year);
+    }
+    if (expected_graduation_year !== undefined) {
+      fields.push(`expected_graduation_year = $${i++}`);
+      values.push(expected_graduation_year);
+    }
 
     if (fields.length === 0) {
       return res.status(400).json({ message: 'No fields to update' });
@@ -352,5 +364,487 @@ exports.editStudent = async (req, res) => {
   } catch (err) {
     console.error('editStudent error:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+exports.getFacilitatorColleges = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const result = await pool.query(
+      `SELECT c.id, c.name, c.is_verified
+       FROM colleges c
+       JOIN facilitator_colleges fc ON c.id = fc.college_id
+       WHERE fc.facilitator_id = $1
+       ORDER BY c.name`,
+      [facilitatorId],
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    serverError(res, err, 'getFacilitatorColleges');
+  }
+};
+
+// ─── Analytics helpers ────────────────────────────────────────────────────────
+
+async function getFacilitatorCollegeIds(facilitatorId, requestedCollegeId) {
+  const colRes = await pool.query(
+    'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+    [facilitatorId],
+  );
+  const allowed = colRes.rows.map((r) => r.college_id);
+  if (requestedCollegeId) {
+    return allowed.includes(requestedCollegeId) ? [requestedCollegeId] : [];
+  }
+  return allowed;
+}
+
+async function getEnrolledStudentIds(collegeIds, batch, subjectId) {
+  const params = [collegeIds];
+  let batchClause = '';
+  let subjectJoin = '';
+  let subjectClause = '';
+
+  if (batch) {
+    params.push(batch);
+    batchClause = `AND sp.year = $${params.length}`;
+  }
+  if (subjectId) {
+    subjectJoin = 'JOIN user_subjects us ON us.user_id = sp.user_id';
+    params.push(subjectId);
+    subjectClause = `AND us.subject_id = $${params.length}::uuid`;
+  }
+
+  const res = await pool.query(
+    `SELECT DISTINCT sp.user_id
+     FROM student_profiles sp
+     JOIN users u ON u.id = sp.user_id
+     ${subjectJoin}
+     WHERE sp.college_id = ANY($1::uuid[]) AND u.role = 'student'
+     ${batchClause} ${subjectClause}`,
+    params,
+  );
+  return res.rows.map((r) => r.user_id);
+}
+
+// ─── Analytics: subjects for a college/batch ─────────────────────────────────
+
+exports.getAnalyticsSubjects = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { college_id, batch } = req.query;
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    if (!colleges.length) return res.json({ success: true, data: [] });
+
+    const params = [colleges];
+    let batchClause = '';
+    if (batch) { params.push(batch); batchClause = `AND sp.year = $${params.length}`; }
+
+    const { rows } = await pool.query(
+      `SELECT DISTINCT s.id, s.name
+       FROM subjects s
+       JOIN user_subjects us ON us.subject_id = s.id
+       JOIN student_profiles sp ON sp.user_id = us.user_id
+       WHERE sp.college_id = ANY($1::uuid[]) ${batchClause}
+       ORDER BY s.name`,
+      params,
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    serverError(res, err, 'getAnalyticsSubjects');
+  }
+};
+
+// ─── Analytics: Quiz ─────────────────────────────────────────────────────────
+
+exports.getQuizAnalytics = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { college_id, batch, subject_id } = req.query;
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    if (!colleges.length) return res.json({ success: true, data: emptyQuizData() });
+
+    const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
+    if (!enrolledIds.length) return res.json({ success: true, data: emptyQuizData() });
+
+    const attParams = [enrolledIds];
+    let subjectClause = '';
+    if (subject_id) {
+      attParams.push(subject_id);
+      subjectClause = `AND t.subject_id = $${attParams.length}::uuid`;
+    }
+
+    const attRes = await pool.query(
+      `SELECT qa.user_id, qa.score::float, qa.is_passed, NULLIF(q.max_score, 0)::float AS max_score
+       FROM quiz_attempts qa
+       JOIN quizzes q ON q.id = qa.quiz_id
+       JOIN units un ON un.id = q.unit_id
+       JOIN topics t ON t.id = un.topic_id
+       WHERE qa.user_id = ANY($1::uuid[]) ${subjectClause}`,
+      attParams,
+    );
+
+    const rows = attRes.rows;
+    const attemptedSet = new Set(rows.map((r) => r.user_id));
+    const passedSet = new Set(rows.filter((r) => r.is_passed).map((r) => r.user_id));
+    const pctScores = rows
+      .filter((r) => r.max_score)
+      .map((r) => (r.score / r.max_score) * 100);
+
+    const avgScore = pctScores.length
+      ? Math.round(pctScores.reduce((a, b) => a + b, 0) / pctScores.length)
+      : 0;
+
+    const dist = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
+    pctScores.forEach((s) => {
+      if (s <= 20) dist['0-20']++;
+      else if (s <= 40) dist['21-40']++;
+      else if (s <= 60) dist['41-60']++;
+      else if (s <= 80) dist['61-80']++;
+      else dist['81-100']++;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        enrolled: enrolledIds.length,
+        attempted: attemptedSet.size,
+        not_attempted: enrolledIds.length - attemptedSet.size,
+        passed: passedSet.size,
+        failed: attemptedSet.size - passedSet.size,
+        avg_score_pct: avgScore,
+        score_distribution: Object.entries(dist).map(([range, count]) => ({ range, count })),
+      },
+    });
+  } catch (err) {
+    serverError(res, err, 'getQuizAnalytics');
+  }
+};
+
+function emptyQuizData() {
+  return {
+    enrolled: 0, attempted: 0, not_attempted: 0,
+    passed: 0, failed: 0, avg_score_pct: 0,
+    score_distribution: ['0-20', '21-40', '41-60', '61-80', '81-100'].map((range) => ({ range, count: 0 })),
+  };
+}
+
+// ─── Analytics: Assignments ───────────────────────────────────────────────────
+
+exports.getAssignmentAnalytics = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { college_id, batch, assignment_id } = req.query;
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    if (!colleges.length) return res.json({ success: true, data: { total: 0, submitted: 0, not_submitted: 0, rate: 0, students: [] } });
+
+    const params = [colleges];
+    let batchClause = '';
+    if (batch) { params.push(batch); batchClause = `AND sp.year = $${params.length}`; }
+
+    const studentsRes = await pool.query(
+      `SELECT u.id, u.full_name, u.email
+       FROM users u
+       JOIN student_profiles sp ON sp.user_id = u.id
+       WHERE sp.college_id = ANY($1::uuid[]) AND u.role = 'student' ${batchClause}
+       ORDER BY u.full_name`,
+      params,
+    );
+    const students = studentsRes.rows;
+
+    let submittedIds = new Set();
+    if (assignment_id) {
+      const subRes = await pool.query(
+        `SELECT student_id FROM college_assignment_submissions WHERE assignment_id = $1`,
+        [assignment_id],
+      );
+      submittedIds = new Set(subRes.rows.map((r) => r.student_id));
+    }
+
+    const studentList = students.map((s) => ({
+      id: s.id,
+      name: s.full_name,
+      email: s.email,
+      status: assignment_id ? (submittedIds.has(s.id) ? 'Submitted' : 'Pending') : null,
+    }));
+
+    const submitted = assignment_id ? studentList.filter((s) => s.status === 'Submitted').length : 0;
+    const total = students.length;
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        submitted,
+        not_submitted: total - submitted,
+        rate: total > 0 ? Math.round((submitted / total) * 100) : 0,
+        students: studentList,
+      },
+    });
+  } catch (err) {
+    serverError(res, err, 'getAssignmentAnalytics');
+  }
+};
+
+// ─── Analytics: Projects ─────────────────────────────────────────────────────
+
+exports.getProjectAnalytics = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { college_id, batch, subject_id } = req.query;
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    if (!colleges.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [] } });
+
+    const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
+    if (!enrolledIds.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [] } });
+
+    // Get student names
+    const namesRes = await pool.query(
+      `SELECT u.id, u.full_name, u.email FROM users u WHERE u.id = ANY($1::uuid[]) ORDER BY u.full_name`,
+      [enrolledIds],
+    );
+
+    // Get project submissions scoped to subject (if provided)
+    const psParams = [enrolledIds];
+    let psJoin = '';
+    let psClause = '';
+    if (subject_id) {
+      psJoin = 'JOIN projects p ON p.id = ps.project_id JOIN topics t ON t.id = p.topic_id';
+      psParams.push(subject_id);
+      psClause = `AND t.subject_id = $${psParams.length}::uuid`;
+    }
+
+    const psRes = await pool.query(
+      `SELECT ps.user_id, ps.is_approved
+       FROM project_submissions ps
+       ${psJoin}
+       WHERE ps.user_id = ANY($1::uuid[]) ${psClause}`,
+      psParams,
+    );
+
+    const submittedMap = new Map();
+    psRes.rows.forEach((r) => {
+      const existing = submittedMap.get(r.user_id);
+      // is_approved takes priority
+      if (!existing || r.is_approved) submittedMap.set(r.user_id, r.is_approved);
+    });
+
+    const students = namesRes.rows.map((s) => {
+      let status = 'Not Started';
+      if (submittedMap.has(s.id)) {
+        status = submittedMap.get(s.id) ? 'Approved' : 'Submitted';
+      }
+      return { id: s.id, name: s.full_name, email: s.email, status };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        not_started: students.filter((s) => s.status === 'Not Started').length,
+        submitted: students.filter((s) => s.status === 'Submitted').length,
+        approved: students.filter((s) => s.status === 'Approved').length,
+        students,
+      },
+    });
+  } catch (err) {
+    serverError(res, err, 'getProjectAnalytics');
+  }
+};
+
+// ─── Analytics: Batch Dashboard ───────────────────────────────────────────────
+
+exports.getBatchDashboard = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { college_id, batch } = req.query;
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    if (!colleges.length) return res.json({ success: true, data: { enrolled: 0, quiz_completion_rate: 0, quiz_pass_rate: 0, assignment_completion_rate: 0, project_completion_rate: 0, subjects: [] } });
+
+    const enrolledIds = await getEnrolledStudentIds(colleges, batch, null);
+    if (!enrolledIds.length) return res.json({ success: true, data: { enrolled: 0, quiz_completion_rate: 0, quiz_pass_rate: 0, assignment_completion_rate: 0, project_completion_rate: 0, subjects: [] } });
+
+    // Subjects enrolled by these students
+    const subjectsRes = await pool.query(
+      `SELECT DISTINCT s.id, s.name
+       FROM subjects s
+       JOIN user_subjects us ON us.subject_id = s.id
+       WHERE us.user_id = ANY($1::uuid[])
+       ORDER BY s.name`,
+      [enrolledIds],
+    );
+
+    // For each subject: quiz completion, pass rate, assignment completion
+    const subjectRows = await Promise.all(
+      subjectsRes.rows.map(async (subj) => {
+        const subjEnrolled = await getEnrolledStudentIds(colleges, batch, subj.id);
+        if (!subjEnrolled.length) return { ...subj, quiz_completion: 0, pass_rate: 0, assignment_completion: 0 };
+
+        const quizRes = await pool.query(
+          `SELECT qa.user_id, qa.is_passed
+           FROM quiz_attempts qa
+           JOIN quizzes q ON q.id = qa.quiz_id
+           JOIN units un ON un.id = q.unit_id
+           JOIN topics t ON t.id = un.topic_id
+           WHERE qa.user_id = ANY($1::uuid[]) AND t.subject_id = $2::uuid`,
+          [subjEnrolled, subj.id],
+        );
+        const attempted = new Set(quizRes.rows.map((r) => r.user_id));
+        const passed = new Set(quizRes.rows.filter((r) => r.is_passed).map((r) => r.user_id));
+
+        // Assignment completion: college assignments for this college
+        let asgComplete = 0;
+        if (colleges.length) {
+          const asgRes = await pool.query(
+            `SELECT cas.student_id
+             FROM college_assignment_submissions cas
+             JOIN college_assignments ca ON ca.id = cas.assignment_id
+             WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])`,
+            [colleges, subjEnrolled],
+          );
+          asgComplete = new Set(asgRes.rows.map((r) => r.student_id)).size;
+        }
+
+        return {
+          id: subj.id,
+          name: subj.name,
+          quiz_completion: subjEnrolled.length > 0 ? Math.round((attempted.size / subjEnrolled.length) * 100) : 0,
+          pass_rate: attempted.size > 0 ? Math.round((passed.size / attempted.size) * 100) : 0,
+          assignment_completion: subjEnrolled.length > 0 ? Math.round((asgComplete / subjEnrolled.length) * 100) : 0,
+        };
+      }),
+    );
+
+    // Overall assignment completion
+    const asgRes = await pool.query(
+      `SELECT COUNT(DISTINCT cas.student_id) as submitted
+       FROM college_assignment_submissions cas
+       JOIN college_assignments ca ON ca.id = cas.assignment_id
+       WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])`,
+      [colleges, enrolledIds],
+    );
+    const asgSubmitted = parseInt(asgRes.rows[0]?.submitted || 0);
+
+    // Overall project completion
+    const projRes = await pool.query(
+      `SELECT COUNT(DISTINCT user_id) as submitted
+       FROM project_submissions
+       WHERE user_id = ANY($1::uuid[])`,
+      [enrolledIds],
+    );
+    const projSubmitted = parseInt(projRes.rows[0]?.submitted || 0);
+
+    // Overall quiz stats
+    const allQuizRes = await pool.query(
+      `SELECT qa.user_id, qa.is_passed
+       FROM quiz_attempts qa
+       WHERE qa.user_id = ANY($1::uuid[])`,
+      [enrolledIds],
+    );
+    const allAttempted = new Set(allQuizRes.rows.map((r) => r.user_id));
+    const allPassed = new Set(allQuizRes.rows.filter((r) => r.is_passed).map((r) => r.user_id));
+
+    res.json({
+      success: true,
+      data: {
+        enrolled: enrolledIds.length,
+        quiz_completion_rate: enrolledIds.length > 0 ? Math.round((allAttempted.size / enrolledIds.length) * 100) : 0,
+        quiz_pass_rate: allAttempted.size > 0 ? Math.round((allPassed.size / allAttempted.size) * 100) : 0,
+        assignment_completion_rate: enrolledIds.length > 0 ? Math.round((asgSubmitted / enrolledIds.length) * 100) : 0,
+        project_completion_rate: enrolledIds.length > 0 ? Math.round((projSubmitted / enrolledIds.length) * 100) : 0,
+        subjects: subjectRows,
+      },
+    });
+  } catch (err) {
+    serverError(res, err, 'getBatchDashboard');
+  }
+};
+
+// ─── Analytics: Student Performance ──────────────────────────────────────────
+
+exports.getStudentAnalytics = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { college_id, batch, subject_id } = req.query;
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    if (!colleges.length) return res.json({ success: true, data: [] });
+
+    const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
+    if (!enrolledIds.length) return res.json({ success: true, data: [] });
+
+    const namesRes = await pool.query(
+      `SELECT u.id, u.full_name, u.email FROM users u WHERE u.id = ANY($1::uuid[]) ORDER BY u.full_name`,
+      [enrolledIds],
+    );
+
+    // Quiz scores per student
+    const quizParams = [enrolledIds];
+    let subjQuizClause = '';
+    if (subject_id) {
+      quizParams.push(subject_id);
+      subjQuizClause = `AND t.subject_id = $${quizParams.length}::uuid`;
+    }
+    const quizRes = await pool.query(
+      `SELECT qa.user_id,
+              ROUND(AVG(CASE WHEN q.max_score > 0 THEN qa.score::float / q.max_score * 100 ELSE 0 END))::int AS avg_pct,
+              COUNT(*) AS total_attempts,
+              SUM(CASE WHEN qa.is_passed THEN 1 ELSE 0 END) AS passed_count
+       FROM quiz_attempts qa
+       JOIN quizzes q ON q.id = qa.quiz_id
+       JOIN units un ON un.id = q.unit_id
+       JOIN topics t ON t.id = un.topic_id
+       WHERE qa.user_id = ANY($1::uuid[]) ${subjQuizClause}
+       GROUP BY qa.user_id`,
+      quizParams,
+    );
+    const quizMap = new Map(quizRes.rows.map((r) => [r.user_id, r]));
+
+    // Assignment submissions
+    const asgRes = await pool.query(
+      `SELECT DISTINCT cas.student_id
+       FROM college_assignment_submissions cas
+       JOIN college_assignments ca ON ca.id = cas.assignment_id
+       WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])`,
+      [colleges, enrolledIds],
+    );
+    const asgSubmitted = new Set(asgRes.rows.map((r) => r.student_id));
+
+    // Project submissions
+    const psParams = [enrolledIds];
+    let projSubjClause = '';
+    if (subject_id) {
+      psParams.push(subject_id);
+      projSubjClause = `AND t.subject_id = $${psParams.length}::uuid`;
+    }
+    const projRes = await pool.query(
+      `SELECT ps.user_id, ps.is_approved
+       FROM project_submissions ps
+       JOIN projects p ON p.id = ps.project_id
+       JOIN topics t ON t.id = p.topic_id
+       WHERE ps.user_id = ANY($1::uuid[]) ${projSubjClause}`,
+      psParams,
+    );
+    const projMap = new Map();
+    projRes.rows.forEach((r) => {
+      const ex = projMap.get(r.user_id);
+      if (!ex || r.is_approved) projMap.set(r.user_id, r.is_approved);
+    });
+
+    const data = namesRes.rows.map((s) => {
+      const quiz = quizMap.get(s.id);
+      let projStatus = 'Not Started';
+      if (projMap.has(s.id)) projStatus = projMap.get(s.id) ? 'Approved' : 'Submitted';
+      return {
+        id: s.id,
+        name: s.full_name,
+        email: s.email,
+        quiz_avg_pct: quiz ? quiz.avg_pct : null,
+        quiz_attempts: quiz ? parseInt(quiz.total_attempts) : 0,
+        assignment_status: asgSubmitted.has(s.id) ? 'Submitted' : 'Pending',
+        project_status: projStatus,
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    serverError(res, err, 'getStudentAnalytics');
   }
 };
