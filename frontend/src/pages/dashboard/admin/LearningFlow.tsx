@@ -1746,6 +1746,7 @@ const LearningFlow: React.FC = () => {
                     );
                     if (subject) {
                       dispatch(setActiveSubject(subject.slug));
+                      dispatch(fetchCourseStructure(subject.slug));
                     }
                   }}
                 >
