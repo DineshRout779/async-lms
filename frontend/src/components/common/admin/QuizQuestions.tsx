@@ -125,6 +125,7 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
         }
       }
     } catch (error) {
+      console.log('error: ', error);
     }
   };
 
@@ -794,7 +795,7 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
             onClick={() => setBulkModalOpen(true)}
             size='sm'
             variant='outline'
-            className='border-slate-300 text-slate-600 hover:bg-slate-50'
+            className='border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-800'
           >
             <Upload className='mr-1 h-3.5 w-3.5' />
             Bulk Import
