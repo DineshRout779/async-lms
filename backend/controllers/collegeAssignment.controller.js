@@ -134,6 +134,7 @@ exports.getMyCollegeAssignments = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT ca.id, ca.title, ca.description, ca.due_date, ca.created_at, ca.course,
               ca.instruction_file_url, ca.instruction_file_name,
+              ca.test_cases, ca.rubric, ca.evaluator_type, ca.assignment_description,
               u.full_name AS created_by_name,
               cas.submission_link, cas.submission_file_url, cas.submitted_at
        FROM college_assignments ca
@@ -222,7 +223,7 @@ exports.manageAssignments = async (req, res) => {
 // POST /api/v1/college-assignments
 // Body: { college_id, title, description?, due_date? }
 exports.createAssignment = async (req, res) => {
-  const { college_id, title, description, due_date, course } = req.body;
+  const { college_id, title, description, due_date, course, test_cases, rubric, evaluator_type, assignment_description } = req.body;
 
   if (!college_id || !title) {
     return res
@@ -243,8 +244,8 @@ exports.createAssignment = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO college_assignments (college_id, created_by, title, description, due_date, course, instruction_file_url, instruction_file_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO college_assignments (college_id, created_by, title, description, due_date, course, instruction_file_url, instruction_file_name, test_cases, rubric, evaluator_type, assignment_description)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         college_id,
@@ -255,6 +256,10 @@ exports.createAssignment = async (req, res) => {
         course || 'General',
         req.body.instruction_file_url || null,
         req.body.instruction_file_name || null,
+        test_cases ? JSON.stringify(test_cases) : '[]',
+        rubric ? JSON.stringify(rubric) : null,
+        evaluator_type || null,
+        assignment_description || null,
       ],
     );
     const assignment = rows[0];
@@ -279,7 +284,7 @@ exports.createAssignment = async (req, res) => {
 // Body: { title?, description?, due_date? }
 exports.updateAssignment = async (req, res) => {
   const { id } = req.params;
-  const { title, description, due_date, course } = req.body;
+  const { title, description, due_date, course, test_cases, rubric, evaluator_type, assignment_description } = req.body;
 
   try {
     // Fetch existing to check ownership scope for facilitators
@@ -311,8 +316,12 @@ exports.updateAssignment = async (req, res) => {
            course                = COALESCE($4, course),
            instruction_file_url  = COALESCE($5, instruction_file_url),
            instruction_file_name = COALESCE($6, instruction_file_name),
+           test_cases            = COALESCE($7, test_cases),
+           rubric                = COALESCE($8, rubric),
+           evaluator_type        = COALESCE($9, evaluator_type),
+           assignment_description= COALESCE($10, assignment_description),
            updated_at  = NOW()
-       WHERE id = $7
+       WHERE id = $11
        RETURNING *`,
       [
         title || null,
@@ -321,6 +330,10 @@ exports.updateAssignment = async (req, res) => {
         course || null,
         req.body.instruction_file_url || null,
         req.body.instruction_file_name || null,
+        test_cases ? JSON.stringify(test_cases) : null,
+        rubric ? JSON.stringify(rubric) : null,
+        evaluator_type || null,
+        assignment_description || null,
         id,
       ],
     );
@@ -433,6 +446,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT ca.id, ca.title, ca.description, ca.due_date, ca.created_at, ca.course,
               ca.instruction_file_url, ca.instruction_file_name,
+              ca.test_cases, ca.rubric, ca.evaluator_type, ca.assignment_description,
               u.full_name AS created_by_name,
               cas.submission_link, cas.submission_file_url, cas.submission_file_name, cas.submitted_at
        FROM college_assignments ca
@@ -524,6 +538,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT ca.id, ca.title, ca.description, ca.due_date, ca.created_at, ca.course,
               ca.instruction_file_url, ca.instruction_file_name,
+              ca.test_cases, ca.rubric, ca.evaluator_type, ca.assignment_description,
               u.full_name AS created_by_name,
               cas.submission_link, cas.submission_file_url, cas.submission_file_name, cas.submitted_at
        FROM college_assignments ca

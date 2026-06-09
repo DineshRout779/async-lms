@@ -113,13 +113,17 @@ export default function RichTextEditor({
 
   // Sync value prop → editor when changed externally (e.g. modal reset)
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     if (isInternalUpdate.current) {
       isInternalUpdate.current = false;
       return;
     }
-    if (editor.getHTML() !== value) {
-      editor.commands.setContent(value, false as any);
+    try {
+      if (editor.getHTML() !== value) {
+        editor.commands.setContent(value, false as any);
+      }
+    } catch (err) {
+      console.warn("Editor sync ignored due to state error", err);
     }
   }, [value, editor]);
 

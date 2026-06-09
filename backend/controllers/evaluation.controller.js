@@ -7,6 +7,8 @@ const EVALUATOR_APIS = {
   JS: "https://js-evaluator-r80h.onrender.com/evaluate-batch-by-links",
   REACT: "https://react-evaluator.onrender.com/evaluate-batch-by-links",
   AI: "https://ai-evaluator.onrender.com/evaluate-batch-by-links",
+  // PYTHON: "https://python-evaluator.onrender.com/evaluate-batch-by-links", // Placeholder
+  // JAVA: "https://java-evaluator.onrender.com/evaluate-batch-by-links", // Placeholder
 };
 exports.runEvaluation = async (req, res) => {
   const client = await pool.connect();
@@ -104,7 +106,7 @@ exports.runEvaluation = async (req, res) => {
     );
 
     const evaluation = evalRes.rows[0];
-    
+
     // Default to 'AI' if no specific evaluator is set
     const evaluatorType = assignment.evaluator_type || "AI";
 
@@ -121,7 +123,7 @@ exports.runEvaluation = async (req, res) => {
       const baseSubmissions = submissions.map((s) => ({
         submissionId: s.submission_id,
         student: s.student_name,
-        submissionLink: s.submission_link, 
+        submissionLink: s.submission_link,
       }));
 
       switch (type) {
@@ -152,7 +154,7 @@ exports.runEvaluation = async (req, res) => {
     //creating a  payload
     const payload = getPayload(evaluatorType, submissions, assignment);
     console.log("this is payload", payload)
-    
+
     // Call external evaluator api
     const evaluatorUrl = EVALUATOR_APIS[evaluatorType];
     console.log("Using evaluator:", evaluatorType, "at", evaluatorUrl);
@@ -168,7 +170,7 @@ exports.runEvaluation = async (req, res) => {
       console.log("Evaluation successful via API");
     } catch (apiError) {
       console.warn("Evaluator API failed or suspended. Using Mock Evaluation.", apiError.message);
-      
+
       // 6. Mock Fallback (Simulates AI Evaluation for testing)
       results = submissions.map((s) => ({
         student: s.student_name,
@@ -282,6 +284,18 @@ exports.getEvaluationResults = async (req, res) => {
       results: resultsRes.rows,
     });
 
+  } catch (error) {
+    serverError(res, error);
+  }
+};
+
+exports.getAvailableEvaluators = (req, res) => {
+  try {
+    const evaluators = Object.keys(EVALUATOR_APIS).map((key) => ({
+      id: key,
+      name: `${key === 'REACT' ? 'React' : key} Evaluator`
+    }));
+    res.json({ success: true, data: evaluators });
   } catch (error) {
     serverError(res, error);
   }
