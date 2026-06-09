@@ -138,7 +138,7 @@ exports.generateResume = async (req, res) => {
 
     const profile = profileResult.rows[0] || {};
     const subjects = subjectsResult.rows;
-    const verifiedProjects = projectsResult.rows;
+    const verifiedProjects = verifiedProjectsResult.rows;
 
     // Using exercises as projects since they contain the actual submission scores
     console.log('[resume] fetching projects (exercises)');
