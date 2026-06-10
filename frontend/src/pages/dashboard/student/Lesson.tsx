@@ -185,10 +185,10 @@ const Lesson = () => {
       totalLessons: total || null,
       nextItem: next
         ? {
-            type: next.type,
-            slug: next.slug,
-            id: next.id || next.quiz_id,
-          }
+          type: next.type,
+          slug: next.slug,
+          id: next.id || next.quiz_id,
+        }
         : null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -497,8 +497,7 @@ const Lesson = () => {
                             return (
                               <label
                                 key={option.id}
-                                className={`flex items-center gap-3 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${
-                                  !quizSubmitted
+                                className={`flex items-center gap-3 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${!quizSubmitted
                                     ? isSelected
                                       ? 'border-indigo-500 bg-indigo-50'
                                       : 'border-slate-200 hover:bg-slate-50'
@@ -507,7 +506,7 @@ const Lesson = () => {
                                       : isWrong
                                         ? 'border-red-500 bg-red-50'
                                         : 'border-slate-200'
-                                }`}
+                                  }`}
                               >
                                 <input
                                   type='radio'
@@ -556,8 +555,7 @@ const Lesson = () => {
                             return (
                               <label
                                 key={value}
-                                className={`flex items-center gap-2 rounded-lg border px-6 py-3 cursor-pointer transition-colors ${
-                                  !quizSubmitted
+                                className={`flex items-center gap-2 rounded-lg border px-6 py-3 cursor-pointer transition-colors ${!quizSubmitted
                                     ? isSelected
                                       ? 'border-indigo-500 bg-indigo-50'
                                       : 'border-slate-200 hover:bg-slate-50'
@@ -566,7 +564,7 @@ const Lesson = () => {
                                       : isWrong
                                         ? 'border-red-500 bg-red-50'
                                         : 'border-slate-200'
-                                }`}
+                                  }`}
                               >
                                 <input
                                   type='radio'
@@ -649,11 +647,10 @@ const Lesson = () => {
                 {/* Results Panel */}
                 {quizSubmitted && quizResults && (
                   <div
-                    className={`mt-8 rounded-2xl border p-6 text-center ${
-                      isPassed
+                    className={`mt-8 rounded-2xl border p-6 text-center ${isPassed
                         ? 'bg-emerald-50 border-emerald-200'
                         : 'bg-orange-50 border-orange-200'
-                    }`}
+                      }`}
                   >
                     {isPassed ? (
                       <CheckCircle2 className='mx-auto mb-3 h-10 w-10 text-emerald-600' />
@@ -661,9 +658,8 @@ const Lesson = () => {
                       <XCircle className='mx-auto mb-3 h-10 w-10 text-orange-500' />
                     )}
                     <p
-                      className={`text-lg font-bold ${
-                        isPassed ? 'text-emerald-800' : 'text-orange-800'
-                      }`}
+                      className={`text-lg font-bold ${isPassed ? 'text-emerald-800' : 'text-orange-800'
+                        }`}
                     >
                       {isPassed ? 'Quiz Passed! 🎉' : 'Not quite — try again!'}
                     </p>
@@ -693,11 +689,10 @@ const Lesson = () => {
                       <Button
                         variant='outline'
                         onClick={handleRetakeQuiz}
-                        className={`flex-1 ${
-                          isPassed
+                        className={`flex-1 ${isPassed
                             ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700'
                             : 'border-orange-300 text-orange-700 hover:bg-orange-100 hover:text-orange-700'
-                        }`}
+                          }`}
                       >
                         Retake Quiz
                       </Button>

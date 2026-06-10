@@ -235,11 +235,11 @@ exports.getBatches = async (req, res) => {
     if (collegeIds.length === 0) return res.json({ success: true, data: [] });
 
     const { rows } = await pool.query(
-      `SELECT DISTINCT sp.year AS id, sp.year::text AS name
+      `SELECT DISTINCT sp.expected_graduation_year AS id, sp.expected_graduation_year::text AS name
        FROM student_profiles sp
        WHERE sp.college_id = ANY($1::uuid[])
-         AND sp.year IS NOT NULL
-       ORDER BY sp.year DESC`,
+         AND sp.expected_graduation_year IS NOT NULL
+       ORDER BY sp.expected_graduation_year DESC`,
       [collegeIds],
     );
     res.json({ success: true, data: rows });

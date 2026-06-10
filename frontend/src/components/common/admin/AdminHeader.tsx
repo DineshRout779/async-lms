@@ -24,10 +24,10 @@ export default function AdminHeader({
   const currentUser = useAppSelector(selectUser);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const title =
-    pathname === '/dashboard/admin'
-      ? 'Home'
-      : pathname.split('/').at(-1)?.replace('-', ' ');
+  let title = pathname === '/dashboard/admin' ? 'Home' : pathname.split('/').at(-1)?.replace('-', ' ');
+  if (pathname.includes('/results/')) {
+    title = 'Evaluation Results';
+  }
 
   const handleLogout = () => {
     dispatch(logout());
