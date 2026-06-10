@@ -131,8 +131,7 @@ export default function FacilitatorProfileDialog({ facilitatorId, onClose }: Pro
                 <div className='flex flex-wrap gap-2'>
                   {profile.colleges.map((c) => (
                     <div key={c.id} className='rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5'>
-                      <p className='text-sm font-semibold text-slate-800'>{c.short_code}</p>
-                      <p className='text-[11px] text-slate-500'>{c.name}</p>
+                      <p className='text-sm font-semibold text-slate-800'>{c.name}</p>
                     </div>
                   ))}
                 </div>

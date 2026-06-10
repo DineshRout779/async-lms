@@ -65,7 +65,7 @@ export default function CollegeDetailSheet({ collegeId, onClose }: Props) {
             <DialogHeader className='pb-4 border-b shrink-0'>
               <div className='flex items-start gap-4'>
                 <div className='w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0'>
-                  {data.short_code}
+                  {data.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
                 </div>
                 <div className='space-y-1'>
                   <DialogTitle className='text-lg font-bold leading-tight'>{data.name}</DialogTitle>

@@ -29,7 +29,6 @@ export default function CollegeFormDialog({
 }: Props) {
   const [form, setForm] = useState({
     name: '',
-    short_code: '',
     city: '',
     state: '',
   });
@@ -41,13 +40,12 @@ export default function CollegeFormDialog({
     if (college) {
       setForm({
         name: college.name,
-        short_code: college.short_code,
         city: college.city,
         state: college.state,
       });
       setIsVerified(college.is_verified);
     } else {
-      setForm({ name: '', short_code: '', city: '', state: '' });
+      setForm({ name: '', city: '', state: '' });
       setIsVerified(false);
     }
   }, [college]);
@@ -94,17 +92,6 @@ export default function CollegeFormDialog({
               placeholder='IIT Delhi'
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
-
-          {/* Short Code */}
-          <div className='space-y-2'>
-            <Label htmlFor='short-code'>Short Code</Label>
-            <Input
-              id='short-code'
-              placeholder='IIT D'
-              value={form.short_code}
-              onChange={(e) => setForm({ ...form, short_code: e.target.value })}
             />
           </div>
 

@@ -110,9 +110,8 @@ export default function StudentProfileDialog({ studentId, apiPrefix, onClose }: 
                 <div>
                   <p className='text-[10px] font-semibold uppercase text-slate-400 tracking-wider'>College</p>
                   <p className='text-sm font-semibold text-slate-800'>
-                    {profile.college_short_name || 'N/A'}
+                    {profile.college_name || 'N/A'}
                   </p>
-                  <p className='text-[11px] text-slate-500 leading-tight'>{profile.college_name}</p>
                 </div>
               </div>
               <div className='flex items-start gap-2 rounded-lg bg-slate-50 p-3'>
