@@ -126,7 +126,6 @@ export default function AdminColleges() {
             <TableHeader className='bg-slate-50/50'>
               <TableRow>
                 <TableHead className='pl-6'>College</TableHead>
-                <TableHead>Code</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className='w-12' />
@@ -136,14 +135,14 @@ export default function AdminColleges() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className='h-64 text-center'>
+                  <TableCell colSpan={4} className='h-64 text-center'>
                     <Loader2 className='w-8 h-8 animate-spin text-blue-600 mx-auto' />
                   </TableCell>
                 </TableRow>
               ) : colleges.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={4}
                     className='h-64 text-center text-slate-500'
                   >
                     No colleges found.
@@ -165,10 +164,6 @@ export default function AdminColleges() {
                           {college.name}
                         </span>
                       </div>
-                    </TableCell>
-
-                    <TableCell className='text-slate-500'>
-                      {college.short_code}
                     </TableCell>
 
                     <TableCell>

@@ -162,11 +162,8 @@ const Students = () => {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <p className='font-bold text-slate-900 uppercase'>
-                    {student.college_short_name || 'N/A'}
-                  </p>
-                  <p className='text-xs text-slate-400 truncate max-w-45'>
-                    {student.college_name}
+                  <p className='text-sm text-slate-700 truncate max-w-45'>
+                    {student.college_name || 'N/A'}
                   </p>
                 </TableCell>
                 <TableCell>
