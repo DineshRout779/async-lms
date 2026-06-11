@@ -2,6 +2,7 @@ const serverError = require('../utils/serverError');
 const pool = require("../config/pg");
 const axios = require("axios");
 const { notify } = require('../services/notificationService');
+const { presignS3Url } = require('../utils/s3');
 
 const EVALUATOR_APIS = {
   JS: "https://js-evaluator-r80h.onrender.com/evaluate-batch-by-links",
@@ -27,7 +28,7 @@ exports.runEvaluation = async (req, res) => {
 
     // 1. Try fetching from curriculum assignments first
     let assignmentRes = await client.query(
-      `SELECT id, evaluator_type, test_cases, rubric, 'unit' as type
+      `SELECT id, title, evaluator_type, test_cases, rubric, 'unit' as type
        FROM assignments
        WHERE id = $1`,
       [assignmentId]
@@ -39,7 +40,7 @@ exports.runEvaluation = async (req, res) => {
     // 2. If not found, try facilitator-created college assignments
     if (!assignment) {
       assignmentRes = await client.query(
-        `SELECT id, NULL as evaluator_type, NULL as test_cases, NULL as rubric, 'college' as type
+        `SELECT id, title, NULL as evaluator_type, NULL as test_cases, NULL as rubric, 'college' as type
          FROM college_assignments
          WHERE id = $1`,
         [assignmentId]
@@ -172,11 +173,20 @@ exports.runEvaluation = async (req, res) => {
       console.warn("Evaluator API failed or suspended. Using Mock Evaluation.", apiError.message);
 
       // 6. Mock Fallback (Simulates AI Evaluation for testing)
-      results = submissions.map((s) => ({
-        student: s.student_name,
-        marks: Math.floor(Math.random() * (98 - 80 + 1) + 80),
-        feedback: `Excellent submission for "${assignment.title}". The logic is sound and follow best practices. (Automated Simulation)`,
-      }));
+      results = submissions.map((s) => {
+        const score = Math.floor(Math.random() * (98 - 80 + 1) + 80);
+        let feedback = "";
+        if (score >= 95) feedback = `Flawless submission for "${assignment.title}". Best practices were strictly followed. (Automated Simulation)`;
+        else if (score >= 90) feedback = `Excellent submission for "${assignment.title}". The logic is sound. (Automated Simulation)`;
+        else if (score >= 85) feedback = `Great effort on "${assignment.title}". Minor optimizations are possible. (Automated Simulation)`;
+        else feedback = `Good attempt at "${assignment.title}". Ensure edge cases are handled correctly next time. (Automated Simulation)`;
+
+        return {
+          student: s.student_name,
+          marks: score,
+          feedback: feedback,
+        };
+      });
       csvUrl = "https://mock-results.csv";
     }
 
@@ -269,19 +279,43 @@ exports.getEvaluationResults = async (req, res) => {
     const { id } = req.params;
 
     const evalRes = await pool.query(
-      `SELECT * FROM evaluations WHERE id = $1`,
+      `SELECT e.*, COALESCE(a.title, c.title) as assignment_name
+       FROM evaluations e
+       LEFT JOIN assignments a ON e.assignment_id = a.id
+       LEFT JOIN college_assignments c ON e.college_assignment_id = c.id
+       WHERE e.id = $1`,
       [id]
     );
 
     const resultsRes = await pool.query(
-      `SELECT * FROM evaluation_results WHERE evaluation_id = $1`,
+      `SELECT r.*, 
+              COALESCE(s.submission_link, cs.submission_link) as submission_link,
+              cs.submission_file_url as submission_file_url,
+              sp.expected_graduation_year,
+              col.name as college_name,
+              col.id as college_id
+       FROM evaluation_results r
+       JOIN evaluations e ON r.evaluation_id = e.id
+       LEFT JOIN assignment_submissions s ON r.submission_id = s.id AND e.assignment_id IS NOT NULL
+       LEFT JOIN college_assignment_submissions cs ON r.submission_id = cs.id AND e.college_assignment_id IS NOT NULL
+       LEFT JOIN student_profiles sp ON r.student_id = sp.user_id
+       LEFT JOIN colleges col ON sp.college_id = col.id
+       WHERE r.evaluation_id = $1`,
       [id]
+    );
+
+    const results = await Promise.all(
+      resultsRes.rows.map(async (row) => ({
+        ...row,
+        submission_link: await presignS3Url(row.submission_link),
+        submission_file_url: await presignS3Url(row.submission_file_url)
+      }))
     );
 
     res.json({
       success: true,
       evaluation: evalRes.rows[0],
-      results: resultsRes.rows,
+      results: results,
     });
 
   } catch (error) {

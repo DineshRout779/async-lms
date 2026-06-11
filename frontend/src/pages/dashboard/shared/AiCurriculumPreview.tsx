@@ -78,6 +78,24 @@ function buildLearningPath(modules: AiModule[], durationWeeks: number | null, da
   void hoursPerDay;
 }
 
+// ─── Formatting helper ──────────────────────────────────────────────────────────
+
+// Often AI returns instructions as a single continuous string without proper line breaks.
+// This helper tries to inject newlines before common list markers so ReactMarkdown can render them.
+function formatAiText(text: string | undefined): string {
+  if (!text) return '';
+  let formatted = text
+    // Add newlines before "Step X:" or "1." or "a." or "-"
+    .replace(/(?<!\n)(Step \d+:)/gi, '\n\n**$1**')
+    .replace(/(?<!\n)(\d+\.)(?=\s+[A-Z])/g, '\n\n$1')
+    .replace(/(?<!\n)([a-z]\.)(?=\s+[A-Z])/g, '\n  $1')
+    .replace(/(?<!\n)(-\s+)(?=[A-Z])/g, '\n$1')
+    // Highlight specific keywords
+    .replace(/(Acceptance criteria:)/gi, '\n\n**$1**\n')
+    .replace(/(Objective:)/gi, '**$1**\n\n');
+  return formatted;
+}
+
 // ─── Lesson preview row ────────────────────────────────────────────────────────
 
 const getEmbedUrl = (url: string) => {
@@ -370,7 +388,9 @@ function TopicPreview({ topic }: { topic: AiTopic }) {
               <div className='flex items-start gap-2.5 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl'>
                 <div className='flex-1'>
                   <p className='text-[12px] font-bold text-amber-800'>{topic.assignment.title}</p>
-                  <p className='text-[11px] text-amber-600 mt-0.5'>{topic.assignment.instructions}</p>
+                  <div className='prose prose-amber prose-sm max-w-none text-amber-700 prose-p:text-amber-700 prose-headings:text-amber-800 prose-pre:whitespace-pre-wrap prose-pre:break-words mt-1'>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatAiText(topic.assignment.instructions)}</ReactMarkdown>
+                  </div>
                 </div>
                 <span className='text-[12px] font-bold text-amber-600 shrink-0 bg-white border border-amber-200 px-2 py-0.5 rounded-full'>{topic.assignment.max_score} pts</span>
               </div>

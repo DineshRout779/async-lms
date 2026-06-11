@@ -2,6 +2,8 @@ type Result = {
   student_name: string;
   marks: number;
   feedback: string;
+  submission_link?: string;
+  submission_file_url?: string;
 };
 
 type Props = {
@@ -33,9 +35,17 @@ const StudentTable = ({results} : Props) => {
               <td className="p-3">{item.marks}</td>
               <td className="p-3">{item.feedback}</td>
               <td className="p-3">
-                <button className="text-blue-600 text-sm">
-                  View Submission
-                </button>
+                {item.submission_link ? (
+                  <a href={item.submission_link} target="_blank" rel="noreferrer" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
+                    View Link
+                  </a>
+                ) : item.submission_file_url ? (
+                  <a href={item.submission_file_url} target="_blank" rel="noreferrer" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
+                    View File
+                  </a>
+                ) : (
+                  <span className="text-slate-400 text-sm">—</span>
+                )}
               </td>
             </tr>
           ))}

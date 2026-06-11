@@ -34,7 +34,10 @@ export default function FacilitatorHeader({ toggleSidebar }: { toggleSidebar: ()
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const title = TITLES[pathname] ?? pathname.split('/').at(-1)?.replace(/-/g, ' ') ?? 'Facilitator';
+  let title = TITLES[pathname] ?? pathname.split('/').at(-1)?.replace(/-/g, ' ') ?? 'Facilitator';
+  if (pathname.includes('/results/')) {
+    title = 'Evaluation Results';
+  }
 
   const handleLogout = () => {
     dispatch(logout());

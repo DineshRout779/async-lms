@@ -84,7 +84,7 @@ const TopHeader = ({ onFilterChange }: Props) => {
         onChange={(e) => setSelectedBatch(e.target.value)}
         className='border border-slate-200 px-3 py-1.5 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400'
       >
-        <option value=''>All Batches</option>
+        <option value=''>All Grad Years</option>
         {batches.map((b) => (
           <option key={b.id} value={b.id}>
             {b.name}
