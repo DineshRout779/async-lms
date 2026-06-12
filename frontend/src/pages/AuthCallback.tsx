@@ -33,6 +33,11 @@ export default function AuthCallback() {
       return;
     }
 
+    if (user.role === 'curriculum_developer') {
+      navigate('/dashboard/curriculum-developer');
+      return;
+    }
+
     if (user.role === 'facilitator') {
       if (user.onboarding_step !== 'done') {
         navigate('/onboarding/facilitator');
