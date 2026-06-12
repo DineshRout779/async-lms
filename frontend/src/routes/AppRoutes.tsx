@@ -74,6 +74,9 @@ const StudentSettings = lazyWithRetry(
 const ResumeBuilder = lazyWithRetry(
   () => import('@/pages/dashboard/student/ResumeBuilder'),
 );
+const StudentAnalytics = lazyWithRetry(
+  () => import('@/pages/dashboard/student/StudentAnalytics'),
+);
 const CourseViewLayout = lazyWithRetry(() => import('@/layouts/CourseLayout'));
 
 // Facilitator Dashboard
@@ -137,6 +140,11 @@ const AdminProfile = lazyWithRetry(
   () => import('@/pages/dashboard/admin/AdminProfile'),
 );
 
+// Curriculum Developer Dashboard
+const CurriculumDeveloperDashboardLayout = lazyWithRetry(
+  () => import('@/layouts/CurriculumDeveloperDashboardLayout'),
+);
+
 // AI Curriculum Builder (shared)
 const AiCurriculumList = lazyWithRetry(
   () => import('@/pages/dashboard/shared/AiCurriculumList'),
@@ -196,6 +204,7 @@ const router = createBrowserRouter([
               { path: 'leaderboard', element: <Leaderboard /> },
               { path: 'profile', element: <StudentProfile /> },
               { path: 'settings', element: <StudentSettings /> },
+              { path: 'analytics', element: <StudentAnalytics /> },
               { path: 'resume-builder', element: <ResumeBuilder /> },
               { path: 'courses', element: <MyCourses /> },
               {
@@ -239,11 +248,7 @@ const router = createBrowserRouter([
               { path: 'assignment-success', element: <AssignmentSuccess /> },
               { path: 'evaluations', element: <FacilitatorEvaluations /> },
               { path: 'results/:id', element: <ResultsPage /> },
-              { path: 'ai-curriculum', element: <AiCurriculumList /> },
-              { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
-              { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
-              { path: 'ai-curriculum/:id/preview', element: <AiCurriculumPreview /> },
-              { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
+
               { path: 'analytics', element: <FacilitatorAnalytics /> },
               { path: 'student-growth', element: <FacilitatorStudentGrowth /> },
               { path: 'reports', element: <FacilitatorReports /> },
@@ -278,6 +283,19 @@ const router = createBrowserRouter([
               { path: 'evaluations', element: <Evaluations /> },
               { path: 'results/:id', element: <ResultsPage /> },
               { path: 'profile', element: <AdminProfile /> },
+              { path: 'ai-curriculum', element: <AiCurriculumList /> },
+              { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
+              { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
+              { path: 'ai-curriculum/:id/preview', element: <AiCurriculumPreview /> },
+              { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
+            ],
+          },
+
+          {
+            path: 'dashboard/curriculum-developer',
+            element: <CurriculumDeveloperDashboardLayout />,
+            children: [
+              { index: true, element: <AiCurriculumList /> },
               { path: 'ai-curriculum', element: <AiCurriculumList /> },
               { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
               { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },

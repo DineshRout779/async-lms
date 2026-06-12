@@ -2,7 +2,7 @@ export interface User {
   id: string | number;
   full_name: string;
   email: string;
-  role: 'student' | 'facilitator' | 'admin';
+  role: 'student' | 'facilitator' | 'admin' | 'curriculum_developer';
   is_verified: boolean;
   college_id?: string | number;
   college_ids?: (string | number)[];
