@@ -8,7 +8,7 @@ function watchWorkspace({ userId, projectId, workspacePath, socket }) {
   if (watchers.has(key)) return;
 
   const watcher = chokidar.watch(workspacePath, {
-    ignored: [/(^|[\/\\])\../, '**/node_modules/**', '**/dist/**', '**/build/**'], // ignore hidden files and huge directories
+    ignored: [/node_modules/, /dist/, /build/, /(^|[\/\\])\../], // Use Regex to completely block traversal
     ignoreInitial: true,
     persistent: true,
     depth: 10,
