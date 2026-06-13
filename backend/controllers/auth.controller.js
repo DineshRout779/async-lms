@@ -100,6 +100,11 @@ exports.login = async (req, res) => {
     }
 
     const user = userRes.rows[0];
+
+    if (!user.password_hash) {
+      return res.status(401).json({ message: 'This account uses Google Sign-In. Please click "Continue with Google".' });
+    }
+
     const valid = await bcrypt.compare(password, user.password_hash);
     delete user.password_hash;
 

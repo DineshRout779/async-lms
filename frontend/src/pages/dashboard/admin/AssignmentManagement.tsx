@@ -201,10 +201,10 @@ export default function AssignmentManagement() {
           let status: Assignment['status'] = 'Active';
           if (item.evaluation_status === 'completed') {
             status = 'Completed';
-          } else if (subsCount > 0) {
-            status = 'Submitted';
           } else if (isOverdue) {
             status = 'Overdue';
+          } else if (subsCount > 0) {
+            status = 'Submitted';
           }
 
           return {

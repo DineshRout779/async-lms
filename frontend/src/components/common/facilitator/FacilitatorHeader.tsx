@@ -34,7 +34,10 @@ export default function FacilitatorHeader({ toggleSidebar }: { toggleSidebar: ()
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const title = TITLES[pathname] ?? pathname.split('/').at(-1)?.replace(/-/g, ' ') ?? 'Facilitator';
+  let title = TITLES[pathname] ?? pathname.split('/').at(-1)?.replace(/-/g, ' ') ?? 'Facilitator';
+  if (pathname.includes('/results/')) {
+    title = 'Evaluation Results';
+  }
 
   const handleLogout = () => {
     dispatch(logout());
@@ -80,18 +83,18 @@ export default function FacilitatorHeader({ toggleSidebar }: { toggleSidebar: ()
             <DropdownMenuSeparator />
 
             <DropdownMenuItem
-              className='cursor-pointer py-2.5 rounded-md gap-2'
+              className='cursor-pointer py-2.5 rounded-md gap-2 text-red-600 focus:text-red-700 focus:bg-red-50'
               onClick={() => navigate('/dashboard/facilitator/settings')}
             >
-              <User className='h-4 w-4 text-slate-400' />
+              <User className='h-4 w-4' />
               <span className='text-sm font-medium'>My Profile</span>
             </DropdownMenuItem>
 
             <DropdownMenuItem
-              className='cursor-pointer py-2.5 rounded-md gap-2'
+              className='cursor-pointer py-2.5 rounded-md gap-2 text-red-600 focus:text-red-700 focus:bg-red-50'
               onClick={() => navigate('/dashboard/facilitator/settings')}
             >
-              <Settings className='h-4 w-4 text-slate-400' />
+              <Settings className='h-4 w-4' />
               <span className='text-sm font-medium'>Account Settings</span>
             </DropdownMenuItem>
 

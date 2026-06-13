@@ -75,15 +75,21 @@ interface StudentRow {
   degree?: string | null;
   batch?: number | null;
   college_name?: string | null;
-  college_short_name?: string | null;
   enrolled_courses?: number;
   progress_percent?: number;
   joined_date: string;
   is_verified: boolean;
 }
 
+interface CollegeOption {
+  id: string;
+  name: string;
+  is_verified: boolean;
+}
+
 const FacilitatorStudents = () => {
   const [students, setStudents] = useState<StudentRow[]>([]);
+  const [colleges, setColleges] = useState<CollegeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCollege, setSelectedCollege] = useState<string>('all');
@@ -94,21 +100,15 @@ const FacilitatorStudents = () => {
   const [editForm, setEditForm] = useState({ degree: '', current_academic_year: '', expected_graduation_year: '' });
   const [saving, setSaving] = useState(false);
 
-  const colleges = useMemo(() => {
-    const seen = new Map<string, string>();
-    students.forEach((s) => {
-      if (s.college_name && s.college_short_name) {
-        seen.set(s.college_name, s.college_short_name);
-      }
-    });
-    return Array.from(seen.entries()).map(([name, short]) => ({ name, short }));
-  }, [students]);
-
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get<StudentRow[]>('/facilitator/students');
-      setStudents(res.data);
+      const [studentsRes, collegesRes] = await Promise.all([
+        apiClient.get<StudentRow[]>('/facilitator/students'),
+        apiClient.get<{ success: boolean; data: CollegeOption[] }>('/facilitator/colleges'),
+      ]);
+      setStudents(studentsRes.data);
+      setColleges(collegesRes.data.data);
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to load students'));
     } finally {
@@ -166,7 +166,7 @@ const FacilitatorStudents = () => {
     return students.filter(
       (s) =>
         (tab === 'all' || !s.is_verified) &&
-        (selectedCollege === 'all' || s.college_name === selectedCollege) &&
+        (selectedCollege === 'all' || colleges.find((c) => c.id === selectedCollege)?.name === s.college_name) &&
         (s.full_name.toLowerCase().includes(q) ||
           s.email.toLowerCase().includes(q)),
     );
@@ -230,8 +230,8 @@ const FacilitatorStudents = () => {
               <SelectContent>
                 <SelectItem value='all'>All Colleges</SelectItem>
                 {colleges.map((c) => (
-                  <SelectItem key={c.name} value={c.name}>
-                    {c.short} — {c.name}
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>

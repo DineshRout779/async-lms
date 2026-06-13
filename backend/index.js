@@ -139,6 +139,7 @@ app.use(require('./middlewares/errorHandler'));
 
 const { Server } = require('socket.io');
 const notificationService = require('./services/notificationService');
+const { initPools } = require('./services/runnerService');
 
 const io = new Server(server, {
   cors: {
@@ -183,4 +184,8 @@ server.on('upgrade', (req, socket, head) => {
 server.listen(3001, () => {
   const ct = new Date().toLocaleTimeString();
   console.log('Backend (Orchestrator) running on http://localhost:3001', ct);
+});
+
+initPools().catch((err) => {
+  console.error('[WARN] Runner pool init failed (exercise run/test unavailable):', err.message);
 });

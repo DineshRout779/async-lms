@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Save, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import RichTextEditor from '@/components/common/RichTextEditor';
+import MarkdownEditor from '@/components/common/MarkdownEditor';
 import toast from 'react-hot-toast';
 
 interface AssignmentModalProps {
@@ -30,10 +31,9 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
   loading = false,
 }) => {
   const [title, setTitle] = useState(editData?.title ?? '');
-  const [instructions, setInstructions] = useState(
-    editData?.instructions ?? '',
-  );
+  const [instructions, setInstructions] = useState(editData?.instructions ?? '');
   const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
+  const [editorType, setEditorType] = useState<'rich' | 'markdown'>('rich');
 
   useEffect(() => {
     if (isOpen) {
@@ -66,8 +66,8 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
 
   return (
     <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
-      <div className='w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl'>
-        <div className='mb-4 flex items-center justify-between'>
+      <div className='flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl'>
+        <div className='flex items-center justify-between p-6 pb-4'>
           <div>
             <h3 className='text-lg font-bold text-slate-900'>
               {editData ? 'Edit Assignment' : 'Create Assignment'}
@@ -82,6 +82,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
           </button>
         </div>
 
+        <div className='flex-1 overflow-y-auto px-6'>
         <div className='space-y-4'>
           <div>
             <label className='mb-2 block text-sm font-medium text-slate-700'>
@@ -97,15 +98,40 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
           </div>
 
           <div>
-            <label className='mb-2 block text-sm font-medium text-slate-700'>
-              Instructions
-            </label>
-            <RichTextEditor
-              value={instructions}
-              onChange={setInstructions}
-              placeholder='Detailed instructions for the assignment...'
-              minHeight='140px'
-            />
+            <div className='mb-2 flex items-center justify-between'>
+              <label className='text-sm font-medium text-slate-700'>Instructions</label>
+              <div className='flex items-center gap-1 border border-slate-200 rounded-md p-0.5 bg-slate-50'>
+                <button
+                  type='button'
+                  onClick={() => setEditorType('rich')}
+                  className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${editorType === 'rich' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Rich Text
+                </button>
+                <button
+                  type='button'
+                  onClick={() => setEditorType('markdown')}
+                  className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${editorType === 'markdown' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Markdown
+                </button>
+              </div>
+            </div>
+            {editorType === 'rich' ? (
+              <RichTextEditor
+                value={instructions}
+                onChange={setInstructions}
+                placeholder='Detailed instructions for the assignment...'
+                minHeight='140px'
+              />
+            ) : (
+              <MarkdownEditor
+                value={instructions}
+                onChange={setInstructions}
+                placeholder='Detailed instructions for the assignment...'
+                minHeight='140px'
+              />
+            )}
           </div>
 
           <div>
@@ -122,8 +148,9 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
             />
           </div>
         </div>
+        </div>
 
-        <div className='mt-6 flex gap-3'>
+        <div className='flex gap-3 border-t border-slate-100 p-6 pt-4'>
           <Button
             onClick={onClose}
             className='flex-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'

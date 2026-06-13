@@ -63,9 +63,6 @@ export const ManageAccessModal = ({
               >
                 <div>
                   <p className='font-bold text-slate-800'>{c.name}</p>
-                  <p className='text-xs text-slate-400 uppercase tracking-wider'>
-                    {c.short_code}
-                  </p>
                 </div>
                 <Switch
                   checked={c.assigned}

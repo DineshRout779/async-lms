@@ -155,9 +155,13 @@ export default function CapstoneView() {
         <div className='bg-white px-6 py-8'>
           {capstone.instructions ? (
             <div className='prose prose-slate max-w-none lg:prose-lg'>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {capstone.instructions}
-              </ReactMarkdown>
+              {/^<[a-z][\s\S]*>/i.test(capstone.instructions.trimStart()) ? (
+                <div dangerouslySetInnerHTML={{ __html: capstone.instructions }} />
+              ) : (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {capstone.instructions}
+                </ReactMarkdown>
+              )}
             </div>
           ) : (
             <p className='italic text-slate-400'>No instructions provided.</p>

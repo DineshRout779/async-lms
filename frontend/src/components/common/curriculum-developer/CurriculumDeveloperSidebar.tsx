@@ -1,58 +1,38 @@
-import {
-  LayoutDashboard,
-  Users,
-  Settings,
-  ClipboardList,
-  CheckSquare,
-  BarChart2,
-  TrendingUp,
-  FileText,
-} from 'lucide-react';
+import { LayoutDashboard, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router';
+import Logo from '../Logo';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
-import Logo from '../Logo';
 
 const menuItems = [
-  { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/facilitator' },
-  { name: 'Students', icon: Users, path: '/dashboard/facilitator/students' },
+  { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/curriculum-developer' },
   {
-    name: 'Assignments',
-    icon: ClipboardList,
-    path: '/dashboard/facilitator/assignments',
+    name: 'AI Curriculum',
+    icon: Sparkles,
+    path: '/dashboard/curriculum-developer/ai-curriculum',
   },
-  {
-    name: 'Evaluations',
-    icon: CheckSquare,
-    path: '/dashboard/facilitator/evaluations',
-  },
-  {
-    name: 'Analytics',
-    icon: BarChart2,
-    path: '/dashboard/facilitator/analytics',
-  },
-  {
-    name: 'Student Growth',
-    icon: TrendingUp,
-    path: '/dashboard/facilitator/student-growth',
-  },
-  { name: 'Reports', icon: FileText, path: '/dashboard/facilitator/reports' },
-  { name: 'Settings', icon: Settings, path: '/dashboard/facilitator/settings' },
 ];
 
-export default function FacilitatorSidebar({
+export default function CurriculumDeveloperSidebar({
   isOpen,
 }: {
   isOpen: boolean;
   toggle: () => void;
 }) {
-  const user = useAppSelector(selectUser);
+  const currentUser = useAppSelector(selectUser);
+
+  const initials = currentUser?.full_name
+    ?.split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'CD';
 
   return (
     <aside
       className={cn(
-        'h-full flex flex-col transition-all duration-300 bg-slate-900 text-slate-300',
+        'h-full flex flex-col transition-all duration-300 bg-[#191C34] text-slate-300',
         isOpen ? 'w-64' : 'w-20',
       )}
     >
@@ -72,14 +52,13 @@ export default function FacilitatorSidebar({
           <NavLink
             key={item.name}
             to={item.path}
-            end={item.path === '/dashboard/facilitator'}
+            end={item.path === '/dashboard/curriculum-developer'}
             className={({ isActive }) =>
               cn(
-                'flex items-center py-3 rounded-lg transition-all group',
-                isOpen ? 'gap-3 px-3' : 'justify-center px-0',
+                'flex items-center gap-3 px-3 py-3 rounded-lg transition-all group',
                 isActive
-                  ? 'bg-slate-700 text-white shadow-sm'
-                  : 'hover:bg-slate-800 hover:text-white',
+                  ? 'bg-[#333d7c] text-white shadow-sm'
+                  : 'hover:bg-[#2a3469] hover:text-white',
               )
             }
           >
@@ -94,9 +73,7 @@ export default function FacilitatorSidebar({
                   )}
                 />
                 {isOpen && (
-                  <span className='font-medium text-[14px] tracking-wider'>
-                    {item.name}
-                  </span>
+                  <span className='font-medium text-[14px]'>{item.name}</span>
                 )}
                 {isActive && isOpen && (
                   <div className='ml-auto w-1.5 h-1.5 rounded-full bg-yellow-400' />
@@ -108,20 +85,20 @@ export default function FacilitatorSidebar({
       </nav>
 
       {/* User Profile Section - Bottom */}
-      <div className='p-4 border-t border-slate-800 bg-slate-900'>
+      <div className='p-4 border-t border-[#222644] bg-[#191C34]'>
         <div
           className={cn('flex items-center gap-3', !isOpen && 'justify-center')}
         >
-          <div className='w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold shrink-0'>
-            {user?.full_name?.charAt(0) || 'F'}
+          <div className='w-10 h-10 rounded-full bg-[#f59e0b] flex items-center justify-center text-white font-bold shrink-0'>
+            {initials}
           </div>
           {isOpen && (
             <div className='min-w-0'>
               <p className='text-sm font-bold text-white truncate'>
-                {user?.full_name || 'Facilitator'}
+                {currentUser?.full_name || 'Developer'}
               </p>
               <p className='text-[11px] text-yellow-400 font-medium truncate leading-tight'>
-                Facilitator
+                {currentUser?.email}
               </p>
             </div>
           )}

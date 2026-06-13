@@ -10,8 +10,6 @@ import {
   ArrowRight,
   Upload,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import apiClient from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -181,13 +179,72 @@ export default function CollegeAssignmentView() {
           <div className='lg:col-span-7 space-y-6'>
             <Card className='border-none rounded-[2rem] p-10 shadow-sm h-full'>
               <div className='space-y-10'>
-                <div className='space-y-4'>
-                  <h2 className='text-xl font-black text-[#1E293B]'>Assignment Brief</h2>
-                  <div className='prose prose-sm max-w-none text-[#64748B] font-medium leading-7'>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {assignment.description || 'No description provided.'}
-                    </ReactMarkdown>
+                <div className='space-y-8'>
+                  <div className='space-y-4'>
+                    <h2 className='text-xl font-black text-[#1E293B]'>Assignment Brief</h2>
+                    {assignment.description ? (
+                      <div 
+                        className='prose prose-sm max-w-none text-[#64748B] font-medium leading-7'
+                        dangerouslySetInnerHTML={{ __html: assignment.description }}
+                      />
+                    ) : (
+                      <p className='text-[#64748B] italic'>No description provided.</p>
+                    )}
                   </div>
+                  
+                  {assignment.assignment_description && (
+                    <div className='space-y-4 pt-6 border-t border-slate-100'>
+                      <h2 className='text-xl font-black text-[#1E293B]'>Instructions</h2>
+                      <div 
+                        className='prose prose-sm max-w-none text-[#64748B] font-medium leading-7'
+                        dangerouslySetInnerHTML={{ __html: assignment.assignment_description }}
+                      />
+                    </div>
+                  )}
+
+                  {assignment.test_cases && assignment.test_cases.length > 0 && (
+                    <div className='space-y-4 pt-6 border-t border-slate-100'>
+                      <h2 className='text-xl font-black text-[#1E293B]'>Test Cases</h2>
+                      <div className='rounded-xl border border-slate-200 overflow-hidden'>
+                        <table className='w-full text-sm text-left'>
+                          <thead className='bg-slate-50 text-slate-600 font-bold'>
+                            <tr>
+                              <th className='px-4 py-3 border-b'>Input</th>
+                              <th className='px-4 py-3 border-b'>Expected Output</th>
+                              <th className='px-4 py-3 border-b w-24 text-center'>Points</th>
+                            </tr>
+                          </thead>
+                          <tbody className='divide-y divide-slate-100 bg-white'>
+                            {assignment.test_cases.map((tc, idx) => (
+                              <tr key={idx} className='hover:bg-slate-50 transition-colors'>
+                                <td className='px-4 py-3 font-mono text-slate-700'>{tc.input}</td>
+                                <td className='px-4 py-3 font-mono text-slate-700'>{tc.output}</td>
+                                <td className='px-4 py-3 text-center font-bold text-blue-600'>{tc.score}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {assignment.rubric && assignment.rubric.length > 0 && (
+                    <div className='space-y-4 pt-6 border-t border-slate-100'>
+                      <h2 className='text-xl font-black text-[#1E293B]'>Evaluation Rubric</h2>
+                      <div className='grid gap-3'>
+                        {assignment.rubric.map((item, idx) => (
+                          <div key={idx} className='flex items-start justify-between p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-200 transition-colors'>
+                            <div>
+                              <h3 className='font-bold text-slate-800'>{item.name}</h3>
+                            </div>
+                            <div className='shrink-0 ml-4 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg font-bold text-sm'>
+                              {item.score} pts
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className='pt-8 border-t border-slate-50'>

@@ -1,4 +1,4 @@
-import { Search, Menu, LogOut, UserCircle, Settings } from 'lucide-react';
+import { Search, Menu, LogOut, UserCircle, User } from 'lucide-react';
 import NotificationBell from '@/components/common/NotificationBell';
 // import { Button } from '@/components/ui/button';
 import {
@@ -24,10 +24,10 @@ export default function AdminHeader({
   const currentUser = useAppSelector(selectUser);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const title =
-    pathname === '/dashboard/admin'
-      ? 'Home'
-      : pathname.split('/').at(-1)?.replace('-', ' ');
+  let title = pathname === '/dashboard/admin' ? 'Home' : pathname.split('/').at(-1)?.replace('-', ' ');
+  if (pathname.includes('/results/')) {
+    title = 'Evaluation Results';
+  }
 
   const handleLogout = () => {
     dispatch(logout());
@@ -91,10 +91,10 @@ export default function AdminHeader({
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className='cursor-pointer gap-2'
+                className='cursor-pointer gap-2 text-zinc-600 focus:text-blue-600 focus:bg-red-50'
                 onClick={() => navigate('/dashboard/admin/profile')}
               >
-                <Settings size={16} /> Account Settings
+                <User size={16} /> Profile
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

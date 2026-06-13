@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Code,
   FileText,
+  BarChart2,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -52,6 +53,7 @@ const menuItems: MenuItem[] = [
     icon: FileText,
     path: '/dashboard/student/resume-builder',
   },
+  { name: 'Analytics', icon: BarChart2, path: '/dashboard/student/analytics' },
   { name: 'Profile', icon: User, path: '/dashboard/student/profile' },
   { name: 'Settings', icon: Settings, path: '/dashboard/student/settings' },
 ];

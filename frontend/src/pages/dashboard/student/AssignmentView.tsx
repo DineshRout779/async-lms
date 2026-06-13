@@ -158,9 +158,13 @@ export default function AssignmentView() {
         <div className='bg-white px-6 py-8'>
           {assignment.instructions ? (
             <div className='prose prose-slate max-w-none lg:prose-lg'>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {assignment.instructions}
-              </ReactMarkdown>
+              {/^<[a-z][\s\S]*>/i.test(assignment.instructions.trimStart()) ? (
+                <div dangerouslySetInnerHTML={{ __html: assignment.instructions }} />
+              ) : (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {assignment.instructions}
+                </ReactMarkdown>
+              )}
             </div>
           ) : (
             <p className='italic text-slate-400'>No instructions provided.</p>

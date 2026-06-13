@@ -38,6 +38,10 @@ export default function Login() {
       navigate('/dashboard/admin');
       return;
     }
+    if (user.role === 'curriculum_developer') {
+      navigate('/dashboard/curriculum-developer');
+      return;
+    }
     if (user.role === 'facilitator') {
       if (user.onboarding_step !== 'done') navigate('/onboarding/facilitator');
       else if (!user.is_verified) navigate('/pending-verification');

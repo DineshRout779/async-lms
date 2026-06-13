@@ -365,11 +365,8 @@ const Users = () => {
                       <p className='text-xs text-slate-500'>{user.email}</p>
                     </TableCell>
                     <TableCell>
-                      <p className='font-semibold text-slate-800'>
-                        {user.college_short_name || 'N/A'}
-                      </p>
-                      <p className='text-xs text-slate-500'>
-                        {user.college_name}
+                      <p className='text-sm text-slate-700'>
+                        {user.college_name || 'N/A'}
                       </p>
                     </TableCell>
                     <TableCell>
@@ -399,15 +396,25 @@ const Users = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        className={
-                          user.is_verified
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-yellow-50 text-yellow-700'
-                        }
-                      >
-                        {user.is_verified ? 'Verified' : 'Unverified'}
-                      </Badge>
+                      <div className='flex items-center gap-2'>
+                        <Badge
+                          className={
+                            user.is_verified
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-yellow-50 text-yellow-700'
+                          }
+                        >
+                          {user.is_verified ? 'Verified' : 'Unverified'}
+                        </Badge>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          className='h-7 text-[10px]'
+                          onClick={() => handleVerify(user.id, user.is_verified)}
+                        >
+                          {user.is_verified ? 'Unverify' : 'Verify'}
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className='text-right'>
                       <Button
