@@ -173,7 +173,7 @@ jobs:
             echo "WORKER_PORT=4000" > .env
             echo "WORKER_ID=worker-$(hostname)" >> .env
             echo "WORKER_URL=http://$PRIVATE_IP:4000" >> .env
-            echo "REDIS_URL=redis://172.31.46.237:6379" >> .env
+            echo "REDIS_URL=${{ secrets.REDIS_URL }}" >> .env
             echo "ORCHESTRATOR_URL=${{ secrets.ORCHESTRATOR_URL }}" >> .env
             echo "PGHOST=${{ secrets.PGHOST }}" >> .env
             echo "PGDATABASE=${{ secrets.PGDATABASE }}" >> .env
@@ -193,8 +193,7 @@ jobs:
             echo "WORKER_CAPACITY=${{ secrets.WORKER_CAPACITY }}" >> .env
             echo "MAX_WORKSPACES=${{ secrets.MAX_WORKSPACES }}" >> .env
             echo "S3_WORKSPACE_BUCKET=${{ secrets.S3_WORKSPACE_BUCKET }}" >> .env
-            echo "REDIS_URL=redis://172.31.46.237:6379" >> .env
-            echo "ASG_NAME=codeguru-staging-worker-ASG" >> .env
+            echo "ASG_NAME=c${{ secrets.ASG_NAME }}" >> .env
             
             # Install build tools for native modules like node-pty
             sudo apt-get update -y
