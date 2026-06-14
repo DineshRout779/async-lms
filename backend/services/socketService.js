@@ -2,15 +2,44 @@
 
 const path = require('path');
 const axios = require('axios');
+const os = require('os');
 const { pullWorkspace, pushWorkspace } = require('./s3SyncService');
-const { ensureWorkspaceContainer, stopWorkspaceContainer } = require('./workspaceRuntime');
+const { ensureWorkspaceContainer, stopWorkspaceContainer, getProfileMemoryLimit } = require('./workspaceRuntime');
 const { createTerminal } = require('./terminalService');
 const { watchWorkspace, stopWatchWorkspace } = require('./workspaceWatcher');
 const { extractPortsFromOutput } = require('./portDetectionService');
 const { getWorkspaceQuota, touchWorkspace } = require('./fileSystemService');
 const { getContainerIP, clearContainerIP } = require('./dockerService');
-const { ENABLED: nginxEnabled, addPreviewRoute, removePreviewRoutes, getPreviewUrl } = require('./nginxPreviewService');
+const { registerRoute: addPreviewRoute, unregisterRoutes: removePreviewRoutes, getPreviewUrl } = require('./previewProxyService');
+const nginxEnabled = true; // Native proxy is always available
 const { createPortProxy, destroyPortProxies } = require('./portProxyService');
+const { Queue, Worker } = require('bullmq');
+const Redis = require('ioredis');
+const { pushQueueMetric } = require('./cloudwatchService');
+const { setInstanceProtection } = require('./instanceProtectionService');
+
+// ---------- Redis & BullMQ Queue ----------
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+
+const redisConnection = new Redis(REDIS_URL, {
+  maxRetriesPerRequest: null,
+  // Added for production stability
+  retryStrategy(times) {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+});
+
+redisConnection.on('connect', () => {
+  console.log(`[redis] Successfully connected to ${REDIS_URL}`);
+});
+
+redisConnection.on('error', (err) => {
+  console.error(`[redis] Connection error:`, err.message);
+});
+
+
+const workspaceQueue = new Queue('workspace-queue', { connection: redisConnection });
 
 const terminals = new Map();          // socketId → PTY
 const activePorts = new Map();        // `${userId}:${projectId}` → Set<number>
@@ -28,11 +57,24 @@ const CONTAINER_TTL_MS    =  5 * 60 * 1000; // 5 minutes of inactivity
 const CLEANUP_INTERVAL_MS =  5 * 60 * 1000; // check every 5 minutes
 
 // ---------- Capacity & queue ----------
-// Hard cap on concurrent live workspace containers.
-// Adjust MAX_WORKSPACES env var to match available RAM on the host.
-const MAX_CONCURRENT_WORKSPACES = parseInt(process.env.MAX_WORKSPACES || '10', 10);
-// Array of waiting requests: { socketId, socket, userId, projectId, image, profile }
-const workspaceQueue = [];
+const SAFETY_BUFFER_MB = 50; 
+let allocatedMemoryMB = 0;
+const MAX_SERVER_MEMORY_MB = (os.totalmem() / (1024 * 1024)) - 500;
+const activeProfiles = new Map(); // key -> requiredMB
+
+function hasCapacity(profile) {
+  const requiredMB = getProfileMemoryLimit(profile);
+  const canFit = (allocatedMemoryMB + requiredMB) <= MAX_SERVER_MEMORY_MB;
+  
+  if (!canFit) {
+    console.log(`[capacity] Rejecting ${profile}: Allocated=${allocatedMemoryMB}MB, Req=${requiredMB}MB, Max=${Math.round(MAX_SERVER_MEMORY_MB)}MB`);
+  }
+  
+  return canFit;
+}
+
+// Map to track active sockets for queued jobs (transient)
+const activeSockets = new Map(); // socketId -> socket
 
 const cleanupTimer = setInterval(() => {
   const now = Date.now();
@@ -47,11 +89,20 @@ const cleanupTimer = setInterval(() => {
 
       // Full teardown
       clearContainerIP(cname);
-      removePreviewRoutes(cname);
+      removePreviewRoutes(cname); // unregister from proxy
       destroyPortProxies(cname);
       activePorts.delete(key);
       outputBuffers.delete(key);
       lastActivity.delete(key);
+
+      const requiredMB = activeProfiles.get(key);
+      if (requiredMB) {
+        allocatedMemoryMB -= requiredMB;
+        activeProfiles.delete(key);
+        if (activeProfiles.size === 0) {
+          setInstanceProtection(false);
+        }
+      }
 
       // Slot freed — promote next queued user immediately (before async teardown)
       promoteFromQueue();
@@ -91,6 +142,13 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
     // Synchronously occupy the slot to prevent concurrency race conditions
     lastActivity.set(key, Date.now());
     
+    if (!activeProfiles.has(key)) {
+      const requiredMB = getProfileMemoryLimit(profile);
+      activeProfiles.set(key, requiredMB);
+      allocatedMemoryMB += requiredMB;
+      setInstanceProtection(true);
+    }
+    
     socket.join(`ws:${key}`);
 
     const knownPorts = activePorts.get(key);
@@ -104,6 +162,12 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
     socket.emit('workspace:status', { message: 'Starting container…' });
 
     await pullWorkspace(userId, projectId);
+    
+    // In a distributed environment, the worker node must provision the template
+    // (or update config files) before mounting it into the container.
+    const { provisionWorkspace } = require('./workspaceService');
+    provisionWorkspace(userId, projectId, profile);
+
     await ensureWorkspaceContainer({ userId, projectId, image, profile });
 
     const workspacePath = path.join(
@@ -125,27 +189,87 @@ async function startWorkspace(socket, { userId, projectId, image, profile }) {
     const key = `${userId}:${projectId}`;
     lastActivity.delete(key);
     
+    const reqMB = activeProfiles.get(key);
+    if (reqMB) {
+      allocatedMemoryMB -= reqMB;
+      activeProfiles.delete(key);
+      if (activeProfiles.size === 0) {
+        setInstanceProtection(false);
+      }
+    }
+    
     // Release the slot so the queue can advance
     promoteFromQueue();
   }
 }
 
-function promoteFromQueue() {
-  // Skip any entries whose socket has already disconnected
-  while (workspaceQueue.length) {
-    const next = workspaceQueue.shift();
-    if (next.socket.disconnected) continue;
+async function promoteFromQueue() {
+  // BullMQ handles the "next" item logic automatically.
+  // We just need to check if there are jobs waiting.
+  const waitingCount = await workspaceQueue.getWaitingCount();
+  if (waitingCount > 0) {
+    console.log(`[queue] ${waitingCount} jobs waiting in Redis`);
+  }
+  // Push the latest queue count to CloudWatch so ASG knows the current demand
+  pushQueueMetric(waitingCount);
+}
 
-    // Notify remaining queue members of their new positions
-    workspaceQueue.forEach((item, i) => {
-      item.socket.emit('workspace:queued', { position: i + 1, total: workspaceQueue.length });
-    });
+// Ensure CloudWatch always has recent data (even if 0) for stable Auto Scaling
+setInterval(async () => {
+  try {
+    const waitingCount = await workspaceQueue.getWaitingCount();
+    pushQueueMetric(waitingCount);
+  } catch (err) {
+    console.error('[queue:metric] Failed to poll queue count', err.message);
+  }
+}, 60000);
 
-    console.log(`[queue] Promoting ${next.userId}:${next.projectId} — ${workspaceQueue.length} still waiting`);
-    startWorkspace(next.socket, next);
+// ---------- BullMQ Worker ----------
+// Processes jobs when capacity is available
+const queueWorker = new Worker('workspace-queue', async (job) => {
+  const { userId, projectId, image, profile, socketId } = job.data;
+  const key = `${userId}:${projectId}`;
+
+  console.log(`[queue:worker] Processing ${key} (Job: ${job.id})`);
+
+  // Wait for capacity to be available
+  while (!hasCapacity(profile)) {
+    // Wait 5 seconds before checking again
+    await new Promise(r => setTimeout(r, 5000));
+  }
+
+  // Find an active socket to associate with this start
+  let socket = activeSockets.get(socketId);
+  
+  if (!socket || socket.disconnected) {
+    // Attempt to find a new socket if the user reconnected while in queue
+    const room = _io?.sockets?.adapter?.rooms?.get(`ws:${key}`);
+    if (room && room.size > 0) {
+      const firstSocketId = room.values().next().value;
+      socket = activeSockets.get(firstSocketId);
+    }
+  }
+
+  if (!socket || socket.disconnected) {
+    console.log(`[queue:worker] Socket disconnected, skipping job ${job.id}`);
     return;
   }
-}
+
+  // Double check if container is already running (e.g. user reconnected and bypasssed queue)
+  if (lastActivity.has(key)) {
+    console.log(`[queue:worker] Workspace ${key} already active, skipping job ${job.id}`);
+    return;
+  }
+
+  await startWorkspace(socket, { userId, projectId, image, profile });
+}, { 
+  connection: redisConnection,
+  concurrency: 1, // Start one at a time to avoid RAM spikes
+});
+
+queueWorker.on('failed', (job, err) => {
+  console.error(`[queue:worker] Job ${job?.id} failed:`, err.message);
+});
 
 // ---------- Socket handler ----------
 module.exports = function setupSocket(io) {
@@ -159,6 +283,8 @@ module.exports = function setupSocket(io) {
     socket.on('notification:subscribe', ({ userId }) => {
       if (userId) socket.join(`user:${userId}`);
     });
+
+    activeSockets.set(socket.id, socket);
 
     socket.on('workspace:start', async ({ userId, projectId, image, profile }) => {
       try {
@@ -174,19 +300,28 @@ module.exports = function setupSocket(io) {
         // Reconnecting users already have a running container — skip the queue
         const isReconnect = lastActivity.has(key);
 
-        if (!isReconnect && lastActivity.size >= MAX_CONCURRENT_WORKSPACES) {
-          // Server at capacity — enqueue, or update position if already waiting
-          let idx = workspaceQueue.findIndex(q => q.userId === userId && q.projectId === projectId);
-          if (idx === -1) {
-            workspaceQueue.push({ socketId: socket.id, socket, userId, projectId, image, profile });
-            idx = workspaceQueue.length - 1;
-          } else {
-            // Update the socket ref in case user reconnected while queued
-            workspaceQueue[idx].socket = socket;
-            workspaceQueue[idx].socketId = socket.id;
-          }
-          socket.emit('workspace:queued', { position: idx + 1, total: workspaceQueue.length });
-          console.log(`[queue] ${key} queued at position ${idx + 1}/${workspaceQueue.length} (active: ${lastActivity.size})`);
+        if (!isReconnect && !hasCapacity(profile)) {
+          // Server at capacity — enqueue using BullMQ
+          const job = await workspaceQueue.add(`start:${key}`, {
+            userId,
+            projectId,
+            image,
+            profile,
+            socketId: socket.id
+          }, {
+            jobId: key.replace(':', '-'), // Fix: BullMQ Job IDs cannot contain colons
+            removeOnComplete: true,
+            removeOnFail: true
+          });
+
+          // Join the room so the worker can find them later
+          socket.join(`ws:${key}`);
+          
+          const waitingCount = await workspaceQueue.getWaitingCount();
+          socket.emit('workspace:queued', { position: waitingCount, total: waitingCount });
+          console.log(`[queue] ${key} added to Redis queue (Position: ${waitingCount})`);
+          // Instant CloudWatch push for 0-second Auto Scaling delay!
+          pushQueueMetric(waitingCount);
           return;
         }
 
@@ -246,9 +381,8 @@ module.exports = function setupSocket(io) {
 
         const containerName = `workspace-${userId}-${projectId}`;
 
-        // Host-side TCP relay for Windows Docker Desktop compatibility
-        for (const port of newPorts) createPortProxy(containerName, port);
-
+        // Host-side TCP relay for Windows/Mac Docker Desktop compatibility
+        // We will assign these asynchronously below
         // Emit immediately (path-proxy URL) so preview shows right away
         socket.emit(
           'workspace:ports:update',
@@ -262,10 +396,25 @@ module.exports = function setupSocket(io) {
           const ip = await getContainerIP(containerName);
           if (!ip) return;
 
+          const isLocal = process.env.NODE_ENV !== 'production';
+          const targetIp = isLocal ? 'localhost' : ip;
+
           const urlMap = new Map();
           await Promise.all(
             newPorts.map(async (port) => {
-              const ok = await addPreviewRoute(containerName, ip, port);
+              let targetPort = port;
+              
+              if (isLocal) {
+                try {
+                  // createPortProxy now returns a dynamic free port on the host
+                  targetPort = await createPortProxy(containerName, port);
+                } catch(err) {
+                  console.warn(`[portProxy] failed for port ${port}`, err);
+                }
+              }
+
+              // Pass targetPort for routing, but original port for the URL string
+              const ok = await addPreviewRoute(containerName, targetIp, targetPort, port);
               if (ok) urlMap.set(port, getPreviewUrl(containerName, port));
             })
           );
@@ -296,21 +445,16 @@ module.exports = function setupSocket(io) {
     });
 
     socket.on('disconnect', () => {
+      activeSockets.delete(socket.id);
+      
       // 1. Kill the PTY
       const term = terminals.get(socket.id);
       if (term) { try { term.kill(); } catch (_) {} }
       terminals.delete(socket.id);
 
-      // 2. Remove from queue if this socket was waiting
-      const qIdx = workspaceQueue.findIndex(q => q.socketId === socket.id);
-      if (qIdx !== -1) {
-        workspaceQueue.splice(qIdx, 1);
-        // Update positions for remaining queue members
-        workspaceQueue.forEach((item, i) => {
-          item.socket.emit('workspace:queued', { position: i + 1, total: workspaceQueue.length });
-        });
-      }
-
+      // BullMQ jobs stay in Redis even if the socket disconnects.
+      // The Worker will check if the socket is still alive when it pulls the job.
+      
       if (socket.workspace) {
         const { userId, projectId } = socket.workspace;
 

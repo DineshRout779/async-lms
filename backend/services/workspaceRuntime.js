@@ -112,6 +112,12 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
     console.log(
       `Starting container ${name} [${profile ?? 'default'}] memory=${limits.memory} swap=${swap} cpus=${limits.cpus}`,
     );
+    
+    // Forcefully remove any existing stopped/stale container with this name
+    // to prevent code 125 conflict errors if a previous cleanup was interrupted.
+    try {
+      await runDockerAsync(['rm', '-f', name]);
+    } catch (_) {}
 
     const dockerArgs = [
       'run',
@@ -135,8 +141,11 @@ async function ensureWorkspaceContainer({ userId, projectId, image, profile }) {
       '-w',
       '/workspace',
       image,
-      'sleep',
-      'infinity'
+      'bash',
+      '-c',
+      profile === 'mern'
+        ? 'cp -a /prebaked_modules/node_modules /workspace/node_modules 2>/dev/null || true && cp -a /prebaked_modules/package-lock.json /workspace/package-lock.json 2>/dev/null || true && sleep infinity'
+        : 'sleep infinity'
     );
 
     await runDockerAsync(dockerArgs);
@@ -168,4 +177,15 @@ async function stopWorkspaceContainer(userId, projectId) {
   }
 }
 
-module.exports = { ensureWorkspaceContainer, stopWorkspaceContainer };
+function getProfileMemoryLimit(profile) {
+  const limits = PROFILE_LIMITS[profile] ?? PROFILE_LIMITS.default;
+  // Parse '256m' or '128m' into 256 or 128
+  return parseInt(limits.memory, 10);
+}
+
+module.exports = { 
+  ensureWorkspaceContainer, 
+  stopWorkspaceContainer, 
+  getProfileMemoryLimit,
+  PROFILE_LIMITS 
+};

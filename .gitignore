@@ -12,6 +12,7 @@ neondb-latest-schema.dump
 *.pem
 .claude
 PRD - Code Guru - phase-2.pdf
+workspaces
 Code Editor Architecture.md
 Codeguru Architecture.md
 coding-standard.md
