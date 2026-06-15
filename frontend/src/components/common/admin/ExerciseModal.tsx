@@ -194,7 +194,7 @@ const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChang
                   disabled={generating}
                   size='sm' 
                   variant='outline' 
-                  className='text-xs h-6 px-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50'
+                  className='text-xs h-6 px-2 border-indigo-300 text-indigo-600 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors duration-150'
                 >
                   {generating ? (
                     <Loader2 className='w-3 h-3 mr-1 animate-spin' />

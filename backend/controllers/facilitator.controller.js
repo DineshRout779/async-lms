@@ -369,15 +369,20 @@ exports.editStudent = async (req, res) => {
 
 exports.getFacilitatorColleges = async (req, res) => {
   try {
-    const facilitatorId = req.user.id;
-    const result = await pool.query(
-      `SELECT c.id, c.name, c.is_verified
-       FROM colleges c
-       JOIN facilitator_colleges fc ON c.id = fc.college_id
-       WHERE fc.facilitator_id = $1
-       ORDER BY c.name`,
-      [facilitatorId],
-    );
+    const { id: facilitatorId, role } = req.user;
+    let result;
+    if (role === 'admin') {
+      result = await pool.query(`SELECT id, name, is_verified FROM colleges ORDER BY name`);
+    } else {
+      result = await pool.query(
+        `SELECT c.id, c.name, c.is_verified
+         FROM colleges c
+         JOIN facilitator_colleges fc ON c.id = fc.college_id
+         WHERE fc.facilitator_id = $1
+         ORDER BY c.name`,
+        [facilitatorId],
+      );
+    }
     res.json({ success: true, data: result.rows });
   } catch (err) {
     serverError(res, err, 'getFacilitatorColleges');
@@ -386,7 +391,12 @@ exports.getFacilitatorColleges = async (req, res) => {
 
 // ─── Analytics helpers ────────────────────────────────────────────────────────
 
-async function getFacilitatorCollegeIds(facilitatorId, requestedCollegeId) {
+async function getFacilitatorCollegeIds(facilitatorId, requestedCollegeId, role) {
+  if (role === 'admin') {
+    if (requestedCollegeId) return [requestedCollegeId];
+    const allRes = await pool.query('SELECT id AS college_id FROM colleges');
+    return allRes.rows.map((r) => r.college_id);
+  }
   const colRes = await pool.query(
     'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
     [facilitatorId],
@@ -430,9 +440,9 @@ async function getEnrolledStudentIds(collegeIds, batch, subjectId) {
 
 exports.getAnalyticsSubjects = async (req, res) => {
   try {
-    const facilitatorId = req.user.id;
+    const { id: facilitatorId, role } = req.user;
     const { college_id, batch } = req.query;
-    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: [] });
 
     const params = [colleges];
@@ -458,9 +468,9 @@ exports.getAnalyticsSubjects = async (req, res) => {
 
 exports.getQuizAnalytics = async (req, res) => {
   try {
-    const facilitatorId = req.user.id;
+    const { id: facilitatorId, role } = req.user;
     const { college_id, batch, subject_id } = req.query;
-    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: emptyQuizData() });
 
     const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
@@ -473,15 +483,34 @@ exports.getQuizAnalytics = async (req, res) => {
       subjectClause = `AND t.subject_id = $${attParams.length}::uuid`;
     }
 
-    const attRes = await pool.query(
-      `SELECT qa.user_id, qa.score::float, qa.is_passed, NULLIF(q.max_score, 0)::float AS max_score
-       FROM quiz_attempts qa
-       JOIN quizzes q ON q.id = qa.quiz_id
-       JOIN units un ON un.id = q.unit_id
-       JOIN topics t ON t.id = un.topic_id
-       WHERE qa.user_id = ANY($1::uuid[]) ${subjectClause}`,
-      attParams,
-    );
+    const [attRes, questionRes] = await Promise.all([
+      pool.query(
+        `SELECT qa.user_id, qa.score::float, qa.is_passed, NULLIF(q.max_score, 0)::float AS max_score
+         FROM quiz_attempts qa
+         JOIN quizzes q ON q.id = qa.quiz_id
+         JOIN units un ON un.id = q.unit_id
+         JOIN topics t ON t.id = un.topic_id
+         WHERE qa.user_id = ANY($1::uuid[]) ${subjectClause}`,
+        attParams,
+      ),
+      pool.query(
+        `SELECT qq.id AS question_id, qq.question_text,
+                ROUND(
+                  100.0 * COUNT(*) FILTER (WHERE qqa.is_correct = true)
+                  / NULLIF(COUNT(*), 0)
+                )::int AS correct_pct
+         FROM quiz_questions qq
+         JOIN quizzes q ON q.id = qq.quiz_id
+         JOIN units un ON un.id = q.unit_id
+         JOIN topics t ON t.id = un.topic_id
+         JOIN quiz_question_answers qqa ON qqa.question_id = qq.id
+         JOIN quiz_attempts qa ON qa.id = qqa.quiz_attempt_id AND qa.user_id = ANY($1::uuid[])
+         WHERE TRUE ${subjectClause}
+         GROUP BY qq.id, qq.question_text, qq.order_index
+         ORDER BY qq.order_index`,
+        attParams,
+      ),
+    ]);
 
     const rows = attRes.rows;
     const attemptedSet = new Set(rows.map((r) => r.user_id));
@@ -513,6 +542,7 @@ exports.getQuizAnalytics = async (req, res) => {
         failed: attemptedSet.size - passedSet.size,
         avg_score_pct: avgScore,
         score_distribution: Object.entries(dist).map(([range, count]) => ({ range, count })),
+        question_analytics: questionRes.rows,
       },
     });
   } catch (err) {
@@ -525,6 +555,7 @@ function emptyQuizData() {
     enrolled: 0, attempted: 0, not_attempted: 0,
     passed: 0, failed: 0, avg_score_pct: 0,
     score_distribution: ['0-20', '21-40', '41-60', '61-80', '81-100'].map((range) => ({ range, count: 0 })),
+    question_analytics: [],
   };
 }
 
@@ -532,9 +563,9 @@ function emptyQuizData() {
 
 exports.getAssignmentAnalytics = async (req, res) => {
   try {
-    const facilitatorId = req.user.id;
+    const { id: facilitatorId, role } = req.user;
     const { college_id, batch, assignment_id } = req.query;
-    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: { total: 0, submitted: 0, not_submitted: 0, rate: 0, students: [] } });
 
     const params = [colleges];
@@ -589,9 +620,9 @@ exports.getAssignmentAnalytics = async (req, res) => {
 
 exports.getProjectAnalytics = async (req, res) => {
   try {
-    const facilitatorId = req.user.id;
+    const { id: facilitatorId, role } = req.user;
     const { college_id, batch, subject_id } = req.query;
-    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [] } });
 
     const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
@@ -654,9 +685,9 @@ exports.getProjectAnalytics = async (req, res) => {
 
 exports.getBatchDashboard = async (req, res) => {
   try {
-    const facilitatorId = req.user.id;
+    const { id: facilitatorId, role } = req.user;
     const { college_id, batch } = req.query;
-    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: { enrolled: 0, quiz_completion_rate: 0, quiz_pass_rate: 0, assignment_completion_rate: 0, project_completion_rate: 0, subjects: [] } });
 
     const enrolledIds = await getEnrolledStudentIds(colleges, batch, null);
@@ -762,9 +793,9 @@ exports.getBatchDashboard = async (req, res) => {
 
 exports.getStudentAnalytics = async (req, res) => {
   try {
-    const facilitatorId = req.user.id;
+    const { id: facilitatorId, role } = req.user;
     const { college_id, batch, subject_id } = req.query;
-    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id);
+    const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: [] });
 
     const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);

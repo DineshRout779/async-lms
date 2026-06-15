@@ -24,6 +24,8 @@ const {
   submitCapstone,
   getStudentScorecard,
   enrollInSubject,
+  getStudentAnalytics,
+  getStudentModuleAnalytics,
 } = require('../controllers/student.controller');
 
 // ===== PROGRESS TRACKING =====
@@ -69,6 +71,10 @@ router.post('/subjects/:subjectId/enroll', verifyToken, isStudent, enrollInSubje
 
 // ===== SCORECARD =====
 router.get('/scorecard', verifyToken, isStudent, getStudentScorecard);
+
+// ===== ANALYTICS =====
+router.get('/analytics', verifyToken, isStudent, getStudentAnalytics);
+router.get('/analytics/modules', verifyToken, isStudent, getStudentModuleAnalytics);
 
 // ===== LEADERBOARDS =====
 router.get(

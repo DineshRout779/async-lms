@@ -626,14 +626,20 @@ exports.submitQuizAttempt = async (req, res) => {
       let correctOption = null;
       let userIsCorrect = false;
 
+      let selectedOptionId = null;
+
       if (question.type === 'multiple_choice') {
         correctOption = question.options.find((o) => o.is_correct);
+        const selectedOption = question.options.find((o) => o.id === userAnswer);
+        selectedOptionId = selectedOption?.id ?? null;
         if (correctOption && userAnswer === correctOption.id) {
           score += question.points;
           userIsCorrect = true;
         }
       } else if (question.type === 'true_false') {
         correctOption = question.options.find((o) => o.is_correct);
+        const selectedOption = question.options.find((o) => o.option_text === userAnswer);
+        selectedOptionId = selectedOption?.id ?? null;
         if (correctOption && userAnswer === correctOption.option_text) {
           score += question.points;
           userIsCorrect = true;
@@ -643,6 +649,7 @@ exports.submitQuizAttempt = async (req, res) => {
 
       question_results[questionId] = {
         is_correct: userIsCorrect,
+        selected_option_id: selectedOptionId,
         correct_option_id: correctOption?.id ?? null,
         correct_option_text: correctOption?.option_text ?? null,
       };
@@ -662,6 +669,33 @@ exports.submitQuizAttempt = async (req, res) => {
        RETURNING *;`,
       [quizId, userId, score, isPassed],
     );
+
+    // Save per-question results for analytics
+    const attemptId = result.rows[0].id;
+    const answerRows = Object.entries(question_results);
+    if (answerRows.length > 0) {
+      // Each row: (quiz_attempt_id, question_id, selected_option_id, is_correct, points_earned)
+      const vals = answerRows
+        .map((_, i) => `($1, $${i * 4 + 2}::uuid, $${i * 4 + 3}::uuid, $${i * 4 + 4}, $${i * 4 + 5})`)
+        .join(', ');
+      const params = [
+        attemptId,
+        ...answerRows.flatMap(([qId, r]) => {
+          const q = questionsMap.get(qId);
+          return [
+            qId,
+            r.selected_option_id ?? null,
+            r.is_correct,
+            r.is_correct ? (q?.points ?? 0) : 0,
+          ];
+        }),
+      ];
+      await pool.query(
+        `INSERT INTO quiz_question_answers (quiz_attempt_id, question_id, selected_option_id, is_correct, points_earned)
+         VALUES ${vals} ON CONFLICT DO NOTHING`,
+        params,
+      );
+    }
 
     // Award XP only when quiz is passed
     const pointsAwarded = isPassed ? 15 : 0;
@@ -1795,6 +1829,163 @@ exports.getStudentScorecard = async (req, res) => {
     res
       .status(500)
       .json({ success: false, message: 'Failed to fetch scorecard', error: error.message });
+  }
+};
+
+/**
+ * Student per-module analytics breakdown
+ * GET /api/students/analytics/modules
+ */
+exports.getStudentModuleAnalytics = async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const result = await pool.query(
+      `SELECT
+         t.id AS topic_id,
+         t.title AS topic_title,
+         s.id AS subject_id,
+         s.name AS subject_name,
+         -- Best quiz score for this topic (sum of best per-quiz scores vs total max)
+         COALESCE((
+           SELECT SUM(bq.best_score)
+           FROM (
+             SELECT qa.quiz_id, MAX(qa.score) AS best_score
+             FROM quiz_attempts qa
+             JOIN quizzes q ON q.id = qa.quiz_id
+             JOIN units un ON un.id = q.unit_id
+             WHERE qa.user_id = $1 AND un.topic_id = t.id
+             GROUP BY qa.quiz_id
+           ) bq
+         ), 0)::int AS quiz_score,
+         COALESCE((
+           SELECT SUM(q.max_score)
+           FROM quizzes q
+           JOIN units un ON un.id = q.unit_id
+           WHERE un.topic_id = t.id
+         ), 0)::int AS quiz_max,
+         -- Assignment status: Submitted if any submission exists for this topic
+         CASE
+           WHEN EXISTS (
+             SELECT 1 FROM assignment_submissions asub
+             JOIN assignments a ON a.id = asub.assignment_id
+             JOIN units un ON un.id = a.unit_id
+             WHERE asub.user_id = $1 AND un.topic_id = t.id
+           ) THEN 'Submitted'
+           ELSE 'Pending'
+         END AS assignment_status,
+         -- Project status
+         CASE
+           WHEN EXISTS (
+             SELECT 1 FROM project_submissions ps
+             JOIN projects p ON p.id = ps.project_id
+             WHERE ps.user_id = $1 AND p.topic_id = t.id AND ps.is_approved = true
+           ) THEN 'Approved'
+           WHEN EXISTS (
+             SELECT 1 FROM project_submissions ps
+             JOIN projects p ON p.id = ps.project_id
+             WHERE ps.user_id = $1 AND p.topic_id = t.id
+           ) THEN 'Submitted'
+           WHEN EXISTS (
+             SELECT 1 FROM projects p WHERE p.topic_id = t.id
+           ) THEN 'Not Started'
+           ELSE NULL
+         END AS project_status
+       FROM topics t
+       JOIN subjects s ON s.id = t.subject_id
+       JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       ORDER BY s.name, t.order_index`,
+      [userId],
+    );
+
+    // Group by subject
+    const subjectMap = new Map();
+    for (const row of result.rows) {
+      if (!subjectMap.has(row.subject_id)) {
+        subjectMap.set(row.subject_id, { subject_id: row.subject_id, subject_name: row.subject_name, topics: [] });
+      }
+      subjectMap.get(row.subject_id).topics.push({
+        topic_id: row.topic_id,
+        topic_title: row.topic_title,
+        quiz_score: row.quiz_score,
+        quiz_max: row.quiz_max,
+        assignment_status: row.assignment_status,
+        project_status: row.project_status,
+      });
+    }
+
+    res.json({ success: true, data: Array.from(subjectMap.values()) });
+  } catch (err) {
+    console.error('getStudentModuleAnalytics error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch module analytics' });
+  }
+};
+
+/**
+ * Student self-analytics summary
+ * GET /api/students/analytics
+ */
+exports.getStudentAnalytics = async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const [metricsRes, recentQuizzesRes, pendingRes] = await Promise.all([
+      pool.query(
+        `SELECT
+           (SELECT COUNT(*)::int FROM quiz_attempts WHERE user_id = $1)         AS quizzes_attempted,
+           COALESCE((
+             SELECT ROUND(AVG(qa.score::numeric / NULLIF(q.max_score,0) * 100))::int
+             FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id
+             WHERE qa.user_id = $1 AND q.max_score > 0
+           ), 0)                                                                 AS avg_quiz_score,
+           (SELECT COUNT(*)::int FROM assignment_submissions WHERE user_id = $1) AS assignments_submitted,
+           (SELECT COUNT(*)::int FROM project_submissions WHERE user_id = $1 AND is_approved = true)
+                                                                                 AS projects_completed`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT qa.id, un.title AS name,
+                ROUND(qa.score::numeric / NULLIF(q.max_score,0) * 100)::int AS score,
+                CASE WHEN qa.is_passed THEN 'Passed' ELSE 'Failed' END AS status,
+                qa.created_at
+         FROM quiz_attempts qa
+         JOIN quizzes q ON q.id = qa.quiz_id
+         JOIN units un ON un.id = q.unit_id
+         WHERE qa.user_id = $1
+         ORDER BY qa.created_at DESC
+         LIMIT 5`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS assignments_pending
+         FROM assignments a
+         JOIN units u ON u.id = a.unit_id
+         JOIN topics t ON t.id = u.topic_id
+         JOIN subjects s ON s.id = t.subject_id
+         JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+         WHERE NOT EXISTS (
+           SELECT 1 FROM assignment_submissions sub
+           WHERE sub.assignment_id = a.id AND sub.user_id = $1
+         )`,
+        [userId],
+      ),
+    ]);
+
+    const m = metricsRes.rows[0];
+    res.json({
+      success: true,
+      data: {
+        metrics: {
+          quizzes_attempted: m.quizzes_attempted,
+          avg_quiz_score: m.avg_quiz_score,
+          assignments_submitted: m.assignments_submitted,
+          assignments_pending: pendingRes.rows[0].assignments_pending,
+          projects_completed: m.projects_completed,
+        },
+        recent_quizzes: recentQuizzesRes.rows,
+      },
+    });
+  } catch (err) {
+    console.error('getStudentAnalytics error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
   }
 };
 
