@@ -532,6 +532,7 @@ const CodeEditor = (): JSX.Element => {
         workerSocket.on('disconnect', () => setSocketConnected(false));
         workerSocket.on('workspace:ready', () => setWsStatus('ready'));
         workerSocket.on('workspace:queued', ({ position, total }: { position: number; total: number }) => {
+          clearTimeout(timeoutId); // STOP the timeout if we are in queue
           setWsStatus('queued');
           setQueuePosition(position);
           setQueueTotal(total);
@@ -580,7 +581,7 @@ const CodeEditor = (): JSX.Element => {
       terminalRef.current?.clear();
 
       socketRef.current!.once('workspace:ready', async () => {
-        clearTimeout(timeoutId);
+        clearTimeout(timeoutId); // Clear timeout when ready
         const dims = fitAddonRef.current?.proposeDimensions();
         socketRef.current!.emit('terminal:start', {
           cols: dims?.cols ?? 80,

@@ -22,9 +22,15 @@ function registerWorker(id, url, capacity = 20) {
   console.log(`[registry] Worker registered: ${id} @ ${url} (capacity: ${capacity})`);
 }
 
-function heartbeat(id) {
+function heartbeat(id, stats = {}) {
   const w = workers.get(id);
-  if (w) w.lastSeen = Date.now();
+  if (w) {
+    w.lastSeen = Date.now();
+    if (stats.freeMemory !== undefined) w.freeMemory = stats.freeMemory;
+    if (stats.totalMemory !== undefined) w.totalMemory = stats.totalMemory;
+    return true;
+  }
+  return false;
 }
 
 function deregisterWorker(id) {
@@ -60,8 +66,15 @@ function assignWorker(userId, projectId) {
   let overflowLoad = Infinity;
 
   for (const [id, w] of workers.entries()) {
-    const load = w.activeCount / w.capacity;
+    // Calculate load based on active slots
+    let load = w.activeCount / w.capacity;
     
+    // Add a "Memory Penalty" if the worker is low on RAM (less than 1GB)
+    // This pushes traffic to workers with more headroom.
+    if (w.freeMemory !== undefined && w.freeMemory < 1024) {
+      load += 0.5; // Artificial load increase
+    }
+
     // Track for overflow queueing
     if (load < overflowLoad) {
       overflowLoad = load;

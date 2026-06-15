@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const net = require('net');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
@@ -63,6 +65,33 @@ app.use(
   express.static(path.join(__dirname, 'public', 'uploads')),
 );
 
+// ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
+const workerProxies = new Map(); // workerIp -> proxyInstance
+
+function getWorkerProxy(workerIp) {
+  if (workerProxies.has(workerIp)) return workerProxies.get(workerIp);
+
+  const workerPort = process.env.WORKER_PORT || 4000;
+  const proxy = createProxyMiddleware({
+    target: `http://${workerIp}:${workerPort}`,
+    changeOrigin: true,
+    ws: false, // Handle upgrades manually below instead of automatically
+    pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
+    logger: console,
+    onProxyReqWs: (proxyReq, req, socket) => {
+       // Optional: Add custom headers here if needed
+    }
+  });
+
+  workerProxies.set(workerIp, proxy);
+  return proxy;
+}
+
+app.use('/worker/:ip', (req, res, next) => {
+  const proxy = getWorkerProxy(req.params.ip);
+  return proxy(req, res, next);
+});
+
 // ── Internal worker registry endpoints (no auth — internal network only) ────
 app.post('/api/v1/internal/workers/register', (req, res) => {
   const { id, url, capacity } = req.body;
@@ -73,9 +102,14 @@ app.post('/api/v1/internal/workers/register', (req, res) => {
 });
 
 app.post('/api/v1/internal/workers/heartbeat', (req, res) => {
-  const { id } = req.body;
+  const { id, freeMemory, totalMemory } = req.body;
   if (!id) return res.status(400).json({ error: 'id required' });
-  heartbeat(id);
+  
+  const known = heartbeat(id, { freeMemory, totalMemory });
+  if (!known) {
+    return res.status(404).json({ error: 'Worker not registered' });
+  }
+  
   res.json({ ok: true });
 });
 
@@ -121,6 +155,30 @@ io.on('connection', (socket) => {
     if (userId) socket.join(`user:${userId}`);
   });
   socket.on('disconnect', () => {});
+});
+
+// ── Handle WebSocket Upgrades for Worker Proxy ──────────────────────────────
+const WORKER_WS_RE = /^\/worker\/([^/]+)\/socket\.io/;
+
+server.on('upgrade', (req, socket, head) => {
+  const match = req.url.match(WORKER_WS_RE);
+  
+  if (match) {
+    const workerIp = match[1];
+    const proxy = getWorkerProxy(workerIp);
+    
+    console.log(`[proxy:ws] Upgrading connection to worker ${workerIp}`);
+    
+    if (typeof proxy.upgrade === 'function') {
+      proxy.upgrade(req, socket, head);
+    } else {
+      socket.destroy();
+    }
+    return; // IMPORTANT: Stop here so we don't interfere with main socket.io
+  }
+  
+  // If it's NOT a worker request, we DO NOT call any proxy logic.
+  // The built-in socket.io listeners will handle the upgrade automatically.
 });
 
 server.listen(3001, () => {
