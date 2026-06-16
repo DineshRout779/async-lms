@@ -7,6 +7,7 @@ import {
   BarChart2,
   TrendingUp,
   FileText,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router';
@@ -26,6 +27,11 @@ const menuItems = [
     name: 'Evaluations',
     icon: CheckSquare,
     path: '/dashboard/facilitator/evaluations',
+  },
+  {
+    name: 'AI Curriculum',
+    icon: Sparkles,
+    path: '/dashboard/facilitator/ai-curriculum',
   },
   {
     name: 'Analytics',

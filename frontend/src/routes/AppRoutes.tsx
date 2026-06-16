@@ -253,6 +253,11 @@ const router = createBrowserRouter([
               { path: 'student-growth', element: <FacilitatorStudentGrowth /> },
               { path: 'reports', element: <FacilitatorReports /> },
               { path: 'settings', element: <FacilitatorSettings /> },
+              { path: 'ai-curriculum', element: <AiCurriculumList /> },
+              { path: 'ai-curriculum/new', element: <AiCurriculumBuilder /> },
+              { path: 'ai-curriculum/:id/edit', element: <AiCurriculumEditor /> },
+              { path: 'ai-curriculum/:id/preview', element: <AiCurriculumPreview /> },
+              { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
             ],
           },
 
