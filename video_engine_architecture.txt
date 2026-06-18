@@ -1,0 +1,44 @@
+# Video Recommendation Engine Architecture & Updates
+
+This document outlines the changes and new architecture introduced to solve issues with YouTube video quality, relevance, and cross-domain compatibility in the AI Curriculum Generation system.
+
+## 1. Architectural Changes
+
+Instead of relying purely on a naive YouTube search, we completely rebuilt the Video Recommendation system into a multi-staged, highly robust architecture.
+
+### New Files Created:
+1. **`backend/services/youtube.service.js`**
+   - **Purpose:** Acts as a clean wrapper around the YouTube Data API.
+   - **Key Feature:** Fetches videos while inherently filtering out YouTube Shorts by enforcing `videoDuration=medium`. It also fetches detailed statistics (view counts, like counts) for each video.
+
+2. **`backend/utils/videoFilters.js`**
+   - **Purpose:** Houses all the mathematical logic and strict filters.
+   - **Filters Included:**
+     - **Noise Filter:** Checks duration bounds (blocks videos under 1 minute or over 2 hours).
+     - **View Count Filter:** Eliminates obscure videos with fewer than 10,000 views.
+     - **Quality Filter:** Enforces a minimum 1.5% like-to-view ratio.
+     - **Freshness Filter:** Enforces a maximum age (e.g., published within the last 2 or 5 years).
+   - **The Ranker:** Mathematically scores the surviving videos based on a weighted formula of Relevance (40%), Engagement (25%), Authority (20%), and Freshness (15%).
+
+3. **`backend/services/videoRecommendation.service.js`**
+   - **Purpose:** The "Orchestrator" or the brain of the operation.
+   - **Multi-Stage Graceful Fallback:** If strict filters result in 0 videos (e.g., for niche or very old legacy topics like Java), it intelligently drops the filters one by one (e.g., ignoring freshness, then lowering view count limits) to ensure the system never crashes and always returns the best *available* video.
+   - **LLM Semantic Selection (Agentic Layer):** Takes the top 10 mathematically-vetted videos and passes them to OpenAI (gpt-4o). The LLM reads the titles and explicitly picks the absolute best match based on the lesson's context, rather than relying on blind keyword matching.
+
+4. **`backend/controllers/videoRecommendation.controller.js` & `backend/routes/videoRecommendation.routes.js`**
+   - **Purpose:** Provides REST APIs for platform admins to whitelist trusted YouTube channels (which gives them an algorithmic boost) and to monitor the pipeline's decision logs.
+
+## 2. Prompt Optimizations (Domain-Agnostic Generation)
+
+We encountered an issue where generating non-IT courses (like "Soil Health Analysis") returned completely irrelevant engineering videos. This happened because the AI prompts were hardcoded to hunt for "Programming Languages" and "code-along tutorials". 
+
+We modified `backend/services/aiCurriculumService.js` and `videoRecommendation.service.js` to implement **Domain-Agnostic Universal Prompts**:
+
+- **Dynamic Domain Context:** The AI now dynamically evaluates the `courseTitle` to figure out the "Domain" (e.g., Science, IT, Beauty).
+- **Conditional Requirements:** 
+  - If it's an IT course, it strictly forces the exact programming language (e.g., "Java").
+  - If it's a non-IT course, it strictly enforces the core subject (e.g., "Soil Science") and avoids asking for coding-specific terms.
+- **Tone Matching:** It only includes practical keywords (like "hands-on" or "step-by-step") if they naturally fit the overarching domain.
+
+## Summary
+The pipeline now guarantees that students get videos that are highly relevant to the exact subject matter, mathematically proven to be high quality (views/likes), and intelligently selected by an Agentic LLM acting as a Senior Curriculum Director.

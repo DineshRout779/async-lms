@@ -1116,7 +1116,7 @@ exports.generateAndSaveLessonContent = async (req, res) => {
 
     const ctxRes = await pool.query(
       `SELECT l.title AS lesson_title, t.title AS unit_title, m.title AS topic_title,
-              c.title AS course_title, c.role_focus, c.level
+              c.title AS course_title, c.role_focus, c.level, c.id AS course_id
        FROM ai_course_lessons l
        JOIN ai_course_topics t ON l.topic_id = t.id
        JOIN ai_course_modules m ON t.module_id = m.id
@@ -1125,11 +1125,22 @@ exports.generateAndSaveLessonContent = async (req, res) => {
       [id],
     );
     if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Lesson not found' });
-    const { lesson_title, unit_title, topic_title, course_title, role_focus, level } = ctxRes.rows[0];
+    const { lesson_title, unit_title, topic_title, course_title, role_focus, level, course_id } = ctxRes.rows[0];
+
+    // Fetch existing videos in this course to avoid duplicates
+    const existingVideosRes = await pool.query(
+      `SELECT l.video_url 
+       FROM ai_course_lessons l
+       JOIN ai_course_topics t ON l.topic_id = t.id
+       JOIN ai_course_modules m ON t.module_id = m.id
+       WHERE m.course_id = $1 AND l.id != $2 AND l.video_url IS NOT NULL`,
+      [course_id, id]
+    );
+    const excludeUrls = existingVideosRes.rows.map(r => r.video_url);
 
     const result = await generateLessonContent({
       type, courseTitle: course_title, roleFocus: role_focus, level,
-      topicTitle: topic_title, unitTitle: unit_title, lessonTitle: lesson_title,
+      topicTitle: topic_title, unitTitle: unit_title, lessonTitle: lesson_title, lessonId: id, excludeUrls
     });
 
     let updateFields, updateVals;

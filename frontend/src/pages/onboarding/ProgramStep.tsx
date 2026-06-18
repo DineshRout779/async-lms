@@ -37,8 +37,10 @@ export default function ProgramStep() {
         subjectIds: [selected],
       });
       navigate('/onboarding/confirm');
-    } catch {
+    } catch (err: any) {
       // navigation does not occur — user stays on step
+      alert(err.response?.data?.message || err.message || 'An error occurred while saving your program.');
+      console.error('Failed to select program:', err);
     } finally {
       setSubmitting(false);
     }
