@@ -96,26 +96,24 @@ export default function AdminCourses() {
               className='border py-0 border-slate-200 overflow-hidden bg-white rounded-xl shadow-sm'
             >
               <div
-                className={`h-1.5 w-full ${
-                  course.is_published ? 'bg-green-500' : 'bg-amber-500'
-                }`}
+                className={`h-1.5 w-full ${course.is_published ? 'bg-green-500' : 'bg-amber-500'
+                  }`}
               />
-              <CardHeader className='p-6 pb-4 space-y-4'>
-                <div className='flex justify-between items-start'>
-                  <div className='flex gap-2'>
+              <CardHeader className='p-6 pb-4 space-y-4 overflow-hidden'>
+                <div className='flex justify-between items-start gap-2'>
+                  <div className='flex items-center gap-2 min-w-0 flex-1 flex-wrap'>
                     <Badge
                       variant='secondary'
-                      className='font-bold text-[10px] uppercase'
+                      className='font-bold text-[10px] uppercase whitespace-normal break-words leading-tight'
                     >
-                      {course.slug}
+                      {course.slug.replace(/-?\d+$/, '')}
                     </Badge>
-                    {/* Publication Status UI */}
                     {course.is_published ? (
-                      <Badge className='bg-green-50 text-green-700 border-green-200 flex gap-1 items-center text-[10px]'>
+                      <Badge className='bg-green-50 text-green-700 border-green-200 flex gap-1 items-center text-[10px] shrink-0 whitespace-nowrap'>
                         <Globe className='w-3 h-3' /> Published
                       </Badge>
                     ) : (
-                      <Badge className='bg-amber-50 text-amber-700 border-amber-200 flex gap-1 items-center text-[10px]'>
+                      <Badge className='bg-amber-50 text-amber-700 border-amber-200 flex gap-1 items-center text-[10px] shrink-0 whitespace-nowrap'>
                         <Lock className='w-3 h-3' /> Draft
                       </Badge>
                     )}
@@ -144,8 +142,8 @@ export default function AdminCourses() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <div>
-                  <h3 className='text-[20px] font-bold text-[#1e293b] truncate'>
+                <div className='min-w-0'>
+                  <h3 className='text-[20px] font-bold text-[#1e293b] break-words'>
                     {course.name}
                   </h3>
                   <p className='text-[14px] text-[#64748b] line-clamp-2 mt-1'>
