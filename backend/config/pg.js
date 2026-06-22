@@ -227,6 +227,31 @@ pool.on('error', (err, client) => {
     await client.query(`ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_subtopic_slug TEXT`);
     await client.query(`ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ`);
 
+    // ── Video Recommendation Engine ─────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS channel_whitelist (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        channel_id  TEXT NOT NULL UNIQUE,
+        channel_name TEXT NOT NULL,
+        added_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS video_pipeline_logs (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        lesson_id       UUID REFERENCES ai_course_lessons(id) ON DELETE CASCADE,
+        query_used      TEXT NOT NULL,
+        videos_fetched  INTEGER NOT NULL DEFAULT 0,
+        videos_passed   INTEGER NOT NULL DEFAULT 0,
+        selected_url    TEXT,
+        fallback_stage  INTEGER NOT NULL DEFAULT 0,
+        error_message   TEXT,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
     client.release(); // Always release the client back to the pool
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);

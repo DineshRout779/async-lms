@@ -57,6 +57,7 @@ app.use('/api/v1/evaluations', evaluationRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/notifications', require('./routes/notification.routes'));
 app.use('/api/v1/ai-curriculum', require('./routes/aiCurriculum.routes'));
+app.use('/api/v1/admin/videos', require('./routes/videoRecommendation.routes'));
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 const verifyToken = require('./middlewares/verfiyToken');
 app.use(

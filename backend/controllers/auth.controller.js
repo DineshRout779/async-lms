@@ -96,16 +96,19 @@ exports.login = async (req, res) => {
     );
 
     if (!userRes.rowCount) {
+      console.log(`[LOGIN FAILED] User not found for email: ${email}`);
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     const user = userRes.rows[0];
 
     if (!user.password_hash) {
+      console.log(`[LOGIN FAILED] User uses Google Sign-In: ${email}`);
       return res.status(401).json({ message: 'This account uses Google Sign-In. Please click "Continue with Google".' });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
+    console.log(`[LOGIN DEBUG] Password comparison result for ${email}: valid=${valid}`);
     delete user.password_hash;
 
     if (!valid) {

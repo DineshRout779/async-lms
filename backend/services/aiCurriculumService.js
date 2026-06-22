@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const { recommendBestVideo } = require('./videoRecommendation.service');
 
 const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
 
@@ -402,8 +403,12 @@ async function generateLessonContent({
   topicTitle,
   unitTitle,
   lessonTitle,
+  lessonId = null,
+  excludeUrls = [],
 }) {
   if (type === 'video') {
+    let searchQuery = `${lessonTitle} tutorial`; // Safe fallback in case of OpenAI failure
+
     const prompt = `You are an expert at finding educational YouTube videos.
 We need to find a video for a lesson.
 Course: ${courseTitle}
@@ -412,25 +417,44 @@ Unit: ${unitTitle}
 Lesson: ${lessonTitle}
 Role: ${roleFocus}
 
-Generate a natural, highly effective YouTube search query (3 to 6 words maximum) that will return a relevant tutorial video specifically for the lesson "${lessonTitle}" in the context of "${topicTitle}". 
-DO NOT use the exact academic lesson title if it's too long or complex. Instead, extract the core tool and concept (e.g., instead of "Leveraging Spreadsheets for Requirements Analysis", output "Excel Requirements Analysis tutorial").
-Do NOT use negative keywords or operators, just provide a clean, simple search phrase that a real human would type into YouTube to learn this specific skill.
+You are a master curriculum search specialist.
+Your task is to generate a highly effective YouTube search query (3 to 7 words maximum) to find the perfect educational video for the lesson "${lessonTitle}" within the topic "${topicTitle}" for the course "${courseTitle}".
+
+CRITICAL RULES:
+1. ANALYZE THE DOMAIN: First, determine the overarching domain of the course (e.g., IT, Business, Beauty, Science, Art). 
+2. DOMAIN SPECIFICITY: Include the core subject or technology from the Course Title in the search query to anchor the context (e.g., "Java", "Soil Science", "Bridal Makeup").
+3. LESSON SPECIFICITY: You MUST explicitly include the core conceptual focus of the lesson title in the query. Do not generalize to the whole course.
+4. TONE & FORMAT: Add 1 or 2 format keywords ONLY if appropriate for the domain. For IT: "tutorial", "hands-on". For Science: "explained", "animation". For Beauty/Art: "step-by-step", "demonstration". For Business: "overview", "case study". 
+5. Do NOT use negative keywords or operators, just provide a clean, simple search phrase.
 
 Return ONLY a valid JSON object:
 { "search_query": "the best youtube search string" }`;
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      response_format: { type: 'json_object' }
+    try {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        response_format: { type: 'json_object' }
+      });
+      
+      const parsed = JSON.parse(response.choices[0].message.content);
+      if (parsed.search_query) {
+        searchQuery = parsed.search_query;
+      }
+    } catch (err) {
+      console.warn("OpenAI LLM failed, using fallback query:", err.message);
+    }
+    
+    // Use the robust Video Recommendation Engine instead of the naive legacy search
+    const { video_url, video_results } = await recommendBestVideo({ 
+      query: searchQuery, 
+      lessonId, 
+      excludeUrls,
+      lessonTitle,
+      topicTitle,
+      courseTitle
     });
-    
-    const parsed = JSON.parse(response.choices[0].message.content);
-    const searchQuery = parsed.search_query;
-    
-    const video_url = await searchYouTubeVideo(searchQuery);
-    const video_results = await searchYouTubeVideos(searchQuery);
     return { video_url, video_results };
   }
 
