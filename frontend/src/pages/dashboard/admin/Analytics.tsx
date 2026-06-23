@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ClipboardList, Code2, BookOpen, TrendingUp, Users,
-  Loader2, CheckCircle2, XCircle, CheckSquare, BarChart2, User,
+  Loader2, CheckSquare, BarChart2, User,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import apiClient from '@/services/api';
@@ -85,29 +85,6 @@ function GeneralAnalytics() {
         <StatCard icon={Code2} label='Exercise Submissions' value={exerciseStats.totalSubmissions.toLocaleString()} sub={`${exerciseStats.passRate}% pass rate`} iconBg='bg-emerald-50' iconColor='text-emerald-600' />
         <StatCard icon={BookOpen} label='Content Items' value={(contentInventory.lessons + contentInventory.quizzes + contentInventory.exercises).toLocaleString()} sub={`${contentInventory.lessons} lessons · ${contentInventory.quizzes} quizzes · ${contentInventory.exercises} exercises`} iconBg='bg-amber-50' iconColor='text-amber-600' />
         <StatCard icon={TrendingUp} label='Course Structure' value={contentInventory.topics} sub={`${contentInventory.units} units · ${contentInventory.subtopics} subtopics`} iconBg='bg-violet-50' iconColor='text-violet-600' />
-      </div>
-
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-        <Card className='border-none shadow-sm'>
-          <CardHeader className='pb-2 pt-5 px-5'><CardTitle className='text-sm font-semibold text-slate-700'>Quiz Pass / Fail</CardTitle></CardHeader>
-          <CardContent className='px-5 pb-5 space-y-3'>
-            <div className='flex items-center justify-between text-sm'><span className='flex items-center gap-1.5 text-emerald-600'><CheckCircle2 className='w-4 h-4' /> Passed</span><span className='font-semibold text-slate-800'>{quizStats.passedCount.toLocaleString()}</span></div>
-            <Bar pct={quizStats.passRate} color='bg-emerald-500' />
-            <div className='flex items-center justify-between text-sm'><span className='flex items-center gap-1.5 text-red-500'><XCircle className='w-4 h-4' /> Failed</span><span className='font-semibold text-slate-800'>{(quizStats.totalAttempts - quizStats.passedCount).toLocaleString()}</span></div>
-            <Bar pct={100 - quizStats.passRate} color='bg-red-400' />
-            <p className='text-xs text-slate-400 pt-1'>{quizStats.passRate}% overall pass rate · avg score {quizStats.avgScore}</p>
-          </CardContent>
-        </Card>
-        <Card className='border-none shadow-sm'>
-          <CardHeader className='pb-2 pt-5 px-5'><CardTitle className='text-sm font-semibold text-slate-700'>Exercise Pass / Fail</CardTitle></CardHeader>
-          <CardContent className='px-5 pb-5 space-y-3'>
-            <div className='flex items-center justify-between text-sm'><span className='flex items-center gap-1.5 text-emerald-600'><CheckCircle2 className='w-4 h-4' /> Passed</span><span className='font-semibold text-slate-800'>{exerciseStats.passedCount.toLocaleString()}</span></div>
-            <Bar pct={exerciseStats.passRate} color='bg-emerald-500' />
-            <div className='flex items-center justify-between text-sm'><span className='flex items-center gap-1.5 text-red-500'><XCircle className='w-4 h-4' /> Failed</span><span className='font-semibold text-slate-800'>{(exerciseStats.totalSubmissions - exerciseStats.passedCount).toLocaleString()}</span></div>
-            <Bar pct={100 - exerciseStats.passRate} color='bg-red-400' />
-            <p className='text-xs text-slate-400 pt-1'>{exerciseStats.passRate}% overall pass rate</p>
-          </CardContent>
-        </Card>
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -225,7 +202,7 @@ export default function Analytics() {
         {activeTab === 'quiz' && <QuizTab colleges={colleges} batches={batches} subjects={subjects} />}
         {activeTab === 'assignments' && <AssignmentsTab colleges={colleges} batches={batches} />}
         {activeTab === 'projects' && <ProjectsTab colleges={colleges} batches={batches} subjects={subjects} />}
-        {activeTab === 'batch' && <BatchTab colleges={colleges} batches={batches} />}
+        {activeTab === 'batch' && <BatchTab colleges={colleges} batches={batches} subjects={subjects} />}
         {activeTab === 'students' && <StudentsTab colleges={colleges} batches={batches} subjects={subjects} />}
       </div>
     </div>

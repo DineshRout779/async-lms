@@ -469,7 +469,9 @@ exports.getAnalyticsSubjects = async (req, res) => {
 exports.getQuizAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, subject_id } = req.query;
+    const { college_id, batch, subject_id, page, limit } = req.query;
+    const qLimit = Math.min(parseInt(limit, 10) || 10, 100);
+    const qOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * qLimit;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: emptyQuizData() });
 
@@ -483,7 +485,8 @@ exports.getQuizAnalytics = async (req, res) => {
       subjectClause = `AND t.subject_id = $${attParams.length}::uuid`;
     }
 
-    const [attRes, questionRes] = await Promise.all([
+    const qParamsWithPaging = [...attParams, qLimit, qOffset];
+    const [attRes, questionRes, questionCountRes] = await Promise.all([
       pool.query(
         `SELECT qa.user_id, qa.score::float, qa.is_passed, NULLIF(q.max_score, 0)::float AS max_score
          FROM quiz_attempts qa
@@ -507,7 +510,19 @@ exports.getQuizAnalytics = async (req, res) => {
          JOIN quiz_attempts qa ON qa.id = qqa.quiz_attempt_id AND qa.user_id = ANY($1::uuid[])
          WHERE TRUE ${subjectClause}
          GROUP BY qq.id, qq.question_text, qq.order_index
-         ORDER BY qq.order_index`,
+         ORDER BY qq.order_index
+         LIMIT $${qParamsWithPaging.length - 1} OFFSET $${qParamsWithPaging.length}`,
+        qParamsWithPaging,
+      ),
+      pool.query(
+        `SELECT COUNT(DISTINCT qq.id)::int AS total
+         FROM quiz_questions qq
+         JOIN quizzes q ON q.id = qq.quiz_id
+         JOIN units un ON un.id = q.unit_id
+         JOIN topics t ON t.id = un.topic_id
+         JOIN quiz_question_answers qqa ON qqa.question_id = qq.id
+         JOIN quiz_attempts qa ON qa.id = qqa.quiz_attempt_id AND qa.user_id = ANY($1::uuid[])
+         WHERE TRUE ${subjectClause}`,
         attParams,
       ),
     ]);
@@ -543,6 +558,7 @@ exports.getQuizAnalytics = async (req, res) => {
         avg_score_pct: avgScore,
         score_distribution: Object.entries(dist).map(([range, count]) => ({ range, count })),
         question_analytics: questionRes.rows,
+        question_analytics_total: questionCountRes.rows[0]?.total ?? 0,
       },
     });
   } catch (err) {
@@ -556,6 +572,7 @@ function emptyQuizData() {
     passed: 0, failed: 0, avg_score_pct: 0,
     score_distribution: ['0-20', '21-40', '41-60', '61-80', '81-100'].map((range) => ({ range, count: 0 })),
     question_analytics: [],
+    question_analytics_total: 0,
   };
 }
 
@@ -794,12 +811,14 @@ exports.getBatchDashboard = async (req, res) => {
 exports.getStudentAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, subject_id } = req.query;
+    const { college_id, batch, subject_id, page, limit } = req.query;
+    const sLimit = Math.min(parseInt(limit, 10) || 20, 100);
+    const sOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * sLimit;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
-    if (!colleges.length) return res.json({ success: true, data: [] });
+    if (!colleges.length) return res.json({ success: true, data: [], total: 0 });
 
     const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
-    if (!enrolledIds.length) return res.json({ success: true, data: [] });
+    if (!enrolledIds.length) return res.json({ success: true, data: [], total: 0 });
 
     const namesRes = await pool.query(
       `SELECT u.id, u.full_name, u.email FROM users u WHERE u.id = ANY($1::uuid[]) ORDER BY u.full_name`,
@@ -874,7 +893,7 @@ exports.getStudentAnalytics = async (req, res) => {
       };
     });
 
-    res.json({ success: true, data });
+    res.json({ success: true, data: data.slice(sOffset, sOffset + sLimit), total: data.length });
   } catch (err) {
     serverError(res, err, 'getStudentAnalytics');
   }

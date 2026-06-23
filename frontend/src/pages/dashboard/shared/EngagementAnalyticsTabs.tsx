@@ -18,6 +18,7 @@ type QuizData = {
   passed: number; failed: number; avg_score_pct: number;
   score_distribution: { range: string; count: number }[];
   question_analytics?: { question_id: string; question_text: string; correct_pct: number }[];
+  question_analytics_total: number;
 };
 
 type AssignmentData = {
@@ -149,20 +150,25 @@ function QuestionAnalyticsTable({ questions }: { questions: { question_id: strin
 
 // ─── Tab: Quiz Analytics ──────────────────────────────────────────────────────
 
+const QUIZ_PAGE_SIZE = 10;
+
 export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; batches: Batch[]; subjects: Subject[] }) {
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
   const [data, setData] = useState<QuizData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [qPage, setQPage] = useState(1);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (p = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      params.set('page', String(p));
+      params.set('limit', String(QUIZ_PAGE_SIZE));
       const res = await apiClient.get(`/facilitator/analytics/quiz?${params}`);
       setData(res.data.data);
     } catch {
@@ -172,7 +178,12 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
     }
   }, [college, batch, subject]);
 
-  useEffect(() => { load(); }, [load]);
+  const handlePageChange = (p: number) => {
+    setQPage(p);
+    load(p);
+  };
+
+  useEffect(() => { setQPage(1); load(1); }, [load]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -219,11 +230,37 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
               <ListChecks className="w-4 h-4 text-indigo-500" />
               <h3 className="text-sm font-semibold text-slate-700">Question Analytics</h3>
             </div>
-            {(!data.question_analytics || data.question_analytics.length === 0) ? (
+            {data.question_analytics_total === 0 ? (
               <EmptyState message="No quiz attempts yet — question analytics will appear once students submit quizzes" />
-            ) : (
-              <QuestionAnalyticsTable questions={data.question_analytics} />
-            )}
+            ) : (() => {
+              const totalPages = Math.ceil(data.question_analytics_total / QUIZ_PAGE_SIZE);
+              return (
+                <>
+                  <QuestionAnalyticsTable questions={data.question_analytics!} />
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+                      <span>{data.question_analytics_total} questions · page {qPage} of {totalPages}</span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handlePageChange(qPage - 1)}
+                          disabled={qPage === 1}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Prev
+                        </button>
+                        <button
+                          onClick={() => handlePageChange(qPage + 1)}
+                          disabled={qPage === totalPages}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </>
       )}
@@ -421,9 +458,10 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
 
 // ─── Tab: Batch Dashboard ─────────────────────────────────────────────────────
 
-export function BatchTab({ colleges, batches }: { colleges: College[]; batches: Batch[] }) {
+export function BatchTab({ colleges, batches, subjects }: { colleges: College[]; batches: Batch[]; subjects: Subject[] }) {
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
+  const [subject, setSubject] = useState('');
   const [data, setData] = useState<BatchDashData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -433,6 +471,7 @@ export function BatchTab({ colleges, batches }: { colleges: College[]; batches: 
       const params = new URLSearchParams();
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
+      if (subject) params.set('subject_id', subject);
       const res = await apiClient.get(`/facilitator/analytics/batch?${params}`);
       setData(res.data.data);
     } catch {
@@ -440,7 +479,7 @@ export function BatchTab({ colleges, batches }: { colleges: College[]; batches: 
     } finally {
       setLoading(false);
     }
-  }, [college, batch]);
+  }, [college, batch, subject]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -449,6 +488,7 @@ export function BatchTab({ colleges, batches }: { colleges: College[]; batches: 
       <div className="flex flex-wrap gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
+        <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
       </div>
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
@@ -496,39 +536,48 @@ export function BatchTab({ colleges, batches }: { colleges: College[]; batches: 
 
 // ─── Tab: Student Performance ─────────────────────────────────────────────────
 
+const STUDENTS_PAGE_SIZE = 20;
+
 export function StudentsTab({ colleges, batches, subjects }: { colleges: College[]; batches: Batch[]; subjects: Subject[] }) {
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
   const [data, setData] = useState<StudentRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (p = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      params.set('page', String(p));
+      params.set('limit', String(STUDENTS_PAGE_SIZE));
       const res = await apiClient.get(`/facilitator/analytics/students?${params}`);
       setData(res.data.data ?? []);
+      setTotal(res.data.total ?? 0);
     } catch {
       setData([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   }, [college, batch, subject]);
 
-  useEffect(() => { load(); }, [load]);
+  const handlePageChange = (p: number) => { setPage(p); load(p); };
 
-  const totalQuizAvg = data.length
-    ? Math.round(
-        data.filter((s) => s.quiz_avg_pct !== null).reduce((acc, s) => acc + (s.quiz_avg_pct ?? 0), 0) /
-        (data.filter((s) => s.quiz_avg_pct !== null).length || 1),
-      )
+  useEffect(() => { setPage(1); load(1); }, [load]);
+
+  const attempted = data.filter((s) => s.quiz_avg_pct !== null);
+  const totalQuizAvg = attempted.length
+    ? Math.round(attempted.reduce((acc, s) => acc + (s.quiz_avg_pct ?? 0), 0) / attempted.length)
     : 0;
   const submittedCount = data.filter((s) => s.assignment_status === 'Submitted').length;
   const completedProjects = data.filter((s) => s.project_status === 'Approved').length;
+  const totalPages = Math.ceil(total / STUDENTS_PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-6">
@@ -538,11 +587,11 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
       </div>
 
-      {loading ? <LoadingState /> : data.length === 0 ? <EmptyState message="No students found" /> : (
+      {loading ? <LoadingState /> : total === 0 ? <EmptyState message="No students found" /> : (
         <>
           <div className="grid grid-cols-3 gap-4">
             <StatCard label="Total Quiz Avg" value={`${totalQuizAvg}%`} sub="Across all attempted quizzes" />
-            <StatCard label="Assignments Submitted" value={submittedCount} sub={`out of ${data.length} students`} />
+            <StatCard label="Assignments Submitted" value={submittedCount} sub={`out of ${total} students`} />
             <StatCard label="Projects Completed" value={completedProjects} sub="Approved capstone projects" />
           </div>
 
@@ -579,6 +628,27 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                 ))}
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+                <span>{total} students · page {page} of {totalPages}</span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handlePageChange(page - 1)}
+                    disabled={page === 1}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(page + 1)}
+                    disabled={page === totalPages}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
