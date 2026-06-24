@@ -45,6 +45,7 @@ const EvaluationTable = ({ search, selectedCollege, selectedDomain, selectedBatc
       const params: Record<string, string> = {};
       if (selectedCollege) params.collegeId = selectedCollege;
       if (selectedDomain) params.domain = selectedDomain;
+      if (selectedBatch) params.batch = selectedBatch;
       if (search) params.search = search;
 
       const res = await apiClient.get('/college-assignments/evaluation-filters', { params });
