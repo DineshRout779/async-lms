@@ -221,62 +221,81 @@ exports.manageAssignments = async (req, res) => {
 };
 
 // POST /api/v1/college-assignments
-// Body: { college_id, title, description?, due_date? }
+// Body: { college_id, college_ids, title, description?, due_date? }
 exports.createAssignment = async (req, res) => {
-  const { college_id, title, description, due_date, course, test_cases, rubric, evaluator_type, assignment_description } = req.body;
+  const { college_id, college_ids, title, description, due_date, course, test_cases, rubric, evaluator_type, assignment_description } = req.body;
 
-  if (!college_id || !title) {
+  const targetCollegeIds = Array.isArray(college_ids)
+    ? college_ids
+    : (college_id ? [college_id] : []);
+
+  if (targetCollegeIds.length === 0 || !title) {
     return res
       .status(400)
-      .json({ success: false, message: 'college_id and title are required' });
+      .json({ success: false, message: 'college_id/college_ids and title are required' });
   }
 
   // Facilitators may only create assignments for their own colleges
   if (req.user.role === 'facilitator') {
     const allowed = req.user.college_ids || [];
-    if (!allowed.includes(college_id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not assigned to this college',
-      });
+    for (const cid of targetCollegeIds) {
+      if (!allowed.includes(cid)) {
+        return res.status(403).json({
+          success: false,
+          message: `You are not assigned to college: ${cid}`,
+        });
+      }
     }
   }
 
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
-      `INSERT INTO college_assignments (college_id, created_by, title, description, due_date, course, instruction_file_url, instruction_file_name, test_cases, rubric, evaluator_type, assignment_description)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING *`,
-      [
-        college_id,
-        req.user.id,
-        title,
-        description || null,
-        due_date || null,
-        course || 'General',
-        req.body.instruction_file_url || null,
-        req.body.instruction_file_name || null,
-        test_cases ? JSON.stringify(test_cases) : '[]',
-        rubric ? JSON.stringify(rubric) : null,
-        evaluator_type || null,
-        assignment_description || null,
-      ],
-    );
-    const assignment = rows[0];
-    // Notify all students in the college about the new assignment
-    notifyCollege({
-      collegeId: college_id,
-      type: 'new_assignment',
-      title: `New Assignment: ${title}`,
-      body: due_date
-        ? `Due ${new Date(due_date).toLocaleDateString()}: ${description || title}`
-        : description || title,
-      link: '/dashboard/student/assignments',
-    });
-    res.status(201).json({ success: true, data: assignment });
+    await client.query('BEGIN');
+    const createdAssignments = [];
+
+    for (const cid of targetCollegeIds) {
+      const { rows } = await client.query(
+        `INSERT INTO college_assignments (college_id, created_by, title, description, due_date, course, instruction_file_url, instruction_file_name, test_cases, rubric, evaluator_type, assignment_description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING *`,
+        [
+          cid,
+          req.user.id,
+          title,
+          description || null,
+          due_date || null,
+          course || 'General',
+          req.body.instruction_file_url || null,
+          req.body.instruction_file_name || null,
+          test_cases ? JSON.stringify(test_cases) : '[]',
+          rubric ? JSON.stringify(rubric) : null,
+          evaluator_type || null,
+          assignment_description || null,
+        ],
+      );
+      const assignment = rows[0];
+      createdAssignments.push(assignment);
+
+      // Notify all students in the college about the new assignment
+      notifyCollege({
+        collegeId: cid,
+        type: 'new_assignment',
+        title: `New Assignment: ${title}`,
+        body: due_date
+          ? `Due ${new Date(due_date).toLocaleDateString()}: ${description || title}`
+          : description || title,
+        link: '/dashboard/student/assignments',
+      });
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({ success: true, data: createdAssignments[0], all_data: createdAssignments });
   } catch (error) {
-    console.error('createAssignment:', error);
+    await client.query('ROLLBACK');
+    console.error('createAssignment ERROR:', error);
     serverError(res, error);
+  } finally {
+    client.release();
   }
 };
 
