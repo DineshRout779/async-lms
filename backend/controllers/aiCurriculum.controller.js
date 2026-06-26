@@ -8,6 +8,7 @@ const {
 } = require('../services/aiCurriculumService');
 const { notify } = require('../services/notificationService');
 
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function slugify(text) {
@@ -98,6 +99,8 @@ exports.saveCourse = async (req, res) => {
       duration_weeks, daily_hours, content_preference,
       modules, // full generated tree
       capstone_project, // course-level final capstone
+      use_master_video,
+      master_video_url
     } = req.body;
 
     const userId = req.user.id;
@@ -109,13 +112,14 @@ exports.saveCourse = async (req, res) => {
     const courseRes = await client.query(
       `INSERT INTO ai_courses
          (title, domain, role_focus, jd_text, skills, audience, level,
-          learning_goal, duration_weeks, daily_hours, content_preference, created_by, capstone_project)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          learning_goal, duration_weeks, daily_hours, content_preference, created_by, capstone_project, use_master_video, master_video_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING *`,
       [title, domain, role_focus, jd_text || null,
        JSON.stringify(skills || []), audienceVal, level, learning_goal,
        duration_weeks || null, daily_hours || null, content_preference || null, userId,
-       capstone_project ? JSON.stringify(capstone_project) : null],
+       capstone_project ? JSON.stringify(capstone_project) : null,
+       use_master_video || false, master_video_url || null],
     );
     const course = courseRes.rows[0];
 
@@ -260,6 +264,7 @@ exports.getCourse = async (req, res) => {
     res.json({ success: true, data: { ...course, modules, reviews: reviewsRes.rows } });
   } catch (err) {
     console.error('getCourse error:', err);
+    require('fs').writeFileSync('get_course_error.log', String(err.stack || err));
     serverError(res, err);
   }
 };
@@ -1116,7 +1121,8 @@ exports.generateAndSaveLessonContent = async (req, res) => {
 
     const ctxRes = await pool.query(
       `SELECT l.title AS lesson_title, t.title AS unit_title, m.title AS topic_title,
-              c.title AS course_title, c.role_focus, c.level, c.id AS course_id
+              c.title AS course_title, c.role_focus, c.level, c.id AS course_id,
+              c.use_master_video, c.master_video_url
        FROM ai_course_lessons l
        JOIN ai_course_topics t ON l.topic_id = t.id
        JOIN ai_course_modules m ON t.module_id = m.id
@@ -1125,7 +1131,10 @@ exports.generateAndSaveLessonContent = async (req, res) => {
       [id],
     );
     if (!ctxRes.rows.length) return res.status(404).json({ success: false, message: 'Lesson not found' });
-    const { lesson_title, unit_title, topic_title, course_title, role_focus, level, course_id } = ctxRes.rows[0];
+    const { 
+      lesson_title, unit_title, topic_title, course_title, role_focus, level, course_id,
+      use_master_video, master_video_url 
+    } = ctxRes.rows[0];
 
     // Fetch existing videos in this course to avoid duplicates
     const existingVideosRes = await pool.query(
@@ -1140,7 +1149,8 @@ exports.generateAndSaveLessonContent = async (req, res) => {
 
     const result = await generateLessonContent({
       type, courseTitle: course_title, roleFocus: role_focus, level,
-      topicTitle: topic_title, unitTitle: unit_title, lessonTitle: lesson_title, lessonId: id, excludeUrls
+      topicTitle: topic_title, unitTitle: unit_title, lessonTitle: lesson_title, lessonId: id, excludeUrls,
+      useMasterVideo: use_master_video, masterVideoUrl: master_video_url
     });
 
     let updateFields, updateVals;

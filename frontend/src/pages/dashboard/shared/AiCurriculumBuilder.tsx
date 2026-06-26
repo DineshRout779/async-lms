@@ -33,6 +33,8 @@ const EMPTY_FORM: CourseFormData = {
   daily_hours: '',
   content_preference: '',
   num_modules: '',
+  use_master_video: false,
+  master_video_url: '',
 };
 
 // ─── Shared field components ──────────────────────────────────────────────────
@@ -252,6 +254,39 @@ function StepOne({
               />
             </div>
           </div>
+        </div>
+      </Section>
+
+      {/* Section 4: Video Generation Options */}
+      <Section title='Video Content Engine'>
+        <div className='space-y-4'>
+          <label className='flex items-center gap-3 cursor-pointer p-4 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors'>
+            <input 
+              type="checkbox" 
+              className='w-4.5 h-4.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500' 
+              checked={form.use_master_video || false}
+              onChange={(e) => set({ use_master_video: e.target.checked })}
+            />
+            <div>
+              <p className='text-sm font-semibold text-slate-800'>Use a Master Video (AI Video Slicing)</p>
+              <p className='text-[13px] text-slate-500 mt-0.5'>Instead of searching YouTube for each individual topic, the AI will slice a single long course video into perfect lesson chunks.</p>
+            </div>
+          </label>
+
+          {form.use_master_video && (
+            <div className='pl-8 animate-in fade-in slide-in-from-top-2 duration-200'>
+              <Label required>Master Video YouTube URL</Label>
+              <TextInput
+                placeholder='e.g. https://www.youtube.com/watch?v=ajdRvxDWH4w'
+                value={form.master_video_url || ''}
+                onChange={(v) => set({ master_video_url: v })}
+                className='mt-1'
+              />
+              <p className='text-xs text-slate-400 mt-2'>
+                The AI will download the transcript of this entire video and precisely slice it for every lesson in this course!
+              </p>
+            </div>
+          )}
         </div>
       </Section>
 

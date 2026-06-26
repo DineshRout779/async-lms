@@ -73,6 +73,19 @@ function applyViewCountFilter(videos, minViews = 10000) {
  * (relevance * 0.40) + (engagement * 0.25) + (authority * 0.20) + (freshness * 0.15)
  */
 function rankVideos(videos, whitelistMap, originalQuery = "") {
+  // Heuristic: Determine Ideal Duration from Query Context
+  const queryLower = originalQuery.toLowerCase();
+  let idealMinDuration = 10 * 60; // Default 10 mins
+  let idealMaxDuration = 40 * 60; // Default 40 mins
+  
+  if (queryLower.includes("course") || queryLower.includes("project") || queryLower.includes("masterclass") || queryLower.includes("build a") || queryLower.includes("full")) {
+    idealMinDuration = 30 * 60;
+    idealMaxDuration = 120 * 60;
+  } else if (queryLower.includes("syntax") || queryLower.includes("intro") || queryLower.includes("what is") || queryLower.includes("basics")) {
+    idealMinDuration = 5 * 60;
+    idealMaxDuration = 20 * 60;
+  }
+
   // We need min/max for normalization
   let maxViews = 1;
   let maxLikesRatio = 1;
@@ -136,17 +149,45 @@ function rankVideos(videos, whitelistMap, originalQuery = "") {
       freshnessScore = Math.max(0, 1.0 - (ageYears / 5));
     }
 
+    // Duration Score (0 to 1): AI Human-like duration logic
+    let durationScore = 0.5; // neutral
+    if (v.duration) {
+      const durationSecs = parseIsoDurationToSeconds(v.duration);
+      if (durationSecs >= idealMinDuration && durationSecs <= idealMaxDuration) {
+        durationScore = 1.0; // Perfect duration for this specific topic!
+      } else if (durationSecs < idealMinDuration) {
+        // Too short, penalty proportional to how short it is
+        durationScore = Math.max(0.2, durationSecs / idealMinDuration);
+        
+        // Human Factor Exception: If the short video is an absolute banger 
+        // (insanely high engagement), we forgive the duration penalty completely!
+        if (engagementScore > 0.75) {
+          durationScore = Math.min(1.0, durationScore + 0.6);
+        }
+      } else if (durationSecs > idealMaxDuration) {
+        // Too long, penalty
+        durationScore = Math.max(0.2, idealMaxDuration / durationSecs);
+        
+        // Human Factor Exception: If the long video has huge engagement, boost it slightly
+        if (engagementScore > 0.8) {
+          durationScore = Math.min(1.0, durationScore + 0.3);
+        }
+      }
+    }
+
     // Final Formula
     const finalScore = 
-      (relevanceScore * 0.40) + 
-      (engagementScore * 0.25) + 
-      (authorityScore * 0.20) + 
-      (freshnessScore * 0.15);
+      (relevanceScore * 0.35) + 
+      (durationScore * 0.20) + 
+      (engagementScore * 0.20) + 
+      (authorityScore * 0.15) + 
+      (freshnessScore * 0.10);
 
     return {
       ...v,
       scores: {
         relevance: relevanceScore.toFixed(3),
+        duration: durationScore.toFixed(3),
         engagement: engagementScore.toFixed(3),
         authority: authorityScore.toFixed(3),
         freshness: freshnessScore.toFixed(3),

@@ -133,6 +133,8 @@ export interface CourseFormData {
   daily_hours: number | '';
   content_preference: string;
   num_modules: number | '';
+  use_master_video?: boolean;
+  master_video_url?: string;
 }
 
 // Incremental generation suggestion shapes

@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const { recommendBestVideo } = require('./videoRecommendation.service');
+const { fetchVideoTranscript } = require('./transcript.service');
 
 const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
 
@@ -405,8 +406,64 @@ async function generateLessonContent({
   lessonTitle,
   lessonId = null,
   excludeUrls = [],
+  useMasterVideo = false,
+  masterVideoUrl = null,
 }) {
   if (type === 'video') {
+    if (useMasterVideo && masterVideoUrl) {
+      try {
+        console.log(`[Video Chunking] Fetching transcript for master video...`);
+        const transcript = await fetchVideoTranscript(masterVideoUrl);
+        
+        if (transcript && transcript.length > 0) {
+          console.log(`[Video Chunking] Transcript loaded. Asking LLM for exact timestamps for lesson: ${lessonTitle}`);
+          
+          // We don't want to send 20,000 tokens if not needed. But for highly accurate slicing, we send the transcript.
+          // To save tokens, we only send the text and offsetSec.
+          const compressedTranscript = transcript.map(t => `[${Math.floor(t.offsetSec)}s] ${t.text}`).join('\\n');
+          
+          const chunkingPrompt = `You are a video curriculum extractor.
+Here is the transcript of a master course video. The numbers in brackets are timestamps in seconds.
+Your goal is to find the exact start and end timestamps where the instructor teaches the lesson: "${lessonTitle}".
+Course Context: ${courseTitle} -> ${topicTitle} -> ${unitTitle}
+
+Transcript:
+${compressedTranscript}
+
+Return ONLY a valid JSON object:
+{
+  "found": true or false,
+  "start_seconds": 120,
+  "end_seconds": 300
+}
+If the topic is completely missing from the video, set "found": false.`;
+
+          const chunkRes = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [{ role: 'user', content: chunkingPrompt }],
+            temperature: 0.1,
+            response_format: { type: 'json_object' }
+          });
+          
+          const chunkData = JSON.parse(chunkRes.choices[0].message.content);
+          if (chunkData.found && chunkData.start_seconds !== undefined && chunkData.end_seconds !== undefined) {
+            console.log(`[Video Chunking] Success! Found chunk for ${lessonTitle} from ${chunkData.start_seconds}s to ${chunkData.end_seconds}s`);
+            
+            // Format URL to include start and end
+            const { extractVideoId } = require('./transcript.service');
+            const videoId = extractVideoId(masterVideoUrl) || masterVideoUrl;
+            const video_url = `https://www.youtube.com/embed/${videoId}?start=${chunkData.start_seconds}&end=${chunkData.end_seconds}`;
+            
+            return { video_url, video_results: [] };
+          } else {
+            console.warn(`[Video Chunking] LLM could not find "${lessonTitle}" in master video. Falling back to standalone video...`);
+          }
+        }
+      } catch (err) {
+        console.error(`[Video Chunking] Failed. Falling back to normal video recommendation. Error:`, err.message);
+      }
+    }
+
     let searchQuery = `${lessonTitle} tutorial`; // Safe fallback in case of OpenAI failure
 
     const prompt = `You are an expert at finding educational YouTube videos.

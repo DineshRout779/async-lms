@@ -11,9 +11,9 @@ async function searchVideos(query, maxResults = 15) {
     throw new Error('YOUTUBE_API_KEY is missing');
   }
 
-  // We use videoDuration=medium to filter out YouTube shorts (which are < 4 mins)
-  // This is a native API safeguard before our own Noise Filter.
-  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoDuration=medium&order=relevance&maxResults=${maxResults}&key=${YOUTUBE_API_KEY}`;
+  // We remove the native videoDuration filter to allow long master-videos (>20 mins) and (<60 mins)
+  // We rely entirely on our mathematical Noise Filter to remove Shorts (<200s)
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&order=relevance&maxResults=${maxResults}&key=${YOUTUBE_API_KEY}`;
   
   const res = await fetch(url);
   if (!res.ok) {

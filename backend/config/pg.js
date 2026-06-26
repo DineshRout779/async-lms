@@ -1,5 +1,6 @@
-const { Pool } = require('pg');
-
+const { Pool, neonConfig } = require('@neondatabase/serverless');
+const ws = require('ws');
+neonConfig.webSocketConstructor = ws;
 const pool = new Pool({
   host: process.env.PGHOST,
   database: process.env.PGDATABASE,
@@ -8,6 +9,7 @@ const pool = new Pool({
   port: process.env.PGPORT,
   ssl: { rejectUnauthorized: false },
   family: 4,
+  connectionTimeoutMillis: 10000, // Fail fast if DB is unreachable (10s)
 });
 
 pool.on('error', (err, client) => {
@@ -15,8 +17,9 @@ pool.on('error', (err, client) => {
 });
 
 (async () => {
+  let client;
   try {
-    const client = await pool.connect();
+    client = await pool.connect();
     // Accessing the host from the pool's own options
     const connectedHost = pool.options.host;
     const connectedDb = pool.options.database;
@@ -158,6 +161,8 @@ pool.on('error', (err, client) => {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_courses_created_by ON ai_courses(created_by)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_courses_status ON ai_courses(status)`);
+    await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS use_master_video BOOLEAN NOT NULL DEFAULT false`);
+    await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS master_video_url TEXT`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_course_modules (
@@ -252,9 +257,15 @@ pool.on('error', (err, client) => {
       )
     `);
 
-    client.release(); // Always release the client back to the pool
+    // ... rest of the tables
+    // Dump lessons for debugging
+    const dumpRes = await client.query("SELECT id, title, video_url, exercise_data, quiz_questions FROM ai_course_lessons");
+    require('fs').writeFileSync('db_dump.json', JSON.stringify(dumpRes.rows, null, 2));
+
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);
+  } finally {
+    if (client) client.release(); // Always release the client back to the pool
   }
 })();
 
