@@ -670,7 +670,7 @@ exports.getAssignmentSubmissions = async (req, res) => {
 // GET /api/v1/college-assignments/evaluation-filters
 exports.getFilteredAssignments = async (req, res) => {
   try {
-    const { collegeId, domain, search } = req.query;
+    const { collegeId, domain, search, batch } = req.query;
     const isFacilitator = req.user.role !== 'admin';
     const facilitatorCollegeIds = req.user.college_ids || [];
 
@@ -678,8 +678,31 @@ exports.getFilteredAssignments = async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    // This query UNIONS facilitator-created "College Assignments" 
-    // and curriculum-level "Unit Assignments" (from subjects/topics).
+    const values = [];
+    let index = 1;
+
+    let submissionFilterUnit = '';
+    let submissionFilterCollege = '';
+
+    if (isFacilitator) {
+      values.push(facilitatorCollegeIds);
+      submissionFilterUnit += ` AND sp.college_id = ANY($${index})`;
+      index++;
+    }
+
+    if (collegeId) {
+      values.push(collegeId);
+      submissionFilterUnit += ` AND sp.college_id = $${index}`;
+      index++;
+    }
+
+    if (batch) {
+      values.push(batch);
+      submissionFilterUnit += ` AND sp.expected_graduation_year = $${index}`;
+      submissionFilterCollege += ` AND sp.expected_graduation_year = $${index}`;
+      index++;
+    }
+
     let query = `
       WITH all_assignments AS (
         -- 1. Facilitator-Created College Assignments
@@ -695,7 +718,9 @@ exports.getFilteredAssignments = async (req, res) => {
           (
             SELECT COUNT(*)::int 
             FROM public.college_assignment_submissions cas 
+            ${batch ? 'JOIN public.student_profiles sp ON sp.user_id = cas.student_id' : ''}
             WHERE cas.assignment_id = ca.id
+            ${submissionFilterCollege}
           ) as submissions_count,
           CASE WHEN e.status = 'completed' THEN 'evaluated' ELSE 'pending' END as status,
           e.id as evaluation_id
@@ -720,7 +745,7 @@ exports.getFilteredAssignments = async (req, res) => {
             FROM public.assignment_submissions asub
             JOIN public.student_profiles sp ON asub.user_id = sp.user_id
             WHERE asub.assignment_id = a.id
-            ${isFacilitator ? 'AND sp.college_id = ANY($1)' : ''}
+            ${submissionFilterUnit}
           ) as submissions_count,
           CASE WHEN e.status = 'completed' THEN 'evaluated' ELSE 'pending' END as status,
           e.id as evaluation_id
@@ -734,27 +759,23 @@ exports.getFilteredAssignments = async (req, res) => {
       WHERE 1=1
     `;
 
-    const values = isFacilitator ? [facilitatorCollegeIds] : [];
-    let index = isFacilitator ? 2 : 1;
-
     // 🔒 Role-based restriction (facilitator)
     if (isFacilitator) {
-      // For College Assignments, they must match the facilitator's college.
-      // For Unit Assignments, we show them if they belong to a subject the facilitator can see (simplified to 'all' for now)
+      // $1 is always facilitatorCollegeIds if isFacilitator is true
       query += ` AND (college_id IS NULL OR college_id = ANY($1))`;
     }
 
     // 🎯 College filter
     if (collegeId) {
-      query += ` AND (college_id = $${index} OR (type = 'unit' AND $${index} = ANY($1)))`;
       values.push(collegeId);
+      query += ` AND (college_id = $${index} OR type = 'unit')`;
       index++;
     }
 
     // 🎯 Domain filter
     if (domain) {
-      query += ` AND LOWER(course) LIKE LOWER($${index})`;
-      values.push(`%${domain}%`);
+      query += ` AND (LOWER(course) LIKE LOWER('%' || $${index} || '%') OR LOWER($${index}) LIKE '%' || LOWER(course) || '%')`;
+      values.push(domain);
       index++;
     }
 
@@ -765,7 +786,7 @@ exports.getFilteredAssignments = async (req, res) => {
       index++;
     }
 
-    // Only show assignments that have at least one submission (to avoid cluttering with thousands of curriculum assignments)
+    // Only show assignments that have at least one submission matching the criteria
     query += ` AND submissions_count > 0`;
 
     query += ` ORDER BY created_at DESC NULLS LAST, title ASC`;

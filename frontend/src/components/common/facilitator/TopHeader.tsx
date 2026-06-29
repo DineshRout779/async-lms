@@ -26,7 +26,7 @@ const TopHeader = ({ onFilterChange }: Props) => {
     const fetchFilters = async () => {
       try {
         const [collegeRes, domainRes, batchRes] = await Promise.all([
-          apiClient.get('/colleges'),
+          apiClient.get('/facilitator/colleges'),
           apiClient.get('/subjects/dropdown'),
           apiClient.get('/facilitator/batches'),
         ]);
@@ -73,7 +73,7 @@ const TopHeader = ({ onFilterChange }: Props) => {
       >
         <option value=''>All Domains</option>
         {domains.map((d) => (
-          <option key={d.id} value={d.id}>
+          <option key={d.id} value={d.name}>
             {d.name}
           </option>
         ))}
