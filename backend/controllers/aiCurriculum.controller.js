@@ -7,6 +7,79 @@ const {
   generateCapstone, generateExerciseTests,
 } = require('../services/aiCurriculumService');
 const { notify } = require('../services/notificationService');
+const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const path = require('path');
+const fs = require('fs');
+const { promisify } = require('util');
+const writeFileAsync = promisify(fs.writeFile);
+const mkdirAsync = promisify(fs.mkdir);
+
+// ─── S3 singleton (reused across requests) ───────────────────────────────────
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+async function presignS3Url(url) {
+  if (!url || !url.includes('.amazonaws.com/')) return url;
+  try {
+    const { hostname, pathname } = new URL(url);
+    const bucket = hostname.split('.')[0];
+    const key = decodeURIComponent(pathname.slice(1)); // strip leading /
+    const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
+    return await getSignedUrl(s3, cmd, { expiresIn: 3600 });
+  } catch {
+    return url;
+  }
+}
+
+const s3Configured = () =>
+  !!(
+    process.env.AWS_S3_BUCKET &&
+    process.env.AWS_REGION &&
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY
+  );
+
+async function storeFile(file, { s3KeyPrefix, localSubPath }) {
+  const safeName = file.originalname
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]/g, '');
+  const filename = `${Date.now()}-${safeName}`;
+
+  if (s3Configured()) {
+    try {
+      const key = `${s3KeyPrefix}/${filename}`;
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }),
+      );
+      const url = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      return { url, name: file.originalname };
+    } catch (s3Error) {
+      console.error('S3 upload failed, using local fallback:', s3Error);
+    }
+  }
+
+  // Local fallback
+  const uploadDir = localSubPath
+    ? path.join(__dirname, '..', 'public', 'uploads', localSubPath)
+    : path.join(__dirname, '..', 'public', 'uploads');
+  await mkdirAsync(uploadDir, { recursive: true });
+  await writeFileAsync(path.join(uploadDir, filename), file.buffer);
+  const base = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
+  const urlPath = localSubPath ? `uploads/${localSubPath}/${filename}` : `uploads/${filename}`;
+  const url = `${base}/${urlPath}`;
+  return { url, name: file.originalname };
+}
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -243,7 +316,45 @@ exports.getCourse = async (req, res) => {
           `SELECT * FROM ai_course_lessons WHERE topic_id = $1 ORDER BY order_index`,
           [topic.id],
         );
-        topics.push({ ...topic, lessons: lessonsRes.rows });
+
+        // Presign S3 URLs for lessons
+        const signedLessons = await Promise.all(lessonsRes.rows.map(async (lesson) => {
+          const updatedLesson = { ...lesson };
+          
+          if (updatedLesson.video_url) {
+            updatedLesson.video_url = await presignS3Url(updatedLesson.video_url);
+          }
+          
+          if (updatedLesson.resource_links) {
+            try {
+              const parsedResourceLinks = typeof updatedLesson.resource_links === 'string' ? JSON.parse(updatedLesson.resource_links) : updatedLesson.resource_links;
+              if (Array.isArray(parsedResourceLinks)) {
+                updatedLesson.resource_links = await Promise.all(parsedResourceLinks.map(presignS3Url));
+                if (typeof lesson.resource_links === 'string') {
+                  updatedLesson.resource_links = JSON.stringify(updatedLesson.resource_links);
+                }
+              }
+            } catch (parseError) {
+              console.error('Failed to parse resource_links:', parseError);
+            }
+          }
+
+          if (updatedLesson.exercise_data) {
+            try {
+              const parsedExerciseData = typeof updatedLesson.exercise_data === 'string' ? JSON.parse(updatedLesson.exercise_data) : updatedLesson.exercise_data;
+              if (parsedExerciseData.reference_files && Array.isArray(parsedExerciseData.reference_files)) {
+                parsedExerciseData.reference_files = await Promise.all(parsedExerciseData.reference_files.map(presignS3Url));
+                updatedLesson.exercise_data = typeof lesson.exercise_data === 'string' ? JSON.stringify(parsedExerciseData) : parsedExerciseData;
+              }
+            } catch (parseError) {
+              console.error('Failed to parse exercise_data:', parseError);
+            }
+          }
+          
+          return updatedLesson;
+        }));
+
+        topics.push({ ...topic, lessons: signedLessons });
       }
       modules.push({ ...mod, topics });
     }
@@ -1308,5 +1419,48 @@ exports.deleteCourse = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     serverError(res, err);
+  }
+};
+
+// ─── Upload / Delete Resources ────────────────────────────────────────────────
+
+exports.uploadResource = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    const { url, name } = await storeFile(req.file, {
+      s3KeyPrefix: 'ai-curriculum-resources',
+      localSubPath: 'ai-curriculum-resources',
+    });
+    
+    // Presign the URL immediately so the frontend can preview it without refreshing
+    const presignedUrl = await presignS3Url(url);
+
+    res.json({ success: true, url: presignedUrl, filename: name });
+  } catch (error) {
+    console.error('uploadResource error:', error);
+    serverError(res, error);
+  }
+};
+
+exports.deleteResource = async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url || !url.includes('.amazonaws.com/')) {
+      return res.json({ success: true, message: 'Not an S3 URL or ignored' });
+    }
+    
+    const { hostname, pathname } = new URL(url);
+    const bucket = hostname.split('.')[0];
+    const key = decodeURIComponent(pathname.slice(1));
+    
+    if (s3Configured() && bucket === process.env.AWS_S3_BUCKET) {
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('deleteResource error:', error);
+    serverError(res, error);
   }
 };

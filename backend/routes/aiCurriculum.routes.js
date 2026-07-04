@@ -4,6 +4,13 @@ const verifyToken = require('../middlewares/verfiyToken');
 const isAdmin = require('../middlewares/isAdmin');
 const isCurriculumDeveloper = require('../middlewares/isCurriculumDeveloper');
 const ctrl = require('../controllers/aiCurriculum.controller');
+const multer = require('multer');
+
+// Setup multer for in-memory uploads with 10MB limit
+const upload = multer({ 
+  storage: multer.memoryStorage(), 
+  limits: { fileSize: 10 * 1024 * 1024 } 
+});
 
 // All routes require auth
 router.use(verifyToken);
@@ -15,6 +22,10 @@ router.post('/generate-topics', isCurriculumDeveloper, ctrl.generateTopics);
 router.post('/generate-units', isCurriculumDeveloper, ctrl.generateAndSaveUnits);
 router.post('/generate-subtopics', isCurriculumDeveloper, ctrl.generateAndSaveSubtopics);
 router.post('/exercises/generate-tests', isCurriculumDeveloper, ctrl.generateTaskTests);
+
+// Resources
+router.post('/upload-resource', isCurriculumDeveloper, upload.single('file'), ctrl.uploadResource);
+router.delete('/delete-resource', isCurriculumDeveloper, ctrl.deleteResource);
 
 // Create sub-resources
 router.post('/modules', isCurriculumDeveloper, ctrl.addModule);

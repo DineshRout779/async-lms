@@ -9,6 +9,17 @@ import toast from 'react-hot-toast';
 import type { AiExercise, AiLesson } from '@/features/aiCurriculum/types';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 
+export function getDisplayFilename(url: string) {
+  try {
+    if (url.includes('.amazonaws.com/')) {
+      const filename = new URL(url).pathname.split('/').pop() || '';
+      return decodeURIComponent(filename).replace(/^\d+-/, '') || url;
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
 
 type Tab = 'video' | 'content' | 'exercise';
 
@@ -259,12 +270,18 @@ function ContentTab({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be under 10MB');
+      e.target.value = '';
+      return;
+    }
+
     try {
       setIsUploading(true);
       const formData = new FormData();
       formData.append('file', file);
       const token = localStorage.getItem('token');
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/college-assignments/upload-instruction`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/ai-curriculum/upload-resource`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData
@@ -282,6 +299,30 @@ function ContentTab({
     } finally {
       setIsUploading(false);
       e.target.value = '';
+    }
+  };
+
+  const handleDeleteLink = async (idx: number) => {
+    const linkToRemove = draft.resource_links[idx];
+    
+    // Remove from UI immediately
+    const newLinks = draft.resource_links.filter((_, i) => i !== idx);
+    set('resource_links', newLinks);
+
+    if (linkToRemove && linkToRemove.includes('.amazonaws.com/')) {
+      try {
+        const token = localStorage.getItem('token');
+        await fetch(`${import.meta.env.VITE_API_URL}/api/v1/ai-curriculum/delete-resource`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ url: linkToRemove })
+        });
+      } catch (err) {
+        console.error('Failed to delete resource from S3:', err);
+      }
     }
   };
 
@@ -382,11 +423,12 @@ function ContentTab({
                     <h4 className='font-bold text-slate-800 mb-3'>Attached Resources:</h4>
                     <ul className='list-disc pl-5 space-y-1.5'>
                       {draft.resource_links.filter(l => l.trim()).map((link, idx) => (
-                        <li key={idx}>
-                          <a href={link} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all'>
-                            {link}
-                          </a>
-                        </li>
+                          <li key={idx}>
+                            <a href={link} target='_blank' rel='noopener noreferrer' className='text-indigo-600 hover:underline font-semibold break-all flex items-center gap-1.5'>
+                              <FileText className="w-3.5 h-3.5 shrink-0" />
+                              <span className="line-clamp-1" title={link}>{getDisplayFilename(link)}</span>
+                            </a>
+                          </li>
                       ))}
                     </ul>
                   </div>
@@ -410,33 +452,42 @@ function ContentTab({
         {!preview && (
           <div className='space-y-3 shrink-0 pt-3 border-t border-slate-100'>
             <label className='block text-[12px] font-bold text-slate-700 mb-1'>Additional Resources (Links / Files / Folders)</label>
-            {draft.resource_links.map((link, idx) => (
+            {draft.resource_links.map((link, idx) => {
+              const isS3 = link.includes('.amazonaws.com/');
+              return (
               <div key={idx} className='flex gap-2 items-center'>
-                <input
-                  disabled={!canEdit}
-                  value={link}
-                  onChange={(e) => {
-                    const newLinks = [...draft.resource_links];
-                    newLinks[idx] = e.target.value;
-                    set('resource_links', newLinks);
-                  }}
-                  placeholder='https://...'
-                  className='flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400'
-                />
-                {canEdit && draft.resource_links.length > 1 && (
-                  <button
-                    onClick={() => {
-                      const newLinks = draft.resource_links.filter((_, i) => i !== idx);
+                {isS3 ? (
+                  <div className='flex-1 flex items-center gap-2 border border-slate-200 bg-slate-50 rounded-lg px-3 py-2 text-[13px] text-slate-700 font-medium overflow-hidden'>
+                    <FileText className='w-4 h-4 text-indigo-500 shrink-0' />
+                    <a href={link} target='_blank' rel='noopener noreferrer' className='truncate hover:underline hover:text-indigo-600 cursor-pointer' title={link}>
+                      {getDisplayFilename(link)}
+                    </a>
+                  </div>
+                ) : (
+                  <input
+                    disabled={!canEdit}
+                    value={link}
+                    onChange={(e) => {
+                      const newLinks = [...draft.resource_links];
+                      newLinks[idx] = e.target.value;
                       set('resource_links', newLinks);
                     }}
-                    className='p-2 text-slate-400 hover:text-red-500 transition-colors'
+                    placeholder='https://...'
+                    className='flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400'
+                  />
+                )}
+                {canEdit && draft.resource_links.length > 1 && (
+                  <button
+                    onClick={() => handleDeleteLink(idx)}
+                    className='p-2 text-slate-400 hover:text-red-500 transition-colors shrink-0'
                     title='Remove link'
                   >
                     ✕
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
             {canEdit && (
               <div className='flex items-center gap-4 mt-1'>
                 <button
