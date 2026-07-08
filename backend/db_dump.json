@@ -1,0 +1,1403 @@
+[
+  {
+    "id": "4a710cee-98f7-41ae-b607-d88c130470d8",
+    "title": "Flexible Grid Layouts with CSS Grid",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "f9c28abe-74ec-4f1f-8569-0590bf3bde15",
+    "title": "Responsive Images and Picture Elements",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "4e43e8f7-4910-4719-b7b9-bec73c49f8ac",
+    "title": "CSS Flexbox for Responsive Design",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "b16c1ca1-ed62-49d2-9c57-465f23b96c79",
+    "title": "HTML tags",
+    "video_url": "https://www.youtube.com/results?search_query=HTML%20tags%20Introduction%20to%20HTML%20student%20tutorial",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Create a new HTML file and set up the basic HTML structure including <!DOCTYPE html>, <html>, <head>, and <body> tags.",
+        "Step 2: Inside the <head> section, add a <title> tag and name your webpage 'My First Webpage'.",
+        "Step 3: In the <body> section, add a <header> with an <h1> tag containing the text 'Welcome to My Webpage'.",
+        "Step 4: Below the header, create a <section> with a <p> tag that includes a short paragraph about yourself.",
+        "Step 5: Add an <footer> at the bottom of the page with a <p> tag that includes the text '© 2023 Your Name'."
+      ],
+      "title": "Building a Simple Webpage with HTML Tags",
+      "description": "Create a basic webpage using common HTML tags to structure content.",
+      "starter_code": "<!DOCTYPE html>\n<html>\n<head>\n    <title></title>\n</head>\n<body>\n    \n</body>\n</html>"
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "9b1584c2-b572-4cc7-8873-5ec952b75a12",
+    "title": "Understanding HTML Document Structure",
+    "video_url": "https://youtu.be/aFBQbLIHXfk?si=GhMtcqqCqGKUDWln",
+    "exercise_data": {
+      "tasks": [
+        "Create the basic HTML structure with <!DOCTYPE html>, <html>, <head>, and <body> tags.",
+        "Add a <header> section that includes a <nav> element with links to 'Home', 'About', and 'Contact'.",
+        "Create a <main> section containing an <article> with a <h1> title and a <p> paragraph for the blog post content.",
+        "Include an <aside> element for a sidebar with additional links or information related to the blog.",
+        "Implement a <footer> section with contact information and copyright details."
+      ],
+      "title": "Building a Semantic HTML Document",
+      "description": "Construct a semantic HTML document for a personal blog homepage.",
+      "starter_code": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>My Personal Blog</title>\n</head>\n<body>\n    <!-- Your code goes here -->\n</body>\n</html>"
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "f29006e2-03af-492e-8493-b7b77b9f0b11",
+    "title": "Stakeholder Identification and Analysis",
+    "video_url": "https://www.youtube.com/watch?v=CHlHApBxLBk",
+    "exercise_data": {
+      "tasks": [
+        "Identify at least five potential stakeholders for a fictional project, such as creating a mobile app for a local business.",
+        "Categorize each stakeholder by their level of influence and interest in the project (e.g., high influence and high interest).",
+        "Create a simple stakeholder map to visualize the stakeholder categories and prioritize them accordingly."
+      ],
+      "title": "Identifying and Analyzing Stakeholders",
+      "description": "You will create a simple stakeholder analysis document to identify and categorize stakeholders for a fictional project.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "9a0ecb10-35ae-4019-9a09-2ce7e60273c4",
+    "title": "Arithmetic Operators",
+    "video_url": "https://www.youtube.com/watch?v=5cvazs00m28",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "b39496ec-2024-463d-b699-884dc23e4140",
+    "title": "Comparison Operators",
+    "video_url": "https://www.youtube.com/watch?v=CCLcHQxA6d0",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "354cc614-0ad5-4d46-9810-9285060768b4",
+    "title": "Logical Operators",
+    "video_url": "https://www.youtube.com/watch?v=ovWYhDVQiR8",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "61869d85-592b-4ed3-bb91-06c9522fa84a",
+    "title": "String Concatenation with Operators",
+    "video_url": "https://www.youtube.com/watch?v=uJbYqm7W_mA",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "2e0ea8c7-aff9-4095-b655-ff775137d20f",
+    "title": "If Statements and Boolean Logic",
+    "video_url": "https://www.youtube.com/watch?v=A3OPVFqqqqQ",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "c3f0c1db-aff0-477c-92f4-d4f418039c4b",
+    "title": "Switch Statements",
+    "video_url": "https://www.youtube.com/watch?v=2gE2K8i5tvs",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "34afbd66-1433-4906-887c-036fff40f3d8",
+    "title": "For Loops and Iteration",
+    "video_url": "https://www.youtube.com/watch?v=8__9yNADp_Q",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "ee31b46c-42bd-4cf6-a2f0-7fb9652cefb2",
+    "title": "While and Do-While Loops",
+    "video_url": "https://www.youtube.com/watch?v=w3Q55-l47P0",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "147807e2-dbdf-4f84-ae0e-18601d5abddd",
+    "title": "The Role of Closures in JavaScript",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "5fa1caf5-5494-457a-b624-bf90c9461677",
+    "title": "Function Declaration vs Expression",
+    "video_url": "https://www.youtube.com/watch?v=qrexmHTjlZg",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "cb31f601-d2c7-4280-b592-d5795b687ce6",
+    "title": "Arrow Functions",
+    "video_url": "https://www.youtube.com/watch?v=Q2O5YGXpDYo",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "d5fb3f77-d108-4e14-a018-51ec8e9e0ed8",
+    "title": "Customizing Keyboard Shortcuts for Efficiency",
+    "video_url": "https://www.youtube.com/results?search_query=Customizing%20Keyboard%20Shortcuts%20for%20Efficiency%20key%20board%20shortcuts%20student%20tutorial",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "cdb13847-b2bd-4a0e-8ccb-02eb7b723afd",
+    "title": "Function Expressions vs. Declarations",
+    "video_url": "https://www.youtube.com/watch?v=qrexmHTjlZg",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "e4bd0b65-6148-4a36-a2a7-d9d77eb2c8d5",
+    "title": "Keyboard shortcuts",
+    "video_url": "https://www.youtube.com/watch?v=PUPok5AZ0ek",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Open a new document in your word processor and use keyboard shortcuts to format text. For example, use Ctrl+C and Ctrl+V to copy and paste text, and Ctrl+B to bold text.",
+        "Step 2: Navigate through your computer's file system using keyboard shortcuts. Use Alt+Tab to switch between open applications and Ctrl+N to open a new window in your file explorer.",
+        "Step 3: Customize and create your own keyboard shortcuts for commonly used applications or actions to further improve your efficiency."
+      ],
+      "title": "Mastering Essential Keyboard Shortcuts",
+      "description": "Practice and apply essential keyboard shortcuts to improve your efficiency in navigating and managing tasks on your computer.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "a4e4bf8c-205b-4f7c-8d63-a20a9aeac39b",
+    "title": "Understanding Function Scope",
+    "video_url": "https://www.youtube.com/watch?v=2-bDtzPlwMo",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "1d5490e8-c169-4fa8-b180-db6b6d15a2cc",
+    "title": "Consuming Context with useContext Hook",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "82949b5d-1428-4e7a-979d-76aed0708b89",
+    "title": "Navigating Applications with Keyboard Shortcuts",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "e11ec913-106d-4d6c-9548-0a32c0ea1712",
+    "title": "Advanced Keyboard Shortcuts for Data Entry",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "5296ded4-ede3-4f5e-b2bc-0bca0e63d21b",
+    "title": "Typing Accuracy and Error Correction",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "92ac99bd-b5cd-475f-8e27-3b29666f632e",
+    "title": "Optimizing Performance with Context API",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "6bec8744-b230-4917-b1ca-bc1dc99248c9",
+    "title": "Higher-Order Components (HOCs)",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "876872c6-8bde-4d96-b3a5-8af85479a538",
+    "title": "Semantic Elements: Header, Footer, and Nav",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "c1783a62-2c51-4e79-98ed-6423f6b030ba",
+    "title": "Using Section and Article for Content Segmentation",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "972e50e2-f5bb-41bc-bc0f-4f9528d59fd6",
+    "title": "Accessibility Improvements with HTML5 Semantic Tags",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "89939527-1df9-4489-a7fe-211e8f9ec5b4",
+    "title": "Media Queries and Breakpoints",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "c99261d8-4e0f-4859-a626-662f805c0c6b",
+    "title": "Render Props Pattern",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "8b2fe98a-0524-4460-b90c-3a12a51896ec",
+    "title": "Compound Components",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "eeacb8e9-ba43-4ffc-b717-cea19c4b5118",
+    "title": "Context API for State Management",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "6562a34d-01fc-4a6b-be87-371c0303b5d6",
+    "title": "Understanding Hoisting in Functions",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "639f530d-ed27-4b91-8b22-2fdba5f9e580",
+    "title": "Lexical Scope and Closures",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "f602604c-f9a8-4d5c-b5c8-2c00a601f90a",
+    "title": "IIFE (Immediately Invoked Function Expressions)",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "72cf8f72-9d0f-4266-8e7a-17de7a3f31ed",
+    "title": "Conditional Statements: if, else if, else",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "52f9176e-c975-4238-9a4e-88b161fb044e",
+    "title": "Switch Statements in JavaScript",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "c80da1ae-ebdf-4eff-8c07-4874226906c8",
+    "title": "For Loops and Loop Control",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "ae324662-b9c8-4e58-b1ac-4d06211558fd",
+    "title": "While and Do-While Loops",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "be7660d8-9646-4a3c-bb0c-057356646829",
+    "title": "Creating and Modifying Objects",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "cb9f897f-9e25-490f-add3-729d4f6be837",
+    "title": "Understanding Object Prototypes",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "f8ed444b-42b2-4255-a405-f40d609f3243",
+    "title": "Using Object.create()",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "0eb755fe-b9af-44a0-b01a-320f14cb3ba7",
+    "title": "Prototype Inheritance",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "5eb9a17c-46da-4f97-9205-f366365001c9",
+    "title": "Shortcuts for Managing Windows and Applications",
+    "video_url": "https://www.youtube.com/watch?v=w03xRqD-Oto",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "a3b4a391-74be-4497-8404-8ae501923f12",
+    "title": "Basic Keyboard Shortcuts for Text Editing",
+    "video_url": "https://www.youtube.com/results?search_query=Basic%20Keyboard%20Shortcuts%20for%20Text%20Editing%20key%20board%20shortcuts%20student%20tutorial",
+    "exercise_data": {
+      "tasks": [
+        "Open a text editor of your choice (like Notepad, VS Code, etc.).",
+        "Type a short paragraph of text (4-5 sentences) in the editor.",
+        "Use the following shortcuts to edit the text: (a) Use Ctrl + C to copy a sentence, then Ctrl + V to paste it at the end of the paragraph. (b) Use Ctrl + X to cut a word, then Ctrl + V to move it to a different part of the paragraph. (c) Use Ctrl + Z to undo the last change, and Ctrl + Y to redo it."
+      ],
+      "title": "Mastering Text Editing with Keyboard Shortcuts",
+      "description": "In this exercise, students will practice using basic keyboard shortcuts to enhance their text editing efficiency in a simple text editor.",
+      "starter_code": "// Open your preferred text editor and start typing your paragraph here."
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "d6064b0a-79d5-4f30-888e-da1d428f525f",
+    "title": "Touch Typing for Speed",
+    "video_url": "https://www.youtube.com/results?search_query=Touch%20Typing%20for%20Speed%20Advanced%20Typing%20Techniques%20student%20tutorial",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Set up an HTML file with a textarea for typing input and a button to start the test.",
+        "Step 2: Write JavaScript code to generate a random sentence for the user to type, and display it above the textarea.",
+        "Step 3: Implement a timer that starts when the user begins typing, and stops when the user presses enter, then calculate words per minute (WPM) to display the result."
+      ],
+      "title": "Mastering Touch Typing with a Typing Speed Test App",
+      "description": "Build a simple typing speed test application to practice and improve touch typing skills.",
+      "starter_code": "<!DOCTYPE html>\n<html>\n<head>\n  <title>Typing Speed Test</title>\n</head>\n<body>\n  <h2>Typing Speed Test</h2>\n  <p id=\"sentence\"></p>\n  <textarea id=\"typingInput\" placeholder=\"Start typing here...\"></textarea>\n  <button onclick=\"startTest()\">Start Test</button>\n  <p id=\"result\"></p>\n  <script>\n    // JavaScript code goes here\n  </script>\n</body>\n</html>"
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "7202afed-afa9-4aa2-a377-9aafdce7dd74",
+    "title": "Component Lifecycle: Mounting Phase",
+    "video_url": "https://www.youtube.com/watch?v=uVjvJPAFKyw",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "bfd5c5e0-6bed-473d-9e40-8be6c7d61191",
+    "title": "Understanding RESTful APIs",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "c76fa1e9-04f1-44d7-ab4a-6788bb61efec",
+    "title": "Component Lifecycle: Updating Phase",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "6ff73007-3bcb-4ea8-bbec-41b673197d07",
+    "title": "Component Lifecycle: Unmounting Phase",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "a32dd6b8-3fce-44a3-ae3a-8b35f97f4051",
+    "title": "Introduction to React Hooks: useState and useEffect",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "39fa10c1-1f83-4fa2-9068-e45a7b0f6a18",
+    "title": "Setting Up a FastAPI Project",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "8f1e3ab6-2c90-4d0b-b22f-d939b7cbe79b",
+    "title": "Creating Your First FastAPI Endpoint",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "4fcaf1f3-57fa-4227-87ce-22dc3c74f08d",
+    "title": "Overview of FastAPI",
+    "video_url": "https://www.youtube.com/watch?v=8TMQcRcBnW8",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "98e37a5c-762e-47fc-a484-d6b7ca9fff92",
+    "title": "let vs const",
+    "video_url": "https://www.youtube.com/watch?v=swl_GTyPEs0",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "65631476-477c-4ee0-9320-afce3876767e",
+    "title": "Understanding JavaScript Objects",
+    "video_url": "https://www.youtube.com/watch?v=TCXQsQL5kPo",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Define a JavaScript object named 'car' with properties: make, model, year, and color.",
+        "Step 2: Add a method to the 'car' object named 'displayInfo' that returns a string containing the car's make, model, and year.",
+        "Step 3: Use the 'displayInfo' method to log the car's information to the console.",
+        "Step 4: Add a new property 'owner' to the 'car' object and assign it a value.",
+        "Step 5: Delete the 'color' property from the 'car' object and log the updated object to the console."
+      ],
+      "title": "Exploring JavaScript Objects",
+      "description": "Create and manipulate a JavaScript object to understand its properties and methods.",
+      "starter_code": "// Define your 'car' object and methods below\n\nconst car = {\n  // Your properties and methods here\n};"
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "17cbdc39-62f8-401b-b79e-98cb6d032063",
+    "title": "Array Destructuring",
+    "video_url": "https://www.youtube.com/watch?v=giNjEgYTd9E",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "9932f8c4-eac7-4c61-bdf8-4cef524a61b2",
+    "title": "Symbol Data Type",
+    "video_url": "https://www.youtube.com/watch?v=6R82DEqrelw",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "4ca28ed0-4678-469f-bfcf-d37cbfef013e",
+    "title": "Installing FastAPI and Uvicorn",
+    "video_url": "https://www.youtube.com/watch?v=7AMjmCTumuo",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "32e9ceb1-1c83-44b0-8112-9212ad97dec0",
+    "title": "Creating a Basic FastAPI Application",
+    "video_url": "https://www.youtube.com/watch?v=foGklduxhM0",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "4213be28-c0af-41dd-92b4-16ae91378fd5",
+    "title": "Understanding ASGI and its Role in FastAPI",
+    "video_url": "https://www.youtube.com/watch?v=M81pfi64eeM",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "c376c773-94b9-4778-bb41-ae4e0842aec7",
+    "title": "Customizing Keyboard Shortcuts for Personal Workflow",
+    "video_url": "https://www.youtube.com/results?search_query=Customizing%20Keyboard%20Shortcuts%20for%20Personal%20Workflow%20key%20board%20shortcuts%20student%20tutorial",
+    "exercise_data": {
+      "tasks": [
+        "Identify an application you frequently use that allows for keyboard shortcut customization, such as Microsoft Word, Excel, or Adobe Photoshop.",
+        "Access the settings or preferences menu of the application and locate the keyboard shortcuts customization section.",
+        "Select a task or command you perform regularly and assign a new keyboard shortcut to it that feels intuitive and easy to remember.",
+        "Test the newly assigned shortcut to ensure it works as expected and adjust if necessary.",
+        "Document the changes you made along with a brief explanation of why you chose those specific shortcuts."
+      ],
+      "title": "Customizing Keyboard Shortcuts for Personal Workflow",
+      "description": "Learn how to customize keyboard shortcuts to enhance your productivity by tailoring them to your personal workflow in a commonly used application.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "b088d609-2f9c-4a9f-83a9-951e7e4cc09c",
+    "title": "Navigation Shortcuts for Efficient Browsing",
+    "video_url": "https://www.youtube.com/results?search_query=Navigation%20Shortcuts%20for%20Efficient%20Browsing%20key%20board%20shortcuts%20student%20tutorial",
+    "exercise_data": {
+      "tasks": [
+        "Create an HTML file with a list of at least five links to different websites.",
+        "Use keyboard shortcuts to navigate through the links. For Windows, use 'Tab' to move forward and 'Shift + Tab' to move backward. For Mac, use the same shortcuts.",
+        "Open a console (F12 for Windows or 'Option + Command + I' for Mac) and use the 'Ctrl + L' (or 'Command + L' for Mac) shortcut to focus on the address bar to practice the shortcut for directly accessing URLs."
+      ],
+      "title": "Master Keyboard Navigation Shortcuts",
+      "description": "In this exercise, you'll create a simple HTML page with a list of links to practice using keyboard shortcuts for efficient navigation.",
+      "starter_code": "<!DOCTYPE html>\n<html>\n<head>\n    <title>Navigation Shortcuts Practice</title>\n</head>\n<body>\n    <h1>Practice Navigation Shortcuts</h1>\n    <ul>\n        <li><a href='https://www.google.com'>Google</a></li>\n        <li><a href='https://www.facebook.com'>Facebook</a></li>\n        <li><a href='https://www.twitter.com'>Twitter</a></li>\n        <li><a href='https://www.linkedin.com'>LinkedIn</a></li>\n        <li><a href='https://www.youtube.com'>YouTube</a></li>\n    </ul>\n</body>\n</html>"
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "3014207d-3d19-4024-9e2a-1a0642d23c4e",
+    "title": "Constructors and Initialization",
+    "video_url": "https://www.youtube.com/watch?v=Znmz_WxMxp4",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "78839acc-7126-4237-96a8-f1b1150a2bee",
+    "title": "Defining Classes and Objects",
+    "video_url": "https://www.youtube.com/watch?v=AC-QIsrT5BA",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "ecf18d3b-a619-4872-ab18-6a6d9b6026d2",
+    "title": "Understanding 'this' Keyword",
+    "video_url": "https://www.youtube.com/watch?v=pNXC9Mfp5T0",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "b42b2af7-9991-4db8-aa2f-3d140d16ac14",
+    "title": "Integrating Pydantic for Data Validation",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "acf7ebdf-3a8d-44d3-9848-c4ff479c4384",
+    "title": "Setting Up the FastAPI Environment",
+    "video_url": "https://www.youtube.com/watch?v=ED6PRjmXgBA",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "563fb04d-8ede-4412-8df2-37058e767c2c",
+    "title": "Creating Your First FastAPI Endpoint",
+    "video_url": "https://www.youtube.com/watch?v=F43rgxq4CKw",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "acce75e7-286e-459b-bc98-668d4dd44b21",
+    "title": "Understanding Path and Query Parameters",
+    "video_url": "https://www.youtube.com/watch?v=6uN6GxMwzVI",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "8266006b-e7cc-4482-83a9-2b10a4106667",
+    "title": "Instance Variables and Methods",
+    "video_url": "https://www.youtube.com/watch?v=cprwB4x6haM",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "a6342986-3dff-4579-9672-3effc6890e0c",
+    "title": "Setting Up Environment Variables for FastAPI",
+    "video_url": "https://www.youtube.com/watch?v=kmJz8w5ij8Y",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "04f84e76-e9f6-467e-ab0e-81a1e3d51682",
+    "title": "Understanding the User Interface",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "0af7161b-30aa-4b24-9bbe-9045f0f26f15",
+    "title": "business intro",
+    "video_url": "https://www.youtube.com/watch?v=McZW0iDsZns",
+    "exercise_data": {
+      "tasks": [
+        "Read the provided business scenario carefully to understand the main operations.",
+        "List at least three key business processes involved in the scenario, such as sales, inventory management, or customer support.",
+        "Create a simple flowchart or diagram for one of the identified processes to visualize steps and interactions."
+      ],
+      "title": "Identify Key Business Processes",
+      "description": "Analyze a small business scenario to identify and document key business processes.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "9a4f596f-5ba1-4f5d-9c25-409e066288d5",
+    "title": "Importing and Organizing Media Files",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "449a9f91-3643-48e3-a0a1-f0c43384c17f",
+    "title": "Basic Editing Tools and Functions",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "8409458b-3648-41e5-8164-ea7db859c2e0",
+    "title": "Introduction to Elicitation Techniques",
+    "video_url": "https://www.youtube.com/watch?v=CHlHApBxLBk",
+    "exercise_data": {
+      "tasks": [
+        "Pair up with a classmate. One will play the role of the business analyst, and the other will be a stakeholder.",
+        "As the business analyst, choose an elicitation technique (e.g., interviews, surveys, workshops) and prepare questions or a plan to gather information about a hypothetical project.",
+        "Conduct the role-play session, using your chosen technique to elicit requirements from the stakeholder.",
+        "After the session, switch roles and repeat the process with a different technique.",
+        "Reflect on which techniques were most effective and why, sharing insights with your partner."
+      ],
+      "title": "Understanding Elicitation Techniques through Role-Playing",
+      "description": "In this exercise, you will role-play as a business analyst to practice different elicitation techniques with a peer. This will help you understand how to gather information effectively from stakeholders.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "8806c953-ee9b-4755-ad13-726caf28f60d",
+    "title": "Installing and Setting Up Video Editing Software",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "bdb5a259-27bb-46b4-8fa0-4400c537416f",
+    "title": "Techniques for Stakeholder Analysis",
+    "video_url": "https://www.youtube.com/watch?v=lieVJU9jv6U",
+    "exercise_data": {
+      "tasks": [
+        "Identify all potential stakeholders involved in the project using brainstorming techniques.",
+        "Categorize each stakeholder based on their level of influence and interest using a stakeholder matrix.",
+        "Develop a stakeholder engagement plan outlining communication strategies for each stakeholder group."
+      ],
+      "title": "Stakeholder Analysis for a New Project",
+      "description": "Conduct a stakeholder analysis to identify key stakeholders and understand their influence and interest in a new project.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "f412bd0c-c87b-4a65-bd9b-219d70585bbe",
+    "title": "Identifying Key Stakeholders",
+    "video_url": "https://www.youtube.com/watch?v=8uZiGB8DeJg",
+    "exercise_data": {
+      "tasks": [
+        "Read the provided project scenario and list all potential stakeholders involved.",
+        "Categorize the stakeholders based on their influence and interest levels (e.g., high influence/high interest, high influence/low interest, low influence/high interest, low influence/low interest).",
+        "Create a stakeholder map using a simple diagramming tool or paper, placing each stakeholder in the appropriate quadrant based on their influence and interest."
+      ],
+      "title": "Identify and Map Key Stakeholders",
+      "description": "In this exercise, you will identify key stakeholders for a given project scenario and create a stakeholder map to visualize their influence and interest levels. This will help you understand who to engage and how to prioritize their needs.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "73550a38-807a-4412-a709-1ca57ac8cc54",
+    "title": "Structuring Content with Semantic Elements",
+    "video_url": "https://www.youtube.com/watch?v=YPzFPoqwTmI",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Create a header section using the <header> tag and include a <h1> element for the article title.",
+        "Step 2: Use the <section> tag to create a main content area for the article text and include at least one <h2> subheading.",
+        "Step 3: Add a <footer> section at the bottom of the page to include author information and publication date.",
+        "Step 4: Ensure all content is wrapped within appropriate semantic elements like <article>, <aside>, and <nav> where necessary.",
+        "Step 5: Validate your HTML structure using an online HTML validator to check for semantic correctness."
+      ],
+      "title": "Building a Semantic Article Page",
+      "description": "Create a simple article page using semantic HTML elements to structure the content for better accessibility and SEO.",
+      "starter_code": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Semantic Article Page</title>\n</head>\n<body>\n\n<!-- Start coding below -->\n\n</body>\n</html>",
+      "resource_links": [],
+      "reference_files": []
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "d540c184-4d5d-4bfa-bfb9-49315a78cc79",
+    "title": "Understanding Requirements Life Cycle",
+    "video_url": "https://www.youtube.com/watch?v=kSU2MPeptpM",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "581677c2-5073-4440-98a5-4f0b68019005",
+    "title": "Introduction to Elicitation Techniques",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "ab902390-07a3-4514-9718-19a4856ac433",
+    "title": "Interviews as an Elicitation Technique",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "d9bb7d10-fa57-4ebf-a41d-85312c81756c",
+    "title": "Active Listening Techniques",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "6df44e12-05c0-47ab-b0c9-57117aeef206",
+    "title": "Effective Questioning Methods",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "82814770-1d4d-44a8-9673-6601ccf37ebe",
+    "title": "Facilitation Skills for Group Discussions",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "f7b7c613-e26e-4043-8ef3-1af60510a402",
+    "title": "Building Consensus in Teams",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "093ac585-f8bc-4999-8968-d184b67066e6",
+    "title": "Cation Exchange Capacity (CEC)",
+    "video_url": "https://www.youtube.com/watch?v=8vh-6iJRJbw",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "299c0e5c-7191-40b1-ba90-f42ef842976a",
+    "title": "Soil Nutrient Availability",
+    "video_url": "https://www.youtube.com/watch?v=-E5vqyUe8c0",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "a59390c1-aa5a-4734-bd67-3b5a1fe993e7",
+    "title": "Traceability of Requirements",
+    "video_url": "https://www.youtube.com/results?search_query=Traceability%20of%20Requirements%20Introduction%20to%20Requirements%20Life%20Cycle%20Management%20student%20tutorial",
+    "exercise_data": {
+      "tasks": [
+        "Create a spreadsheet with columns for Requirement ID, Requirement Description, Design Document ID, and Test Case ID.",
+        "List at least five business requirements in the spreadsheet with unique Requirement IDs and detailed descriptions.",
+        "For each business requirement, identify the corresponding design document and test case, and fill in their IDs in the respective columns.",
+        "Check for completeness by ensuring each business requirement links to at least one design document and one test case.",
+        "Reflect on how this traceability matrix helps in managing changes to requirements throughout the project lifecycle."
+      ],
+      "title": "Mapping and Tracing Requirements",
+      "description": "In this exercise, you will create a traceability matrix using a simple spreadsheet to map and trace business requirements to their corresponding design documents and test cases.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "5d5a29f9-8e41-49ed-ba34-b3e7609fd02f",
+    "title": "Home Row Finger Placement",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "98dd16d8-3535-4b23-91b9-1fee22fa209f",
+    "title": "Ergonomic Posture and Setup",
+    "video_url": "https://www.youtube.com/results?search_query=Ergonomic%20Posture%20and%20Setup%20Advanced%20Typing%20Techniques%20student%20tutorial",
+    "exercise_data": {
+      "tasks": [
+        "Adjust your chair height so that your feet are flat on the floor and your knees are at a 90-degree angle.",
+        "Position your keyboard so that your forearms are parallel to the ground when typing, keeping your elbows close to your body.",
+        "Adjust your monitor so that the top of the screen is at or slightly below eye level, and at an arm's length distance.",
+        "Create a checklist to remind yourself of ergonomic practices, including correct posture, regular breaks, and eye exercises.",
+        "Review your checklist and adjust your setup weekly to ensure ongoing ergonomic practices."
+      ],
+      "title": "Optimizing Your Workspace for Ergonomic Typing",
+      "description": "Set up your workstation to ensure ergonomic posture while typing, and create a checklist for maintaining this setup.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "99f57415-6c42-44a8-b62e-730c948d8a44",
+    "title": "Speed Drills with Timed Exercises",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "91c063b1-a736-4183-8b27-f6b49d0228b2",
+    "title": "Touch Typing Techniques",
+    "video_url": "https://www.youtube.com/watch?v=T39-TAmgjwM",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "3d2370ab-a7af-49f6-848d-7aa19ea35dee",
+    "title": "Correct Keyboard and Chair Height",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "513bdf19-200d-4b72-ae06-4b1cd05ad889",
+    "title": "Wrist Position and Hand Placement",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "6d13546f-525d-49eb-b889-25449d883ed1",
+    "title": "Desk Organization for Optimal Ergonomics",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "248f22a5-417a-443e-8061-79691c760ff4",
+    "title": "Identifying and Adjusting for Common Ergonomic Risks",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "d48f4b0b-c5f7-4b7b-9574-835e1ea40a01",
+    "title": "Understanding Flex Containers and Flex Items",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "daf4dd02-c042-418b-a98e-4f87a1fbe41a",
+    "title": "Flex Direction and Its Impact on Layout",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "1f2922aa-02f7-40b4-9b6e-260fda0fcf6a",
+    "title": "Aligning Items with Justify-Content and Align-Items",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "a1d04d26-c02a-4529-a1d4-459fa7e39dab",
+    "title": "Accuracy Improvement Strategies",
+    "video_url": "https://www.youtube.com/watch?v=QAb3ATOpBpE",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Identify the top three common typing errors you make during typing tests or regular typing tasks.",
+        "Step 2: Create a list of challenging words or phrases that include the letters or patterns you often mistype.",
+        "Step 3: Use a typing software or online typing tool to create a custom drill. Input your list of challenging words and phrases and practice daily for at least 10 minutes.",
+        "Step 4: Track your progress over a week, noting your accuracy improvement each day.",
+        "Step 5: Adjust your drill list based on new errors you identify or improvements you've made."
+      ],
+      "title": "Improve Your Typing Accuracy with Custom Drills",
+      "description": "Create a personalized typing drill to focus on improving accuracy by analyzing common mistakes and practicing targeted exercises.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "8a2cd1e1-fb22-41f2-96a2-746a3aa481c3",
+    "title": "HTML Document Structure",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "1739e07a-1dfa-4ab8-b3bd-9752099de60a",
+    "title": "Semantic HTML Elements",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "e5025963-21cd-4dfe-a31e-2edb453d6cc5",
+    "title": "HTML Forms and Input Types",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "f664405c-853c-4a9b-a4e7-c32c38166c3c",
+    "title": "HTML5 Audio and Video Tags",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "00e07172-fd21-40f7-a0d6-3d7ae8cb8049",
+    "title": "Understanding HTML5 Semantic Elements",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "53ebd898-6a11-47e5-98c2-a97f9dbb7916",
+    "title": "Using <header> and <footer> Effectively",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "96a3cefd-461b-4ea2-babe-42f3b3e42d3d",
+    "title": "Implementing <article> and <section>",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "1f203d80-4dc6-4f4b-91a3-a1a0d9f77896",
+    "title": "The Role of <aside> and <nav>",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "78173fb0-b4f2-4a45-b400-540fc7ea9f1d",
+    "title": "Mastering Flexbox with Flex-Grow, Flex-Shrink, and Flex-Basis",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "2c3a5bf6-bd87-4084-90cc-d1c0b0a82145",
+    "title": "Introduction to Context API",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "1702d882-18d8-4e60-985e-f14ba860d50b",
+    "title": "Creating and Using Context Providers",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "6d70d71b-2f5b-473d-849b-c9c795325706",
+    "title": "Understanding Semantic HTML Tags",
+    "video_url": "https://www.youtube.com/watch?v=DSRMCZwM3YE",
+    "exercise_data": {
+      "tasks": [
+        "Create a basic HTML document structure with <!DOCTYPE html>, <html>, <head>, and <body> tags.",
+        "Within the <body>, add a <header> section containing the blog post's title inside an <h1> tag and a navigation menu using <nav> with at least two links.",
+        "Below the <header>, create a <main> section with an <article> tag. Inside the <article>, add a <section> with a subheading using an <h2> tag and a paragraph of text.",
+        "Add another <section> within the <article> for comments. Include a <h2> heading for comments and a list of comments using <ul> and <li> tags.",
+        "Conclude the document with a <footer> section that contains information like the author's name and a copyright notice."
+      ],
+      "title": "Creating a Semantic Blog Post",
+      "description": "Build a simple blog post structure using semantic HTML tags to improve both SEO and accessibility.",
+      "starter_code": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Semantic Blog Post</title>\n</head>\n<body>\n\n</body>\n</html>",
+      "resource_links": [],
+      "reference_files": []
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "f90b427c-c8dd-4d8e-8096-c631182d4a65",
+    "title": "ARIA Roles and Attributes for Accessibility",
+    "video_url": "https://www.youtube.com/watch?v=q1oOoQsgzj4",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Add ARIA roles to the main structural elements of the HTML document, such as 'navigation', 'main', and 'footer'.",
+        "Step 2: Implement ARIA attributes to improve form accessibility by adding 'aria-label' to input fields that lack visible labels.",
+        "Step 3: Enhance the accessibility of a dynamic content section by using 'aria-live' to announce updates to screen readers."
+      ],
+      "title": "Implementing ARIA Roles and Attributes for Enhanced Accessibility",
+      "description": "In this exercise, you'll enhance the accessibility of a simple webpage by implementing ARIA roles and attributes to improve screen reader support and user navigation.",
+      "starter_code": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Accessible Webpage</title>\n</head>\n<body>\n    <header>\n        <h1>Welcome to Our Website</h1>\n    </header>\n    <nav>\n        <ul>\n            <li><a href=\"#home\">Home</a></li>\n            <li><a href=\"#services\">Services</a></li>\n            <li><a href=\"#contact\">Contact</a></li>\n        </ul>\n    </nav>\n    <main>\n        <section id=\"home\">\n            <h2>About Us</h2>\n            <p>Learn more about our mission and values.</p>\n        </section>\n        <section id=\"services\">\n            <h2>Our Services</h2>\n            <p>Discover the range of services we offer to help you succeed.</p>\n        </section>\n        <section id=\"contact\">\n            <h2>Contact Us</h2>\n            <form>\n                <label for=\"name\">Name:</label>\n                <input type=\"text\" id=\"name\">\n                <label for=\"email\">Email:</label>\n                <input type=\"email\" id=\"email\">\n                <button type=\"submit\">Submit</button>\n            </form>\n        </section>\n    </main>\n    <footer>\n        <p>&copy; 2023 Our Website</p>\n    </footer>\n</body>\n</html>",
+      "resource_links": [],
+      "reference_files": []
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "3a250fe4-e374-4fd3-9a70-28fc817e8638",
+    "title": "Using HTML Landmark Roles",
+    "video_url": "https://www.youtube.com/watch?v=zmVyUrhRoU0",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Identify the main sections of the webpage such as header, navigation, main content, and footer.",
+        "Step 2: Replace generic <div> and <span> elements with semantic HTML5 elements like <header>, <nav>, <main>, and <footer>.",
+        "Step 3: Add ARIA landmark roles to these elements to enhance accessibility for assistive technologies.",
+        "Step 4: Validate your HTML using a validator tool to ensure that your semantic and ARIA roles are correctly implemented.",
+        "Step 5: Test the webpage using a screen reader to verify that the landmark roles are being recognized."
+      ],
+      "title": "Implementing Semantic HTML Landmark Roles",
+      "description": "In this exercise, you will enhance a basic webpage by adding semantic HTML5 elements and ARIA landmark roles to improve accessibility.",
+      "starter_code": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Semantic HTML and Accessibility</title>\n</head>\n<body>\n    <div id=\"header\">\n        <h1>Welcome to My Website</h1>\n    </div>\n    <div id=\"navigation\">\n        <ul>\n            <li><a href=\"#\">Home</a></li>\n            <li><a href=\"#\">About</a></li>\n            <li><a href=\"#\">Contact</a></li>\n        </ul>\n    </div>\n    <div id=\"main-content\">\n        <h2>Main Content</h2>\n        <p>This is where the main content of the page goes.</p>\n    </div>\n    <div id=\"footer\">\n        <p>&copy; 2023 My Website</p>\n    </div>\n</body>\n</html>"
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "d2a9f27e-2ea2-4a2f-854d-711735646ede",
+    "title": "Advanced Finger Placement Techniques",
+    "video_url": "https://www.youtube.com/watch?v=QAb3ATOpBpE",
+    "exercise_data": {
+      "tasks": [
+        "Identify and list all the keys on your keyboard that require a shift in standard finger placement (e.g., symbols, numbers).",
+        "Practice typing a paragraph that includes at least five different symbols and numbers. Focus on maintaining proper finger positioning throughout.",
+        "Create a daily practice routine using an online typing tool to target these advanced finger placements and track your progress over a week."
+      ],
+      "title": "Mastering Advanced Finger Placement Techniques",
+      "description": "Enhance your typing efficiency by practicing advanced finger placement techniques. This exercise will help you improve your speed and accuracy by focusing on correct finger positioning for less commonly used keys.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "bda3f32c-983f-4c5d-9281-33ebd8053651",
+    "title": "Understanding Encapsulation",
+    "video_url": "https://www.youtube.com/watch?v=gZPiXPNUxVY",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "e35b4448-d359-4535-bd15-0d52deb34e6c",
+    "title": "Understanding CSS Specificity",
+    "video_url": "https://www.youtube.com/watch?v=LUDkXMXf3P8",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Analyze the given HTML structure and identify the elements that need styling.",
+        "Step 2: Write CSS rules to style the paragraph inside the div with the class 'container' using a class selector.",
+        "Step 3: Override the previous style by targeting the same paragraph with an ID selector.",
+        "Step 4: Add an inline style to the paragraph to observe how it overrides other styles due to higher specificity.",
+        "Step 5: Comment on why the inline style takes precedence over the previous styles."
+      ],
+      "title": "Mastering CSS Specificity with Practical Examples",
+      "description": "In this exercise, you will apply different CSS selectors to understand how specificity affects the styling of HTML elements. You will need to manipulate the given HTML structure to achieve the desired styling outcomes by adjusting CSS selectors and properties.",
+      "starter_code": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>CSS Specificity Exercise</title>\n    <style>\n        /* Add your CSS here */\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <p id=\"unique-paragraph\">This is a paragraph inside a container.</p>\n    </div>\n</body>\n</html>"
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "49f90ef7-7376-4228-b5bf-97571eecad41",
+    "title": "Private and Public Access Modifiers",
+    "video_url": "https://www.youtube.com/watch?v=XVa1BGP1YPk",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "00cc0501-3d6f-4e13-b73f-bc94c68fe717",
+    "title": "Using Getters and Setters",
+    "video_url": "https://www.youtube.com/watch?v=uDK-Z4obpZg",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "21dfa9f7-ee52-4150-a13a-4bda47225a58",
+    "title": "Package-Level Access and Protected Modifier",
+    "video_url": "https://www.youtube.com/watch?v=SXLlsqMOhNw",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "48c71cd6-59b8-4e38-acf3-7406b5c28a9f",
+    "title": "Responsive Images and Units",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "a4b3300a-173d-4d31-bb99-e93ceab977f1",
+    "title": "Basic CSS Selectors",
+    "video_url": "https://www.youtube.com/watch?v=rndMS4pEKP8",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Use a type selector to change the font color of all paragraph elements to blue.",
+        "Step 2: Use a class selector to set the background color of elements with the class 'highlight' to yellow.",
+        "Step 3: Use an ID selector to change the font size of the element with the ID 'main-title' to 24px.",
+        "Step 4: Use a descendant selector to make all list items within a 'nav' element italic."
+      ],
+      "title": "Styling Elements with Basic CSS Selectors",
+      "description": "Use basic CSS selectors to style an HTML page with different colors and fonts.",
+      "starter_code": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>CSS Selectors Exercise</title>\n    <style>\n        /* Your CSS here */\n    </style>\n</head>\n<body>\n    <h1 id=\"main-title\">Welcome to the CSS Selectors Exercise</h1>\n    <p>This is a paragraph that will be styled using a type selector.</p>\n    <p class=\"highlight\">This paragraph has a special class that will be styled separately.</p>\n    <nav>\n        <ul>\n            <li>Home</li>\n            <li>About</li>\n            <li>Contact</li>\n        </ul>\n    </nav>\n</body>\n</html>",
+      "resource_links": [],
+      "reference_files": []
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "4c05034e-a42d-46a6-8d0f-5d8bf4145389",
+    "title": "Pseudo-classes and Pseudo-elements",
+    "video_url": "https://www.youtube.com/watch?v=Bm-Y6bnJBN8",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Use the ':hover' pseudo-class to change the background color of the navigation links when the user hovers over them.",
+        "Step 2: Apply the ':first-child' pseudo-class to style the first link differently, such as changing its font size or color.",
+        "Step 3: Use the '::after' pseudo-element to add a decorative element, like a border or icon, after each navigation link."
+      ],
+      "title": "Styling a Navigation Menu with Pseudo-classes and Pseudo-elements",
+      "description": "In this exercise, you will style a simple navigation menu using CSS pseudo-classes and pseudo-elements to enhance the user experience and visual appeal.",
+      "starter_code": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Navigation Menu Exercise</title>\n    <style>\n        /* Add your CSS here */\n        nav ul {\n            list-style-type: none;\n            padding: 0;\n        }\n        nav li {\n            display: inline;\n            margin-right: 20px;\n        }\n        nav a {\n            text-decoration: none;\n            color: black;\n        }\n    </style>\n</head>\n<body>\n    <nav>\n        <ul>\n            <li><a href=\"#\">Home</a></li>\n            <li><a href=\"#\">About</a></li>\n            <li><a href=\"#\">Services</a></li>\n            <li><a href=\"#\">Contact</a></li>\n        </ul>\n    </nav>\n</body>\n</html>",
+      "resource_links": [],
+      "reference_files": []
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "f067ca7f-201d-48fb-81a7-b67a61121cec",
+    "title": "Introduction to Responsive Design",
+    "video_url": "https://www.youtube.com/watch?v=l04dDYW-QaI",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "a5d173d7-7e3b-434f-818a-a311e232cc81",
+    "title": "Flexible Layouts with Flexbox",
+    "video_url": "https://www.youtube.com/watch?v=aEj6k-gi9-s",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "152b2a3b-3528-4f59-8c1d-6566620457f9",
+    "title": "Media Queries: Breakpoints and Syntax",
+    "video_url": "https://www.youtube.com/watch?v=n9yI6fjkrfE",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "dee78b00-2eb4-4ed4-ad59-2319b6d7f7f7",
+    "title": "Combinator Selectors",
+    "video_url": "https://www.youtube.com/watch?v=1cEG1T8beO4",
+    "exercise_data": {
+      "tasks": [
+        "Create a basic HTML structure with a few nested elements: a <div> containing multiple <p> elements, and another <div> inside with <span> and <p> elements.",
+        "Write CSS rules to style the <p> elements within the first <div> using the child combinator selector.",
+        "Style the <span> elements that are direct children of the second <div> using the general sibling combinator selector.",
+        "Apply a style to the <p> elements inside the second <div> that immediately follow a <span> element using the adjacent sibling combinator selector."
+      ],
+      "title": "Exploring CSS Combinator Selectors",
+      "description": "Create an HTML page styled with CSS combinator selectors to understand their usage and specificity.",
+      "starter_code": "<!DOCTYPE html>\n<html>\n<head>\n    <style>\n        /* Add your CSS selectors here */\n    </style>\n</head>\n<body>\n    <div class=\"first-div\">\n        <p>First paragraph in first div</p>\n        <p>Second paragraph in first div</p>\n    </div>\n    <div class=\"second-div\">\n        <span>Span in second div</span>\n        <p>Paragraph following span</p>\n        <p>Another paragraph in second div</p>\n    </div>\n</body>\n</html>",
+      "resource_links": [],
+      "reference_files": []
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "8008a23e-b377-49d1-a3b5-f4de9cce77d1",
+    "title": "Key Roles and Career Paths in Beauty",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "0a912177-9382-471b-bbb6-ac63c3c517c1",
+    "title": "Understanding Beauty Industry Terminology",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "bf716ee9-1dda-476b-94d4-fe06dc7e9d0f",
+    "title": "Introduction to Beauty Product Categories",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "171724c9-7e37-4833-926b-0100cd456ff4",
+    "title": "Soil Texture Classification",
+    "video_url": "https://www.youtube.com/watch?v=rOukdzEFjLs",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "06090b01-ab7f-4203-bf18-d0f39089f538",
+    "title": "History and Evolution of the Beauty Industry",
+    "video_url": "https://www.youtube.com/watch?v=Wz6j-PjX_NY",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "12b59c9a-401d-4eff-b7e6-5e64abad7d4f",
+    "title": "Introduction to Soil Types",
+    "video_url": "https://www.youtube.com/watch?v=UNqCBicHe6s",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "27512643-f18b-445e-b9e0-84a2ba6bdce9",
+    "title": "Characteristics of Clay Soil",
+    "video_url": "https://www.youtube.com/watch?v=0uTtkAG5pDs",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "047f6766-75b1-45d3-8932-9ca895eb3142",
+    "title": "Soil Structure Types",
+    "video_url": "https://www.youtube.com/watch?v=PTt7RzYOooA",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "26f113ba-64b5-462e-b5a4-7e1eff1a154c",
+    "title": "Characteristics of Loamy Soil",
+    "video_url": "https://www.youtube.com/watch?v=6tgIVyRC80Y",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "b78d3c06-7ba6-4fd0-b6dc-3f3b7a4220aa",
+    "title": "Soil Density and Porosity",
+    "video_url": "https://www.youtube.com/watch?v=gmWuSp03DNQ",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "2412da84-09ee-4614-9955-bc44f9a20324",
+    "title": "Soil pH and Its Importance",
+    "video_url": "https://www.youtube.com/watch?v=93y8C30Y4U0",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "e5195b6e-21d8-4d0f-b6b9-608e145b0c77",
+    "title": "Characteristics of Sandy Soil",
+    "video_url": "https://www.youtube.com/watch?v=SOWRgpvQ06E",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "543d063c-a7c1-4c87-867c-aa000b44b28b",
+    "title": "Properties of Loamy Soils",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "f8006fad-ab3a-4b5a-8f28-137aa9085d72",
+    "title": "Introduction to Soil Composition",
+    "video_url": "https://www.youtube.com/watch?v=ZmVwwWIYoiw",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "03b3f201-143f-48c0-a769-0452fc1c5301",
+    "title": "Identifying Sandy Soils",
+    "video_url": "https://www.youtube.com/watch?v=Mru1ElmG7pg",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "99b400ee-4212-492f-a584-2de58a082b85",
+    "title": "Characteristics of Clay Soils",
+    "video_url": "https://www.youtube.com/watch?v=RlscZuGejis",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "fe2193ef-5842-4128-bf13-6356945f82a4",
+    "title": "Water Retention in Soil",
+    "video_url": "https://www.youtube.com/watch?v=o_mJXQdpmHw",
+    "exercise_data": {
+      "tasks": [
+        "Step 1: Gather three different types of soil (sand, silt, and clay) and label them.",
+        "Step 2: Take three identical containers and fill each one with a different type of soil up to the same level.",
+        "Step 3: Slowly pour a fixed amount of water (e.g., 100 ml) into each container and allow the water to drain through.",
+        "Step 4: After a set period, measure and record the amount of water retained in each type of soil.",
+        "Step 5: Analyze your results and summarize which soil type has the highest and lowest water retention capacity."
+      ],
+      "title": "Analyzing Water Retention in Different Soil Types",
+      "description": "In this exercise, you will conduct a simple experiment to compare the water retention capacity of different soil types, such as sand, silt, and clay. You will measure how much water each soil type retains and record your observations.",
+      "starter_code": ""
+    },
+    "quiz_questions": []
+  },
+  {
+    "id": "f148c62e-2c49-4ece-90ee-b013be26b430",
+    "title": "Soil Microorganisms and Their Roles",
+    "video_url": "https://www.youtube.com/watch?v=UJyKPTIXmKg",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "e5535fe3-9397-4da9-a658-07bb67f7430b",
+    "title": "Earthworms and Soil Health",
+    "video_url": "https://www.youtube.com/watch?v=DkmMM_FKFkE",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "58fc9e5d-9dcb-4046-b545-766f67ad3674",
+    "title": "The Soil Food Web",
+    "video_url": "https://www.youtube.com/watch?v=NuHEoix8HFo",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "3f8d87a3-4fe7-41e5-a7e2-8151fe0eec47",
+    "title": "Impact of Fungi on Soil Ecology",
+    "video_url": "https://www.youtube.com/watch?v=6tmnVOVhimo",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "3b1d1641-b064-49b1-b5f7-30a0c2384c43",
+    "title": "Variables and Data Types",
+    "video_url": "https://www.youtube.com/watch?v=77YcUSLPqfc",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "64a89ea0-4ee4-491c-a22a-fb2738e8e9d9",
+    "title": "Basic Operators and Expressions",
+    "video_url": "https://www.youtube.com/watch?v=VoKFyB1q4fc",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "3a3e8ec9-f38a-4d43-9fe8-ef14a5961e0e",
+    "title": "Control Structures: if-else Statements",
+    "video_url": "https://www.youtube.com/watch?v=rlC0iDNXJNs",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "cdf63e93-4603-42bb-ace8-1fa663844a2b",
+    "title": "Introduction to JavaScript Syntax",
+    "video_url": "https://www.youtube.com/watch?v=4BBlc_qDs8g",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "f54fed31-83e8-46e3-a211-460239120ba8",
+    "title": "Primitive Data Types in JavaScript",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "0b6c1696-a92c-4594-a404-4201ad1f7307",
+    "title": "Working with Strings and Template Literals",
+    "video_url": null,
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "7feae87d-6f92-455a-8928-282c17ded11d",
+    "title": "Introduction to Variables",
+    "video_url": "https://www.youtube.com/watch?v=nbX0MIV7-Ek",
+    "exercise_data": null,
+    "quiz_questions": []
+  },
+  {
+    "id": "62e7b8c3-327d-449b-8d75-854da4d2d05c",
+    "title": "Understanding let vs const",
+    "video_url": "https://www.youtube.com/watch?v=swl_GTyPEs0",
+    "exercise_data": null,
+    "quiz_questions": []
+  }
+]

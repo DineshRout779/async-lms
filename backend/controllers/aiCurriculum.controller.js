@@ -4,8 +4,9 @@ const {
   generateCurriculum, regenerateLesson, extractSkillsFromJD,
   generateTopics, generateUnits, generateSubtopics,
   generateLessonContent, generateUnitQuiz, generateUnitAssignment,
-  generateCapstone, generateExerciseTests,
+  generateCapstone, generateExerciseTests, generateContentFromFile, generateExerciseFromFile,
 } = require('../services/aiCurriculumService');
+const pdfParse = require('pdf-parse');
 const { notify } = require('../services/notificationService');
 const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -1461,6 +1462,99 @@ exports.deleteResource = async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('deleteResource error:', error);
+    serverError(res, error);
+  }
+};
+
+exports.generateContentFromResource = async (req, res) => {
+  try {
+    const { url, title } = req.body;
+    if (!url) {
+      return res.status(400).json({ success: false, message: 'URL is required' });
+    }
+    let fileText = '';
+    
+    if (url.includes('.amazonaws.com/')) {
+      const { hostname, pathname } = new URL(url);
+      const bucket = hostname.split('.')[0];
+      // When S3 URLs are signed they contain query params, but pathname is just the path
+      const key = decodeURIComponent(pathname.slice(1));
+      
+      const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
+      const response = await s3.send(cmd);
+      
+      const streamToBuffer = (stream) =>
+        new Promise((resolve, reject) => {
+          const chunks = [];
+          stream.on("data", (chunk) => chunks.push(chunk));
+          stream.on("error", reject);
+          stream.on("end", () => resolve(Buffer.concat(chunks)));
+        });
+        
+      const buffer = await streamToBuffer(response.Body);
+      
+      if (key.toLowerCase().endsWith('.pdf')) {
+        const pdfData = await pdfParse(buffer);
+        fileText = pdfData.text;
+      } else {
+        fileText = buffer.toString('utf-8');
+      }
+    } else {
+      return res.status(400).json({ success: false, message: 'Only uploaded files are supported for AI generation currently' });
+    }
+    
+    if (!fileText || !fileText.trim()) {
+      return res.status(400).json({ success: false, message: 'Could not extract text from file' });
+    }
+    
+    const aiContent = await aiCurriculumService.generateContentFromFile(fileText, title);
+    res.json({ success: true, content: aiContent });
+  } catch (error) {
+    console.error('generateContentFromResource error:', error);
+    serverError(res, error);
+  }
+};
+
+exports.generateExerciseFromResource = async (req, res) => {
+  try {
+    const { url, title } = req.body;
+    if (!url) {
+      return res.status(400).json({ success: false, message: 'URL is required' });
+    }
+    let fileText = '';
+    
+    if (url.includes('.amazonaws.com/')) {
+      const { hostname, pathname } = new URL(url);
+      const bucket = hostname.split('.')[0];
+      const key = decodeURIComponent(pathname.slice(1));
+      
+      const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
+      const response = await s3.send(cmd);
+      
+      const streamToBuffer = (stream) =>
+        new Promise((resolve, reject) => {
+          const chunks = [];
+          stream.on("data", (chunk) => chunks.push(chunk));
+          stream.on("error", reject);
+          stream.on("end", () => resolve(Buffer.concat(chunks)));
+        });
+        
+      const buffer = await streamToBuffer(response.Body);
+      
+      if (key.toLowerCase().endsWith('.pdf')) {
+        const pdfData = await pdfParse(buffer);
+        fileText = pdfData.text;
+      } else {
+        fileText = buffer.toString('utf-8');
+      }
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid S3 URL' });
+    }
+
+    const aiContent = await generateExerciseFromFile(fileText, title);
+    res.json({ success: true, content: aiContent });
+  } catch (error) {
+    console.error('generateExerciseFromResource error:', error);
     serverError(res, error);
   }
 };

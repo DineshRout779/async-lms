@@ -708,6 +708,71 @@ Syntax Rules:
   return parsed.test_cases || [];
 }
 
+/**
+ * Analyze an uploaded document to extract or synthesize lesson content.
+ */
+async function generateExerciseFromFile(fileText, lessonTitle) {
+  const prompt = `You are an expert curriculum designer. The user has uploaded a document to generate an exercise for the lesson titled: "${lessonTitle}".
+
+Read the following document text carefully.
+
+Intelligent Instructions:
+1. Extract or invent a practical, hands-on exercise based on the concepts found in the document.
+2. The exercise must have a clear description, a list of actionable tasks, and some starter code to help the learner begin.
+
+Output ONLY a valid JSON object matching this schema (no markdown blocks around the JSON):
+{
+  "description": "Clear instructions for the overall exercise and what the learner must build or do. Minimum 1 paragraph.",
+  "tasks": ["Actionable task 1", "Actionable task 2", "Actionable task 3"],
+  "starter_code": "Boilerplate code to get them started. If the document has code snippets, use them to create a realistic starting point. ALWAYS wrap in \`\`\`language code blocks\`\`\`."
+}
+
+Document Text (truncated if too long):
+${fileText.substring(0, 15000)}
+`;
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.5,
+    max_tokens: 1500,
+    response_format: { type: 'json_object' },
+  });
+
+  return JSON.parse(response.choices[0].message.content);
+}
+
+async function generateContentFromFile(fileText, lessonTitle) {
+  const prompt = `You are an expert curriculum designer. The user has uploaded a document for the lesson titled: "${lessonTitle}".
+
+Read the following document text carefully.
+
+Intelligent Instructions:
+1. If the document explicitly contains a clearly defined Explanation, Example, and Activity, extract and format them nicely into Markdown.
+2. If the document only contains raw informational text (e.g., just an explanation of concepts), use that text to write a comprehensive Explanation, but you must INVENT a highly relevant Example and a short Activity based on the concepts found in the document.
+
+Output ONLY a valid JSON object matching this schema (no markdown blocks around the JSON):
+{
+  "explanation": "Full markdown explanation using the document content. Use ## subheadings, bullet points, \`\`\`code blocks\`\`\`. Minimum 3 paragraphs. This is the main reading content.",
+  "example": "Concrete, role-relevant code or concept example. MUST be nicely formatted using Markdown! If it contains code, ALWAYS wrap it in \`\`\`language code blocks\`\`\` and ensure it spans multiple lines cleanly with proper indentation.",
+  "activity": "Short in-lesson activity the learner does immediately (extracted or invented). Format using Markdown."
+}
+
+Document Text (truncated if too long):
+${fileText.substring(0, 15000)}
+`;
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.5,
+    max_tokens: 2500,
+    response_format: { type: 'json_object' },
+  });
+
+  return JSON.parse(response.choices[0].message.content);
+}
+
 module.exports = {
   generateCurriculum,
   regenerateLesson,
@@ -720,4 +785,6 @@ module.exports = {
   generateUnitAssignment,
   generateCapstone,
   generateExerciseTests,
+  generateContentFromFile,
+  generateExerciseFromFile,
 };

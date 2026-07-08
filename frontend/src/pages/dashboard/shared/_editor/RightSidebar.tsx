@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   BookOpen, Code2, Download, Eye, FileText,
   Loader2, MonitorPlay, Pencil, Save, Sparkles, Upload,
@@ -265,6 +265,85 @@ function ContentTab({
   };
 
   const [isUploading, setIsUploading] = useState(false);
+  const [isGeneratingFromFile, setIsGeneratingFromFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAutoGenerate = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be under 10MB');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      setIsGeneratingFromFile(true);
+      const toastId = toast.loading('Uploading & Generating...');
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('token');
+      const uploadRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/ai-curriculum/upload-resource`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const uploadData = await uploadRes.json();
+      
+      if (uploadData.success && uploadData.url) {        
+        // Instantly generate (without saving the link to the UI)
+        const genRes = await aiCurriculumApi.generateFromResource(uploadData.url, lesson.title);
+        if (genRes.data?.success && genRes.data?.content) {
+          setDraft(d => ({
+            ...d,
+            explanation: genRes.data.content.explanation || d.explanation,
+            example: genRes.data.content.example || d.example,
+            activity: genRes.data.content.activity || d.activity,
+          }));
+          setDirty(true);
+          toast.success('Generated successfully!', { id: toastId });
+        } else {
+          toast.error('Failed to generate from file', { id: toastId });
+        }
+      } else {
+        toast.error('Upload failed', { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error generating from file', { id: toastId });
+    } finally {
+      setIsGeneratingFromFile(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleGenerateFromFile = async (link: string) => {
+    setIsGeneratingFromFile(true);
+    const toastId = toast.loading('Generating content from file...');
+    try {
+      const res = await aiCurriculumApi.generateFromResource(link, lesson.title);
+      if (res.data?.success && res.data?.content) {
+        setDraft(d => ({
+          ...d,
+          explanation: res.data.content.explanation || d.explanation,
+          example: res.data.content.example || d.example,
+          activity: res.data.content.activity || d.activity,
+        }));
+        setDirty(true);
+        toast.success('Generated successfully!', { id: toastId });
+      } else {
+        toast.error('Failed to generate from file', { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error generating from file', { id: toastId });
+    } finally {
+      setIsGeneratingFromFile(false);
+    }
+  };
+
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -288,8 +367,12 @@ function ContentTab({
       });
       const data = await res.json();
       if (data.success && data.url) {
-        set('resource_links', [...draft.resource_links, data.url]);
-        toast.success('File uploaded');
+        const newLinks = [...draft.resource_links, data.url];
+        set('resource_links', newLinks);
+        // Auto-save the lesson so the link persists in the database immediately
+        await onUpdateLesson({ ...draft, resource_links: newLinks });
+        setDirty(false);
+        toast.success('File uploaded and saved');
       } else {
         toast.error('Upload failed');
       }
@@ -308,6 +391,9 @@ function ContentTab({
     // Remove from UI immediately
     const newLinks = draft.resource_links.filter((_, i) => i !== idx);
     set('resource_links', newLinks);
+    // Auto-save the lesson so the link removal persists
+    await onUpdateLesson({ ...draft, resource_links: newLinks });
+    setDirty(false);
 
     if (linkToRemove && linkToRemove.includes('.amazonaws.com/')) {
       try {
@@ -459,9 +545,20 @@ function ContentTab({
                 {isS3 ? (
                   <div className='flex-1 flex items-center gap-2 border border-slate-200 bg-slate-50 rounded-lg px-3 py-2 text-[13px] text-slate-700 font-medium overflow-hidden'>
                     <FileText className='w-4 h-4 text-indigo-500 shrink-0' />
-                    <a href={link} target='_blank' rel='noopener noreferrer' className='truncate hover:underline hover:text-indigo-600 cursor-pointer' title={link}>
+                    <a href={link} target='_blank' rel='noopener noreferrer' className='flex-1 truncate hover:underline hover:text-indigo-600 cursor-pointer' title={link}>
                       {getDisplayFilename(link)}
                     </a>
+                    {canEdit && (
+                      <button
+                        onClick={() => handleGenerateFromFile(link)}
+                        disabled={isGeneratingFromFile || generating}
+                        className='flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold text-white bg-indigo-500 hover:bg-indigo-600 rounded disabled:opacity-50 transition-colors shrink-0'
+                        title='Generate lesson content from this file'
+                      >
+                        <Sparkles className='w-3 h-3' />
+                        Generate
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <input
@@ -517,12 +614,29 @@ function ContentTab({
         <div className='border-t border-slate-100 px-4 py-3 flex items-center gap-2 shrink-0'>
           <button
             onClick={onGenerate}
-            disabled={generating}
+            disabled={generating || isGeneratingFromFile}
             className='flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors'
           >
             {generating ? <Loader2 className='w-3.5 h-3.5 animate-spin' /> : <Sparkles className='w-3.5 h-3.5' />}
             {generating ? 'Generating...' : lesson.explanation ? 'Regenerate' : 'Generate'}
           </button>
+
+          <input
+            type="file"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleAutoGenerate}
+            disabled={isGeneratingFromFile || generating}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isGeneratingFromFile || generating}
+            className='flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 transition-colors'
+          >
+            {isGeneratingFromFile ? <Loader2 className='w-3 h-3 animate-spin' /> : <FileText className='w-3 h-3' />}
+            {isGeneratingFromFile ? 'Working...' : 'Generate from File'}
+          </button>
+
           <div className='flex-1' />
           {dirty && <span className='text-[11px] text-amber-500 font-semibold'>Unsaved</span>}
           <button
@@ -578,6 +692,9 @@ function ExerciseTab({
   const [preview, setPreview] = useState(false);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<Record<number, boolean>>({});
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isGeneratingFromFile, setIsGeneratingFromFile] = useState(false);
 
   useEffect(() => {
     const ex = !lesson.exercise_data ? null
@@ -603,6 +720,50 @@ function ExerciseTab({
   const set = (field: keyof typeof draft, val: string | string[]) => {
     setDraft((d) => ({ ...d, [field]: val }));
     setDirty(true);
+  };
+
+  const handleAutoGenerateExercise = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsGeneratingFromFile(true);
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // Upload silently to S3
+      const uploadRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/ai-curriculum/upload-resource`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+      
+      if (uploadData.success && uploadData.url) {
+        // Instantly generate exercise from the uploaded file
+        const genRes = await aiCurriculumApi.generateExerciseFromResource(uploadData.url, lesson.title);
+        if (genRes.data?.success && genRes.data?.content) {
+          setDraft(d => ({
+            ...d,
+            description: genRes.data.content.description || d.description,
+            tasks: (genRes.data.content.tasks || []).join('\n'),
+            starter_code: genRes.data.content.starter_code || d.starter_code,
+          }));
+          setDirty(true);
+          toast.success('Exercise generated from file');
+        } else {
+          toast.error('Failed to generate exercise');
+        }
+      } else {
+        toast.error('File upload failed');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error processing file');
+    } finally {
+      setIsGeneratingFromFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleSave = async () => {
@@ -1005,11 +1166,27 @@ function ExerciseTab({
         <div className='border-t border-slate-100 px-4 py-3 flex items-center gap-2 shrink-0'>
           <button
             onClick={onGenerate}
-            disabled={generating}
+            disabled={generating || isGeneratingFromFile}
             className='flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors'
           >
             {generating ? <Loader2 className='w-3.5 h-3.5 animate-spin' /> : <Sparkles className='w-3.5 h-3.5' />}
             {generating ? 'Generating...' : exercise ? 'Regenerate' : 'Generate'}
+          </button>
+
+          <input
+            type="file"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleAutoGenerateExercise}
+            disabled={isGeneratingFromFile || generating}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isGeneratingFromFile || generating}
+            className='flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 transition-colors'
+          >
+            {isGeneratingFromFile ? <Loader2 className='w-3 h-3 animate-spin' /> : <FileText className='w-3 h-3' />}
+            {isGeneratingFromFile ? 'Working...' : 'Generate from File'}
           </button>
 
         {exercise && (

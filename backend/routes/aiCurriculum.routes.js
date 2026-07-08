@@ -22,7 +22,8 @@ router.post('/generate-topics', isCurriculumDeveloper, ctrl.generateTopics);
 router.post('/generate-units', isCurriculumDeveloper, ctrl.generateAndSaveUnits);
 router.post('/generate-subtopics', isCurriculumDeveloper, ctrl.generateAndSaveSubtopics);
 router.post('/exercises/generate-tests', isCurriculumDeveloper, ctrl.generateTaskTests);
-
+router.post('/generate-from-resource', isCurriculumDeveloper, ctrl.generateContentFromResource);
+router.post('/generate-exercise-from-resource', isCurriculumDeveloper, ctrl.generateExerciseFromResource);
 // Resources
 router.post('/upload-resource', isCurriculumDeveloper, upload.single('file'), ctrl.uploadResource);
 router.delete('/delete-resource', isCurriculumDeveloper, ctrl.deleteResource);
