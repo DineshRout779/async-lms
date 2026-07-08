@@ -92,7 +92,7 @@ export default function CreateAssignment() {
   const [title, setTitle] = useState(editData.title || '');
   const [description, setDescription] = useState(editData.description || '');
   const [course, setCourse] = useState(editData.course || '');
-  const [college, setCollege] = useState(editData.collegeId || '');
+  const [college] = useState(editData.collegeId || '');
   const [selectedColleges, setSelectedColleges] = useState<string[]>(
     editData.collegeId ? [editData.collegeId] : []
   );
