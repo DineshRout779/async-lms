@@ -182,9 +182,10 @@ server.on('upgrade', (req, socket, head) => {
   // The built-in socket.io listeners will handle the upgrade automatically.
 });
 
-server.listen(3001, () => {
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
   const ct = new Date().toLocaleTimeString();
-  console.log('Backend (Orchestrator) running on http://localhost:3001', ct);
+  console.log(`Backend (Orchestrator) running on port ${PORT}`, ct);
 });
 
 initPools().catch((err) => {
