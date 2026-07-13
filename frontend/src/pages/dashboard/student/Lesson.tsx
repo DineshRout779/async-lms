@@ -279,7 +279,7 @@ const Lesson = () => {
           ? `Exercise submitted! Score: ${score} 🎉`
           : 'Exercise submitted! 🎉',
       );
-      if (!lessonCompleted) {
+      if (result.isPassed && !lessonCompleted) {
         setIsNavigating(true);
       }
     } catch (error) {
@@ -775,7 +775,7 @@ const Lesson = () => {
                 </Button>
               )}
             </div>
-          ) : (
+          ) : data?.lesson?.id ? (
             <Button
               onClick={handleCompleteLesson}
               loading={isCompleting || isNavigating}
@@ -785,7 +785,7 @@ const Lesson = () => {
               <CheckCircle2 className='mr-2 h-6 w-6' />
               Mark as Read & Next
             </Button>
-          )}
+          ) : null}
         </div>
       )}
 

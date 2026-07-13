@@ -878,6 +878,8 @@ const __expect=(a)=>({
   toBeFalsy:()=>{if(a)throw new Error('Expected falsy')},
   toBeNull:()=>{if(a!==null)throw new Error('Expected null')},
   toBeUndefined:()=>{if(a!==undefined)throw new Error('Expected undefined')},
+  toBeGreaterThan:(e)=>{if(a<=e)throw new Error(\`Expected greater than \${e}, got \${a}\`)},
+  toBeLessThan:(e)=>{if(a>=e)throw new Error(\`Expected less than \${e}, got \${a}\`)},
 });
 `;
 const JS_TEST_FOOTER = `\nconsole.log(JSON.stringify({passed:__p,failed:__f,total:__p+__f,results:__r}));\nprocess.exit(__f>0?1:0);\n`;
@@ -924,7 +926,9 @@ async function runTestCases(workspaceDir, language, testCases) {
   let header, footer, testFile;
 
   if (language === 'python') {
-    header   = PY_TEST_HEADER;
+    const studentCode = fs.readFileSync(path.join(workspaceDir, 'main.py'), 'utf-8');
+    const escapedCode = studentCode.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"');
+    header   = `studentCodeString = """${escapedCode}"""\n` + studentCode + `\n` + PY_TEST_HEADER;
     footer   = PY_TEST_FOOTER;
     testFile = path.join(workspaceDir, '__tests__.py');
   } else if (language === 'java') {
@@ -935,7 +939,9 @@ async function runTestCases(workspaceDir, language, testCases) {
     throw new Error('Automated test cases are not supported for SQL exercises.');
   } else {
     // javascript (default)
-    header   = JS_TEST_HEADER;
+    const studentCode = fs.readFileSync(path.join(workspaceDir, 'index.js'), 'utf-8');
+    const escapedCode = studentCode.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    header   = `const studentCodeString = \`${escapedCode}\`;\n` + studentCode + `\n` + JS_TEST_HEADER;
     footer   = JS_TEST_FOOTER;
     testFile = path.join(workspaceDir, '__tests__.js');
   }
