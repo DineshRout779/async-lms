@@ -278,9 +278,10 @@ function ContentTab({
       return;
     }
 
+    let toastId: string | undefined;
     try {
       setIsGeneratingFromFile(true);
-      const toastId = toast.loading('Uploading & Generating...');
+      toastId = toast.loading('Uploading & Generating...');
       
       const formData = new FormData();
       formData.append('file', file);
