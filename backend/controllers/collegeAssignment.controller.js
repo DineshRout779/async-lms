@@ -3,6 +3,7 @@ const pool = require('../config/pg');
 const { notifyCollege } = require('../services/notificationService');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { withS3Prefix } = require('../utils/s3');
 const path = require('path');
 const fs = require('fs');
 const { promisify } = require('util');
@@ -59,7 +60,7 @@ async function storeFile(file, { s3KeyPrefix, localSubPath }) {
 
   if (s3Configured()) {
     try {
-      const key = `${s3KeyPrefix}/${filename}`;
+      const key = withS3Prefix(`${s3KeyPrefix}/${filename}`);
       await s3.send(
         new PutObjectCommand({
           Bucket: process.env.AWS_S3_BUCKET,

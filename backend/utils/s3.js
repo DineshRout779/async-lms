@@ -17,6 +17,15 @@ const s3Configured = () =>
     process.env.AWS_SECRET_ACCESS_KEY
   );
 
+const S3_KEY_PREFIX = (process.env.AWS_S3_KEY_PREFIX || '').replace(
+  /^\/+|\/+$/g,
+  '',
+);
+
+function withS3Prefix(key) {
+  return S3_KEY_PREFIX ? `${S3_KEY_PREFIX}/${key}` : key;
+}
+
 async function presignS3Url(url) {
   if (!url || !url.includes('.amazonaws.com/')) return url;
   try {
@@ -34,4 +43,5 @@ module.exports = {
   s3,
   s3Configured,
   presignS3Url,
+  withS3Prefix,
 };
