@@ -505,9 +505,13 @@ function ExerciseTab({
 }) {
   const exercise = useMemo<AiExercise | null>(() => {
     if (!lesson.exercise_data) return null;
-    return typeof lesson.exercise_data === 'string'
-      ? JSON.parse(lesson.exercise_data as string)
-      : (lesson.exercise_data as AiExercise);
+    try {
+      return typeof lesson.exercise_data === 'string'
+        ? JSON.parse(lesson.exercise_data as string)
+        : (lesson.exercise_data as AiExercise);
+    } catch (err) {
+      return null;
+    }
   }, [lesson.exercise_data]);
 
   const [draft, setDraft] = useState({

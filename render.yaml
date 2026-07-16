@@ -1,0 +1,83 @@
+services:
+  # ---------------------------------------------
+  # 1. Backend Web Service (Node.js)
+  # ---------------------------------------------
+  - type: web
+    name: async-lms-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # These URLs assume the service names defined in this file. 
+      # Render will automatically give them .onrender.com subdomains.
+      - key: FRONTEND_URL
+        value: https://async-lms-frontend.onrender.com
+      - key: GOOGLE_CALLBACK_URL
+        value: https://async-lms-backend.onrender.com/api/v1/auth/google/callback
+      
+      # Automatically connect to the Redis instance defined below
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: async-lms-redis
+          property: connectionString
+
+      # The following variables will be prompted for securely in the Render Dashboard
+      # because sync is set to false (keeps secrets out of your code).
+      - key: PGHOST
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: PGPORT
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: S3_WORKSPACE_BUCKET
+        sync: false
+      - key: GOOGLE_AUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_AUTH_CLIENT_SECRET
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CHATGPT_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+
+  # ---------------------------------------------
+  # 2. Frontend Static Site (Vite/React)
+  # ---------------------------------------------
+  - type: web
+    name: async-lms-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      # Point to the backend service
+      - key: VITE_API_URL
+        value: https://async-lms-backend.onrender.com
+      
+      # Will be prompted for in the Render Dashboard
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
+
+  # ---------------------------------------------
+  # 3. Redis Instance (for bullmq & socket.io)
+  # ---------------------------------------------
+  - type: redis
+    name: async-lms-redis
+    ipAllowList: [] # Allows internal connections from your Render services only
+    plan: free # Uses the free tier for Redis

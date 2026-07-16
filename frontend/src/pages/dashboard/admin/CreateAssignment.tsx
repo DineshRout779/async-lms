@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ArrowLeft, Upload, Plus, Trash2, Loader2, FileText, X } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Trash2, Loader2, FileText, X, ChevronDown } from 'lucide-react';
 import RichTextEditor from '@/components/common/RichTextEditor';
 import MarkdownEditor from '@/components/common/MarkdownEditor';
 import toast from 'react-hot-toast';
@@ -19,6 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
 
 /* ======================
    Editor Toggle
@@ -84,7 +92,10 @@ export default function CreateAssignment() {
   const [title, setTitle] = useState(editData.title || '');
   const [description, setDescription] = useState(editData.description || '');
   const [course, setCourse] = useState(editData.course || '');
-  const [college, setCollege] = useState(editData.collegeId || '');
+  const [college] = useState(editData.collegeId || '');
+  const [selectedColleges, setSelectedColleges] = useState<string[]>(
+    editData.collegeId ? [editData.collegeId] : []
+  );
   const [domain, setDomain] = useState(editData.domain || '');
   const [type, setType] = useState(editData.type || '');
   const [deadline, setDeadline] = useState(editData.deadline || '');
@@ -131,7 +142,7 @@ export default function CreateAssignment() {
 
   useEffect(() => {
     apiClient
-      .get<{ data: College[] }>('/colleges')
+      .get<{ data: College[] }>('/facilitator/colleges')
       .then((res) => setColleges(res.data.data || (res.data as any) || []))
       .catch((error) => toast.error(getErrorMessage(error, 'Failed to load colleges')));
 
@@ -209,7 +220,7 @@ export default function CreateAssignment() {
 
     if (!title.trim()) missing.push('Assignment Title');
     if (!course) missing.push('Course');
-    if (!college) missing.push('College');
+    if (editId ? !college : selectedColleges.length === 0) missing.push('College');
     if (!domain) missing.push('Domain');
     if (!type) missing.push('Type');
     if (!deadline) missing.push('Deadline');
@@ -246,7 +257,7 @@ export default function CreateAssignment() {
         toast.success('Assignment updated successfully!');
       } else {
         const res = await apiClient.post('/college-assignments', {
-          college_id: college,
+          college_ids: selectedColleges,
           title: title.trim(),
           description: description.trim() || null,
           due_date: deadline || null,
@@ -268,8 +279,15 @@ export default function CreateAssignment() {
           title,
           description,
           course,
-          college: colleges.find((c) => c.id === college)?.name || college,
-          collegeId: college,
+          college: editId
+            ? (colleges.find((c) => String(c.id) === college)?.name || college)
+            : (selectedColleges.length === colleges.length
+              ? 'All Colleges'
+              : selectedColleges
+                  .map((id) => colleges.find((c) => String(c.id) === id)?.name)
+                  .filter(Boolean)
+                  .join(', ')),
+          collegeId: editId ? college : selectedColleges[0],
           domain,
           type,
           deadline,
@@ -381,18 +399,76 @@ export default function CreateAssignment() {
 
               <div className='space-y-1.5'>
                 <Label className='text-sm text-slate-600'>College</Label>
-                <Select value={college} onValueChange={setCollege}>
-                  <SelectTrigger className='w-full'>
-                    <SelectValue placeholder='Select College' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {colleges?.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {editId ? (
+                  <Input
+                    value={colleges.find((c) => String(c.id) === college)?.name || college || 'Loading...'}
+                    disabled
+                    className="bg-slate-100/80 border-slate-200 text-slate-500 font-medium"
+                  />
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full flex items-center justify-between px-3 py-2 text-sm font-normal bg-white border border-slate-200 rounded-md shadow-xs hover:bg-slate-50 focus:outline-none text-left text-slate-700"
+                      >
+                        <span className="truncate">
+                          {selectedColleges.length === 0
+                            ? 'Select Colleges'
+                            : selectedColleges.length === colleges.length
+                              ? 'All Colleges'
+                              : selectedColleges.length <= 2
+                                ? selectedColleges
+                                    .map((id) => colleges.find((c) => String(c.id) === id)?.name)
+                                    .filter(Boolean)
+                                    .join(', ')
+                                : `${selectedColleges.length} Colleges Selected`}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-[340px] max-h-[300px] overflow-y-auto bg-white border border-slate-200 rounded-md shadow-lg p-1 z-50">
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault(); // Keep dropdown open
+                          if (selectedColleges.length === colleges.length) {
+                            setSelectedColleges([]);
+                          } else {
+                            setSelectedColleges(colleges.map((c) => String(c.id)));
+                          }
+                        }}
+                        className="flex items-center gap-2.5 px-2.5 py-1.5 text-sm cursor-pointer rounded-sm hover:bg-slate-50 focus:bg-slate-100"
+                      >
+                        <Checkbox
+                          checked={selectedColleges.length === colleges.length && colleges.length > 0}
+                          className="pointer-events-none"
+                        />
+                        <span className="font-medium text-slate-700">All Colleges</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-slate-100 my-1 h-px" />
+                      {colleges?.map((c) => (
+                        <DropdownMenuItem
+                          key={c.id}
+                          onSelect={(e) => {
+                            e.preventDefault(); // Keep dropdown open
+                            setSelectedColleges((prev) =>
+                              prev.includes(String(c.id))
+                                ? prev.filter((item) => item !== String(c.id))
+                                : [...prev, String(c.id)]
+                            );
+                          }}
+                          className="flex items-center gap-2.5 px-2.5 py-1.5 text-sm cursor-pointer rounded-sm hover:bg-slate-50 focus:bg-slate-100"
+                        >
+                          <Checkbox
+                            checked={selectedColleges.includes(String(c.id))}
+                            className="pointer-events-none"
+                          />
+                          <span className="text-slate-700">{c.name}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
 

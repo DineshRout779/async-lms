@@ -82,8 +82,9 @@ function buildLearningPath(modules: AiModule[], durationWeeks: number | null, da
 
 // Often AI returns instructions as a single continuous string without proper line breaks.
 // This helper tries to inject newlines before common list markers so ReactMarkdown can render them.
-function formatAiText(text: string | undefined): string {
+function formatAiText(text: any): string {
   if (!text) return '';
+  if (typeof text !== 'string') text = JSON.stringify(text, null, 2);
   let formatted = text
     // Add newlines before "Step X:" or "1." or "a." or "-"
     .replace(/(?<!\n)(Step \d+:)/gi, '\n\n**$1**')
@@ -216,9 +217,14 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
           )}
 
           {hasExercise && (() => {
-            const parsedData = typeof lesson.exercise_data === 'string'
-              ? JSON.parse(lesson.exercise_data)
-              : lesson.exercise_data;
+            let parsedData;
+            try {
+              parsedData = typeof lesson.exercise_data === 'string'
+                ? JSON.parse(lesson.exercise_data)
+                : lesson.exercise_data;
+            } catch (err) {
+              parsedData = null;
+            }
             const ex = parsedData as AiExercise;
             if (!ex) return null;
             return (
@@ -323,6 +329,7 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
 
 function TopicPreview({ topic }: { topic: AiTopic }) {
   const [open, setOpen] = useState(true);
+  const [showAllQuizzes, setShowAllQuizzes] = useState(false);
 
   return (
     <div className='border border-slate-200 rounded-xl overflow-hidden mb-3'>
@@ -360,7 +367,7 @@ function TopicPreview({ topic }: { topic: AiTopic }) {
                 <ListChecks className='w-3.5 h-3.5 text-orange-400' /> Unit Quiz · {topic.quiz_questions.length} Questions
               </p>
               <div className='space-y-2'>
-                {(topic.quiz_questions as { question: string; options: string[]; correct_index: number }[]).slice(0, 3).map((q, qi) => (
+                {(topic.quiz_questions as { question: string; options: string[]; correct_index: number }[]).slice(0, showAllQuizzes ? topic.quiz_questions.length : 3).map((q, qi) => (
                   <div key={qi} className='border border-slate-200 rounded-lg overflow-hidden'>
                     <div className='bg-slate-50 px-3 py-2 text-[12px] text-slate-700 font-medium'>{q.question}</div>
                     <div className='divide-y divide-slate-100'>
@@ -373,8 +380,15 @@ function TopicPreview({ topic }: { topic: AiTopic }) {
                     </div>
                   </div>
                 ))}
-                {topic.quiz_questions.length > 3 && (
-                  <p className='text-[12px] text-slate-400'>+{topic.quiz_questions.length - 3} more questions</p>
+                {!showAllQuizzes && topic.quiz_questions.length > 3 && (
+                  <button onClick={(e) => { e.stopPropagation(); setShowAllQuizzes(true); }} className='text-[12px] font-medium text-indigo-500 hover:text-indigo-600 transition-colors w-full text-left py-1'>
+                    +{topic.quiz_questions.length - 3} more questions
+                  </button>
+                )}
+                {showAllQuizzes && topic.quiz_questions.length > 3 && (
+                  <button onClick={(e) => { e.stopPropagation(); setShowAllQuizzes(false); }} className='text-[12px] font-medium text-indigo-500 hover:text-indigo-600 transition-colors w-full text-left py-1'>
+                    - Show fewer Quiz
+                  </button>
                 )}
               </div>
             </div>
@@ -537,7 +551,11 @@ export default function AiCurriculumPreview() {
                             <p className='text-sm font-bold text-indigo-800'>{mod.capstone_project.title}</p>
                             <p className='text-[12px] text-indigo-600 mt-1'>{mod.capstone_project.description}</p>
                             {mod.capstone_project.instructions && (
-                              <p className='text-[11px] text-indigo-500 mt-2 border-t border-indigo-100 pt-2'>{mod.capstone_project.instructions}</p>
+                              <p className='text-[11px] text-indigo-500 mt-2 border-t border-indigo-100 pt-2 whitespace-pre-wrap break-words'>
+                                {typeof mod.capstone_project.instructions === 'string' 
+                                  ? mod.capstone_project.instructions 
+                                  : JSON.stringify(mod.capstone_project.instructions, null, 2)}
+                              </p>
                             )}
                           </div>
                         </div>

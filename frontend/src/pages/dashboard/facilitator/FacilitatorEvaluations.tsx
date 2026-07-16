@@ -28,13 +28,7 @@ const FacilitatorEvaluations = () => {
         </div>
 
         <div className='flex items-center gap-3'>
-          <select
-            className='border border-slate-200 px-3 py-2 rounded-md text-sm'
-            value={filters.domain}
-            onChange={(e) => setFilters((prev) => ({ ...prev, domain: e.target.value }))}
-          >
-            <option value=''>All Domains</option>
-          </select>
+
 
           <input
             type='text'
