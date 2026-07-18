@@ -133,8 +133,12 @@ pool.on('error', (err, client) => {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = false`);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = false`,
+    );
 
     // ── AI Curriculum Builder ──────────────────────────────────────────────────
     await client.query(`
@@ -159,10 +163,18 @@ pool.on('error', (err, client) => {
         updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_courses_created_by ON ai_courses(created_by)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_courses_status ON ai_courses(status)`);
-    await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS use_master_video BOOLEAN NOT NULL DEFAULT false`);
-    await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS master_video_url TEXT`);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_ai_courses_created_by ON ai_courses(created_by)`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_ai_courses_status ON ai_courses(status)`,
+    );
+    await client.query(
+      `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS use_master_video BOOLEAN NOT NULL DEFAULT false`,
+    );
+    await client.query(
+      `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS master_video_url TEXT`,
+    );
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_course_modules (
@@ -176,7 +188,9 @@ pool.on('error', (err, client) => {
         created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_modules_course_id ON ai_course_modules(course_id)`);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_ai_modules_course_id ON ai_course_modules(course_id)`,
+    );
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_course_topics (
@@ -188,7 +202,9 @@ pool.on('error', (err, client) => {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_topics_module_id ON ai_course_topics(module_id)`);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_ai_topics_module_id ON ai_course_topics(module_id)`,
+    );
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_course_lessons (
@@ -203,13 +219,27 @@ pool.on('error', (err, client) => {
         created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_lessons_topic_id ON ai_course_lessons(topic_id)`);
-    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS lesson_type TEXT NOT NULL DEFAULT 'video'`);
-    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS duration_mins INTEGER NOT NULL DEFAULT 15`);
-    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS video_url TEXT`);
-    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`);
-    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS exercise_data JSONB`);
-    await client.query(`ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS resource_links JSONB DEFAULT '[]'::jsonb`);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_ai_lessons_topic_id ON ai_course_lessons(topic_id)`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS lesson_type TEXT NOT NULL DEFAULT 'video'`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS duration_mins INTEGER NOT NULL DEFAULT 15`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS video_url TEXT`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS exercise_data JSONB`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_lessons ADD COLUMN IF NOT EXISTS resource_links JSONB DEFAULT '[]'::jsonb`,
+    );
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ai_course_reviews (
@@ -221,16 +251,32 @@ pool.on('error', (err, client) => {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_reviews_course_id ON ai_course_reviews(course_id)`);
-    await client.query(`ALTER TABLE ai_course_modules ADD COLUMN IF NOT EXISTS capstone_project JSONB`);
-    await client.query(`ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS assignment JSONB`);
-    await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS capstone_project JSONB`);
-    await client.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS audience TEXT[] DEFAULT '{}'`);
-    await client.query(`ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_ai_reviews_course_id ON ai_course_reviews(course_id)`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_modules ADD COLUMN IF NOT EXISTS capstone_project JSONB`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS assignment JSONB`,
+    );
+    await client.query(
+      `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS capstone_project JSONB`,
+    );
+    await client.query(
+      `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS audience TEXT[] DEFAULT '{}'`,
+    );
+    await client.query(
+      `ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    );
 
     // Last accessed tracking for "Continue Learning"
-    await client.query(`ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_subtopic_slug TEXT`);
-    await client.query(`ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ`);
+    await client.query(
+      `ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_subtopic_slug TEXT`,
+    );
+    await client.query(
+      `ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ`,
+    );
 
     // ── Video Recommendation Engine ─────────────────────────────────────────────
     await client.query(`
@@ -242,7 +288,7 @@ pool.on('error', (err, client) => {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS video_pipeline_logs (
         id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -259,9 +305,10 @@ pool.on('error', (err, client) => {
 
     // ... rest of the tables
     // Dump lessons for debugging
-    const dumpRes = await client.query("SELECT id, title, video_url, exercise_data, quiz_questions FROM ai_course_lessons");
-    require('fs').writeFileSync('db_dump.json', JSON.stringify(dumpRes.rows, null, 2));
-
+    const dumpRes = await client.query(
+      'SELECT id, title, video_url, exercise_data, quiz_questions FROM ai_course_lessons',
+    );
+    // require('fs').writeFileSync('db_dump.json', JSON.stringify(dumpRes.rows, null, 2));
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);
   } finally {
