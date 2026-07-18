@@ -1,12 +1,5 @@
 {
-    "headers": [
-        {
-            "source": "/(.*)",
-            "headers": [
-                { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" }
-            ]
-        }
-    ],
+    "headers": [],
     "rewrites": [
         {
             "source": "/(.*)",
