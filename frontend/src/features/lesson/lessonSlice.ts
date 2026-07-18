@@ -156,16 +156,20 @@ export const completeLesson = createAsyncThunk<
 });
 
 export const submitExercise = createAsyncThunk<
-  { exerciseId: string; score: number | null },
+  { exerciseId: string; score: number | null; isPassed: boolean },
   { exerciseId: string },
   { rejectValue: string }
 >('lesson/submitExercise', async (payload, { rejectWithValue, dispatch }) => {
   try {
-    const res = await apiClient.post<{ data: { score?: number } }>(
+    const res = await apiClient.post<{ data: { score?: number; is_passed?: boolean } }>(
       `/students/exercise/${payload.exerciseId}/submit`,
     );
     dispatch(loadUser());
-    return { exerciseId: payload.exerciseId, score: res.data.data?.score ?? null };
+    return { 
+      exerciseId: payload.exerciseId, 
+      score: res.data.data?.score ?? null,
+      isPassed: res.data.data?.is_passed ?? false,
+    };
   } catch (error: any) {
     return rejectWithValue(
       error.response?.data?.message || 'Failed to submit exercise',
@@ -321,6 +325,9 @@ const lessonSlice = createSlice({
       })
       .addCase(submitExercise.fulfilled, (state, action) => {
         state.submittingExercise[action.payload.exerciseId] = false;
+        if (action.payload.isPassed) {
+          state.lessonCompleted = true;
+        }
       })
       .addCase(submitExercise.rejected, (state, action) => {
         const exerciseId = action.meta.arg.exerciseId;

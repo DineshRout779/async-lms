@@ -9,7 +9,7 @@ const pool = new Pool({
   port: process.env.PGPORT,
   ssl: { rejectUnauthorized: false },
   family: 4,
-  connectionTimeoutMillis: 10000, // Fail fast if DB is unreachable (10s)
+  connectionTimeoutMillis: 30000, // Increased to 30s so sleeping Neon DBs have time to wake up!
 });
 
 pool.on('error', (err, client) => {

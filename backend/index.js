@@ -1,4 +1,16 @@
 require('dotenv').config();
+
+// Temporary patch to prevent Neon Database serverless WebSocket driver
+// from crashing Node 24 due to a read-only ErrorEvent.message property.
+process.on('uncaughtException', (err) => {
+  if (err && err.message && err.message.includes('Cannot set property message of #<ErrorEvent>')) {
+    console.warn('⚠️ [Neon DB] Ignored harmless WebSocket ErrorEvent bug.');
+    return;
+  }
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
 const express = require('express');
 const http = require('http');
 const net = require('net');
@@ -58,6 +70,7 @@ app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/notifications', require('./routes/notification.routes'));
 app.use('/api/v1/ai-curriculum', require('./routes/aiCurriculum.routes'));
 app.use('/api/v1/admin/videos', require('./routes/videoRecommendation.routes'));
+app.use('/api/v1/workspace', require('./routes/workspace.route'));
 app.use('/content', express.static(path.join(__dirname, 'data', 'content')));
 const verifyToken = require('./middlewares/verfiyToken');
 app.use(

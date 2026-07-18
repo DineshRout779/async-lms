@@ -13,6 +13,12 @@ export const aiCurriculumApi = {
   generate: (data: CourseFormData) =>
     apiClient.post<{ success: boolean; data: GeneratedCurriculum }>('/ai-curriculum/generate', data),
 
+  generateFromResource: (url: string, title?: string) =>
+    apiClient.post<{ success: boolean; content: { explanation: string; example: string; activity: string } }>('/ai-curriculum/generate-from-resource', { url, title }),
+
+  generateExerciseFromResource: (url: string, title?: string) =>
+    apiClient.post<{ success: boolean; content: { description: string; tasks: string[]; starter_code: string } }>('/ai-curriculum/generate-exercise-from-resource', { url, title }),
+
   // Course CRUD
   list: (params?: { status?: string }) =>
     apiClient.get<{ success: boolean; data: AiCourse[] }>('/ai-curriculum', { params }),

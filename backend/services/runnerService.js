@@ -30,8 +30,10 @@ const TEST_CMDS = {
 
 function spawnAsync(cmd, args) {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: 'ignore' });
-    p.on('close', code => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args[0]} exited ${code}`))));
+    let errOut = '';
+    const p = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    if (p.stderr) p.stderr.on('data', d => { errOut += d.toString(); });
+    p.on('close', code => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args[0]} exited ${code}. Error: ${errOut.trim()}`))));
     p.on('error', reject);
   });
 }
@@ -88,8 +90,8 @@ class ContainerPool {
     await spawnAsync('docker', ['rm', '-f', name]).catch(() => {});
     const dockerArgs = [
       'run', '-d', '--name', name,
-      '--memory=128m', '--memory-swap=128m', '--cpus=0.5',
-      '--network=none', '--pids-limit=64'
+      '--memory=256m', '--cpus=0.5',
+      '--network=none'
     ];
 
     if (this.image === 'workspace-python') {
