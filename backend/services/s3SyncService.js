@@ -2,7 +2,7 @@
 // Pulls workspace files from S3 on container start (cold start recovery),
 // and pushes them back on container stop (durable persistence).
 //
-// Enabled only when S3_WORKSPACE_BUCKET is set in the environment.
+// Enabled only when AWS_S3_BUCKET is set in the environment.
 // Degrades gracefully (no-op) when not configured — local dev continues to work.
 
 const {
@@ -14,7 +14,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-const BUCKET = process.env.S3_WORKSPACE_BUCKET;
+const BUCKET = process.env.AWS_S3_BUCKET;
 const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
 const enabled = !!BUCKET;
