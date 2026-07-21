@@ -2,7 +2,7 @@
 //
 // Supports two execution modes via EXECUTION_MODE environment variable:
 // 'docker' (default): Pre-warms a fixed pool of containers. Low latency, requires host Docker daemon.
-// 'api': Uses the Piston execution API. Higher latency, zero infrastructure required (works on Render).
+// 'native': Executes code directly on the host machine using child_process. Less secure, but works on Render.
 'use strict';
 
 const { spawn } = require('child_process');
@@ -66,78 +66,62 @@ function execCapture(container, command, timeoutMs) {
   });
 }
 
-// ── API Execution Mode (Piston API) ───────────────────────────────────────────
+// ── Native Execution Mode (Staging Fallback) ──────────────────────────────────
 
-async function executeWithAPI(workspaceDir, language, isTest = false) {
+async function executeNative(workspaceDir, language, isTest = false) {
   try {
-    const filesInDir = await fs.readdir(workspaceDir);
-    const files = [];
-    
-    for (const file of filesInDir) {
-       const stat = await fs.stat(path.join(workspaceDir, file));
-       if (stat.isFile()) {
-           const content = await fs.readFile(path.join(workspaceDir, file), 'utf-8');
-           files.push({ name: file, content });
-       }
-    }
-    
-    const langMap = {
-      javascript: 'javascript',
-      python: 'python',
-      java: 'java',
-      sql: 'sqlite3'
-    };
-    const pistonLang = langMap[language] || 'javascript';
-
-    // Figure out the main file to run for piston
-    let mainFile = '';
-    if (isTest) {
-      if (language === 'javascript') mainFile = '__tests__.js';
-      if (language === 'python') mainFile = '__tests__.py';
-      if (language === 'java') mainFile = '__Tests__.java';
+    let cmd = [];
+    if (language === 'javascript') {
+      cmd = ['node', isTest ? '__tests__.js' : 'index.js'];
+    } else if (language === 'python') {
+      // Use python3 if available, otherwise just python
+      cmd = ['python3', isTest ? '__tests__.py' : 'main.py'];
+    } else if (language === 'java') {
+      if (isTest) {
+        cmd = ['sh', '-c', `javac Main.java __Tests__.java 2>&1 && java -cp . __Tests__`];
+      } else {
+        cmd = ['sh', '-c', `javac Main.java 2>&1 && java -cp . Main`];
+      }
+    } else if (language === 'sql') {
+      cmd = ['sh', '-c', `sqlite3 -column -header :memory: < solution.sql`];
     } else {
-      if (language === 'javascript') mainFile = 'index.js';
-      if (language === 'python') mainFile = 'main.py';
-      if (language === 'java') mainFile = 'Main.java';
-      if (language === 'sql') mainFile = 'solution.sql';
+      return { output: `Unsupported language for native execution: ${language}`, exitCode: -1 };
     }
 
-    // Move the main file to the front of the array for Piston
-    const mainFileIdx = files.findIndex(f => f.name === mainFile);
-    if (mainFileIdx > 0) {
-      const temp = files[0];
-      files[0] = files[mainFileIdx];
-      files[mainFileIdx] = temp;
-    }
+    return new Promise((resolve) => {
+      const p = spawn(cmd[0], cmd.slice(1), { cwd: workspaceDir });
+      let out = '';
+      let done = false;
 
-    const payload = {
-      language: pistonLang,
-      version: '*',
-      files: files
-    };
+      const finish = (output, exitCode) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve({ output, exitCode });
+      };
 
-    // Note: Node 18+ has built-in global fetch
-    const response = await fetch('https://emkc.org/api/v2/piston/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      const timer = setTimeout(() => {
+        p.kill();
+        finish(out + '\n[Timed out]', -1);
+      }, 15000);
+
+      p.stdout.on('data', d => { out += d; });
+      p.stderr.on('data', d => { out += d; });
+      p.on('close', code => finish(out, code ?? -1));
+      
+      // Fallback for missing commands (like python3 or javac)
+      p.on('error', err => {
+        if (err.code === 'ENOENT') {
+           finish(`Command not found: ${cmd[0]}. Please ensure ${cmd[0]} is installed on this host environment.`, -1);
+        } else {
+           finish(err.message, -1);
+        }
+      });
     });
-
-    const result = await response.json();
-    
-    if (result.message) {
-      return { output: `API Error: ${result.message}`, exitCode: -1 };
-    }
-
-    return {
-      output: result.run.output || '',
-      exitCode: result.run.code
-    };
   } catch (error) {
     return { output: `Execution Engine Error: ${error.message}`, exitCode: -1 };
   }
 }
-
 
 // ── ContainerPool (Docker Mode) ───────────────────────────────────────────────
 
@@ -211,8 +195,8 @@ class ContainerPool {
 const pools = {};
 
 async function initPools() {
-  if (EXECUTION_MODE === 'api') {
-    console.log('[pool] Running in API Mode. Skipping Docker container pool initialization.');
+  if (EXECUTION_MODE === 'api' || EXECUTION_MODE === 'native') {
+    console.log(`[pool] Running in ${EXECUTION_MODE.toUpperCase()} Mode. Skipping Docker container pool initialization.`);
     return;
   }
 
@@ -220,7 +204,7 @@ async function initPools() {
     // Check if docker is available to prevent infinite hang on render if ENV is misconfigured
     await spawnAsync('docker', ['--version']);
   } catch (e) {
-    console.error('[pool] FATAL: Docker is not available on this host. If you are on Render, set EXECUTION_MODE=api in your Environment Variables.');
+    console.error('[pool] FATAL: Docker is not available on this host. If you are on Render, set EXECUTION_MODE=native in your Environment Variables.');
     return;
   }
 
@@ -235,8 +219,8 @@ async function initPools() {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function execute(workspaceDir, language) {
-  if (EXECUTION_MODE === 'api') {
-    return executeWithAPI(workspaceDir, language, false);
+  if (EXECUTION_MODE === 'api' || EXECUTION_MODE === 'native') {
+    return executeNative(workspaceDir, language, false);
   }
 
   const pool = pools[language] ?? pools.javascript;
@@ -246,8 +230,8 @@ function execute(workspaceDir, language) {
 }
 
 function executeTests(workspaceDir, language) {
-  if (EXECUTION_MODE === 'api') {
-    return executeWithAPI(workspaceDir, language, true);
+  if (EXECUTION_MODE === 'api' || EXECUTION_MODE === 'native') {
+    return executeNative(workspaceDir, language, true);
   }
 
   const cmd = TEST_CMDS[language];
