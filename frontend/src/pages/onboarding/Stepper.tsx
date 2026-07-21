@@ -14,14 +14,14 @@ export function Stepper({ current }: { current: Step }) {
 
   return (
     <div className='flex items-center justify-between w-full relative max-w-[320px] mx-auto z-10'>
-      <div className='absolute top-3.5 left-[12%] right-[12%] h-[2px] bg-slate-200 -z-10'></div>
+      <div className='absolute top-2 sm:top-3.5 left-[12%] right-[12%] h-[1px] sm:h-[2px] bg-slate-200 -z-10'></div>
       {steps.map((step, i) => {
         const isActive = i === currentIndex;
         
         return (
-          <div key={step.id} className='flex flex-col items-center gap-2 bg-white px-2 py-1'>
+          <div key={step.id} className='flex flex-col items-center gap-1 sm:gap-2 bg-white px-1 sm:px-2 py-0.5 sm:py-1'>
             <div
-              className={`h-7 w-7 rounded-full text-[13px] font-bold flex items-center justify-center transition-colors
+              className={`h-4 w-4 sm:h-7 sm:w-7 rounded-full text-[8px] sm:text-[13px] font-bold flex items-center justify-center transition-colors
                 ${
                   isActive
                     ? 'bg-[#344499] text-white shadow-md'
@@ -30,7 +30,7 @@ export function Stepper({ current }: { current: Step }) {
             >
               {i + 1}
             </div>
-            <span className={`text-[10px] font-bold tracking-wide ${isActive ? 'text-[#344499]' : 'text-slate-400'}`}>
+            <span className={`text-[7px] sm:text-[10px] font-bold tracking-wide ${isActive ? 'text-[#344499]' : 'text-slate-400'}`}>
               {step.label}
             </span>
           </div>

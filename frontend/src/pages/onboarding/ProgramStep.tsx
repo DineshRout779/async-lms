@@ -50,23 +50,23 @@ export default function ProgramStep() {
     <div 
       className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
     >
-      <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
+      <div className='w-full max-w-[480px] bg-white p-5 sm:px-12 sm:py-10 rounded-xl sm:rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[350px] sm:min-h-[500px]'>
         
         <div className="flex-1">
           <Stepper current='program' />
 
-          <div className="mb-8 mt-6">
-            <h2 className='text-2xl font-bold text-[#344499]'>Select your program</h2>
-            <p className="text-[13px] text-slate-400 font-medium mt-1.5 leading-relaxed tracking-wide">Choose your learning track</p>
+          <div className="mb-5 sm:mb-8 mt-4 sm:mt-6">
+            <h2 className='text-base sm:text-2xl font-bold text-[#344499]'>Select your program</h2>
+            <p className="text-[8px] sm:text-[13px] text-slate-400 font-medium mt-0.5 sm:mt-1.5 leading-relaxed tracking-wide">Choose your learning track</p>
           </div>
 
-          <div className='space-y-5 w-full'>
+          <div className='space-y-3 sm:space-y-5 w-full'>
             <div className='w-full'>
-              <label className="text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block">
+              <label className="text-[9px] sm:text-[13px] font-semibold text-[#344499] tracking-wide mb-1 sm:mb-1.5 block">
                 Program / Course
               </label>
               <Select value={selected} onValueChange={setSelected} disabled={isLoading}>
-                <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
+                <SelectTrigger className='w-full h-8 sm:h-11 text-[9px] sm:text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                   <SelectValue placeholder={isLoading ? 'Loading programs...' : 'Select your program'} />
                 </SelectTrigger>
                 <SelectContent className='w-full'>
@@ -85,24 +85,24 @@ export default function ProgramStep() {
               </Select>
             </div>
 
-            <div className="bg-[#fffbeb] border-l-[3px] border-[#f59e0b] p-3.5 rounded-r-md mt-8 shadow-sm">
-              <p className="text-[11px] font-medium text-slate-800 tracking-wide">You can change this after onboarding</p>
+            <div className="bg-[#fffbeb] border-l-[3px] border-[#f59e0b] p-2 sm:p-3.5 rounded-r-md mt-4 sm:mt-8 shadow-sm">
+              <p className="text-[8px] sm:text-[11px] font-medium text-slate-800 tracking-wide">You can change this after onboarding.</p>
             </div>
           </div>
         </div>
 
-        <div className="flex justify-between items-center mt-10 pt-4">
+        <div className="flex justify-between items-center mt-6 sm:mt-10 pt-2 sm:pt-4">
           <Button 
             variant="ghost" 
             onClick={() => navigate(-1)}
             type="button"
-            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg transition-colors"
+            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-6 sm:px-9 h-8 sm:h-11 text-[10px] sm:text-[14px] font-semibold tracking-wide rounded-md sm:rounded-lg transition-colors"
           >
             Back
           </Button>
           <Button
             type="button"
-            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg shadow-md transition-colors"
+            className="bg-[#344499] hover:bg-[#2c3983] text-white px-6 sm:px-9 h-8 sm:h-11 text-[10px] sm:text-[14px] font-semibold tracking-wide rounded-md sm:rounded-lg shadow-md transition-colors"
             disabled={submitting || !selected}
             onClick={handleContinue}
           >

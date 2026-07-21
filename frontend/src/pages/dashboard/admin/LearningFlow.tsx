@@ -1148,8 +1148,7 @@ const LearningFlow: React.FC = () => {
                                       </div>
 
                                       {/* Assignments & Quizzes pills */}
-                                      {expandedUnits.includes(unit.id) &&
-                                        ((unit.assignments &&
+                                      {((unit.assignments &&
                                           unit.assignments.length > 0) ||
                                           (unit.quizzes &&
                                             unit.quizzes.length > 0)) && (
