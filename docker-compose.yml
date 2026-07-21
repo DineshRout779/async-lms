@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - EXECUTION_MODE=docker
+      - RUNNER_POOL_SIZE=20
+      - RUNNER_POOL_SIZE_JAVA=5
+      - RUNNER_POOL_SIZE_SQL=5
+      # Use the internal redis instance
+      - REDIS_URL=redis://redis:6379
+    # Map the host's docker socket so the container can spawn sibling containers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Load additional environment variables (like Neon DB string) from .env
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:

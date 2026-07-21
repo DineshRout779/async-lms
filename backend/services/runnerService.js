@@ -1,12 +1,15 @@
-// runnerService.js — Container pool for exercise code execution
+// runnerService.js — Container pool for exercise code execution (Hybrid Mode)
 //
-// Instead of spawning a new `docker run --rm` container per execution (3-8s cold
-// start, unbounded concurrency), this module pre-warms a fixed pool of containers
-// per language.  Each run:  acquire → docker cp files in → docker exec → cleanup → release.
-// Cold start cost is paid once at server startup, not per student click.
+// Supports two execution modes via EXECUTION_MODE environment variable:
+// 'docker' (default): Pre-warms a fixed pool of containers. Low latency, requires host Docker daemon.
+// 'api': Uses the Piston execution API. Higher latency, zero infrastructure required (works on Render).
 'use strict';
 
 const { spawn } = require('child_process');
+const fs = require('fs/promises');
+const path = require('path');
+
+const EXECUTION_MODE = process.env.EXECUTION_MODE || 'docker';
 
 const POOL_SIZE     = parseInt(process.env.RUNNER_POOL_SIZE      || '20', 10);
 const POOL_SIZE_JVM = parseInt(process.env.RUNNER_POOL_SIZE_JAVA || '5',  10);
@@ -38,8 +41,6 @@ function spawnAsync(cmd, args) {
   });
 }
 
-// Run a command inside a container and capture all output.
-// Always resolves — never rejects — so the pool finally block always runs.
 function execCapture(container, command, timeoutMs) {
   return new Promise((resolve) => {
     const p = spawn('docker', ['exec', container, ...command]);
@@ -65,7 +66,80 @@ function execCapture(container, command, timeoutMs) {
   });
 }
 
-// ── ContainerPool ─────────────────────────────────────────────────────────────
+// ── API Execution Mode (Piston API) ───────────────────────────────────────────
+
+async function executeWithAPI(workspaceDir, language, isTest = false) {
+  try {
+    const filesInDir = await fs.readdir(workspaceDir);
+    const files = [];
+    
+    for (const file of filesInDir) {
+       const stat = await fs.stat(path.join(workspaceDir, file));
+       if (stat.isFile()) {
+           const content = await fs.readFile(path.join(workspaceDir, file), 'utf-8');
+           files.push({ name: file, content });
+       }
+    }
+    
+    const langMap = {
+      javascript: 'javascript',
+      python: 'python',
+      java: 'java',
+      sql: 'sqlite3'
+    };
+    const pistonLang = langMap[language] || 'javascript';
+
+    // Figure out the main file to run for piston
+    let mainFile = '';
+    if (isTest) {
+      if (language === 'javascript') mainFile = '__tests__.js';
+      if (language === 'python') mainFile = '__tests__.py';
+      if (language === 'java') mainFile = '__Tests__.java';
+    } else {
+      if (language === 'javascript') mainFile = 'index.js';
+      if (language === 'python') mainFile = 'main.py';
+      if (language === 'java') mainFile = 'Main.java';
+      if (language === 'sql') mainFile = 'solution.sql';
+    }
+
+    // Move the main file to the front of the array for Piston
+    const mainFileIdx = files.findIndex(f => f.name === mainFile);
+    if (mainFileIdx > 0) {
+      const temp = files[0];
+      files[0] = files[mainFileIdx];
+      files[mainFileIdx] = temp;
+    }
+
+    const payload = {
+      language: pistonLang,
+      version: '*',
+      files: files
+    };
+
+    // Note: Node 18+ has built-in global fetch
+    const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    
+    if (result.message) {
+      return { output: `API Error: ${result.message}`, exitCode: -1 };
+    }
+
+    return {
+      output: result.run.output || '',
+      exitCode: result.run.code
+    };
+  } catch (error) {
+    return { output: `Execution Engine Error: ${error.message}`, exitCode: -1 };
+  }
+}
+
+
+// ── ContainerPool (Docker Mode) ───────────────────────────────────────────────
 
 class ContainerPool {
   constructor(image, size) {
@@ -75,7 +149,6 @@ class ContainerPool {
     this.queue     = [];
   }
 
-  // Pre-warm all containers in parallel at startup.
   async init() {
     await Promise.all(
       Array.from({ length: this.size }, (_, i) =>
@@ -86,7 +159,6 @@ class ContainerPool {
   }
 
   async _startContainer(name) {
-    // Remove stale container from a previous run, if any.
     await spawnAsync('docker', ['rm', '-f', name]).catch(() => {});
     const dockerArgs = [
       'run', '-d', '--name', name,
@@ -109,7 +181,6 @@ class ContainerPool {
 
   _acquire() {
     if (this.available.length > 0) return Promise.resolve(this.available.pop());
-    // No free container — queue the caller until one is released.
     return new Promise(resolve => this.queue.push(resolve));
   }
 
@@ -118,20 +189,15 @@ class ContainerPool {
     if (next) next(name); else this.available.push(name);
   }
 
-  // Copy workspaceDir files into the container, exec the command, then reset.
-  // The container is returned to the pool only after the workspace is cleaned,
-  // so the next caller always gets a fresh environment.
   async run(workspaceDir, command, timeoutMs) {
     const container = await this._acquire();
     let result;
     try {
-      // Copy user files into container's /workspace
       await spawnAsync('docker', ['cp', `${workspaceDir}/.`, `${container}:/workspace/`]);
       result = await execCapture(container, command, timeoutMs);
     } catch (err) {
       result = { output: err.message, exitCode: -1 };
     } finally {
-      // Reset workspace in background; release container only after cleanup.
       spawnAsync('docker', ['exec', container, 'sh', '-c', 'rm -rf /workspace && mkdir /workspace'])
         .catch(() => {})
         .finally(() => this._release(container));
@@ -140,11 +206,24 @@ class ContainerPool {
   }
 }
 
-// ── Pool registry — one pool per language, created at server startup ──────────
+// ── Pool registry ─────────────────────────────────────────────────────────────
 
 const pools = {};
 
 async function initPools() {
+  if (EXECUTION_MODE === 'api') {
+    console.log('[pool] Running in API Mode. Skipping Docker container pool initialization.');
+    return;
+  }
+
+  try {
+    // Check if docker is available to prevent infinite hang on render if ENV is misconfigured
+    await spawnAsync('docker', ['--version']);
+  } catch (e) {
+    console.error('[pool] FATAL: Docker is not available on this host. If you are on Render, set EXECUTION_MODE=api in your Environment Variables.');
+    return;
+  }
+
   await Promise.all(
     Object.entries(LANGUAGE_PROFILES).map(([lang, { image, poolSize }]) => {
       pools[lang] = new ContainerPool(image, poolSize);
@@ -156,6 +235,10 @@ async function initPools() {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function execute(workspaceDir, language) {
+  if (EXECUTION_MODE === 'api') {
+    return executeWithAPI(workspaceDir, language, false);
+  }
+
   const pool = pools[language] ?? pools.javascript;
   if (!pool) return Promise.resolve({ output: 'Code execution is unavailable (runner not initialised).', exitCode: -1 });
   const profile = LANGUAGE_PROFILES[language] ?? LANGUAGE_PROFILES.javascript;
@@ -163,6 +246,10 @@ function execute(workspaceDir, language) {
 }
 
 function executeTests(workspaceDir, language) {
+  if (EXECUTION_MODE === 'api') {
+    return executeWithAPI(workspaceDir, language, true);
+  }
+
   const cmd = TEST_CMDS[language];
   if (!cmd) return null;
   const pool = pools[language] ?? pools.javascript;
