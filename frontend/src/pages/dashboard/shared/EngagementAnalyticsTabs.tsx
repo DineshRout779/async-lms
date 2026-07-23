@@ -196,7 +196,7 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject]);
+  }, [college, batch, subject, topic, quiz]);
 
   const handlePageChange = (p: number) => {
     setQPage(p);
@@ -511,7 +511,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject]);
+  }, [college, batch, subject, topic]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -608,7 +608,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject]);
+  }, [college, batch, subject, topic]);
 
   const handlePageChange = (p: number) => { setPage(p); load(p); };
 

@@ -539,16 +539,18 @@ exports.getQuizAnalytics = async (req, res) => {
       ),
       pool.query(
         `SELECT qq.id AS question_id, qq.question_text,
-                ROUND(
-                  100.0 * COUNT(*) FILTER (WHERE qqa.is_correct = true)
-                  / NULLIF(COUNT(*), 0)
+                COALESCE(
+                  ROUND(
+                    100.0 * COUNT(qqa.id) FILTER (WHERE qqa.is_correct = true)
+                    / NULLIF(COUNT(qa.id), 0)
+                  ), 0
                 )::int AS correct_pct
          FROM quiz_questions qq
          JOIN quizzes q ON q.id = qq.quiz_id
          JOIN units un ON un.id = q.unit_id
          JOIN topics t ON t.id = un.topic_id
-         JOIN quiz_question_answers qqa ON qqa.question_id = qq.id
-         JOIN quiz_attempts qa ON qa.id = qqa.quiz_attempt_id AND qa.user_id = ANY($1::uuid[])
+         LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id AND qa.user_id = ANY($1::uuid[])
+         LEFT JOIN quiz_question_answers qqa ON qqa.quiz_attempt_id = qa.id AND qqa.question_id = qq.id
          WHERE TRUE ${subjectClause}
          GROUP BY qq.id, qq.question_text, qq.order_index
          ORDER BY qq.order_index
@@ -561,9 +563,7 @@ exports.getQuizAnalytics = async (req, res) => {
          JOIN quizzes q ON q.id = qq.quiz_id
          JOIN units un ON un.id = q.unit_id
          JOIN topics t ON t.id = un.topic_id
-         JOIN quiz_question_answers qqa ON qqa.question_id = qq.id
-         JOIN quiz_attempts qa ON qa.id = qqa.quiz_attempt_id AND qa.user_id = ANY($1::uuid[])
-         WHERE TRUE ${subjectClause}`,
+         WHERE $1::uuid[] IS NOT NULL ${subjectClause}`,
         attParams,
       ),
     ]);
