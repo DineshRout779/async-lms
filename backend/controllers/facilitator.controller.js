@@ -529,7 +529,8 @@ exports.getQuizAnalytics = async (req, res) => {
     const qParamsWithPaging = [...attParams, qLimit, qOffset];
     const [attRes, questionRes, questionCountRes] = await Promise.all([
       pool.query(
-        `SELECT qa.user_id, qa.score::float, qa.is_passed, NULLIF(q.max_score, 0)::float AS max_score
+        `SELECT qa.user_id, qa.score::float, qa.is_passed,
+                NULLIF((SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id), 0)::float AS max_score
          FROM quiz_attempts qa
          JOIN quizzes q ON q.id = qa.quiz_id
          JOIN units un ON un.id = q.unit_id
@@ -571,9 +572,19 @@ exports.getQuizAnalytics = async (req, res) => {
     const rows = attRes.rows;
     const attemptedSet = new Set(rows.map((r) => r.user_id));
     const passedSet = new Set(rows.filter((r) => r.is_passed).map((r) => r.user_id));
-    const pctScores = rows
-      .filter((r) => r.max_score)
-      .map((r) => (r.score / r.max_score) * 100);
+    
+    // Calculate one average score per student
+    const studentScores = new Map();
+    rows.forEach(r => {
+      if (r.max_score) {
+        if (!studentScores.has(r.user_id)) studentScores.set(r.user_id, []);
+        studentScores.get(r.user_id).push((r.score / r.max_score) * 100);
+      }
+    });
+
+    const pctScores = Array.from(studentScores.values()).map(
+      scores => scores.reduce((a, b) => a + b, 0) / scores.length
+    );
 
     const avgScore = pctScores.length
       ? Math.round(pctScores.reduce((a, b) => a + b, 0) / pctScores.length)
@@ -897,8 +908,10 @@ exports.getStudentAnalytics = async (req, res) => {
       subjQuizClause = `AND t.subject_id = $${quizParams.length}::uuid`;
     }
     const quizRes = await pool.query(
-      `SELECT qa.user_id,
-              ROUND(AVG(CASE WHEN q.max_score > 0 THEN qa.score::float / q.max_score * 100 ELSE 0 END))::int AS avg_pct,
+        `SELECT qa.user_id,
+                ROUND(AVG(CASE WHEN (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id) > 0
+                          THEN qa.score::float / (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id) * 100
+                          ELSE 0 END))::int AS avg_pct,
               COUNT(*) AS total_attempts,
               SUM(CASE WHEN qa.is_passed THEN 1 ELSE 0 END) AS passed_count
        FROM quiz_attempts qa

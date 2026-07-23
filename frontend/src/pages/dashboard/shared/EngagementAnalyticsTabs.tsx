@@ -96,6 +96,60 @@ export function RateBar({ value, color = 'bg-indigo-500' }: { value: number; col
   );
 }
 
+function getPageNumbers(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, 5, '...', totalPages];
+  }
+  if (currentPage >= totalPages - 2) {
+    return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+}
+
+export function PaginationControls({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (p: number) => void }) {
+  const pages = getPageNumbers(page, totalPages);
+  
+  return (
+    <div className="flex gap-1 items-center">
+      <button
+        onClick={() => onPageChange(page - 1)}
+        disabled={page === 1}
+        className="px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-slate-600"
+      >
+        Prev
+      </button>
+      
+      {pages.map((p, i) => (
+        <button
+          key={i}
+          onClick={() => typeof p === 'number' && onPageChange(p)}
+          disabled={p === '...'}
+          className={`w-7 h-7 flex items-center justify-center rounded-md border text-xs transition-colors ${
+            p === page 
+              ? 'bg-indigo-600 text-white border-indigo-600 font-medium' 
+              : p === '...' 
+                ? 'border-transparent text-slate-400 cursor-default' 
+                : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          {p}
+        </button>
+      ))}
+
+      <button
+        onClick={() => onPageChange(page + 1)}
+        disabled={page === totalPages}
+        className="px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-slate-600"
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
 export function Select({
   label, value, onChange, options, placeholder,
 }: {
@@ -262,22 +316,7 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
                       <span>{data.question_analytics_total} questions · page {qPage} of {totalPages}</span>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handlePageChange(qPage - 1)}
-                          disabled={qPage === 1}
-                          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Prev
-                        </button>
-                        <button
-                          onClick={() => handlePageChange(qPage + 1)}
-                          disabled={qPage === totalPages}
-                          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Next
-                        </button>
-                      </div>
+                      <PaginationControls page={qPage} totalPages={totalPages} onPageChange={handlePageChange} />
                     </div>
                   )}
                 </>
@@ -675,22 +714,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
                 <span>{total} students · page {page} of {totalPages}</span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page === 1}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={page === totalPages}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
+                <PaginationControls page={page} totalPages={totalPages} onPageChange={handlePageChange} />
               </div>
             )}
           </div>
