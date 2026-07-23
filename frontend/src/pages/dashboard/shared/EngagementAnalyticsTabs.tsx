@@ -331,20 +331,43 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
 
 // ─── Tab: Assignment Tracker ──────────────────────────────────────────────────
 
-export function AssignmentsTab({ colleges, batches }: { colleges: College[]; batches: Batch[] }) {
+export function AssignmentsTab({ colleges, batches, subjects }: { colleges: College[]; batches: Batch[]; subjects: Subject[] }) {
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
-  const [assignment, setAssignment] = useState('');
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [assignmentCompound, setAssignmentCompound] = useState(''); // e.g. 'college|123'
+  
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
+  const [collegeAssignments, setCollegeAssignments] = useState<Assignment[]>([]);
+  const [courseAssignments, setCourseAssignments] = useState<{ id: string; name: string }[]>([]);
+  
   const [data, setData] = useState<AssignmentData | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Fetch topics when subject changes
   useEffect(() => {
-    if (!college) { setAssignments([]); return; }
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
+
+  // Fetch college assignments when college changes
+  useEffect(() => {
+    if (!college) { setCollegeAssignments([]); return; }
     apiClient.get(`/college-assignments/facilitator?college_id=${college}`)
-      .then((r) => setAssignments(r.data?.data ?? []))
-      .catch(() => setAssignments([]));
+      .then((r) => setCollegeAssignments(r.data?.data ?? []))
+      .catch(() => setCollegeAssignments([]));
   }, [college]);
+
+  // Fetch course assignments when topic changes
+  useEffect(() => {
+    if (!topic) { setCourseAssignments([]); return; }
+    apiClient.get(`/facilitator/analytics/course-assignments?topic_id=${topic}`)
+      .then((r) => setCourseAssignments(r.data?.data ?? []))
+      .catch(() => setCourseAssignments([]));
+  }, [topic]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -352,7 +375,15 @@ export function AssignmentsTab({ colleges, batches }: { colleges: College[]; bat
       const params = new URLSearchParams();
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
-      if (assignment) params.set('assignment_id', assignment);
+      if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
+      
+      if (assignmentCompound) {
+        const [type, id] = assignmentCompound.split('|');
+        params.set('assignment_type', type);
+        params.set('assignment_id', id);
+      }
+      
       const res = await apiClient.get(`/facilitator/analytics/assignments?${params}`);
       setData(res.data.data);
     } catch {
@@ -360,16 +391,23 @@ export function AssignmentsTab({ colleges, batches }: { colleges: College[]; bat
     } finally {
       setLoading(false);
     }
-  }, [college, batch, assignment]);
+  }, [college, batch, subject, topic, assignmentCompound]);
 
   useEffect(() => { load(); }, [load]);
+
+  const mergedAssignments = [
+    ...collegeAssignments.map(a => ({ id: `college|${a.id}`, name: `[College] ${a.title}` })),
+    ...courseAssignments.map(a => ({ id: `course|${a.id}`, name: `[Course] ${a.name}` }))
+  ];
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
-        <Select label="Assignment" value={assignment} onChange={setAssignment} options={assignments.map((a) => ({ id: a.id, name: a.title }))} placeholder="Select Assignment" />
+        <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
+        <Select label="Assignment" value={assignmentCompound} onChange={setAssignmentCompound} options={mergedAssignments} placeholder="Select Assignment" />
       </div>
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
@@ -378,7 +416,7 @@ export function AssignmentsTab({ colleges, batches }: { colleges: College[]; bat
             <StatCard label="Total Students" value={data.total} />
             <StatCard label="Submitted" value={data.submitted} />
             <StatCard label="Not Submitted" value={data.not_submitted} />
-            <StatCard label="Submission Rate" value={assignment ? `${data.rate}%` : '—'} />
+            <StatCard label="Submission Rate" value={assignmentCompound ? `${data.rate}%` : '—'} />
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -391,7 +429,7 @@ export function AssignmentsTab({ colleges, batches }: { colleges: College[]; bat
                   <tr>
                     <th className="text-left px-5 py-3">Student</th>
                     <th className="text-left px-5 py-3">Email</th>
-                    {assignment && <th className="text-left px-5 py-3">Status</th>}
+                    {assignmentCompound && <th className="text-left px-5 py-3">Status</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -399,7 +437,7 @@ export function AssignmentsTab({ colleges, batches }: { colleges: College[]; bat
                     <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
                       <td className="px-5 py-3 text-slate-500">{s.email}</td>
-                      {assignment && <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>}
+                      {assignmentCompound && <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>}
                     </tr>
                   ))}
                 </tbody>

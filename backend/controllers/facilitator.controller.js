@@ -242,6 +242,15 @@ exports.getBatches = async (req, res) => {
        ORDER BY sp.expected_graduation_year DESC`,
       [collegeIds],
     );
+
+    const unknownRes = await pool.query(
+      `SELECT 1 FROM student_profiles sp WHERE sp.college_id = ANY($1::uuid[]) AND sp.expected_graduation_year IS NULL LIMIT 1`,
+      [collegeIds]
+    );
+    if (unknownRes.rowCount > 0) {
+      rows.push({ id: 'unknown', name: 'Unknown Batch' });
+    }
+
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('getBatches error:', err);
@@ -415,8 +424,12 @@ async function getEnrolledStudentIds(collegeIds, batch, subjectId) {
   let subjectClause = '';
 
   if (batch) {
-    params.push(batch);
-    batchClause = `AND sp.year = $${params.length}`;
+    if (batch === 'unknown') {
+      batchClause = `AND sp.expected_graduation_year IS NULL`;
+    } else {
+      params.push(batch);
+      batchClause = `AND sp.expected_graduation_year = $${params.length}`;
+    }
   }
   if (subjectId) {
     subjectJoin = 'JOIN user_subjects us ON us.user_id = sp.user_id';
@@ -447,7 +460,14 @@ exports.getAnalyticsSubjects = async (req, res) => {
 
     const params = [colleges];
     let batchClause = '';
-    if (batch) { params.push(batch); batchClause = `AND sp.year = $${params.length}`; }
+    if (batch) { 
+      if (batch === 'unknown') {
+        batchClause = `AND sp.expected_graduation_year IS NULL`;
+      } else {
+        params.push(batch); 
+        batchClause = `AND sp.expected_graduation_year = $${params.length}`; 
+      }
+    }
 
     const { rows } = await pool.query(
       `SELECT DISTINCT s.id, s.name
@@ -495,6 +515,25 @@ exports.getAnalyticsQuizzes = async (req, res) => {
     res.json({ success: true, data: rows });
   } catch (err) {
     serverError(res, err, 'getAnalyticsQuizzes');
+  }
+};
+
+exports.getCourseAssignments = async (req, res) => {
+  try {
+    const { topic_id } = req.query;
+    if (!topic_id) return res.json({ success: true, data: [] });
+
+    const { rows } = await pool.query(
+      `SELECT a.id, a.title as name
+       FROM assignments a
+       JOIN units un ON a.unit_id = un.id
+       WHERE un.topic_id = $1::uuid
+       ORDER BY un.order_index, a.title`,
+      [topic_id]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    serverError(res, err, 'getCourseAssignments');
   }
 };
 
@@ -633,19 +672,35 @@ function emptyQuizData() {
 exports.getAssignmentAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, assignment_id } = req.query;
+    const { college_id, batch, subject_id, assignment_id, assignment_type } = req.query;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: { total: 0, submitted: 0, not_submitted: 0, rate: 0, students: [] } });
 
     const params = [colleges];
     let batchClause = '';
-    if (batch) { params.push(batch); batchClause = `AND sp.year = $${params.length}`; }
+    if (batch) { 
+      if (batch === 'unknown') {
+        batchClause = `AND sp.expected_graduation_year IS NULL`;
+      } else {
+        params.push(batch); 
+        batchClause = `AND sp.expected_graduation_year = $${params.length}`; 
+      }
+    }
+
+    let subjectJoin = '';
+    let subjectClause = '';
+    if (subject_id) {
+      subjectJoin = 'JOIN user_subjects us ON us.user_id = sp.user_id';
+      params.push(subject_id);
+      subjectClause = `AND us.subject_id = $${params.length}::uuid`;
+    }
 
     const studentsRes = await pool.query(
       `SELECT u.id, u.full_name, u.email
        FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE sp.college_id = ANY($1::uuid[]) AND u.role = 'student' ${batchClause}
+       ${subjectJoin}
+       WHERE sp.college_id = ANY($1::uuid[]) AND u.role = 'student' ${batchClause} ${subjectClause}
        ORDER BY u.full_name`,
       params,
     );
@@ -653,11 +708,19 @@ exports.getAssignmentAnalytics = async (req, res) => {
 
     let submittedIds = new Set();
     if (assignment_id) {
-      const subRes = await pool.query(
-        `SELECT student_id FROM college_assignment_submissions WHERE assignment_id = $1`,
-        [assignment_id],
-      );
-      submittedIds = new Set(subRes.rows.map((r) => r.student_id));
+      if (assignment_type === 'course') {
+        const subRes = await pool.query(
+          `SELECT user_id as student_id FROM assignment_submissions WHERE assignment_id = $1`,
+          [assignment_id]
+        );
+        submittedIds = new Set(subRes.rows.map((r) => r.student_id));
+      } else {
+        const subRes = await pool.query(
+          `SELECT student_id FROM college_assignment_submissions WHERE assignment_id = $1`,
+          [assignment_id],
+        );
+        submittedIds = new Set(subRes.rows.map((r) => r.student_id));
+      }
     }
 
     const studentList = students.map((s) => ({
