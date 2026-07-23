@@ -156,9 +156,27 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [quiz, setQuiz] = useState('');
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
+  const [quizzes, setQuizzes] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<QuizData | null>(null);
   const [loading, setLoading] = useState(false);
   const [qPage, setQPage] = useState(1);
+
+  useEffect(() => {
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
+
+  useEffect(() => {
+    if (!topic) { setQuizzes([]); setQuiz(''); return; }
+    apiClient.get(`/facilitator/analytics/quizzes?topic_id=${topic}`)
+      .then(r => setQuizzes(r.data?.data ?? []))
+      .catch(() => setQuizzes([]));
+  }, [topic]);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -167,6 +185,8 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
+      if (quiz) params.set('quiz_id', quiz);
       params.set('page', String(p));
       params.set('limit', String(QUIZ_PAGE_SIZE));
       const res = await apiClient.get(`/facilitator/analytics/quiz?${params}`);
@@ -191,6 +211,8 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
+        <Select label="Quiz" value={quiz} onChange={setQuiz} options={quizzes} placeholder="All Quizzes" />
       </div>
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
@@ -462,8 +484,17 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<BatchDashData | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -472,6 +503,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
       const res = await apiClient.get(`/facilitator/analytics/batch?${params}`);
       setData(res.data.data);
     } catch {
@@ -489,6 +521,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
       </div>
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
@@ -542,10 +575,19 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<StudentRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -554,6 +596,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
       params.set('page', String(p));
       params.set('limit', String(STUDENTS_PAGE_SIZE));
       const res = await apiClient.get(`/facilitator/analytics/students?${params}`);
@@ -585,6 +628,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
       </div>
 
       {loading ? <LoadingState /> : total === 0 ? <EmptyState message="No students found" /> : (

@@ -17,6 +17,8 @@ router.patch('/students/:id', editStudent);
 
 // Analytics
 router.get('/analytics/subjects', facilitatorController.getAnalyticsSubjects);
+router.get('/analytics/topics', facilitatorController.getAnalyticsTopics);
+router.get('/analytics/quizzes', facilitatorController.getAnalyticsQuizzes);
 router.get('/analytics/quiz', facilitatorController.getQuizAnalytics);
 router.get('/analytics/assignments', facilitatorController.getAssignmentAnalytics);
 router.get('/analytics/projects', facilitatorController.getProjectAnalytics);

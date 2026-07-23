@@ -1,11 +1,9 @@
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-const ws = require('ws');
-neonConfig.webSocketConstructor = ws;
+const { Pool } = require('pg');
 const pool = new Pool({
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE,
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
+  host: (process.env.PGHOST || '').trim(),
+  database: (process.env.PGDATABASE || '').trim(),
+  user: (process.env.PGUSER || '').trim(),
+  password: (process.env.PGPASSWORD || '').trim(),
   port: process.env.PGPORT,
   ssl: { rejectUnauthorized: false },
   family: 4,
