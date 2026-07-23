@@ -344,6 +344,7 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
   
   const [data, setData] = useState<AssignmentData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [aPage, setAPage] = useState(1);
 
   // Fetch topics when subject changes
   useEffect(() => {
@@ -369,7 +370,7 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
       .catch(() => setCourseAssignments([]));
   }, [topic]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (p = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -384,6 +385,9 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
         params.set('assignment_id', id);
       }
       
+      params.set('page', String(p));
+      params.set('limit', '10');
+      
       const res = await apiClient.get(`/facilitator/analytics/assignments?${params}`);
       setData(res.data.data);
     } catch {
@@ -393,7 +397,12 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
     }
   }, [college, batch, subject, topic, assignmentCompound]);
 
-  useEffect(() => { load(); }, [load]);
+  const handlePageChange = (p: number) => {
+    setAPage(p);
+    load(p);
+  };
+
+  useEffect(() => { setAPage(1); load(1); }, [load]);
 
   const mergedAssignments = [
     ...collegeAssignments.map(a => ({ id: `college|${a.id}`, name: `[College] ${a.title}` })),
@@ -424,24 +433,32 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
               <h3 className="text-sm font-semibold text-slate-700">Student Submissions</h3>
             </div>
             {data.students.length === 0 ? <EmptyState message="No students found" /> : (
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                  <tr>
-                    <th className="text-left px-5 py-3">Student</th>
-                    <th className="text-left px-5 py-3">Email</th>
-                    {assignmentCompound && <th className="text-left px-5 py-3">Status</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.students.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
-                      <td className="px-5 py-3 text-slate-500">{s.email}</td>
-                      {assignmentCompound && <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>}
+              <>
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left px-5 py-3">Student</th>
+                      <th className="text-left px-5 py-3">Email</th>
+                      {assignmentCompound && <th className="text-left px-5 py-3">Status</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.students.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
+                        <td className="px-5 py-3 text-slate-500">{s.email}</td>
+                        {assignmentCompound && <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {Math.ceil(data.total / 10) > 1 && (
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+                    <span>{data.total} students · page {aPage} of {Math.ceil(data.total / 10)}</span>
+                    <PaginationControls page={aPage} totalPages={Math.ceil(data.total / 10)} onPageChange={handlePageChange} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>

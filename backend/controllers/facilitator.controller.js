@@ -672,7 +672,9 @@ function emptyQuizData() {
 exports.getAssignmentAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, subject_id, assignment_id, assignment_type } = req.query;
+    const { college_id, batch, subject_id, assignment_id, assignment_type, page, limit } = req.query;
+    const sLimit = Math.min(parseInt(limit, 10) || 20, 100);
+    const sOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * sLimit;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: { total: 0, submitted: 0, not_submitted: 0, rate: 0, students: [] } });
 
@@ -740,7 +742,7 @@ exports.getAssignmentAnalytics = async (req, res) => {
         submitted,
         not_submitted: total - submitted,
         rate: total > 0 ? Math.round((submitted / total) * 100) : 0,
-        students: studentList,
+        students: studentList.slice(sOffset, sOffset + sLimit),
       },
     });
   } catch (err) {
