@@ -58,7 +58,7 @@ exports.getUserProfile = async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         u.id, u.full_name, u.email, u.role, u.created_at,
+         u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.created_at,
          sp.degree, sp.year, sp.current_academic_year,
          COALESCE(c.id, fc_c.id) AS college_id,
          COALESCE(c.name, fc_c.name) AS college_name,
@@ -67,6 +67,7 @@ exports.getUserProfile = async (req, res) => {
          COALESCE(us.longest_streak, 0) AS longest_streak,
          COUNT(DISTINCT ub.badge_id)::integer AS badge_count
        FROM public.users u
+       LEFT JOIN public.roles r ON r.id = u.role_id
        LEFT JOIN public.student_profiles sp ON sp.user_id = u.id
        LEFT JOIN public.colleges c ON c.id = sp.college_id
        LEFT JOIN public.facilitator_colleges fc ON fc.facilitator_id = u.id
@@ -75,7 +76,7 @@ exports.getUserProfile = async (req, res) => {
        LEFT JOIN public.user_streaks us ON us.user_id = u.id
        LEFT JOIN public.user_badges ub ON ub.user_id = u.id
        WHERE u.id = $1
-       GROUP BY u.id, u.full_name, u.email, u.role, u.created_at,
+       GROUP BY u.id, u.full_name, u.email, r.role_key, u.created_at,
          sp.degree, sp.year, sp.current_academic_year, c.id, c.name, fc_c.id, fc_c.name,
          us.current_streak, us.longest_streak`,
       [userId],
@@ -195,7 +196,7 @@ exports.getAllUsers = async (req, res) => {
         u.id,
         u.full_name,
         u.email,
-        u.role,
+        LOWER(r.role_key) AS role,
         u.is_verified,
         sp.degree,
         sp.year,
@@ -215,6 +216,7 @@ exports.getAllUsers = async (req, res) => {
         COALESCE(facilitator_meta.college_ids, '{}'::uuid[]) as facilitator_college_ids,
         COALESCE(facilitator_meta.college_names, '{}'::text[]) as facilitator_college_names
       FROM public.users u
+      LEFT JOIN public.roles r ON r.id = u.role_id
       LEFT JOIN public.student_profiles sp ON u.id = sp.user_id
       LEFT JOIN public.colleges c ON sp.college_id = c.id
       LEFT JOIN LATERAL (
@@ -230,7 +232,7 @@ exports.getAllUsers = async (req, res) => {
           ON usp.user_id = u.id
           AND usp.subtopic_id = st.id
         WHERE us.user_id = u.id
-      ) as student_meta ON u.role = 'student'
+      ) as student_meta ON r.role_key = 'STUDENT'
       LEFT JOIN LATERAL (
         SELECT
           ARRAY_AGG(fc.college_id ORDER BY c2.name) as college_ids,
@@ -238,7 +240,7 @@ exports.getAllUsers = async (req, res) => {
         FROM public.facilitator_colleges fc
         INNER JOIN public.colleges c2 ON c2.id = fc.college_id
         WHERE fc.facilitator_id = u.id
-      ) as facilitator_meta ON u.role = 'facilitator'
+      ) as facilitator_meta ON r.role_key = 'FACILITATOR'
       ORDER BY u.created_at DESC
     `;
     const result = await pool.query(query);
@@ -254,12 +256,13 @@ exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params; // Must be a valid UUID string
     const result = await pool.query(
-      `SELECT u.id, u.full_name, u.email, u.role, u.is_verified, u.onboarding_step, u.created_at,
+      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.is_verified, u.onboarding_step, u.created_at,
               sp.college_id, sp.degree, sp.year,
-              c.name as college_name 
-       FROM public.users u 
+              c.name as college_name
+       FROM public.users u
+       LEFT JOIN public.roles r ON r.id = u.role_id
        LEFT JOIN public.student_profiles sp ON u.id = sp.user_id
-       LEFT JOIN public.colleges c ON sp.college_id = c.id 
+       LEFT JOIN public.colleges c ON sp.college_id = c.id
        WHERE u.id = $1`,
       [id],
     );
@@ -288,11 +291,17 @@ exports.updateUser = async (req, res) => {
 
       // 1. Update User (Identity)
       const userUpdateQuery = `
-        UPDATE public.users 
-        SET full_name = $1, 
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2 
-        RETURNING id, full_name, email, role, updated_at
+        WITH updated AS (
+          UPDATE public.users
+          SET full_name = $1,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+          RETURNING id, full_name, email, role_id, updated_at
+        )
+        SELECT updated.id, updated.full_name, updated.email,
+               LOWER(r.role_key) AS role, updated.updated_at
+        FROM updated
+        LEFT JOIN public.roles r ON r.id = updated.role_id
       `;
       const userResult = await client.query(userUpdateQuery, [full_name, id]);
 
@@ -341,19 +350,31 @@ exports.changeUserRole = async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
 
+    const roleRes = await pool.query(
+      'SELECT id FROM public.roles WHERE role_key = $1',
+      [(role || '').toUpperCase()],
+    );
+
+    if (!roleRes.rowCount) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
     const result = await pool.query(
-      `UPDATE public.users 
-       SET role = $1, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $2 
-       RETURNING id, role, updated_at`,
-      [role, id],
+      `UPDATE public.users
+       SET role_id = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, updated_at`,
+      [roleRes.rows[0].id, id],
     );
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ message: 'Role updated successfully', user: result.rows[0] });
+    res.json({
+      message: 'Role updated successfully',
+      user: { ...result.rows[0], role: (role || '').toLowerCase() },
+    });
   } catch (err) {
     console.error('Change Role Error:', err.message);
     res.status(500).json({ message: 'Server error' });

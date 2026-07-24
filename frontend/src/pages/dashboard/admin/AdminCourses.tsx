@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CreateCourseModal } from '@/components/common/admin/CreateCourseModal';
 import { ManageAccessModal } from '@/components/common/admin/ManageAccessModal';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { fetchSubjects, deleteSubject } from '@/features/subjects/subjectSlice';
 
@@ -38,18 +39,22 @@ export default function AdminCourses() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Subject | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; label?: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     dispatch(fetchSubjects());
   }, [dispatch]);
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this course?')) return;
     try {
+      setDeleting(true);
       await dispatch(deleteSubject(id)).unwrap();
       toast.success('Course deleted');
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to delete course. Please try again.'));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -134,7 +139,7 @@ export default function AdminCourses() {
                         <Edit2 className='w-4 h-4' /> Edit Details
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => handleDelete(course.id)}
+                        onClick={() => setConfirmDelete({ id: course.id, label: course.name })}
                         className='gap-2 text-red-600 cursor-pointer focus:text-red-600'
                       >
                         <Trash2 className='w-4 h-4' /> Delete Course
@@ -194,6 +199,28 @@ export default function AdminCourses() {
           courseName={selectedCourse.name}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDelete(null);
+        }}
+        title='Delete Course'
+        description={
+          <>
+            Are you sure you want to delete{' '}
+            <span className='font-semibold'>{confirmDelete?.label ?? 'this course'}</span>? This
+            action cannot be undone.
+          </>
+        }
+        confirmLabel='Delete'
+        loading={deleting}
+        onConfirm={async () => {
+          if (!confirmDelete) return;
+          await handleDelete(confirmDelete.id);
+          setConfirmDelete(null);
+        }}
+      />
     </div>
   );
 }
