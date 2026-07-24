@@ -36,8 +36,8 @@ exports.signup = async (req, res) => {
     // 3. Insert User (Identity)
     const result = await pool.query(
       `
-      INSERT INTO users (full_name, email, password_hash, role, onboarding_step, is_verified)
-      VALUES ($1, $2, $3, $4, 'college', $5)
+      INSERT INTO users (full_name, email, password_hash, role, role_id, onboarding_step, is_verified)
+      VALUES ($1, $2, $3, $4, (SELECT id FROM roles WHERE role_key = UPPER($4::varchar)), 'college', $5)
       RETURNING id, full_name, email, role, onboarding_step, is_verified
       `,
       [
@@ -220,8 +220,8 @@ exports.googleCallback = async (req, res) => {
       }
     } else {
       const insertRes = await pool.query(
-        `INSERT INTO users (full_name, email, google_id, role, onboarding_step, is_verified)
-         VALUES ($1, $2, $3, 'student', 'college', false)
+        `INSERT INTO users (full_name, email, google_id, role, role_id, onboarding_step, is_verified)
+         VALUES ($1, $2, $3, 'student', (SELECT id FROM roles WHERE role_key = 'STUDENT'), 'college', false)
          RETURNING id, full_name, email, role, onboarding_step, is_verified`,
         [name, email, googleId],
       );
