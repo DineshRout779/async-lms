@@ -1,5 +1,6 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
+const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
 
 // 1. College Selection Step
@@ -159,7 +160,7 @@ exports.selectSubjects = async (req, res) => {
         const facRes = await pool.query(
           `SELECT fc.facilitator_id FROM facilitator_colleges fc
            JOIN users u ON u.id = fc.facilitator_id
-           WHERE fc.college_id = $1 AND u.is_verified = true`,
+           WHERE fc.college_id = $1 AND u.is_verified = true AND fc.is_deleted = false`,
           [college_id],
         );
         await Promise.all(
@@ -210,7 +211,7 @@ exports.selectFacilitatorColleges = async (req, res) => {
     await client.query('BEGIN');
 
     await client.query(
-      'DELETE FROM facilitator_colleges WHERE facilitator_id = $1',
+      'UPDATE facilitator_colleges SET is_deleted = true WHERE facilitator_id = $1 AND is_deleted = false',
       [userId],
     );
 
@@ -226,6 +227,7 @@ exports.selectFacilitatorColleges = async (req, res) => {
     );
 
     await client.query('COMMIT');
+    logAction({ req, action: 'UPDATE', entityType: 'facilitator_college', entityId: userId, details: { college_ids } });
     res.json({
       success: true,
       message: 'Colleges assigned! Awaiting admin verification.',

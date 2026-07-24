@@ -1,5 +1,6 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
+const { logAction } = require('../utils/auditLogger');
 const {
   generateCurriculum, regenerateLesson, extractSkillsFromJD,
   generateTopics, generateUnits, generateSubtopics,
@@ -263,10 +264,11 @@ exports.listCourses = async (req, res) => {
     const params = [];
 
     if (role === 'admin') {
-      if (status) { query += ` WHERE c.status = $1`; params.push(status); }
+      query += ` WHERE c.is_deleted = false`;
+      if (status) { params.push(status); query += ` AND c.status = $${params.length}`; }
     } else {
       // facilitators see only their own
-      query += ` WHERE c.created_by = $1`;
+      query += ` WHERE c.is_deleted = false AND c.created_by = $1`;
       params.push(userId);
       if (status) { query += ` AND c.status = $2`; params.push(status); }
     }
@@ -293,7 +295,7 @@ exports.getCourse = async (req, res) => {
        FROM ai_courses c
        JOIN users u ON c.created_by = u.id
        LEFT JOIN users r ON c.reviewed_by = r.id
-       WHERE c.id = $1`,
+       WHERE c.id = $1 AND c.is_deleted = false`,
       [id],
     );
     if (!courseRes.rows.length) return res.status(404).json({ success: false, message: 'Course not found' });
@@ -301,20 +303,20 @@ exports.getCourse = async (req, res) => {
     const course = courseRes.rows[0];
 
     const modulesRes = await pool.query(
-      `SELECT * FROM ai_course_modules WHERE course_id = $1 ORDER BY order_index`,
+      `SELECT * FROM ai_course_modules WHERE course_id = $1 AND is_deleted = false ORDER BY order_index`,
       [id],
     );
 
     const modules = [];
     for (const mod of modulesRes.rows) {
       const topicsRes = await pool.query(
-        `SELECT * FROM ai_course_topics WHERE module_id = $1 ORDER BY order_index`,
+        `SELECT * FROM ai_course_topics WHERE module_id = $1 AND is_deleted = false ORDER BY order_index`,
         [mod.id],
       );
       const topics = [];
       for (const topic of topicsRes.rows) {
         const lessonsRes = await pool.query(
-          `SELECT * FROM ai_course_lessons WHERE topic_id = $1 ORDER BY order_index`,
+          `SELECT * FROM ai_course_lessons WHERE topic_id = $1 AND is_deleted = false ORDER BY order_index`,
           [topic.id],
         );
 
@@ -423,7 +425,9 @@ exports.submitForReview = async (req, res) => {
     );
 
     // Notify all admins
-    const admins = await pool.query(`SELECT id FROM users WHERE role = 'admin'`);
+    const admins = await pool.query(
+      `SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = 'ADMIN'`,
+    );
     for (const admin of admins.rows) {
       notify({
         userId: admin.id,
@@ -840,29 +844,74 @@ exports.addLesson = async (req, res) => {
 // ─── Delete module / topic / lesson ──────────────────────────────────────────
 
 exports.deleteModule = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    await pool.query(`DELETE FROM ai_course_modules WHERE id = $1`, [id]);
+    await client.query('BEGIN');
+    const modRes = await client.query(
+      `UPDATE ai_course_modules SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *`,
+      [id],
+    );
+    if (!modRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Not found' });
+    }
+    await client.query(
+      `UPDATE ai_course_topics SET is_deleted = true WHERE module_id = $1`,
+      [id],
+    );
+    await client.query(
+      `UPDATE ai_course_lessons SET is_deleted = true WHERE topic_id IN (SELECT id FROM ai_course_topics WHERE module_id = $1)`,
+      [id],
+    );
+    await client.query('COMMIT');
+    logAction({ req, action: 'DELETE', entityType: 'ai_course_module', entityId: id, details: { title: modRes.rows[0].title } });
     res.json({ success: true });
   } catch (err) {
+    await client.query('ROLLBACK');
     serverError(res, err);
+  } finally {
+    client.release();
   }
 };
 
 exports.deleteTopic = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    await pool.query(`DELETE FROM ai_course_topics WHERE id = $1`, [id]);
+    await client.query('BEGIN');
+    const topicRes = await client.query(
+      `UPDATE ai_course_topics SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *`,
+      [id],
+    );
+    if (!topicRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Not found' });
+    }
+    await client.query(
+      `UPDATE ai_course_lessons SET is_deleted = true WHERE topic_id = $1`,
+      [id],
+    );
+    await client.query('COMMIT');
+    logAction({ req, action: 'DELETE', entityType: 'ai_course_topic', entityId: id, details: { title: topicRes.rows[0].title } });
     res.json({ success: true });
   } catch (err) {
+    await client.query('ROLLBACK');
     serverError(res, err);
+  } finally {
+    client.release();
   }
 };
 
 exports.deleteLesson = async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query(`DELETE FROM ai_course_lessons WHERE id = $1`, [id]);
+    const result = await pool.query(
+      `UPDATE ai_course_lessons SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *`,
+      [id],
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    logAction({ req, action: 'DELETE', entityType: 'ai_course_lesson', entityId: id, details: { title: result.rows[0].title } });
     res.json({ success: true });
   } catch (err) {
     serverError(res, err);
@@ -1400,12 +1449,13 @@ exports.generateAndSaveCapstone = async (req, res) => {
 // ─── Delete course ────────────────────────────────────────────────────────────
 
 exports.deleteCourse = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const userId = req.user.id;
     const role = req.user.role;
 
-    const courseRes = await pool.query(`SELECT * FROM ai_courses WHERE id = $1`, [id]);
+    const courseRes = await client.query(`SELECT * FROM ai_courses WHERE id = $1 AND is_deleted = false`, [id]);
     if (!courseRes.rows.length) return res.status(404).json({ success: false, message: 'Not found' });
 
     const course = courseRes.rows[0];
@@ -1416,10 +1466,30 @@ exports.deleteCourse = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot delete a published course' });
     }
 
-    await pool.query(`DELETE FROM ai_courses WHERE id = $1`, [id]);
+    await client.query('BEGIN');
+    await client.query(`UPDATE ai_courses SET is_deleted = true WHERE id = $1`, [id]);
+    await client.query(
+      `UPDATE ai_course_modules SET is_deleted = true WHERE course_id = $1`,
+      [id],
+    );
+    await client.query(
+      `UPDATE ai_course_topics SET is_deleted = true WHERE module_id IN (SELECT id FROM ai_course_modules WHERE course_id = $1)`,
+      [id],
+    );
+    await client.query(
+      `UPDATE ai_course_lessons SET is_deleted = true WHERE topic_id IN (
+         SELECT t.id FROM ai_course_topics t JOIN ai_course_modules m ON t.module_id = m.id WHERE m.course_id = $1
+       )`,
+      [id],
+    );
+    await client.query('COMMIT');
+    logAction({ req, action: 'DELETE', entityType: 'ai_course', entityId: id, details: { title: course.title } });
     res.json({ success: true });
   } catch (err) {
+    await client.query('ROLLBACK');
     serverError(res, err);
+  } finally {
+    client.release();
   }
 };
 

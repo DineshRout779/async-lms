@@ -1,13 +1,14 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
+const { logAction } = require('../utils/auditLogger');
 
 // GET all colleges
 exports.getAllColleges = async (req, res) => {
   try {
     const showVerified = req.query.is_verfied ? true : false;
     const query = showVerified
-      ? 'SELECT * FROM colleges WHERE is_verified = true ORDER BY name ASC'
-      : 'SELECT * FROM colleges ORDER BY name ASC';
+      ? 'SELECT * FROM colleges WHERE is_verified = true AND is_deleted = false ORDER BY name ASC'
+      : 'SELECT * FROM colleges WHERE is_deleted = false ORDER BY name ASC';
     const result = await pool.query(query);
     // Standardized response to match frontend expectations
     res.status(200).json({ success: true, data: result.rows });
@@ -28,6 +29,7 @@ exports.createCollege = async (req, res) => {
       RETURNING *`;
     const values = [name, short_code, city, state, is_verfied];
     const result = await pool.query(query, values);
+    logAction({ req, action: 'CREATE', entityType: 'college', entityId: result.rows[0].id, details: { name } });
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     res.status(400).json({
@@ -52,6 +54,7 @@ exports.updateCollege = async (req, res) => {
     const result = await pool.query(query, values);
     if (result.rowCount === 0)
       return res.status(404).json({ message: 'College not found' });
+    logAction({ req, action: 'UPDATE', entityType: 'college', entityId: id, details: { name } });
     res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {
     res.status(400).json({
@@ -62,18 +65,34 @@ exports.updateCollege = async (req, res) => {
   }
 };
 
-// DELETE college
+// DELETE college (soft delete; cascades to facilitator_colleges mappings)
 exports.deleteCollege = async (req, res) => {
   const { id } = req.params;
+  const client = await pool.connect();
   try {
-    const result = await pool.query('DELETE FROM colleges WHERE id = $1', [id]);
-    if (result.rowCount === 0)
+    await client.query('BEGIN');
+    const result = await client.query(
+      'UPDATE colleges SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *',
+      [id],
+    );
+    if (result.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'College not found' });
+    }
+    await client.query(
+      'UPDATE facilitator_colleges SET is_deleted = true WHERE college_id = $1 AND is_deleted = false',
+      [id],
+    );
+    await client.query('COMMIT');
+    logAction({ req, action: 'DELETE', entityType: 'college', entityId: id });
     res
       .status(200)
       .json({ success: true, message: 'College deleted successfully' });
   } catch (error) {
+    await client.query('ROLLBACK');
     serverError(res, error);
+  } finally {
+    client.release();
   }
 };
 
@@ -81,14 +100,15 @@ exports.getCollegesBySubject = async (req, res) => {
   const { subjectId } = req.params;
   try {
     const query = `
-      SELECT 
+      SELECT
         c.id, c.name, c.short_code,
         EXISTS (
           SELECT 1 FROM facilitator_colleges fc
           JOIN facilitator_subjects fs ON fc.facilitator_id = fs.facilitator_id
-          WHERE fc.college_id = c.id AND fs.subject_id = $1
+          WHERE fc.college_id = c.id AND fs.subject_id = $1 AND fc.is_deleted = false
         ) as assigned
       FROM public.colleges c
+      WHERE c.is_deleted = false
       ORDER BY c.name ASC;
     `;
     const { rows } = await pool.query(query, [subjectId]);
@@ -105,15 +125,17 @@ exports.toggleSubjectAccess = async (req, res) => {
 
   try {
     const existing = await pool.query(
-      'SELECT id FROM facilitator_colleges WHERE facilitator_id = $1 AND college_id = $2',
+      'SELECT id FROM facilitator_colleges WHERE facilitator_id = $1 AND college_id = $2 AND is_deleted = false',
       [facilitatorId, collegeId],
     );
 
     if (existing.rowCount > 0) {
       // Revoke access
-      await pool.query('DELETE FROM facilitator_colleges WHERE id = $1', [
-        existing.rows[0].id,
-      ]);
+      await pool.query(
+        'UPDATE facilitator_colleges SET is_deleted = true WHERE id = $1 AND is_deleted = false',
+        [existing.rows[0].id],
+      );
+      logAction({ req, action: 'DELETE', entityType: 'facilitator_college', entityId: existing.rows[0].id, details: { facilitatorId, collegeId } });
     } else {
       // Grant access: ensure facilitator is linked to subject first
       await pool.query(
@@ -124,6 +146,7 @@ exports.toggleSubjectAccess = async (req, res) => {
         'INSERT INTO facilitator_colleges (facilitator_id, college_id) VALUES ($1, $2)',
         [facilitatorId, collegeId],
       );
+      logAction({ req, action: 'CREATE', entityType: 'facilitator_college', entityId: null, details: { facilitatorId, collegeId } });
     }
     res.json({ success: true, message: `Subject assigned!` });
   } catch (error) {
@@ -138,7 +161,7 @@ exports.assignFacilitator = async (req, res) => {
   try {
     await client.query('BEGIN');
     await client.query(
-      'DELETE FROM facilitator_colleges WHERE facilitator_id = $1',
+      'UPDATE facilitator_colleges SET is_deleted = true WHERE facilitator_id = $1 AND is_deleted = false',
       [facilitator_id],
     );
     if (college_ids?.length > 0) {
@@ -148,6 +171,7 @@ exports.assignFacilitator = async (req, res) => {
       );
     }
     await client.query('COMMIT');
+    logAction({ req, action: 'UPDATE', entityType: 'facilitator_college', entityId: facilitator_id, details: { college_ids } });
     res
       .status(200)
       .json({ success: true, message: 'Colleges assigned successfully' });

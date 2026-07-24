@@ -1,5 +1,6 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
+const { logAction } = require('../utils/auditLogger');
 const path = require('path');
 const fs = require('fs').promises;
 const https = require('https');
@@ -59,6 +60,7 @@ exports.getAllSubjects = async (req, res) => {
       LEFT JOIN topics t ON s.id = t.subject_id
       LEFT JOIN units u ON t.id = u.topic_id
       LEFT JOIN subtopics st ON u.id = st.unit_id
+      WHERE s.is_deleted = false
       GROUP BY s.id
       ORDER BY s.order_index ASC
     `);
@@ -83,7 +85,7 @@ exports.getAllPublishedSubjects = async (req, res) => {
           WHERE t.subject_id = s.id
         ) AS total_lessons
       FROM subjects s
-      WHERE s.is_published = true
+      WHERE s.is_published = true AND s.is_deleted = false
       ORDER BY s.order_index ASC
     `);
     res.json({ success: true, data: rows });
@@ -100,9 +102,9 @@ exports.getCourseStructure = async (req, res) => {
 
     // 1. Fetch subject
     const subjectResult = await pool.query(
-      `SELECT id, name, description 
-       FROM subjects 
-       WHERE slug = $1 AND is_published = true`,
+      `SELECT id, name, description
+       FROM subjects
+       WHERE slug = $1 AND is_published = true AND is_deleted = false`,
       [slug],
     );
 
@@ -167,16 +169,16 @@ exports.getCourseStructure = async (req, res) => {
         p.max_score AS capstone_max_score
 
       FROM topics t
-      LEFT JOIN projects p ON t.id = p.topic_id
-      LEFT JOIN units u ON t.id = u.topic_id
-      LEFT JOIN subtopics st ON u.id = st.unit_id
-      LEFT JOIN lesson_content lc 
-        ON st.id = lc.subtopic_id AND lc.is_published = true
-      LEFT JOIN quizzes q ON u.id = q.unit_id
-      LEFT JOIN exercises e ON st.id = e.subtopic_id
-      LEFT JOIN assignments a ON u.id = a.unit_id
+      LEFT JOIN projects p ON t.id = p.topic_id AND p.is_deleted = false
+      LEFT JOIN units u ON t.id = u.topic_id AND u.is_deleted = false
+      LEFT JOIN subtopics st ON u.id = st.unit_id AND st.is_deleted = false
+      LEFT JOIN lesson_content lc
+        ON st.id = lc.subtopic_id AND lc.is_published = true AND lc.is_deleted = false
+      LEFT JOIN quizzes q ON u.id = q.unit_id AND q.is_deleted = false
+      LEFT JOIN exercises e ON st.id = e.subtopic_id AND e.is_deleted = false
+      LEFT JOIN assignments a ON u.id = a.unit_id AND a.is_deleted = false
 
-      WHERE t.subject_id = $1
+      WHERE t.subject_id = $1 AND t.is_deleted = false
       ORDER BY
         t.order_index,
         u.order_index,
@@ -328,7 +330,7 @@ exports.getSubtopicContent = async (req, res) => {
     let lessonCompleted = false;
 
     const subtopicResult = await pool.query(
-      `SELECT id FROM subtopics WHERE slug = $1 LIMIT 1`,
+      `SELECT id FROM subtopics WHERE slug = $1 AND is_deleted = false LIMIT 1`,
       [subtopicSlug],
     );
 
@@ -415,13 +417,13 @@ exports.getSubtopicContent = async (req, res) => {
 
       FROM subtopics st
       LEFT JOIN lesson_content lc
-        ON lc.subtopic_id = st.id AND lc.is_published = true
-      LEFT JOIN quizzes q ON q.unit_id = (SELECT unit_id FROM subtopics WHERE slug = $1)
-      LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
-      LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id
-      LEFT JOIN exercises e ON e.subtopic_id = st.id
+        ON lc.subtopic_id = st.id AND lc.is_published = true AND lc.is_deleted = false
+      LEFT JOIN quizzes q ON q.unit_id = (SELECT unit_id FROM subtopics WHERE slug = $1) AND q.is_deleted = false
+      LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id AND qq.is_deleted = false
+      LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id AND qo.is_deleted = false
+      LEFT JOIN exercises e ON e.subtopic_id = st.id AND e.is_deleted = false
 
-      WHERE st.slug = $1
+      WHERE st.slug = $1 AND st.is_deleted = false
       ORDER BY qq.order_index, qo.order_index
     `;
 
@@ -579,6 +581,8 @@ exports.createSubject = async (req, res) => {
     const values = [name, slug, description];
     const { rows } = await pool.query(query, values);
 
+    logAction({ req, action: 'CREATE', entityType: 'subject', entityId: rows[0].id, details: { name, slug } });
+
     res.status(201).json({
       success: true,
       message: 'Subject created successfully',
@@ -619,28 +623,122 @@ exports.updateSubject = async (req, res) => {
 
     if (result.rowCount === 0)
       return res.status(404).json({ message: 'Subject not found' });
+    logAction({ req, action: 'UPDATE', entityType: 'subject', entityId: id, details: { name, slug, is_published } });
     res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {
     serverError(res, error);
   }
 };
 
-// Delete subject
+// Delete subject (soft delete; cascades to topics/units/subtopics/lesson content/
+// quizzes/exercises/assignments/projects since the schema previously relied on
+// ON DELETE CASCADE for a hard delete)
 exports.deleteSubject = async (req, res) => {
   const { id } = req.params;
+  const client = await pool.connect();
   try {
-    // Note: Due to ON DELETE CASCADE in schema, this will also remove associated topics/subtopics
-    const result = await pool.query(
-      'DELETE FROM public.subjects WHERE id = $1',
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'UPDATE public.subjects SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *',
       [id],
     );
-    if (result.rowCount === 0)
+    if (result.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Subject not found' });
+    }
+
+    await client.query(
+      `UPDATE topics SET is_deleted = true WHERE subject_id = $1 AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE units SET is_deleted = true
+       WHERE topic_id IN (SELECT id FROM topics WHERE subject_id = $1) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE subtopics SET is_deleted = true
+       WHERE unit_id IN (
+         SELECT u.id FROM units u JOIN topics t ON u.topic_id = t.id WHERE t.subject_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE lesson_content SET is_deleted = true
+       WHERE subtopic_id IN (
+         SELECT st.id FROM subtopics st
+         JOIN units u ON st.unit_id = u.id
+         JOIN topics t ON u.topic_id = t.id
+         WHERE t.subject_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE quizzes SET is_deleted = true
+       WHERE unit_id IN (
+         SELECT u.id FROM units u JOIN topics t ON u.topic_id = t.id WHERE t.subject_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE quiz_questions SET is_deleted = true
+       WHERE quiz_id IN (
+         SELECT q.id FROM quizzes q
+         JOIN units u ON q.unit_id = u.id
+         JOIN topics t ON u.topic_id = t.id
+         WHERE t.subject_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE quiz_question_options SET is_deleted = true
+       WHERE question_id IN (
+         SELECT qq.id FROM quiz_questions qq
+         JOIN quizzes q ON qq.quiz_id = q.id
+         JOIN units u ON q.unit_id = u.id
+         JOIN topics t ON u.topic_id = t.id
+         WHERE t.subject_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE exercises SET is_deleted = true
+       WHERE (
+         subtopic_id IN (
+           SELECT st.id FROM subtopics st
+           JOIN units u ON st.unit_id = u.id
+           JOIN topics t ON u.topic_id = t.id
+           WHERE t.subject_id = $1
+         )
+         OR unit_id IN (
+           SELECT u.id FROM units u JOIN topics t ON u.topic_id = t.id WHERE t.subject_id = $1
+         )
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE assignments SET is_deleted = true
+       WHERE unit_id IN (
+         SELECT u.id FROM units u JOIN topics t ON u.topic_id = t.id WHERE t.subject_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE projects SET is_deleted = true WHERE topic_id IN (SELECT id FROM topics WHERE subject_id = $1) AND is_deleted = false`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+    logAction({ req, action: 'DELETE', entityType: 'subject', entityId: id });
     res
       .status(200)
       .json({ success: true, message: 'Subject deleted successfully' });
   } catch (error) {
+    await client.query('ROLLBACK');
     serverError(res, error);
+  } finally {
+    client.release();
   }
 };
 // 5. Get a specific exercise content
@@ -665,7 +763,7 @@ exports.getExerciseContent = async (req, res) => {
       FROM exercises e
       LEFT JOIN subtopics st ON e.subtopic_id = st.id
       LEFT JOIN units u ON e.unit_id = u.id
-      WHERE e.id = $1
+      WHERE e.id = $1 AND e.is_deleted = false
     `;
 
     const { rows } = await pool.query(query, [exerciseId]);
@@ -731,9 +829,9 @@ exports.getQuizContent = async (req, res) => {
         qo.option_text
       FROM quizzes q
       LEFT JOIN units u ON q.unit_id = u.id
-      LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id
-      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
-      WHERE q.id = $1
+      LEFT JOIN quiz_questions qq ON q.id = qq.quiz_id AND qq.is_deleted = false
+      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id AND qo.is_deleted = false
+      WHERE q.id = $1 AND q.is_deleted = false
       ORDER BY qq.order_index, qo.order_index
     `;
 
