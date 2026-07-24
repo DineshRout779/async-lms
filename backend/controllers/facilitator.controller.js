@@ -537,6 +537,24 @@ exports.getCourseAssignments = async (req, res) => {
   }
 };
 
+exports.getAnalyticsModuleProjects = async (req, res) => {
+  try {
+    const { topic_id } = req.query;
+    if (!topic_id) return res.json({ success: true, data: [] });
+
+    const { rows } = await pool.query(
+      `SELECT id, title as name
+       FROM projects
+       WHERE topic_id = $1::uuid
+       ORDER BY title`,
+      [topic_id]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    serverError(res, err, 'getAnalyticsModuleProjects');
+  }
+};
+
 // ─── Analytics: Quiz ─────────────────────────────────────────────────────────
 
 exports.getQuizAnalytics = async (req, res) => {
@@ -755,12 +773,16 @@ exports.getAssignmentAnalytics = async (req, res) => {
 exports.getProjectAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, subject_id } = req.query;
+    const { college_id, batch, subject_id, topic_id, project_id, page, limit } = req.query;
+    
+    const sLimit = Math.min(parseInt(limit, 10) || 10, 100);
+    const sOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * sLimit;
+
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
-    if (!colleges.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [] } });
+    if (!colleges.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [], total: 0 } });
 
     const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
-    if (!enrolledIds.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [] } });
+    if (!enrolledIds.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [], total: 0 } });
 
     // Get student names
     const namesRes = await pool.query(
@@ -772,7 +794,15 @@ exports.getProjectAnalytics = async (req, res) => {
     const psParams = [enrolledIds];
     let psJoin = '';
     let psClause = '';
-    if (subject_id) {
+    
+    if (project_id) {
+      psParams.push(project_id);
+      psClause = `AND ps.project_id = $${psParams.length}::uuid`;
+    } else if (topic_id) {
+      psJoin = 'JOIN projects p ON p.id = ps.project_id';
+      psParams.push(topic_id);
+      psClause = `AND p.topic_id = $${psParams.length}::uuid`;
+    } else if (subject_id) {
       psJoin = 'JOIN projects p ON p.id = ps.project_id JOIN topics t ON t.id = p.topic_id';
       psParams.push(subject_id);
       psClause = `AND t.subject_id = $${psParams.length}::uuid`;
@@ -801,13 +831,19 @@ exports.getProjectAnalytics = async (req, res) => {
       return { id: s.id, name: s.full_name, email: s.email, status };
     });
 
+    const not_started = students.filter((s) => s.status === 'Not Started').length;
+    const submitted = students.filter((s) => s.status === 'Submitted').length;
+    const approved = students.filter((s) => s.status === 'Approved').length;
+    const total = students.length;
+
     res.json({
       success: true,
       data: {
-        not_started: students.filter((s) => s.status === 'Not Started').length,
-        submitted: students.filter((s) => s.status === 'Submitted').length,
-        approved: students.filter((s) => s.status === 'Approved').length,
-        students,
+        total,
+        not_started,
+        submitted,
+        approved,
+        students: students.slice(sOffset, sOffset + sLimit),
       },
     });
   } catch (err) {

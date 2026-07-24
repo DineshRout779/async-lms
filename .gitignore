@@ -17,3 +17,14 @@ Code Editor Architecture.md
 Codeguru Architecture.md
 coding-standard.md
 CodeGuru Requirements Document - June 2026.md
+
+# Testing and Scratch files
+*test*.js
+*check*.js
+socket-test.js
+test-db.js
+schema_check.js
+
+# Database dumps
+db_dump.json
+*.json.dump

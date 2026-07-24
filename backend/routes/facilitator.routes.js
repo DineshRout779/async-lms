@@ -23,6 +23,7 @@ router.get('/analytics/course-assignments', facilitatorController.getCourseAssig
 router.get('/analytics/quiz', facilitatorController.getQuizAnalytics);
 router.get('/analytics/assignments', facilitatorController.getAssignmentAnalytics);
 router.get('/analytics/projects', facilitatorController.getProjectAnalytics);
+router.get('/analytics/module-projects', facilitatorController.getAnalyticsModuleProjects);
 router.get('/analytics/batch', facilitatorController.getBatchDashboard);
 router.get('/analytics/students', facilitatorController.getStudentAnalytics);
 
