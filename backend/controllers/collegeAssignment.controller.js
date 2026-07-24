@@ -1,5 +1,6 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
+const { logAction } = require('../utils/auditLogger');
 const { notifyCollege } = require('../services/notificationService');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -141,7 +142,7 @@ exports.getMyCollegeAssignments = async (req, res) => {
        FROM college_assignments ca
        LEFT JOIN users u ON u.id = ca.created_by
        LEFT JOIN college_assignment_submissions cas ON cas.assignment_id = ca.id AND cas.student_id = $2
-       WHERE ca.college_id = $1
+       WHERE ca.college_id = $1 AND ca.is_deleted = false
        ORDER BY ca.due_date ASC NULLS LAST, ca.created_at DESC`,
       [college_id, req.user.id],
     );
@@ -183,6 +184,7 @@ exports.manageAssignments = async (req, res) => {
         LEFT JOIN colleges c ON c.id = ca.college_id
         LEFT JOIN users u ON u.id = ca.created_by
         LEFT JOIN evaluations e ON e.assignment_id = ca.id
+        WHERE ca.is_deleted = false
         ORDER BY c.name ASC, ca.due_date ASC NULLS LAST`;
       values = [];
     } else {
@@ -207,7 +209,7 @@ exports.manageAssignments = async (req, res) => {
         LEFT JOIN colleges c ON c.id = ca.college_id
         LEFT JOIN users u ON u.id = ca.created_by
         LEFT JOIN evaluations e ON e.assignment_id = ca.id
-        WHERE ca.created_by = $1
+        WHERE ca.created_by = $1 AND ca.is_deleted = false
         ORDER BY c.name ASC, ca.due_date ASC NULLS LAST`;
       values = [req.user.id];
     }
@@ -276,6 +278,7 @@ exports.createAssignment = async (req, res) => {
       );
       const assignment = rows[0];
       createdAssignments.push(assignment);
+      logAction({ req, action: 'CREATE', entityType: 'college_assignment', entityId: assignment.id, details: { title, college_id: cid } });
 
       // Notify all students in the college about the new assignment
       notifyCollege({
@@ -309,7 +312,7 @@ exports.updateAssignment = async (req, res) => {
   try {
     // Fetch existing to check ownership scope for facilitators
     const existing = await pool.query(
-      'SELECT * FROM college_assignments WHERE id = $1',
+      'SELECT * FROM college_assignments WHERE id = $1 AND is_deleted = false',
       [id],
     );
     if (!existing.rowCount) {
@@ -357,6 +360,7 @@ exports.updateAssignment = async (req, res) => {
         id,
       ],
     );
+    logAction({ req, action: 'UPDATE', entityType: 'college_assignment', entityId: id, details: { title } });
     res.json({ success: true, data: rows[0] });
   } catch (error) {
     console.error('updateAssignment:', error);
@@ -370,7 +374,7 @@ exports.deleteAssignment = async (req, res) => {
 
   try {
     const existing = await pool.query(
-      'SELECT college_id FROM college_assignments WHERE id = $1',
+      'SELECT college_id FROM college_assignments WHERE id = $1 AND is_deleted = false',
       [id],
     );
     if (!existing.rowCount) {
@@ -389,7 +393,16 @@ exports.deleteAssignment = async (req, res) => {
       }
     }
 
-    await pool.query('DELETE FROM college_assignments WHERE id = $1', [id]);
+    const result = await pool.query(
+      'UPDATE college_assignments SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *',
+      [id],
+    );
+    if (!result.rowCount) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
+    }
+    logAction({ req, action: 'DELETE', entityType: 'college_assignment', entityId: id });
     res.json({ success: true, message: 'Assignment deleted' });
   } catch (error) {
     console.error('deleteAssignment:', error);
@@ -408,7 +421,7 @@ exports.submitCollegeAssignment = async (req, res) => {
   try {
     // 1. Verify existence
     const assignment = await pool.query(
-      'SELECT id FROM college_assignments WHERE id = $1',
+      'SELECT id FROM college_assignments WHERE id = $1 AND is_deleted = false',
       [id],
     );
     if (!assignment.rowCount) {
@@ -472,7 +485,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
        FROM college_assignments ca
        LEFT JOIN users u ON u.id = ca.created_by
        LEFT JOIN college_assignment_submissions cas ON cas.assignment_id = ca.id AND cas.student_id = $2
-       WHERE ca.id = $1`,
+       WHERE ca.id = $1 AND ca.is_deleted = false`,
       [id, student_id],
     );
 
@@ -500,7 +513,7 @@ exports.submitCollegeAssignment = async (req, res) => {
   try {
     // 1. Verify existence
     const assignment = await pool.query(
-      'SELECT id FROM college_assignments WHERE id = $1',
+      'SELECT id FROM college_assignments WHERE id = $1 AND is_deleted = false',
       [id],
     );
     if (!assignment.rowCount) {
@@ -564,7 +577,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
        FROM college_assignments ca
        LEFT JOIN users u ON u.id = ca.created_by
        LEFT JOIN college_assignment_submissions cas ON cas.assignment_id = ca.id AND cas.student_id = $2
-       WHERE ca.id = $1`,
+       WHERE ca.id = $1 AND ca.is_deleted = false`,
       [id, student_id],
     );
 
@@ -629,7 +642,7 @@ exports.getAssignmentSubmissions = async (req, res) => {
       // College assignment — check facilitator owns this college
       if (isFacilitator) {
         const ownerCheck = await pool.query(
-          `SELECT college_id FROM college_assignments WHERE id = $1`,
+          `SELECT college_id FROM college_assignments WHERE id = $1 AND is_deleted = false`,
           [assignmentId],
         );
         if (!ownerCheck.rowCount) {
@@ -728,6 +741,7 @@ exports.getFilteredAssignments = async (req, res) => {
         FROM public.college_assignments ca
         JOIN public.colleges c ON c.id = ca.college_id
         LEFT JOIN public.evaluations e ON e.assignment_id = ca.id
+        WHERE ca.is_deleted = false
 
         UNION ALL
 
