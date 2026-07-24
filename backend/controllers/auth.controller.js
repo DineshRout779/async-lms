@@ -47,14 +47,15 @@ exports.signup = async (req, res) => {
     // 4. Insert User (Identity)
     const result = await pool.query(
       `
-      INSERT INTO users (full_name, email, password_hash, role_id, onboarding_step, is_verified)
-      VALUES ($1, $2, $3, $4, 'college', $5)
-      RETURNING id, full_name, email, onboarding_step, is_verified
+      INSERT INTO users (full_name, email, password_hash, role, role_id, onboarding_step, is_verified)
+      VALUES ($1, $2, $3, $4, $5, 'college', $6)
+      RETURNING id, full_name, email, role, onboarding_step, is_verified
       `,
       [
         full_name,
         email,
         passwordHash,
+        roleKey.toLowerCase(),
         roleRes.rows[0].id,
         false,
       ],
@@ -237,9 +238,9 @@ exports.googleCallback = async (req, res) => {
         "SELECT id FROM roles WHERE role_key = 'STUDENT'",
       );
       const insertRes = await pool.query(
-        `INSERT INTO users (full_name, email, google_id, role_id, onboarding_step, is_verified)
-         VALUES ($1, $2, $3, $4, 'college', false)
-         RETURNING id, full_name, email, onboarding_step, is_verified`,
+        `INSERT INTO users (full_name, email, google_id, role, role_id, onboarding_step, is_verified)
+         VALUES ($1, $2, $3, 'student', $4, 'college', false)
+         RETURNING id, full_name, email, role, onboarding_step, is_verified`,
         [name, email, googleId, studentRoleRes.rows[0].id],
       );
       user = insertRes.rows[0];
