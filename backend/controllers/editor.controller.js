@@ -27,7 +27,7 @@ exports.startEditor = async (req, res) => {
     }
 
     // Docker path — assign to the least-loaded worker node.
-    const workerUrl = assignWorker(userId, projectId);
+    const workerUrl = assignWorker(userId, projectId, profile);
     res.json({
       projectId,
       workspacePath: null, // Docker handles its own workspace path on the Worker node
