@@ -46,17 +46,19 @@ app.use(cors());
 // IMPORTANT: This must be defined BEFORE express.json(), otherwise body-parser 
 // consumes the stream and causes 504 Gateway Timeouts for POST requests!
 const workerProxies = new Map(); // workerIp -> proxyInstance
+const { createProxyMiddleware, fixRequestBody } = require('http-proxy-middleware');
 
 function getWorkerProxy(workerIp) {
   if (workerProxies.has(workerIp)) return workerProxies.get(workerIp);
 
   const workerPort = process.env.WORKER_PORT || 4000;
-  const proxy = require('http-proxy-middleware').createProxyMiddleware({
+  const proxy = createProxyMiddleware({
     target: `http://${workerIp}:${workerPort}`,
     changeOrigin: true,
     ws: false, // Handle upgrades manually below instead of automatically
     pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
     logger: console,
+    onProxyReq: fixRequestBody,
     onProxyReqWs: (proxyReq, req, socket) => {
        // Optional: Add custom headers here if needed
     }
