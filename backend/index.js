@@ -41,10 +41,10 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(compression());
 app.use(cors());
+app.use(express.json());
+app.use(morgan('combined'));
 
 // ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
-// IMPORTANT: This must be defined BEFORE express.json(), otherwise body-parser 
-// consumes the stream and causes 504 Gateway Timeouts for POST requests!
 const workerProxies = new Map(); // workerIp -> proxyInstance
 const { createProxyMiddleware, fixRequestBody } = require('http-proxy-middleware');
 
@@ -72,9 +72,6 @@ app.use('/worker/:ip', (req, res, next) => {
   const proxy = getWorkerProxy(req.params.ip);
   return proxy(req, res, next);
 });
-
-app.use(express.json());
-app.use(morgan('combined'));
 
 // custom logger
 app.use((req, res, next) => {
