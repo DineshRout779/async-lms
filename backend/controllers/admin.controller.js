@@ -4,6 +4,7 @@ const path = require('path');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { withS3Prefix } = require('../utils/s3');
 const slugify = require('../utils/slugify');
+const { logAction } = require('../utils/auditLogger');
 
 // ============================================
 // EXISTING ADMIN FEATURES (Keep these!)
@@ -12,10 +13,16 @@ const slugify = require('../utils/slugify');
 exports.getAdminStats = async (req, res) => {
   try {
     const queries = [
-      pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['student']),
+      pool.query(
+        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1`,
+        ['STUDENT'],
+      ),
       pool.query('SELECT COUNT(*) FROM colleges'),
       pool.query('SELECT COUNT(*) FROM subjects'),
-      pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['facilitator']),
+      pool.query(
+        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1`,
+        ['FACILITATOR'],
+      ),
       pool.query(
         'SELECT full_name, email, created_at FROM users ORDER BY created_at DESC LIMIT 5',
       ),
@@ -70,12 +77,12 @@ exports.getAdminAnalytics = async (req, res) => {
       // 3. Content inventory
       pool.query(`
         SELECT
-          (SELECT COUNT(*) FROM topics)        AS total_topics,
-          (SELECT COUNT(*) FROM units)         AS total_units,
-          (SELECT COUNT(*) FROM subtopics)     AS total_subtopics,
-          (SELECT COUNT(*) FROM lesson_content)AS total_lessons,
-          (SELECT COUNT(*) FROM quizzes)       AS total_quizzes,
-          (SELECT COUNT(*) FROM exercises)     AS total_exercises
+          (SELECT COUNT(*) FROM topics WHERE is_deleted = false)        AS total_topics,
+          (SELECT COUNT(*) FROM units WHERE is_deleted = false)         AS total_units,
+          (SELECT COUNT(*) FROM subtopics WHERE is_deleted = false)     AS total_subtopics,
+          (SELECT COUNT(*) FROM lesson_content WHERE is_deleted = false)AS total_lessons,
+          (SELECT COUNT(*) FROM quizzes WHERE is_deleted = false)       AS total_quizzes,
+          (SELECT COUNT(*) FROM exercises WHERE is_deleted = false)     AS total_exercises
       `),
       // 4. Students per college (top 10)
       pool.query(`
@@ -88,12 +95,13 @@ exports.getAdminAnalytics = async (req, res) => {
       `),
       // 5. Daily new student registrations – last 7 days
       pool.query(`
-        SELECT TO_CHAR(DATE(created_at), 'Mon DD') AS label, COUNT(*) AS count
-        FROM users
-        WHERE role = 'student'
-          AND created_at >= NOW() - INTERVAL '7 days'
-        GROUP BY DATE(created_at), label
-        ORDER BY DATE(created_at)
+        SELECT TO_CHAR(DATE(u.created_at), 'Mon DD') AS label, COUNT(*) AS count
+        FROM users u
+        JOIN roles r ON r.id = u.role_id
+        WHERE r.role_key = 'STUDENT'
+          AND u.created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY DATE(u.created_at), label
+        ORDER BY DATE(u.created_at)
       `),
       // 6. Top subjects by quiz activity
       pool.query(`
@@ -103,9 +111,9 @@ exports.getAdminAnalytics = async (req, res) => {
           ROUND(AVG(qa.score)::numeric, 1) AS avg_score,
           COUNT(DISTINCT qa.user_id) AS unique_students
         FROM subjects sub
-        LEFT JOIN topics t    ON t.subject_id = sub.id
-        LEFT JOIN units u     ON u.topic_id   = t.id
-        LEFT JOIN quizzes q   ON q.unit_id    = u.id
+        LEFT JOIN topics t    ON t.subject_id = sub.id AND t.is_deleted = false
+        LEFT JOIN units u     ON u.topic_id   = t.id AND u.is_deleted = false
+        LEFT JOIN quizzes q   ON q.unit_id    = u.id AND q.is_deleted = false
         LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id
         GROUP BY sub.id, sub.name
         ORDER BY attempt_count DESC
@@ -179,14 +187,15 @@ exports.getAllStudents = async (req, res) => {
         sp.degree, 
         sp.year as batch, 
         u.created_at as joined_date,
-        u.role,
+        LOWER(r.role_key) AS role,
         u.is_verified,
         c.name as college_name,
         c.short_code as college_short_name
       FROM public.users u
+      JOIN public.roles r ON r.id = u.role_id
       LEFT JOIN public.student_profiles sp ON u.id = sp.user_id
       LEFT JOIN public.colleges c ON sp.college_id = c.id
-      WHERE u.role = 'student'
+      WHERE r.role_key = 'STUDENT'
       ORDER BY u.created_at DESC
     `;
 
@@ -300,16 +309,16 @@ exports.getAdminSubjectStructure = async (req, res) => {
         p.max_score AS capstone_max_score
 
       FROM topics t
-      LEFT JOIN projects p ON t.id = p.topic_id
-      LEFT JOIN units u ON t.id = u.topic_id
-      LEFT JOIN subtopics st ON u.id = st.unit_id
+      LEFT JOIN projects p ON t.id = p.topic_id AND p.is_deleted = false
+      LEFT JOIN units u ON t.id = u.topic_id AND u.is_deleted = false
+      LEFT JOIN subtopics st ON u.id = st.unit_id AND st.is_deleted = false
       LEFT JOIN lesson_content lc
-        ON st.id = lc.subtopic_id
-      LEFT JOIN quizzes q ON u.id = q.unit_id
-      LEFT JOIN exercises e ON st.id = e.subtopic_id
-      LEFT JOIN assignments a ON u.id = a.unit_id
+        ON st.id = lc.subtopic_id AND lc.is_deleted = false
+      LEFT JOIN quizzes q ON u.id = q.unit_id AND q.is_deleted = false
+      LEFT JOIN exercises e ON st.id = e.subtopic_id AND e.is_deleted = false
+      LEFT JOIN assignments a ON u.id = a.unit_id AND a.is_deleted = false
 
-      WHERE t.subject_id = $1
+      WHERE t.subject_id = $1 AND t.is_deleted = false
       ORDER BY
         t.order_index,
         u.order_index,
@@ -480,6 +489,8 @@ exports.createTopic = async (req, res) => {
 
     const result = await pool.query(query, values);
 
+    logAction({ req, action: 'CREATE', entityType: 'topic', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+
     res.status(201).json({
       success: true,
       message: 'Topic created successfully',
@@ -545,6 +556,8 @@ exports.updateTopic = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'topic', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+
     res.json({
       success: true,
       message: 'Topic updated successfully',
@@ -562,30 +575,107 @@ exports.updateTopic = async (req, res) => {
 
 // Delete a topic
 exports.deleteTopic = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM topics WHERE id = $1 RETURNING id;';
-    const result = await pool.query(query, [id]);
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'UPDATE topics SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;',
+      [id],
+    );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
         message: 'Topic not found',
       });
     }
 
+    // Cascade soft-delete to child rows: units -> subtopics -> lesson_content/exercises,
+    // units -> quizzes -> quiz_questions -> quiz_question_options, units -> assignments,
+    // and topic-level projects (capstones).
+    await client.query(
+      `UPDATE quiz_question_options SET is_deleted = true
+       WHERE question_id IN (
+         SELECT qq.id FROM quiz_questions qq
+         INNER JOIN quizzes q ON qq.quiz_id = q.id
+         INNER JOIN units u ON q.unit_id = u.id
+         WHERE u.topic_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE quiz_questions SET is_deleted = true
+       WHERE quiz_id IN (
+         SELECT q.id FROM quizzes q
+         INNER JOIN units u ON q.unit_id = u.id
+         WHERE u.topic_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE quizzes SET is_deleted = true
+       WHERE unit_id IN (SELECT id FROM units WHERE topic_id = $1) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE lesson_content SET is_deleted = true
+       WHERE subtopic_id IN (
+         SELECT st.id FROM subtopics st
+         INNER JOIN units u ON st.unit_id = u.id
+         WHERE u.topic_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE exercises SET is_deleted = true
+       WHERE subtopic_id IN (
+         SELECT st.id FROM subtopics st
+         INNER JOIN units u ON st.unit_id = u.id
+         WHERE u.topic_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE assignments SET is_deleted = true
+       WHERE unit_id IN (SELECT id FROM units WHERE topic_id = $1) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE subtopics SET is_deleted = true
+       WHERE unit_id IN (SELECT id FROM units WHERE topic_id = $1) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE units SET is_deleted = true WHERE topic_id = $1 AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE projects SET is_deleted = true WHERE topic_id = $1 AND is_deleted = false`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+
+    logAction({ req, action: 'DELETE', entityType: 'topic', entityId: id, details: { title: result.rows[0].title } });
+
     res.json({
       success: true,
       message: 'Topic deleted successfully',
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error deleting topic:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete topic',
       error: error.message,
     });
+  } finally {
+    client.release();
   }
 };
 
@@ -629,6 +719,8 @@ exports.createUnit = async (req, res) => {
     ];
 
     const result = await pool.query(query, values);
+
+    logAction({ req, action: 'CREATE', entityType: 'unit', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
 
     res.status(201).json({
       success: true,
@@ -708,6 +800,8 @@ exports.updateUnit = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'unit', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+
     res.json({
       success: true,
       message: 'Unit updated successfully',
@@ -733,30 +827,82 @@ exports.updateUnit = async (req, res) => {
 
 // Delete a unit
 exports.deleteUnit = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM units WHERE id = $1 RETURNING id;';
-    const result = await pool.query(query, [id]);
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'UPDATE units SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;',
+      [id],
+    );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
         message: 'Unit not found',
       });
     }
 
+    // Cascade soft-delete to child rows: subtopics -> lesson_content/exercises,
+    // quizzes -> quiz_questions -> quiz_question_options, and assignments.
+    await client.query(
+      `UPDATE quiz_question_options SET is_deleted = true
+       WHERE question_id IN (
+         SELECT qq.id FROM quiz_questions qq
+         INNER JOIN quizzes q ON qq.quiz_id = q.id
+         WHERE q.unit_id = $1
+       ) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE quiz_questions SET is_deleted = true
+       WHERE quiz_id IN (SELECT id FROM quizzes WHERE unit_id = $1) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE quizzes SET is_deleted = true WHERE unit_id = $1 AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE lesson_content SET is_deleted = true
+       WHERE subtopic_id IN (SELECT id FROM subtopics WHERE unit_id = $1) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE exercises SET is_deleted = true
+       WHERE subtopic_id IN (SELECT id FROM subtopics WHERE unit_id = $1) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE assignments SET is_deleted = true WHERE unit_id = $1 AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE subtopics SET is_deleted = true WHERE unit_id = $1 AND is_deleted = false`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+
+    logAction({ req, action: 'DELETE', entityType: 'unit', entityId: id, details: { title: result.rows[0].title } });
+
     res.json({
       success: true,
       message: 'Unit deleted successfully',
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error deleting unit:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete unit',
       error: error.message,
     });
+  } finally {
+    client.release();
   }
 };
 
@@ -799,6 +945,8 @@ exports.createSubtopic = async (req, res) => {
     ];
 
     const result = await pool.query(query, values);
+
+    logAction({ req, action: 'CREATE', entityType: 'subtopic', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
 
     res.status(201).json({
       success: true,
@@ -878,6 +1026,8 @@ exports.updateSubtopic = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'subtopic', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+
     res.json({
       success: true,
       message: 'Subtopic updated successfully',
@@ -903,30 +1053,53 @@ exports.updateSubtopic = async (req, res) => {
 
 // Delete a subtopic
 exports.deleteSubtopic = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM subtopics WHERE id = $1 RETURNING id;';
-    const result = await pool.query(query, [id]);
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'UPDATE subtopics SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;',
+      [id],
+    );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
         message: 'Subtopic not found',
       });
     }
 
+    // Cascade soft-delete to lesson_content and exercises attached to this subtopic.
+    await client.query(
+      `UPDATE lesson_content SET is_deleted = true WHERE subtopic_id = $1 AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE exercises SET is_deleted = true WHERE subtopic_id = $1 AND is_deleted = false`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+
+    logAction({ req, action: 'DELETE', entityType: 'subtopic', entityId: id, details: { title: result.rows[0].title } });
+
     res.json({
       success: true,
       message: 'Subtopic deleted successfully',
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error deleting subtopic:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete subtopic',
       error: error.message,
     });
+  } finally {
+    client.release();
   }
 };
 
@@ -1014,6 +1187,8 @@ exports.createLessonContent = async (req, res) => {
 
     const result = await pool.query(query, values);
 
+    logAction({ req, action: 'CREATE', entityType: 'lesson_content', entityId: result.rows[0].id, details: { content_type: result.rows[0].content_type, subtopic_id: result.rows[0].subtopic_id } });
+
     res.status(201).json({
       success: true,
       message: 'Lesson content created successfully',
@@ -1097,6 +1272,8 @@ exports.updateLessonContent = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'lesson_content', entityId: result.rows[0].id, details: { content_type: result.rows[0].content_type } });
+
     res.json({
       success: true,
       message: 'Lesson content updated successfully',
@@ -1117,7 +1294,7 @@ exports.deleteLessonContent = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM lesson_content WHERE id = $1 RETURNING id;';
+    const query = 'UPDATE lesson_content SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -1126,6 +1303,8 @@ exports.deleteLessonContent = async (req, res) => {
         message: 'Lesson content not found',
       });
     }
+
+    logAction({ req, action: 'DELETE', entityType: 'lesson_content', entityId: id, details: { content_type: result.rows[0].content_type, subtopic_id: result.rows[0].subtopic_id } });
 
     res.json({
       success: true,
@@ -1203,6 +1382,8 @@ exports.createQuiz = async (req, res) => {
 
     const result = await pool.query(query, [unit_id, passing_score, max_score]);
 
+    logAction({ req, action: 'CREATE', entityType: 'quiz', entityId: result.rows[0].id, details: { unit_id: result.rows[0].unit_id } });
+
     res.status(201).json({
       success: true,
       message: 'Quiz created successfully',
@@ -1255,6 +1436,10 @@ exports.updateQuiz = async (req, res) => {
 
     const result = await pool.query(query, values);
 
+    if (result.rows.length > 0) {
+      logAction({ req, action: 'UPDATE', entityType: 'quiz', entityId: result.rows[0].id, details: { unit_id: result.rows[0].unit_id } });
+    }
+
     res.json({
       success: true,
       message: 'Quiz updated successfully',
@@ -1271,30 +1456,54 @@ exports.updateQuiz = async (req, res) => {
 };
 
 exports.deleteQuiz = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM quizzes WHERE id = $1 RETURNING id;';
-    const result = await pool.query(query, [id]);
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'UPDATE quizzes SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;',
+      [id],
+    );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
         message: 'Quiz not found',
       });
     }
 
+    // Cascade soft-delete to quiz_questions and their quiz_question_options.
+    await client.query(
+      `UPDATE quiz_question_options SET is_deleted = true
+       WHERE question_id IN (SELECT id FROM quiz_questions WHERE quiz_id = $1) AND is_deleted = false`,
+      [id],
+    );
+    await client.query(
+      `UPDATE quiz_questions SET is_deleted = true WHERE quiz_id = $1 AND is_deleted = false`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+
+    logAction({ req, action: 'DELETE', entityType: 'quiz', entityId: id, details: { unit_id: result.rows[0].unit_id } });
+
     res.json({
       success: true,
       message: 'Quiz deleted successfully',
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error deleting quiz:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete quiz',
       error: error.message,
     });
+  } finally {
+    client.release();
   }
 };
 
@@ -1306,7 +1515,7 @@ exports.getExercise = async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      'SELECT id, title, instructions, max_score, subtopic_id, language, initial_files, test_cases, tasks FROM exercises WHERE id = $1',
+      'SELECT id, title, instructions, max_score, subtopic_id, language, initial_files, test_cases, tasks FROM exercises WHERE id = $1 AND is_deleted = false',
       [id],
     );
     if (!result.rowCount) return res.status(404).json({ message: 'Exercise not found' });
@@ -1343,6 +1552,8 @@ exports.createExercise = async (req, res) => {
       JSON.stringify(test_cases || []),
       JSON.stringify(tasks || []),
     ]);
+
+    logAction({ req, action: 'CREATE', entityType: 'exercise', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
 
     res.status(201).json({
       success: true,
@@ -1416,6 +1627,10 @@ exports.updateExercise = async (req, res) => {
 
     const result = await pool.query(query, values);
 
+    if (result.rows.length > 0) {
+      logAction({ req, action: 'UPDATE', entityType: 'exercise', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    }
+
     res.json({
       success: true,
       message: 'Exercise updated successfully',
@@ -1435,7 +1650,7 @@ exports.deleteExercise = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM exercises WHERE id = $1 RETURNING id;';
+    const query = 'UPDATE exercises SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -1444,6 +1659,8 @@ exports.deleteExercise = async (req, res) => {
         message: 'Exercise not found',
       });
     }
+
+    logAction({ req, action: 'DELETE', entityType: 'exercise', entityId: id, details: { title: result.rows[0].title } });
 
     res.json({
       success: true,
@@ -1467,7 +1684,7 @@ exports.getAssignment = async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      'SELECT id, title, instructions, max_score, unit_id FROM assignments WHERE id = $1',
+      'SELECT id, title, instructions, max_score, unit_id FROM assignments WHERE id = $1 AND is_deleted = false',
       [id],
     );
     if (!result.rowCount) return res.status(404).json({ message: 'Assignment not found' });
@@ -1500,6 +1717,8 @@ exports.createAssignment = async (req, res) => {
       instructions,
       max_score,
     ]);
+
+    logAction({ req, action: 'CREATE', entityType: 'assignment', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
 
     res.status(201).json({
       success: true,
@@ -1557,6 +1776,10 @@ exports.updateAssignment = async (req, res) => {
 
     const result = await pool.query(query, values);
 
+    if (result.rows.length > 0) {
+      logAction({ req, action: 'UPDATE', entityType: 'assignment', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    }
+
     res.json({
       success: true,
       message: 'Assignment updated successfully',
@@ -1576,7 +1799,7 @@ exports.deleteAssignment = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM assignments WHERE id = $1 RETURNING id;';
+    const query = 'UPDATE assignments SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -1585,6 +1808,8 @@ exports.deleteAssignment = async (req, res) => {
         message: 'Assignment not found',
       });
     }
+
+    logAction({ req, action: 'DELETE', entityType: 'assignment', entityId: id, details: { title: result.rows[0].title } });
 
     res.json({
       success: true,
@@ -1622,6 +1847,8 @@ exports.createProject = async (req, res) => {
     `;
 
     const result = await pool.query(query, [topic_id, title, instructions || null]);
+
+    logAction({ req, action: 'CREATE', entityType: 'project', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
 
     res.status(201).json({
       success: true,
@@ -1675,6 +1902,10 @@ exports.updateProject = async (req, res) => {
 
     const result = await pool.query(query, values);
 
+    if (result.rows.length > 0) {
+      logAction({ req, action: 'UPDATE', entityType: 'project', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    }
+
     res.json({
       success: true,
       message: 'Project updated successfully',
@@ -1694,7 +1925,7 @@ exports.deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM projects WHERE id = $1 RETURNING id;';
+    const query = 'UPDATE projects SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -1703,6 +1934,8 @@ exports.deleteProject = async (req, res) => {
         message: 'Project not found',
       });
     }
+
+    logAction({ req, action: 'DELETE', entityType: 'project', entityId: id, details: { title: result.rows[0].title } });
 
     res.json({
       success: true,
@@ -1763,6 +1996,8 @@ exports.createQuizQuestion = async (req, res) => {
       explanation || null,
       order_index || null,
     ]);
+
+    logAction({ req, action: 'CREATE', entityType: 'quiz_question', entityId: result.rows[0].id, details: { quiz_id: result.rows[0].quiz_id } });
 
     res.status(201).json({
       success: true,
@@ -1839,6 +2074,8 @@ exports.updateQuizQuestion = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'quiz_question', entityId: result.rows[0].id, details: { quiz_id: result.rows[0].quiz_id } });
+
     res.json({
       success: true,
       message: 'Quiz question updated successfully',
@@ -1859,30 +2096,49 @@ exports.updateQuizQuestion = async (req, res) => {
  * DELETE /api/admin/quiz-questions/:id
  */
 exports.deleteQuizQuestion = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
 
-    const query = 'DELETE FROM quiz_questions WHERE id = $1 RETURNING id;';
-    const result = await pool.query(query, [id]);
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'UPDATE quiz_questions SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;',
+      [id],
+    );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
         message: 'Quiz question not found',
       });
     }
 
+    // Cascade soft-delete to this question's options.
+    await client.query(
+      `UPDATE quiz_question_options SET is_deleted = true WHERE question_id = $1 AND is_deleted = false`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+
+    logAction({ req, action: 'DELETE', entityType: 'quiz_question', entityId: id, details: { quiz_id: result.rows[0].quiz_id } });
+
     res.json({
       success: true,
       message: 'Quiz question deleted successfully',
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error deleting quiz question:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete quiz question',
       error: error.message,
     });
+  } finally {
+    client.release();
   }
 };
 
@@ -1905,8 +2161,8 @@ exports.getQuizQuestions = async (req, res) => {
           ) ORDER BY qo.order_index
         ) FILTER (WHERE qo.id IS NOT NULL) as options
       FROM quiz_questions qq
-      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id
-      WHERE qq.quiz_id = $1
+      LEFT JOIN quiz_question_options qo ON qq.id = qo.question_id AND qo.is_deleted = false
+      WHERE qq.quiz_id = $1 AND qq.is_deleted = false
       GROUP BY qq.id
       ORDER BY qq.order_index;
     `;
@@ -1963,6 +2219,8 @@ exports.createQuizQuestionOption = async (req, res) => {
       is_correct || false,
       order_index || null,
     ]);
+
+    logAction({ req, action: 'CREATE', entityType: 'quiz_question_option', entityId: result.rows[0].id, details: { question_id: result.rows[0].question_id } });
 
     res.status(201).json({
       success: true,
@@ -2030,6 +2288,8 @@ exports.updateQuizQuestionOption = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'quiz_question_option', entityId: result.rows[0].id, details: { question_id: result.rows[0].question_id } });
+
     res.json({
       success: true,
       message: 'Quiz option updated successfully',
@@ -2054,7 +2314,7 @@ exports.deleteQuizQuestionOption = async (req, res) => {
     const { id } = req.params;
 
     const query =
-      'DELETE FROM quiz_question_options WHERE id = $1 RETURNING id;';
+      'UPDATE quiz_question_options SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -2063,6 +2323,8 @@ exports.deleteQuizQuestionOption = async (req, res) => {
         message: 'Quiz option not found',
       });
     }
+
+    logAction({ req, action: 'DELETE', entityType: 'quiz_question_option', entityId: id, details: { question_id: result.rows[0].question_id } });
 
     res.json({
       success: true,
@@ -2207,7 +2469,7 @@ exports.getQuizQuestionOptions = async (req, res) => {
     const query = `
       SELECT id, option_text, is_correct, order_index
       FROM quiz_question_options
-      WHERE question_id = $1
+      WHERE question_id = $1 AND is_deleted = false
       ORDER BY order_index;
     `;
 
@@ -2259,7 +2521,7 @@ exports.getStudentProgress = async (req, res) => {
                 'last_scroll_position', ulp.last_scroll_position
               )
               FROM user_lesson_progress ulp
-              INNER JOIN lesson_content lc ON ulp.lesson_content_id = lc.id
+              INNER JOIN lesson_content lc ON ulp.lesson_content_id = lc.id AND lc.is_deleted = false
               WHERE ulp.user_id = $1 AND lc.subtopic_id = st.id
               LIMIT 1
             ),
@@ -2273,7 +2535,7 @@ exports.getStudentProgress = async (req, res) => {
                 )
               )
               FROM quiz_attempts qa
-              INNER JOIN quizzes q ON qa.quiz_id = q.id
+              INNER JOIN quizzes q ON qa.quiz_id = q.id AND q.is_deleted = false
               WHERE qa.user_id = $1 AND q.subtopic_id = st.id
             ),
             'exercise_submissions', (
@@ -2286,17 +2548,17 @@ exports.getStudentProgress = async (req, res) => {
                 )
               )
               FROM exercise_submissions es
-              INNER JOIN exercises e ON es.exercise_id = e.id
+              INNER JOIN exercises e ON es.exercise_id = e.id AND e.is_deleted = false
               WHERE es.user_id = $1 AND e.subtopic_id = st.id
             )
           )
           ORDER BY st.order_index
         ) as subtopics
       FROM topics t
-      INNER JOIN subtopics st ON t.id = st.topic_id
+      INNER JOIN subtopics st ON t.id = st.topic_id AND st.is_deleted = false
       LEFT JOIN user_topic_progress utp ON utp.topic_id = t.id AND utp.user_id = $1
       LEFT JOIN user_subtopic_progress usp ON usp.subtopic_id = st.id AND usp.user_id = $1
-      WHERE t.subject_id = $2
+      WHERE t.subject_id = $2 AND t.is_deleted = false
       GROUP BY t.id, t.title, t.order_index, utp.progress_percent, utp.is_completed
       ORDER BY t.order_index;
     `;
@@ -2362,7 +2624,7 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
       LEFT JOIN user_subtopic_progress usp ON u.id = usp.user_id
       LEFT JOIN points_log pl ON u.id = pl.user_id
       LEFT JOIN user_streaks us ON u.id = us.user_id
-      WHERE u.role = 'student'
+      WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
     `;
 
     const params = [];
@@ -2371,7 +2633,7 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
       query += ` AND usp.subtopic_id IN (
         SELECT st.id FROM subtopics st
         INNER JOIN topics t ON st.topic_id = t.id
-        WHERE t.subject_id = $1
+        WHERE t.subject_id = $1 AND st.is_deleted = false AND t.is_deleted = false
       )`;
       params.push(subjectId);
     }
@@ -2414,7 +2676,7 @@ exports.getLockControlBatches = async (req, res) => {
       SELECT DISTINCT sp.year
       FROM public.users u
       INNER JOIN public.student_profiles sp ON u.id = sp.user_id
-      WHERE u.role = 'student'
+      WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
     `;
 
     if (collegeId) {
@@ -2463,7 +2725,7 @@ exports.getLockControlOverview = async (req, res) => {
         SELECT u.id
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
-        WHERE u.role = 'student'
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       ),
@@ -2485,11 +2747,11 @@ exports.getLockControlOverview = async (req, res) => {
           st.order_index AS subtopic_order,
           MIN(lc.content_type) AS content_type
         FROM topics t
-        INNER JOIN units u ON u.topic_id = t.id
-        INNER JOIN subtopics st ON st.unit_id = u.id
-        LEFT JOIN lesson_content lc 
-          ON lc.subtopic_id = st.id AND lc.is_published = true
-        WHERE t.subject_id = $3::uuid
+        INNER JOIN units u ON u.topic_id = t.id AND u.is_deleted = false
+        INNER JOIN subtopics st ON st.unit_id = u.id AND st.is_deleted = false
+        LEFT JOIN lesson_content lc
+          ON lc.subtopic_id = st.id AND lc.is_published = true AND lc.is_deleted = false
+        WHERE t.subject_id = $3::uuid AND t.is_deleted = false
         GROUP BY 
           t.id, t.title, t.order_index,
           u.id, u.title, u.order_index,
@@ -2627,7 +2889,7 @@ exports.setLockControlTopic = async (req, res) => {
         SELECT u.id
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
-        WHERE u.role = 'student'
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       ),
@@ -2635,7 +2897,7 @@ exports.setLockControlTopic = async (req, res) => {
         SELECT st.id
         FROM subtopics st
         INNER JOIN units u ON st.unit_id = u.id
-        WHERE u.topic_id = $3
+        WHERE u.topic_id = $3 AND st.is_deleted = false AND u.is_deleted = false
       )
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT c.id, ts.id, $4
@@ -2659,7 +2921,7 @@ exports.setLockControlTopic = async (req, res) => {
           WHERE ($1::uuid IS NULL OR sp2.college_id = $1)
             AND ($2::int IS NULL OR sp2.year = $2)
         ) sp
-        WHERE u.topic_id = $3
+        WHERE u.topic_id = $3 AND st.is_deleted = false AND u.is_deleted = false
         ON CONFLICT (subtopic_id, college_id, year)
         DO UPDATE SET is_locked = EXCLUDED.is_locked, updated_at = NOW()`,
         [collegeParam, batchParam, topicId, isLocked],
@@ -2708,7 +2970,7 @@ exports.setLockControlSubtopic = async (req, res) => {
         SELECT u.id
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
-        WHERE u.role = 'student'
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       )
@@ -2847,7 +3109,7 @@ exports.getTopicLeaderboard = async (req, res) => {
       INNER JOIN users u ON lt.user_id = u.id
       LEFT JOIN student_profiles sp ON u.id = sp.user_id
       LEFT JOIN colleges c ON sp.college_id = c.id
-      INNER JOIN topics t ON lt.topic_id = t.id
+      INNER JOIN topics t ON lt.topic_id = t.id AND t.is_deleted = false
       WHERE lt.topic_id = $1
       ORDER BY lt.rank
       LIMIT $2;
@@ -2932,7 +3194,7 @@ exports.updateLeaderboards = async (req, res) => {
 
     if (type === 'all') {
       // Update all topic leaderboards
-      const topics = await pool.query('SELECT id FROM topics');
+      const topics = await pool.query('SELECT id FROM topics WHERE is_deleted = false');
       for (const topic of topics.rows) {
         await pool.query('SELECT update_topic_leaderboard($1)', [topic.id]);
       }
@@ -2972,10 +3234,15 @@ exports.verifyUser = async (req, res) => {
     }
 
     const query = `
-      UPDATE users 
-      SET is_verified = $1, updated_at = CURRENT_TIMESTAMP 
-      WHERE id = $2 
-      RETURNING id, full_name, role, is_verified;
+      WITH updated AS (
+        UPDATE users
+        SET is_verified = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING id, full_name, role_id, is_verified
+      )
+      SELECT updated.id, updated.full_name, LOWER(r.role_key) AS role, updated.is_verified
+      FROM updated
+      LEFT JOIN roles r ON r.id = updated.role_id;
     `;
 
     const result = await pool.query(query, [is_verified, id]);
@@ -3016,9 +3283,10 @@ exports.getStudentProfile = async (req, res) => {
                 sp.degree, sp.year AS batch,
                 c.name AS college_name, c.short_code AS college_short_name
          FROM users u
+         JOIN roles r ON r.id = u.role_id
          LEFT JOIN student_profiles sp ON u.id = sp.user_id
          LEFT JOIN colleges c ON sp.college_id = c.id
-         WHERE u.id = $1 AND u.role = 'student'`,
+         WHERE u.id = $1 AND r.role_key = 'STUDENT'`,
         [id],
       ),
       pool.query(
@@ -3038,16 +3306,16 @@ exports.getStudentProfile = async (req, res) => {
         `SELECT s.id, s.name,
            COALESCE((
              SELECT COUNT(*)::int FROM user_subtopic_progress usp
-             JOIN subtopics st ON usp.subtopic_id = st.id
-             JOIN units un ON st.unit_id = un.id
-             JOIN topics t ON un.topic_id = t.id
+             JOIN subtopics st ON usp.subtopic_id = st.id AND st.is_deleted = false
+             JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+             JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
              WHERE usp.user_id = $1 AND t.subject_id = s.id AND usp.is_completed = true
            ), 0) AS completed_subtopics,
            COALESCE((
              SELECT COUNT(*)::int FROM subtopics st
-             JOIN units un ON st.unit_id = un.id
-             JOIN topics t ON un.topic_id = t.id
-             WHERE t.subject_id = s.id
+             JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+             JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+             WHERE t.subject_id = s.id AND st.is_deleted = false
            ), 0) AS total_subtopics
          FROM user_subjects us
          JOIN subjects s ON us.subject_id = s.id
@@ -3087,7 +3355,8 @@ exports.getFacilitatorProfile = async (req, res) => {
       pool.query(
         `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at
          FROM users u
-         WHERE u.id = $1 AND u.role = 'facilitator'`,
+         JOIN roles r ON r.id = u.role_id
+         WHERE u.id = $1 AND r.role_key = 'FACILITATOR'`,
         [id],
       ),
       pool.query(
@@ -3138,16 +3407,18 @@ exports.getCollegeDetail = async (req, res) => {
         `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at,
                 sp.degree, sp.current_academic_year, sp.year
          FROM users u
+         JOIN roles r ON r.id = u.role_id
          JOIN student_profiles sp ON sp.user_id = u.id
-         WHERE sp.college_id = $1 AND u.role = 'student'
+         WHERE sp.college_id = $1 AND r.role_key = 'STUDENT'
          ORDER BY u.created_at DESC`,
         [id],
       ),
       pool.query(
         `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at
          FROM users u
+         JOIN roles r ON r.id = u.role_id
          JOIN facilitator_colleges fc ON fc.facilitator_id = u.id
-         WHERE fc.college_id = $1 AND u.role = 'facilitator'
+         WHERE fc.college_id = $1 AND r.role_key = 'FACILITATOR'
          ORDER BY u.created_at DESC`,
         [id],
       ),

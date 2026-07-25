@@ -18,8 +18,6 @@ const verifyToken = async (req, res, next) => {
     // 3. Attach the user payload to the request object
     req.user = verified;
 
-    console.log('Logged in user role:', req.user.role);
-
     // 4. Move to the next middleware or controller
     next();
   } catch (error) {

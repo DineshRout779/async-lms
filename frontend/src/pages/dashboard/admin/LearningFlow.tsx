@@ -44,6 +44,7 @@ import AssignmentModal from '@/components/common/admin/AssignmentModal';
 import CapstoneModal from '@/components/common/admin/CapstoneModal';
 import { QuizQuestionsList } from '@/components/common/admin/QuizQuestions';
 import ContentModal from '@/components/common/admin/ContentModal';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { fetchSubjects } from '@/features/subjects/subjectSlice';
 import {
@@ -132,6 +133,20 @@ const LearningFlow: React.FC = () => {
     string | undefined
   >(undefined);
   const [modalLoading, setModalLoading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    kind:
+      | 'unit'
+      | 'topic'
+      | 'subtopic'
+      | 'content'
+      | 'quiz'
+      | 'exercise'
+      | 'assignment'
+      | 'capstone';
+    id: string;
+    label: string;
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // 1. Initial Load: Get all subjects
   useEffect(() => {
@@ -257,9 +272,11 @@ const LearningFlow: React.FC = () => {
   };
 
   // Delete Unit
-  const handleDeleteUnit = async (unitId: string) => {
-    if (!confirm('Are you sure you want to delete this unit?')) return;
+  const requestDeleteUnit = (unitId: string, label: string) => {
+    setConfirmDelete({ kind: 'unit', id: unitId, label });
+  };
 
+  const handleDeleteUnit = async (unitId: string) => {
     try {
       const response = await apiClient.delete(`/admin/units/${unitId}`);
       if (response.data.success) {
@@ -299,9 +316,11 @@ const LearningFlow: React.FC = () => {
   };
 
   // Delete Topic
-  const handleDeleteTopic = async (topicId: string) => {
-    if (!confirm('Are you sure you want to delete this topic?')) return;
+  const requestDeleteTopic = (topicId: string, label: string) => {
+    setConfirmDelete({ kind: 'topic', id: topicId, label });
+  };
 
+  const handleDeleteTopic = async (topicId: string) => {
     try {
       const response = await apiClient.delete(`/admin/topics/${topicId}`);
       if (response.data.success) {
@@ -377,9 +396,11 @@ const LearningFlow: React.FC = () => {
   };
 
   // Delete Subtopic
-  const handleDeleteSubtopic = async (subtopicId: string) => {
-    if (!confirm('Are you sure you want to delete this subtopic?')) return;
+  const requestDeleteSubtopic = (subtopicId: string, label: string) => {
+    setConfirmDelete({ kind: 'subtopic', id: subtopicId, label });
+  };
 
+  const handleDeleteSubtopic = async (subtopicId: string) => {
     try {
       const response = await apiClient.delete(`/admin/subtopics/${subtopicId}`);
       if (response.data.success) {
@@ -491,9 +512,11 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  const handleDeleteContent = async (contentId: string) => {
-    if (!confirm('Are you sure you want to delete this content?')) return;
+  const requestDeleteContent = (contentId: string, label: string) => {
+    setConfirmDelete({ kind: 'content', id: contentId, label });
+  };
 
+  const handleDeleteContent = async (contentId: string) => {
     try {
       const response = await apiClient.delete(
         `/admin/lesson-content/${contentId}`,
@@ -605,9 +628,11 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  const handleDeleteQuiz = async (id: string) => {
-    if (!confirm('Delete this quiz?')) return;
+  const requestDeleteQuiz = (id: string, label: string) => {
+    setConfirmDelete({ kind: 'quiz', id, label });
+  };
 
+  const handleDeleteQuiz = async (id: string) => {
     try {
       await apiClient.delete(`/admin/quizzes/${id}`);
       toast.success('Quiz deleted');
@@ -646,9 +671,11 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  const handleDeleteExercise = async (id: string) => {
-    if (!confirm('Delete this exercise?')) return;
+  const requestDeleteExercise = (id: string, label: string) => {
+    setConfirmDelete({ kind: 'exercise', id, label });
+  };
 
+  const handleDeleteExercise = async (id: string) => {
     try {
       await apiClient.delete(`/admin/exercises/${id}`);
       toast.success('Exercise deleted');
@@ -676,9 +703,11 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  const handleDeleteAssignment = async (id: string) => {
-    if (!confirm('Delete this assignment?')) return;
+  const requestDeleteAssignment = (id: string, label: string) => {
+    setConfirmDelete({ kind: 'assignment', id, label });
+  };
 
+  const handleDeleteAssignment = async (id: string) => {
     try {
       await apiClient.delete(`/admin/assignments/${id}`);
       toast.success('Assignment deleted');
@@ -734,8 +763,11 @@ const LearningFlow: React.FC = () => {
     }
   };
 
+  const requestDeleteCapstone = (id: string, label: string) => {
+    setConfirmDelete({ kind: 'capstone', id, label });
+  };
+
   const handleDeleteCapstone = async (id: string) => {
-    if (!confirm('Delete this capstone project?')) return;
     try {
       await apiClient.delete(`/admin/projects/${id}`);
       toast.success('Capstone deleted');
@@ -1009,7 +1041,7 @@ const LearningFlow: React.FC = () => {
                             />
                             <div className='mx-1 h-4 w-px bg-slate-200' />
                             <Trash2
-                              onClick={() => handleDeleteTopic(topic.id)}
+                              onClick={() => requestDeleteTopic(topic.id, topic.title)}
                               className='h-4 w-4 cursor-pointer hover:text-red-500'
                             />
                           </div>
@@ -1138,7 +1170,7 @@ const LearningFlow: React.FC = () => {
                                           </button>
                                           <button
                                             onClick={() =>
-                                              handleDeleteUnit(unit.id)
+                                              requestDeleteUnit(unit.id, unit.title)
                                             }
                                             className='rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors'
                                           >
@@ -1195,8 +1227,9 @@ const LearningFlow: React.FC = () => {
                                                     </button>
                                                     <button
                                                       onClick={() =>
-                                                        handleDeleteAssignment(
+                                                        requestDeleteAssignment(
                                                           a.id,
+                                                          a.title,
                                                         )
                                                       }
                                                       className='rounded-full p-0.5 hover:bg-red-100 hover:text-red-600'
@@ -1247,8 +1280,9 @@ const LearningFlow: React.FC = () => {
                                                     </button>
                                                     <button
                                                       onClick={() =>
-                                                        handleDeleteQuiz(
+                                                        requestDeleteQuiz(
                                                           quiz.id,
+                                                          `Quiz ${qIndex + 1}`,
                                                         )
                                                       }
                                                       className='rounded-full p-0.5 hover:bg-red-100 hover:text-red-600'
@@ -1382,8 +1416,9 @@ const LearningFlow: React.FC = () => {
                                                         </button>
                                                         <button
                                                           onClick={() =>
-                                                            handleDeleteSubtopic(
+                                                            requestDeleteSubtopic(
                                                               sub.id,
+                                                              sub.title,
                                                             )
                                                           }
                                                           className='rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors'
@@ -1528,8 +1563,11 @@ const LearningFlow: React.FC = () => {
                                                                 </button>
                                                                 <button
                                                                   onClick={() =>
-                                                                    handleDeleteContent(
+                                                                    requestDeleteContent(
                                                                       content.id,
+                                                                      content.markdown_path
+                                                                        ? content.markdown_path.split('/').pop() ?? 'this content'
+                                                                        : 'this content',
                                                                     )
                                                                   }
                                                                   className='p-1 text-slate-400 hover:text-red-500'
@@ -1611,8 +1649,9 @@ const LearningFlow: React.FC = () => {
                                                                 </button>
                                                                 <button
                                                                   onClick={() =>
-                                                                    handleDeleteExercise(
+                                                                    requestDeleteExercise(
                                                                       exercise.id,
+                                                                      exercise.title,
                                                                     )
                                                                   }
                                                                   className='p-1 text-slate-400 hover:text-red-500'
@@ -1690,7 +1729,10 @@ const LearningFlow: React.FC = () => {
                                     />
                                     <Trash2
                                       onClick={() =>
-                                        handleDeleteCapstone(topic.capstone!.id)
+                                        requestDeleteCapstone(
+                                          topic.capstone!.id,
+                                          topic.capstone!.title,
+                                        )
                                       }
                                       className='h-4 w-4 cursor-pointer hover:text-red-500'
                                     />
@@ -2055,6 +2097,64 @@ const LearningFlow: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDelete(null);
+        }}
+        title={
+          confirmDelete
+            ? `Delete ${confirmDelete.kind.charAt(0).toUpperCase() + confirmDelete.kind.slice(1)}`
+            : 'Delete'
+        }
+        description={
+          <>
+            Are you sure you want to delete{' '}
+            <span className='font-semibold'>
+              {confirmDelete?.label || 'this item'}
+            </span>
+            ? This action cannot be undone.
+          </>
+        }
+        confirmLabel='Delete'
+        loading={deleteLoading}
+        onConfirm={async () => {
+          if (!confirmDelete) return;
+          setDeleteLoading(true);
+          try {
+            switch (confirmDelete.kind) {
+              case 'unit':
+                await handleDeleteUnit(confirmDelete.id);
+                break;
+              case 'topic':
+                await handleDeleteTopic(confirmDelete.id);
+                break;
+              case 'subtopic':
+                await handleDeleteSubtopic(confirmDelete.id);
+                break;
+              case 'content':
+                await handleDeleteContent(confirmDelete.id);
+                break;
+              case 'quiz':
+                await handleDeleteQuiz(confirmDelete.id);
+                break;
+              case 'exercise':
+                await handleDeleteExercise(confirmDelete.id);
+                break;
+              case 'assignment':
+                await handleDeleteAssignment(confirmDelete.id);
+                break;
+              case 'capstone':
+                await handleDeleteCapstone(confirmDelete.id);
+                break;
+            }
+          } finally {
+            setDeleteLoading(false);
+            setConfirmDelete(null);
+          }
+        }}
+      />
     </>
   );
 };

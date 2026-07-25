@@ -53,7 +53,7 @@ async function notifyCollege({ collegeId, type, title, body, link = null }) {
     const { rows } = await pool.query(
       `SELECT u.id FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE sp.college_id = $1 AND u.role = 'student'`,
+       WHERE sp.college_id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')`,
       [collegeId],
     );
     await Promise.all(rows.map(({ id }) => notify({ userId: id, type, title, body, link })));
