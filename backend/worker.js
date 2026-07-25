@@ -158,6 +158,7 @@ async function registerWithOrchestrator(retries = 0) {
       id: WORKER_ID,
       url: WORKER_URL,
       capacity: WORKER_CAPACITY,
+      totalMemory: Math.round(os.totalmem() / 1024 / 1024),
     });
     console.log(`[worker] Registered with orchestrator at ${ORCHESTRATOR_URL}`);
 

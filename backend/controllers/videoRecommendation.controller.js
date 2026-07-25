@@ -1,4 +1,5 @@
 const pool = require('../config/pg');
+const { logAction } = require('../utils/auditLogger');
 
 /**
  * Add a channel to the whitelist
@@ -34,7 +35,7 @@ exports.addChannelToWhitelist = async (req, res) => {
  */
 exports.getWhitelistedChannels = async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM channel_whitelist ORDER BY created_at DESC`);
+    const result = await pool.query(`SELECT * FROM channel_whitelist WHERE is_deleted = false ORDER BY created_at DESC`);
     return res.status(200).json({ success: true, data: result.rows });
   } catch (error) {
     console.error('Error fetching whitelisted channels:', error);
@@ -48,7 +49,14 @@ exports.getWhitelistedChannels = async (req, res) => {
 exports.removeChannelFromWhitelist = async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query(`DELETE FROM channel_whitelist WHERE id = $1`, [id]);
+    const result = await pool.query(
+      `UPDATE channel_whitelist SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *`,
+      [id],
+    );
+    if (!result.rows.length) {
+      return res.status(404).json({ success: false, message: 'Channel not found' });
+    }
+    logAction({ req, action: 'DELETE', entityType: 'channel_whitelist', entityId: id, details: { channel_name: result.rows[0].channel_name } });
     return res.status(200).json({ success: true, message: 'Channel removed from whitelist' });
   } catch (error) {
     console.error('Error removing channel from whitelist:', error);

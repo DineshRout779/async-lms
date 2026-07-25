@@ -31,7 +31,7 @@ exports.getFacilitatorStats = async (req, res) => {
       pool.query(
         `SELECT COUNT(*) FROM public.users u 
          JOIN public.student_profiles sp ON u.id = sp.user_id 
-         WHERE u.role = 'student' AND sp.college_id = ANY($1)`,
+         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1)`,
         [collegeIds],
       ),
       // Subjects assigned to these colleges (via students or facilitator_subjects - let's keep it simple for now)
@@ -45,7 +45,7 @@ exports.getFacilitatorStats = async (req, res) => {
       pool.query(
         `SELECT u.full_name, u.email, u.created_at FROM public.users u
          JOIN public.student_profiles sp ON u.id = sp.user_id
-         WHERE u.role = 'student' AND sp.college_id = ANY($1)
+         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1)
          ORDER BY u.created_at DESC LIMIT 5`,
         [collegeIds],
       ),
@@ -95,13 +95,14 @@ exports.getFacilitatorStudents = async (req, res) => {
         sp.degree, 
         sp.year as batch, 
         u.created_at as joined_date,
-        u.role,
+        LOWER(r.role_key) AS role,
         u.is_verified,
         c.name as college_name,
         c.short_code as college_short_name,
         COALESCE(sm.enrolled_courses, 0) as enrolled_courses,
         COALESCE(sm.progress_percent, 0) as progress_percent
       FROM public.users u
+      JOIN public.roles r ON r.id = u.role_id
       JOIN public.student_profiles sp ON u.id = sp.user_id
       LEFT JOIN public.colleges c ON sp.college_id = c.id
       LEFT JOIN LATERAL (
@@ -120,7 +121,7 @@ exports.getFacilitatorStudents = async (req, res) => {
         FROM public.user_subjects us
         WHERE us.user_id = u.id
       ) sm ON true
-      WHERE u.role = 'student' AND sp.college_id = ANY($1)
+      WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1)
       ORDER BY u.created_at DESC
     `;
 
@@ -163,7 +164,7 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
          FROM users u
          LEFT JOIN student_profiles sp ON u.id = sp.user_id
          LEFT JOIN colleges c ON sp.college_id = c.id
-         WHERE u.id = $1 AND u.role = 'student'`,
+         WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')`,
         [id],
       ),
       pool.query(
@@ -284,7 +285,7 @@ exports.verifyStudent = async (req, res) => {
     const studentRes = await pool.query(
       `SELECT u.id FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE u.id = $1 AND u.role = 'student' AND sp.college_id = ANY($2::uuid[])`,
+       WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($2::uuid[])`,
       [id, collegeIds],
     );
 
@@ -295,9 +296,14 @@ exports.verifyStudent = async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE users SET is_verified = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2
-       RETURNING id, full_name, role, is_verified`,
+      `WITH updated AS (
+         UPDATE users SET is_verified = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+         RETURNING id, full_name, role_id, is_verified
+       )
+       SELECT updated.id, updated.full_name, LOWER(r.role_key) AS role, updated.is_verified
+       FROM updated
+       LEFT JOIN roles r ON r.id = updated.role_id`,
       [is_verified, id],
     );
 
@@ -334,7 +340,7 @@ exports.editStudent = async (req, res) => {
     const studentRes = await pool.query(
       `SELECT u.id FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE u.id = $1 AND u.role = 'student' AND sp.college_id = ANY($2::uuid[])`,
+       WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($2::uuid[])`,
       [id, collegeIds],
     );
     if (!studentRes.rowCount) {
@@ -442,7 +448,7 @@ async function getEnrolledStudentIds(collegeIds, batch, subjectId) {
      FROM student_profiles sp
      JOIN users u ON u.id = sp.user_id
      ${subjectJoin}
-     WHERE sp.college_id = ANY($1::uuid[]) AND u.role = 'student'
+     WHERE sp.college_id = ANY($1::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
      ${batchClause} ${subjectClause}`,
     params,
   );
@@ -719,8 +725,7 @@ exports.getAssignmentAnalytics = async (req, res) => {
       `SELECT u.id, u.full_name, u.email
        FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       ${subjectJoin}
-       WHERE sp.college_id = ANY($1::uuid[]) AND u.role = 'student' ${batchClause} ${subjectClause}
+       WHERE sp.college_id = ANY($1::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') ${batchClause}
        ORDER BY u.full_name`,
       params,
     );

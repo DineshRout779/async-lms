@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'orchestrator',
+      name: 'codeguru-lms-prod',
       script: 'index.js',
       instances: 1,
       env: {

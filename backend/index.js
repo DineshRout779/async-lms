@@ -3,7 +3,11 @@ require('dotenv').config();
 // Temporary patch to prevent Neon Database serverless WebSocket driver
 // from crashing Node 24 due to a read-only ErrorEvent.message property.
 process.on('uncaughtException', (err) => {
-  if (err && err.message && err.message.includes('Cannot set property message of #<ErrorEvent>')) {
+  if (
+    err &&
+    err.message &&
+    err.message.includes('Cannot set property message of #<ErrorEvent>')
+  ) {
     console.warn('⚠️ [Neon DB] Ignored harmless WebSocket ErrorEvent bug.');
     return;
   }
@@ -31,13 +35,60 @@ const evaluationRoutes = require('./routes/evaluationRoutes');
 
 const compression = require('compression');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const { logAction } = require('./utils/auditLogger');
 
 const app = express();
 app.set('trust proxy', 1);
 app.use(compression());
 app.use(cors());
+
+// ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
+// IMPORTANT: This must be defined BEFORE express.json(), otherwise body-parser 
+// consumes the stream and causes 504 Gateway Timeouts for POST requests!
+const workerProxies = new Map(); // workerIp -> proxyInstance
+
+function getWorkerProxy(workerIp) {
+  if (workerProxies.has(workerIp)) return workerProxies.get(workerIp);
+
+  const workerPort = process.env.WORKER_PORT || 4000;
+  const proxy = require('http-proxy-middleware').createProxyMiddleware({
+    target: `http://${workerIp}:${workerPort}`,
+    changeOrigin: true,
+    ws: false, // Handle upgrades manually below instead of automatically
+    pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
+    logger: console,
+    onProxyReqWs: (proxyReq, req, socket) => {
+       // Optional: Add custom headers here if needed
+    }
+  });
+
+  workerProxies.set(workerIp, proxy);
+  return proxy;
+}
+
+app.use('/worker/:ip', (req, res, next) => {
+  const proxy = getWorkerProxy(req.params.ip);
+  return proxy(req, res, next);
+});
+
 app.use(express.json());
 app.use(morgan('combined'));
+
+// custom logger
+app.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    res.on('finish', () => {
+      logAction({
+        req,
+        action: req.method,
+        entityType: 'http_request',
+        entityId: null,
+        details: { statusCode: res.statusCode },
+      });
+    });
+  }
+  next();
+});
 
 // Rate limiter for auth routes — 50 requests per 15 min per IP
 const authLimiter = rateLimit({
@@ -79,51 +130,25 @@ app.use(
   express.static(path.join(__dirname, 'public', 'uploads')),
 );
 
-// ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
-const workerProxies = new Map(); // workerIp -> proxyInstance
-
-function getWorkerProxy(workerIp) {
-  if (workerProxies.has(workerIp)) return workerProxies.get(workerIp);
-
-  const workerPort = process.env.WORKER_PORT || 4000;
-  const proxy = createProxyMiddleware({
-    target: `http://${workerIp}:${workerPort}`,
-    changeOrigin: true,
-    ws: false, // Handle upgrades manually below instead of automatically
-    pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
-    logger: console,
-    onProxyReqWs: (proxyReq, req, socket) => {
-       // Optional: Add custom headers here if needed
-    }
-  });
-
-  workerProxies.set(workerIp, proxy);
-  return proxy;
-}
-
-app.use('/worker/:ip', (req, res, next) => {
-  const proxy = getWorkerProxy(req.params.ip);
-  return proxy(req, res, next);
-});
 
 // ── Internal worker registry endpoints (no auth — internal network only) ────
 app.post('/api/v1/internal/workers/register', (req, res) => {
-  const { id, url, capacity } = req.body;
+  const { id, url, capacity, totalMemory } = req.body;
   if (!id || !url)
     return res.status(400).json({ error: 'id and url required' });
-  registerWorker(id, url, capacity);
+  registerWorker(id, url, capacity, totalMemory);
   res.json({ ok: true });
 });
 
 app.post('/api/v1/internal/workers/heartbeat', (req, res) => {
   const { id, freeMemory, totalMemory } = req.body;
   if (!id) return res.status(400).json({ error: 'id required' });
-  
+
   const known = heartbeat(id, { freeMemory, totalMemory });
   if (!known) {
     return res.status(404).json({ error: 'Worker not registered' });
   }
-  
+
   res.json({ ok: true });
 });
 
@@ -176,13 +201,13 @@ const WORKER_WS_RE = /^\/worker\/([^/]+)\/socket\.io/;
 
 server.on('upgrade', (req, socket, head) => {
   const match = req.url.match(WORKER_WS_RE);
-  
+
   if (match) {
     const workerIp = match[1];
     const proxy = getWorkerProxy(workerIp);
-    
+
     console.log(`[proxy:ws] Upgrading connection to worker ${workerIp}`);
-    
+
     if (typeof proxy.upgrade === 'function') {
       proxy.upgrade(req, socket, head);
     } else {
@@ -190,7 +215,7 @@ server.on('upgrade', (req, socket, head) => {
     }
     return; // IMPORTANT: Stop here so we don't interfere with main socket.io
   }
-  
+
   // If it's NOT a worker request, we DO NOT call any proxy logic.
   // The built-in socket.io listeners will handle the upgrade automatically.
 });
@@ -202,5 +227,8 @@ server.listen(PORT, () => {
 });
 
 initPools().catch((err) => {
-  console.error('[WARN] Runner pool init failed (exercise run/test unavailable):', err.message);
+  console.error(
+    '[WARN] Runner pool init failed (exercise run/test unavailable):',
+    err.message,
+  );
 });

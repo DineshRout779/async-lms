@@ -301,6 +301,21 @@ pool.on('error', (err, client) => {
       )
     `);
 
+    // ── Soft delete: is_deleted flag on every table that previously used hard DELETE ──
+    const softDeleteTables = [
+      'topics', 'units', 'subtopics', 'lesson_content', 'quizzes',
+      'quiz_questions', 'quiz_question_options', 'exercises', 'assignments',
+      'projects', 'colleges', 'facilitator_colleges', 'ai_courses',
+      'ai_course_modules', 'ai_course_topics', 'ai_course_lessons',
+      'college_assignments', 'notifications', 'channel_whitelist',
+      'student_projects', 'subjects',
+    ];
+    for (const table of softDeleteTables) {
+      await client.query(
+        `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false`,
+      );
+    }
+
     // ... rest of the tables
     // Dump lessons for debugging
     const dumpRes = await client.query(
