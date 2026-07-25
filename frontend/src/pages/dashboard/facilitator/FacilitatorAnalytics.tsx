@@ -61,7 +61,7 @@ const FacilitatorAnalytics = () => {
 
       <div>
         {activeTab === 'quiz' && <QuizTab colleges={colleges} batches={batches} subjects={subjects} />}
-        {activeTab === 'assignments' && <AssignmentsTab colleges={colleges} batches={batches} />}
+        {activeTab === 'assignments' && <AssignmentsTab colleges={colleges} batches={batches} subjects={subjects} />}
         {activeTab === 'projects' && <ProjectsTab colleges={colleges} batches={batches} subjects={subjects} />}
         {activeTab === 'batch' && <BatchTab colleges={colleges} batches={batches} subjects={subjects} />}
         {activeTab === 'students' && <StudentsTab colleges={colleges} batches={batches} subjects={subjects} />}

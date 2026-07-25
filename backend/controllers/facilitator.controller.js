@@ -243,6 +243,15 @@ exports.getBatches = async (req, res) => {
        ORDER BY sp.expected_graduation_year DESC`,
       [collegeIds],
     );
+
+    const unknownRes = await pool.query(
+      `SELECT 1 FROM student_profiles sp WHERE sp.college_id = ANY($1::uuid[]) AND sp.expected_graduation_year IS NULL LIMIT 1`,
+      [collegeIds]
+    );
+    if (unknownRes.rowCount > 0) {
+      rows.push({ id: 'unknown', name: 'Unknown Batch' });
+    }
+
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('getBatches error:', err);
@@ -421,8 +430,12 @@ async function getEnrolledStudentIds(collegeIds, batch, subjectId) {
   let subjectClause = '';
 
   if (batch) {
-    params.push(batch);
-    batchClause = `AND sp.year = $${params.length}`;
+    if (batch === 'unknown') {
+      batchClause = `AND sp.expected_graduation_year IS NULL`;
+    } else {
+      params.push(batch);
+      batchClause = `AND sp.expected_graduation_year = $${params.length}`;
+    }
   }
   if (subjectId) {
     subjectJoin = 'JOIN user_subjects us ON us.user_id = sp.user_id';
@@ -453,7 +466,14 @@ exports.getAnalyticsSubjects = async (req, res) => {
 
     const params = [colleges];
     let batchClause = '';
-    if (batch) { params.push(batch); batchClause = `AND sp.year = $${params.length}`; }
+    if (batch) { 
+      if (batch === 'unknown') {
+        batchClause = `AND sp.expected_graduation_year IS NULL`;
+      } else {
+        params.push(batch); 
+        batchClause = `AND sp.expected_graduation_year = $${params.length}`; 
+      }
+    }
 
     const { rows } = await pool.query(
       `SELECT DISTINCT s.id, s.name
@@ -470,12 +490,83 @@ exports.getAnalyticsSubjects = async (req, res) => {
   }
 };
 
+exports.getAnalyticsTopics = async (req, res) => {
+  try {
+    const { subject_id } = req.query;
+    if (!subject_id) return res.json({ success: true, data: [] });
+
+    const { rows } = await pool.query(
+      `SELECT id, title as name FROM topics WHERE subject_id = $1::uuid ORDER BY order_index, title`,
+      [subject_id]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    serverError(res, err, 'getAnalyticsTopics');
+  }
+};
+
+exports.getAnalyticsQuizzes = async (req, res) => {
+  try {
+    const { topic_id } = req.query;
+    if (!topic_id) return res.json({ success: true, data: [] });
+
+    const { rows } = await pool.query(
+      `SELECT q.id, un.title as name
+       FROM quizzes q
+       JOIN units un ON q.unit_id = un.id
+       WHERE un.topic_id = $1::uuid
+       ORDER BY un.order_index`,
+      [topic_id]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    serverError(res, err, 'getAnalyticsQuizzes');
+  }
+};
+
+exports.getCourseAssignments = async (req, res) => {
+  try {
+    const { topic_id } = req.query;
+    if (!topic_id) return res.json({ success: true, data: [] });
+
+    const { rows } = await pool.query(
+      `SELECT a.id, a.title as name
+       FROM assignments a
+       JOIN units un ON a.unit_id = un.id
+       WHERE un.topic_id = $1::uuid
+       ORDER BY un.order_index, a.title`,
+      [topic_id]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    serverError(res, err, 'getCourseAssignments');
+  }
+};
+
+exports.getAnalyticsModuleProjects = async (req, res) => {
+  try {
+    const { topic_id } = req.query;
+    if (!topic_id) return res.json({ success: true, data: [] });
+
+    const { rows } = await pool.query(
+      `SELECT id, title as name
+       FROM projects
+       WHERE topic_id = $1::uuid
+       ORDER BY title`,
+      [topic_id]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    serverError(res, err, 'getAnalyticsModuleProjects');
+  }
+};
+
 // ─── Analytics: Quiz ─────────────────────────────────────────────────────────
 
 exports.getQuizAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, subject_id, page, limit } = req.query;
+    const { college_id, batch, subject_id, topic_id, quiz_id, page, limit } = req.query;
     const qLimit = Math.min(parseInt(limit, 10) || 10, 100);
     const qOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * qLimit;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
@@ -486,7 +577,14 @@ exports.getQuizAnalytics = async (req, res) => {
 
     const attParams = [enrolledIds];
     let subjectClause = '';
-    if (subject_id) {
+    
+    if (quiz_id) {
+      attParams.push(quiz_id);
+      subjectClause = `AND q.id = $${attParams.length}::uuid`;
+    } else if (topic_id) {
+      attParams.push(topic_id);
+      subjectClause = `AND t.id = $${attParams.length}::uuid`;
+    } else if (subject_id) {
       attParams.push(subject_id);
       subjectClause = `AND t.subject_id = $${attParams.length}::uuid`;
     }
@@ -494,7 +592,8 @@ exports.getQuizAnalytics = async (req, res) => {
     const qParamsWithPaging = [...attParams, qLimit, qOffset];
     const [attRes, questionRes, questionCountRes] = await Promise.all([
       pool.query(
-        `SELECT qa.user_id, qa.score::float, qa.is_passed, NULLIF(q.max_score, 0)::float AS max_score
+        `SELECT qa.user_id, qa.score::float, qa.is_passed,
+                NULLIF((SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id), 0)::float AS max_score
          FROM quiz_attempts qa
          JOIN quizzes q ON q.id = qa.quiz_id
          JOIN units un ON un.id = q.unit_id
@@ -504,16 +603,18 @@ exports.getQuizAnalytics = async (req, res) => {
       ),
       pool.query(
         `SELECT qq.id AS question_id, qq.question_text,
-                ROUND(
-                  100.0 * COUNT(*) FILTER (WHERE qqa.is_correct = true)
-                  / NULLIF(COUNT(*), 0)
+                COALESCE(
+                  ROUND(
+                    100.0 * COUNT(qqa.id) FILTER (WHERE qqa.is_correct = true)
+                    / NULLIF(COUNT(qa.id), 0)
+                  ), 0
                 )::int AS correct_pct
          FROM quiz_questions qq
          JOIN quizzes q ON q.id = qq.quiz_id
          JOIN units un ON un.id = q.unit_id
          JOIN topics t ON t.id = un.topic_id
-         JOIN quiz_question_answers qqa ON qqa.question_id = qq.id
-         JOIN quiz_attempts qa ON qa.id = qqa.quiz_attempt_id AND qa.user_id = ANY($1::uuid[])
+         LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id AND qa.user_id = ANY($1::uuid[])
+         LEFT JOIN quiz_question_answers qqa ON qqa.quiz_attempt_id = qa.id AND qqa.question_id = qq.id
          WHERE TRUE ${subjectClause}
          GROUP BY qq.id, qq.question_text, qq.order_index
          ORDER BY qq.order_index
@@ -526,9 +627,7 @@ exports.getQuizAnalytics = async (req, res) => {
          JOIN quizzes q ON q.id = qq.quiz_id
          JOIN units un ON un.id = q.unit_id
          JOIN topics t ON t.id = un.topic_id
-         JOIN quiz_question_answers qqa ON qqa.question_id = qq.id
-         JOIN quiz_attempts qa ON qa.id = qqa.quiz_attempt_id AND qa.user_id = ANY($1::uuid[])
-         WHERE TRUE ${subjectClause}`,
+         WHERE $1::uuid[] IS NOT NULL ${subjectClause}`,
         attParams,
       ),
     ]);
@@ -536,9 +635,19 @@ exports.getQuizAnalytics = async (req, res) => {
     const rows = attRes.rows;
     const attemptedSet = new Set(rows.map((r) => r.user_id));
     const passedSet = new Set(rows.filter((r) => r.is_passed).map((r) => r.user_id));
-    const pctScores = rows
-      .filter((r) => r.max_score)
-      .map((r) => (r.score / r.max_score) * 100);
+    
+    // Calculate one average score per student
+    const studentScores = new Map();
+    rows.forEach(r => {
+      if (r.max_score) {
+        if (!studentScores.has(r.user_id)) studentScores.set(r.user_id, []);
+        studentScores.get(r.user_id).push((r.score / r.max_score) * 100);
+      }
+    });
+
+    const pctScores = Array.from(studentScores.values()).map(
+      scores => scores.reduce((a, b) => a + b, 0) / scores.length
+    );
 
     const avgScore = pctScores.length
       ? Math.round(pctScores.reduce((a, b) => a + b, 0) / pctScores.length)
@@ -587,13 +696,30 @@ function emptyQuizData() {
 exports.getAssignmentAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, assignment_id } = req.query;
+    const { college_id, batch, subject_id, assignment_id, assignment_type, page, limit } = req.query;
+    const sLimit = Math.min(parseInt(limit, 10) || 20, 100);
+    const sOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * sLimit;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: { total: 0, submitted: 0, not_submitted: 0, rate: 0, students: [] } });
 
     const params = [colleges];
     let batchClause = '';
-    if (batch) { params.push(batch); batchClause = `AND sp.year = $${params.length}`; }
+    if (batch) { 
+      if (batch === 'unknown') {
+        batchClause = `AND sp.expected_graduation_year IS NULL`;
+      } else {
+        params.push(batch); 
+        batchClause = `AND sp.expected_graduation_year = $${params.length}`; 
+      }
+    }
+
+    let subjectJoin = '';
+    let subjectClause = '';
+    if (subject_id) {
+      subjectJoin = 'JOIN user_subjects us ON us.user_id = sp.user_id';
+      params.push(subject_id);
+      subjectClause = `AND us.subject_id = $${params.length}::uuid`;
+    }
 
     const studentsRes = await pool.query(
       `SELECT u.id, u.full_name, u.email
@@ -607,11 +733,19 @@ exports.getAssignmentAnalytics = async (req, res) => {
 
     let submittedIds = new Set();
     if (assignment_id) {
-      const subRes = await pool.query(
-        `SELECT student_id FROM college_assignment_submissions WHERE assignment_id = $1`,
-        [assignment_id],
-      );
-      submittedIds = new Set(subRes.rows.map((r) => r.student_id));
+      if (assignment_type === 'course') {
+        const subRes = await pool.query(
+          `SELECT user_id as student_id FROM assignment_submissions WHERE assignment_id = $1`,
+          [assignment_id]
+        );
+        submittedIds = new Set(subRes.rows.map((r) => r.student_id));
+      } else {
+        const subRes = await pool.query(
+          `SELECT student_id FROM college_assignment_submissions WHERE assignment_id = $1`,
+          [assignment_id],
+        );
+        submittedIds = new Set(subRes.rows.map((r) => r.student_id));
+      }
     }
 
     const studentList = students.map((s) => ({
@@ -631,7 +765,7 @@ exports.getAssignmentAnalytics = async (req, res) => {
         submitted,
         not_submitted: total - submitted,
         rate: total > 0 ? Math.round((submitted / total) * 100) : 0,
-        students: studentList,
+        students: studentList.slice(sOffset, sOffset + sLimit),
       },
     });
   } catch (err) {
@@ -644,12 +778,16 @@ exports.getAssignmentAnalytics = async (req, res) => {
 exports.getProjectAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, subject_id } = req.query;
+    const { college_id, batch, subject_id, topic_id, project_id, page, limit } = req.query;
+    
+    const sLimit = Math.min(parseInt(limit, 10) || 10, 100);
+    const sOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * sLimit;
+
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
-    if (!colleges.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [] } });
+    if (!colleges.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [], total: 0 } });
 
     const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
-    if (!enrolledIds.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [] } });
+    if (!enrolledIds.length) return res.json({ success: true, data: { not_started: 0, submitted: 0, approved: 0, students: [], total: 0 } });
 
     // Get student names
     const namesRes = await pool.query(
@@ -661,7 +799,15 @@ exports.getProjectAnalytics = async (req, res) => {
     const psParams = [enrolledIds];
     let psJoin = '';
     let psClause = '';
-    if (subject_id) {
+    
+    if (project_id) {
+      psParams.push(project_id);
+      psClause = `AND ps.project_id = $${psParams.length}::uuid`;
+    } else if (topic_id) {
+      psJoin = 'JOIN projects p ON p.id = ps.project_id';
+      psParams.push(topic_id);
+      psClause = `AND p.topic_id = $${psParams.length}::uuid`;
+    } else if (subject_id) {
       psJoin = 'JOIN projects p ON p.id = ps.project_id JOIN topics t ON t.id = p.topic_id';
       psParams.push(subject_id);
       psClause = `AND t.subject_id = $${psParams.length}::uuid`;
@@ -690,13 +836,19 @@ exports.getProjectAnalytics = async (req, res) => {
       return { id: s.id, name: s.full_name, email: s.email, status };
     });
 
+    const not_started = students.filter((s) => s.status === 'Not Started').length;
+    const submitted = students.filter((s) => s.status === 'Submitted').length;
+    const approved = students.filter((s) => s.status === 'Approved').length;
+    const total = students.length;
+
     res.json({
       success: true,
       data: {
-        not_started: students.filter((s) => s.status === 'Not Started').length,
-        submitted: students.filter((s) => s.status === 'Submitted').length,
-        approved: students.filter((s) => s.status === 'Approved').length,
-        students,
+        total,
+        not_started,
+        submitted,
+        approved,
+        students: students.slice(sOffset, sOffset + sLimit),
       },
     });
   } catch (err) {
@@ -709,11 +861,11 @@ exports.getProjectAnalytics = async (req, res) => {
 exports.getBatchDashboard = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch } = req.query;
+    const { college_id, batch, subject_id, topic_id } = req.query;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: { enrolled: 0, quiz_completion_rate: 0, quiz_pass_rate: 0, assignment_completion_rate: 0, project_completion_rate: 0, subjects: [] } });
 
-    const enrolledIds = await getEnrolledStudentIds(colleges, batch, null);
+    const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
     if (!enrolledIds.length) return res.json({ success: true, data: { enrolled: 0, quiz_completion_rate: 0, quiz_pass_rate: 0, assignment_completion_rate: 0, project_completion_rate: 0, subjects: [] } });
 
     // Subjects enrolled by these students
@@ -732,14 +884,21 @@ exports.getBatchDashboard = async (req, res) => {
         const subjEnrolled = await getEnrolledStudentIds(colleges, batch, subj.id);
         if (!subjEnrolled.length) return { ...subj, quiz_completion: 0, pass_rate: 0, assignment_completion: 0 };
 
+        const qParams = [subjEnrolled, subj.id];
+        let topicClause = '';
+        if (topic_id) {
+          qParams.push(topic_id);
+          topicClause = `AND t.id = $${qParams.length}::uuid`;
+        }
+
         const quizRes = await pool.query(
           `SELECT qa.user_id, qa.is_passed
            FROM quiz_attempts qa
            JOIN quizzes q ON q.id = qa.quiz_id
            JOIN units un ON un.id = q.unit_id
            JOIN topics t ON t.id = un.topic_id
-           WHERE qa.user_id = ANY($1::uuid[]) AND t.subject_id = $2::uuid`,
-          [subjEnrolled, subj.id],
+           WHERE qa.user_id = ANY($1::uuid[]) AND t.subject_id = $2::uuid ${topicClause}`,
+          qParams,
         );
         const attempted = new Set(quizRes.rows.map((r) => r.user_id));
         const passed = new Set(quizRes.rows.filter((r) => r.is_passed).map((r) => r.user_id));
@@ -787,11 +946,23 @@ exports.getBatchDashboard = async (req, res) => {
     const projSubmitted = parseInt(projRes.rows[0]?.submitted || 0);
 
     // Overall quiz stats
+    const allQuizParams = [enrolledIds];
+    let allQuizTopicClause = '';
+    if (topic_id) {
+      allQuizParams.push(topic_id);
+      allQuizTopicClause = `JOIN quizzes q ON q.id = qa.quiz_id JOIN units un ON un.id = q.unit_id JOIN topics t ON t.id = un.topic_id WHERE t.id = $${allQuizParams.length}::uuid AND `;
+    } else if (subject_id) {
+      allQuizParams.push(subject_id);
+      allQuizTopicClause = `JOIN quizzes q ON q.id = qa.quiz_id JOIN units un ON un.id = q.unit_id JOIN topics t ON t.id = un.topic_id WHERE t.subject_id = $${allQuizParams.length}::uuid AND `;
+    } else {
+      allQuizTopicClause = 'WHERE ';
+    }
+
     const allQuizRes = await pool.query(
       `SELECT qa.user_id, qa.is_passed
        FROM quiz_attempts qa
-       WHERE qa.user_id = ANY($1::uuid[])`,
-      [enrolledIds],
+       ${allQuizTopicClause} qa.user_id = ANY($1::uuid[])`,
+      allQuizParams,
     );
     const allAttempted = new Set(allQuizRes.rows.map((r) => r.user_id));
     const allPassed = new Set(allQuizRes.rows.filter((r) => r.is_passed).map((r) => r.user_id));
@@ -817,7 +988,7 @@ exports.getBatchDashboard = async (req, res) => {
 exports.getStudentAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, subject_id, page, limit } = req.query;
+    const { college_id, batch, subject_id, topic_id, page, limit } = req.query;
     const sLimit = Math.min(parseInt(limit, 10) || 20, 100);
     const sOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * sLimit;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
@@ -834,13 +1005,19 @@ exports.getStudentAnalytics = async (req, res) => {
     // Quiz scores per student
     const quizParams = [enrolledIds];
     let subjQuizClause = '';
-    if (subject_id) {
+    
+    if (topic_id) {
+      quizParams.push(topic_id);
+      subjQuizClause = `AND t.id = $${quizParams.length}::uuid`;
+    } else if (subject_id) {
       quizParams.push(subject_id);
       subjQuizClause = `AND t.subject_id = $${quizParams.length}::uuid`;
     }
     const quizRes = await pool.query(
-      `SELECT qa.user_id,
-              ROUND(AVG(CASE WHEN q.max_score > 0 THEN qa.score::float / q.max_score * 100 ELSE 0 END))::int AS avg_pct,
+        `SELECT qa.user_id,
+                ROUND(AVG(CASE WHEN (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id) > 0
+                          THEN qa.score::float / (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id) * 100
+                          ELSE 0 END))::int AS avg_pct,
               COUNT(*) AS total_attempts,
               SUM(CASE WHEN qa.is_passed THEN 1 ELSE 0 END) AS passed_count
        FROM quiz_attempts qa
@@ -866,7 +1043,11 @@ exports.getStudentAnalytics = async (req, res) => {
     // Project submissions
     const psParams = [enrolledIds];
     let projSubjClause = '';
-    if (subject_id) {
+    
+    if (topic_id) {
+      psParams.push(topic_id);
+      projSubjClause = `AND t.id = $${psParams.length}::uuid`;
+    } else if (subject_id) {
       psParams.push(subject_id);
       projSubjClause = `AND t.subject_id = $${psParams.length}::uuid`;
     }

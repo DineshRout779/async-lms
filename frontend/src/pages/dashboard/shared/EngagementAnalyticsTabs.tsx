@@ -27,6 +27,7 @@ type AssignmentData = {
 };
 
 type ProjectData = {
+  total: number;
   not_started: number; submitted: number; approved: number;
   students: { id: string; name: string; email: string; status: string }[];
 };
@@ -96,6 +97,60 @@ export function RateBar({ value, color = 'bg-indigo-500' }: { value: number; col
   );
 }
 
+function getPageNumbers(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, 5, '...', totalPages];
+  }
+  if (currentPage >= totalPages - 2) {
+    return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+}
+
+export function PaginationControls({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (p: number) => void }) {
+  const pages = getPageNumbers(page, totalPages);
+  
+  return (
+    <div className="flex gap-1 items-center">
+      <button
+        onClick={() => onPageChange(page - 1)}
+        disabled={page === 1}
+        className="px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-slate-600"
+      >
+        Prev
+      </button>
+      
+      {pages.map((p, i) => (
+        <button
+          key={i}
+          onClick={() => typeof p === 'number' && onPageChange(p)}
+          disabled={p === '...'}
+          className={`w-7 h-7 flex items-center justify-center rounded-md border text-xs transition-colors ${
+            p === page 
+              ? 'bg-indigo-600 text-white border-indigo-600 font-medium' 
+              : p === '...' 
+                ? 'border-transparent text-slate-400 cursor-default' 
+                : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          {p}
+        </button>
+      ))}
+
+      <button
+        onClick={() => onPageChange(page + 1)}
+        disabled={page === totalPages}
+        className="px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-slate-600"
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
 export function Select({
   label, value, onChange, options, placeholder,
 }: {
@@ -156,9 +211,27 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [quiz, setQuiz] = useState('');
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
+  const [quizzes, setQuizzes] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<QuizData | null>(null);
   const [loading, setLoading] = useState(false);
   const [qPage, setQPage] = useState(1);
+
+  useEffect(() => {
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
+
+  useEffect(() => {
+    if (!topic) { setQuizzes([]); setQuiz(''); return; }
+    apiClient.get(`/facilitator/analytics/quizzes?topic_id=${topic}`)
+      .then(r => setQuizzes(r.data?.data ?? []))
+      .catch(() => setQuizzes([]));
+  }, [topic]);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -167,6 +240,8 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
+      if (quiz) params.set('quiz_id', quiz);
       params.set('page', String(p));
       params.set('limit', String(QUIZ_PAGE_SIZE));
       const res = await apiClient.get(`/facilitator/analytics/quiz?${params}`);
@@ -176,7 +251,7 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject]);
+  }, [college, batch, subject, topic, quiz]);
 
   const handlePageChange = (p: number) => {
     setQPage(p);
@@ -191,6 +266,8 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
+        <Select label="Quiz" value={quiz} onChange={setQuiz} options={quizzes} placeholder="All Quizzes" />
       </div>
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
@@ -240,22 +317,7 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
                       <span>{data.question_analytics_total} questions · page {qPage} of {totalPages}</span>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handlePageChange(qPage - 1)}
-                          disabled={qPage === 1}
-                          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Prev
-                        </button>
-                        <button
-                          onClick={() => handlePageChange(qPage + 1)}
-                          disabled={qPage === totalPages}
-                          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Next
-                        </button>
-                      </div>
+                      <PaginationControls page={qPage} totalPages={totalPages} onPageChange={handlePageChange} />
                     </div>
                   )}
                 </>
@@ -270,28 +332,63 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
 
 // ─── Tab: Assignment Tracker ──────────────────────────────────────────────────
 
-export function AssignmentsTab({ colleges, batches }: { colleges: College[]; batches: Batch[] }) {
+export function AssignmentsTab({ colleges, batches, subjects }: { colleges: College[]; batches: Batch[]; subjects: Subject[] }) {
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
-  const [assignment, setAssignment] = useState('');
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [assignmentCompound, setAssignmentCompound] = useState(''); // e.g. 'college|123'
+  
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
+  const [collegeAssignments, setCollegeAssignments] = useState<Assignment[]>([]);
+  const [courseAssignments, setCourseAssignments] = useState<{ id: string; name: string }[]>([]);
+  
   const [data, setData] = useState<AssignmentData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [aPage, setAPage] = useState(1);
 
+  // Fetch topics when subject changes
   useEffect(() => {
-    if (!college) { setAssignments([]); return; }
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
+
+  // Fetch college assignments when college changes
+  useEffect(() => {
+    if (!college) { setCollegeAssignments([]); return; }
     apiClient.get(`/college-assignments/facilitator?college_id=${college}`)
-      .then((r) => setAssignments(r.data?.data ?? []))
-      .catch(() => setAssignments([]));
+      .then((r) => setCollegeAssignments(r.data?.data ?? []))
+      .catch(() => setCollegeAssignments([]));
   }, [college]);
 
-  const load = useCallback(async () => {
+  // Fetch course assignments when topic changes
+  useEffect(() => {
+    if (!topic) { setCourseAssignments([]); return; }
+    apiClient.get(`/facilitator/analytics/course-assignments?topic_id=${topic}`)
+      .then((r) => setCourseAssignments(r.data?.data ?? []))
+      .catch(() => setCourseAssignments([]));
+  }, [topic]);
+
+  const load = useCallback(async (p = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
-      if (assignment) params.set('assignment_id', assignment);
+      if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
+      
+      if (assignmentCompound) {
+        const [type, id] = assignmentCompound.split('|');
+        params.set('assignment_type', type);
+        params.set('assignment_id', id);
+      }
+      
+      params.set('page', String(p));
+      params.set('limit', '10');
+      
       const res = await apiClient.get(`/facilitator/analytics/assignments?${params}`);
       setData(res.data.data);
     } catch {
@@ -299,16 +396,28 @@ export function AssignmentsTab({ colleges, batches }: { colleges: College[]; bat
     } finally {
       setLoading(false);
     }
-  }, [college, batch, assignment]);
+  }, [college, batch, subject, topic, assignmentCompound]);
 
-  useEffect(() => { load(); }, [load]);
+  const handlePageChange = (p: number) => {
+    setAPage(p);
+    load(p);
+  };
+
+  useEffect(() => { setAPage(1); load(1); }, [load]);
+
+  const mergedAssignments = [
+    ...collegeAssignments.map(a => ({ id: `college|${a.id}`, name: `[College] ${a.title}` })),
+    ...courseAssignments.map(a => ({ id: `course|${a.id}`, name: `[Course] ${a.name}` }))
+  ];
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
-        <Select label="Assignment" value={assignment} onChange={setAssignment} options={assignments.map((a) => ({ id: a.id, name: a.title }))} placeholder="Select Assignment" />
+        <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
+        <Select label="Assignment" value={assignmentCompound} onChange={setAssignmentCompound} options={mergedAssignments} placeholder="Select Assignment" />
       </div>
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
@@ -317,7 +426,7 @@ export function AssignmentsTab({ colleges, batches }: { colleges: College[]; bat
             <StatCard label="Total Students" value={data.total} />
             <StatCard label="Submitted" value={data.submitted} />
             <StatCard label="Not Submitted" value={data.not_submitted} />
-            <StatCard label="Submission Rate" value={assignment ? `${data.rate}%` : '—'} />
+            <StatCard label="Submission Rate" value={assignmentCompound ? `${data.rate}%` : '—'} />
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -325,24 +434,32 @@ export function AssignmentsTab({ colleges, batches }: { colleges: College[]; bat
               <h3 className="text-sm font-semibold text-slate-700">Student Submissions</h3>
             </div>
             {data.students.length === 0 ? <EmptyState message="No students found" /> : (
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                  <tr>
-                    <th className="text-left px-5 py-3">Student</th>
-                    <th className="text-left px-5 py-3">Email</th>
-                    {assignment && <th className="text-left px-5 py-3">Status</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.students.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
-                      <td className="px-5 py-3 text-slate-500">{s.email}</td>
-                      {assignment && <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>}
+              <>
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left px-5 py-3">Student</th>
+                      <th className="text-left px-5 py-3">Email</th>
+                      {assignmentCompound && <th className="text-left px-5 py-3">Status</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.students.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
+                        <td className="px-5 py-3 text-slate-500">{s.email}</td>
+                        {assignmentCompound && <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {Math.ceil(data.total / 10) > 1 && (
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+                    <span>{data.total} students · page {aPage} of {Math.ceil(data.total / 10)}</span>
+                    <PaginationControls page={aPage} totalPages={Math.ceil(data.total / 10)} onPageChange={handlePageChange} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>
@@ -357,16 +474,42 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [project, setProject] = useState('');
+
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+
   const [data, setData] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pPage, setPPage] = useState(1);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
+
+  useEffect(() => {
+    if (!topic) { setProjects([]); setProject(''); return; }
+    apiClient.get(`/facilitator/analytics/module-projects?topic_id=${topic}`)
+      .then(r => setProjects(r.data?.data ?? []))
+      .catch(() => setProjects([]));
+  }, [topic]);
+
+  const load = useCallback(async (p = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
+      if (project) params.set('project_id', project);
+      params.set('page', String(p));
+      params.set('limit', '10');
+
       const res = await apiClient.get(`/facilitator/analytics/projects?${params}`);
       setData(res.data.data);
     } catch {
@@ -374,9 +517,14 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject]);
+  }, [college, batch, subject, topic, project]);
 
-  useEffect(() => { load(); }, [load]);
+  const handlePageChange = (p: number) => {
+    setPPage(p);
+    load(p);
+  };
+
+  useEffect(() => { setPPage(1); load(1); }, [load]);
 
   const chartData = data
     ? [
@@ -398,11 +546,14 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
+        <Select label="Project" value={project} onChange={setProject} options={projects} placeholder="All Projects" />
       </div>
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
         <>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
+            <StatCard label="Total Students" value={data.total ?? 0} />
             <StatCard label="Not Started" value={data.not_started} />
             <StatCard label="Submitted" value={data.submitted} />
             <StatCard label="Approved" value={data.approved} />
@@ -430,24 +581,32 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
               <h3 className="text-sm font-semibold text-slate-700">Student Project Status</h3>
             </div>
             {data.students.length === 0 ? <EmptyState message="No students found" /> : (
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                  <tr>
-                    <th className="text-left px-5 py-3">Student</th>
-                    <th className="text-left px-5 py-3">Email</th>
-                    <th className="text-left px-5 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.students.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
-                      <td className="px-5 py-3 text-slate-500">{s.email}</td>
-                      <td className="px-5 py-3"><StatusBadge status={s.status} /></td>
+              <>
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left px-5 py-3">Student</th>
+                      <th className="text-left px-5 py-3">Email</th>
+                      <th className="text-left px-5 py-3">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.students.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
+                        <td className="px-5 py-3 text-slate-500">{s.email}</td>
+                        <td className="px-5 py-3"><StatusBadge status={s.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {Math.ceil((data.total ?? 0) / 10) > 1 && (
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+                    <span>{data.total} students · page {pPage} of {Math.ceil((data.total ?? 0) / 10)}</span>
+                    <PaginationControls page={pPage} totalPages={Math.ceil((data.total ?? 0) / 10)} onPageChange={handlePageChange} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>
@@ -462,8 +621,17 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<BatchDashData | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -472,6 +640,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
       const res = await apiClient.get(`/facilitator/analytics/batch?${params}`);
       setData(res.data.data);
     } catch {
@@ -479,7 +648,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject]);
+  }, [college, batch, subject, topic]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -489,6 +658,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
       </div>
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
@@ -542,10 +712,19 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
   const [college, setCollege] = useState('');
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<StudentRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!subject) { setTopics([]); setTopic(''); return; }
+    apiClient.get(`/facilitator/analytics/topics?subject_id=${subject}`)
+      .then(r => setTopics(r.data?.data ?? []))
+      .catch(() => setTopics([]));
+  }, [subject]);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -554,6 +733,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       if (college) params.set('college_id', college);
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
+      if (topic) params.set('topic_id', topic);
       params.set('page', String(p));
       params.set('limit', String(STUDENTS_PAGE_SIZE));
       const res = await apiClient.get(`/facilitator/analytics/students?${params}`);
@@ -565,7 +745,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject]);
+  }, [college, batch, subject, topic]);
 
   const handlePageChange = (p: number) => { setPage(p); load(p); };
 
@@ -585,6 +765,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
+        <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
       </div>
 
       {loading ? <LoadingState /> : total === 0 ? <EmptyState message="No students found" /> : (
@@ -631,22 +812,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
                 <span>{total} students · page {page} of {totalPages}</span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page === 1}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={page === totalPages}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
+                <PaginationControls page={page} totalPages={totalPages} onPageChange={handlePageChange} />
               </div>
             )}
           </div>
