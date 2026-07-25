@@ -6,28 +6,92 @@
 // Assignments are in-memory — if the API server restarts, workers
 // re-register and clients re-call /editor/start for a fresh assignment.
 
-const workers     = new Map(); // workerId → { url, capacity, activeCount, lastSeen }
-const assignments = new Map(); // `${userId}:${projectId}` → workerId
+const Redis = require('ioredis');
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+  maxRetriesPerRequest: null,
+  retryStrategy(times) {
+    return Math.min(times * 50, 2000);
+  },
+});
+
+redis.on('error', (err) => console.error('[registry:redis] Connection error:', err.message));
+
+const workers     = new Map(); // workerId → { url, capacity, allocatedMemory, totalMemory, activeCount, lastSeen }
+const assignments = new Map(); // `${userId}:${projectId}` → { workerId, memoryCost }
+
+// --- Startup Recovery (Synchronous blocking isn't needed, it will populate in the background) ---
+(async function recoverState() {
+  try {
+    const recoveredWorkers = await redis.hgetall('registry:workers');
+    for (const [id, dataStr] of Object.entries(recoveredWorkers)) {
+      const data = JSON.parse(dataStr);
+      // Only recover if they haven't timed out (e.g. if orchestrator was down for 5 mins, workers are dead)
+      if (Date.now() - data.lastSeen < 120_000) {
+        workers.set(id, data);
+        console.log(`[registry:recover] Restored worker ${id}`);
+      } else {
+        await redis.hdel('registry:workers', id);
+      }
+    }
+
+    const recoveredAssignments = await redis.hgetall('registry:assignments');
+    for (const [key, dataStr] of Object.entries(recoveredAssignments)) {
+      const data = JSON.parse(dataStr);
+      // Only restore assignment if the worker survived
+      if (workers.has(data.workerId)) {
+        assignments.set(key, data);
+        console.log(`[registry:recover] Restored assignment ${key}`);
+      } else {
+        await redis.hdel('registry:assignments', key);
+      }
+    }
+  } catch (err) {
+    console.error('[registry:recover] Failed to recover state from Redis:', err.message);
+  }
+})();
+
+// Memory costs in MB per language profile
+const PROFILE_MEMORY_COSTS = {
+  mern: 256,
+  javascript: 128,
+  python: 128,
+  java: 256,
+  sql: 128,
+  default: 128,
+};
 
 // ---------- Worker lifecycle ----------
 
-function registerWorker(id, url, capacity = 20) {
+function registerWorker(id, url, capacity = 20, totalMemory = 2048) {
   const existing = workers.get(id);
-  workers.set(id, {
+  const workerData = {
     url,
     capacity,
+    totalMemory: totalMemory || 2048,
+    allocatedMemory: existing?.allocatedMemory ?? 0,
     activeCount: existing?.activeCount ?? 0,
     lastSeen: Date.now(),
-  });
-  console.log(`[registry] Worker registered: ${id} @ ${url} (capacity: ${capacity})`);
+  };
+  workers.set(id, workerData);
+  
+  // Background Sync (Fire and forget)
+  redis.hset('registry:workers', id, JSON.stringify(workerData)).catch(err => 
+    console.error(`[registry:redis] Failed to save worker ${id}:`, err.message)
+  );
+  
+  console.log(`[registry] Worker registered: ${id} @ ${url} (RAM: ${totalMemory}MB)`);
 }
 
 function heartbeat(id, stats = {}) {
   const w = workers.get(id);
   if (w) {
     w.lastSeen = Date.now();
-    if (stats.freeMemory !== undefined) w.freeMemory = stats.freeMemory;
-    if (stats.totalMemory !== undefined) w.totalMemory = stats.totalMemory;
+    
+    // Background Sync (Fire and forget)
+    redis.hset('registry:workers', id, JSON.stringify(w)).catch(() => {});
+    
+    // We intentionally ignore OS freeMemory and totalMemory for load balancing
+    // to prevent spikes. Heartbeat is only for liveness tracking.
     return true;
   }
   return false;
@@ -35,6 +99,7 @@ function heartbeat(id, stats = {}) {
 
 function deregisterWorker(id) {
   workers.delete(id);
+  redis.hdel('registry:workers', id).catch(() => {});
   console.log(`[registry] Worker deregistered: ${id}`);
 }
 
@@ -46,18 +111,19 @@ function deregisterWorker(id) {
  * Returns the worker URL, or null if no workers are registered
  * (caller falls back to local/self-hosted mode).
  */
-function assignWorker(userId, projectId) {
+function assignWorker(userId, projectId, profileName) {
   const key = `${userId}:${projectId}`;
 
   // Reuse existing assignment if that worker is still alive
-  const existingId = assignments.get(key);
-  if (existingId && workers.has(existingId)) {
-    return workers.get(existingId).url;
+  const existing = assignments.get(key);
+  if (existing && workers.has(existing.workerId)) {
+    return workers.get(existing.workerId).url;
   }
 
   if (workers.size === 0) return null; // local mode
 
-  // Pick the least-loaded worker that still has capacity
+  const memoryCost = PROFILE_MEMORY_COSTS[profileName] || PROFILE_MEMORY_COSTS.default;
+
   let bestId = null;
   let bestLoad = Infinity;
   
@@ -66,14 +132,16 @@ function assignWorker(userId, projectId) {
   let overflowLoad = Infinity;
 
   for (const [id, w] of workers.entries()) {
-    // Calculate load based on active slots
-    let load = w.activeCount / w.capacity;
+    // Pure Deterministic Load Calculation
+    // Total memory minus safety buffer (e.g., 512MB for the OS and Docker Daemon)
+    const availableMemory = Math.max(0, w.totalMemory - 512); 
+    const memoryLoad = w.allocatedMemory / availableMemory;
     
-    // Add a "Memory Penalty" if the worker is low on RAM (less than 1GB)
-    // This pushes traffic to workers with more headroom.
-    if (w.freeMemory !== undefined && w.freeMemory < 1024) {
-      load += 0.5; // Artificial load increase
-    }
+    // We still consider capacity as a secondary ceiling just in case (e.g. CPU constraints)
+    const capacityLoad = w.activeCount / w.capacity;
+    
+    // Use the higher of the two loads to determine if the server is full
+    const load = Math.max(memoryLoad, capacityLoad);
 
     // Track for overflow queueing
     if (load < overflowLoad) {
@@ -81,7 +149,10 @@ function assignWorker(userId, projectId) {
       overflowId = id;
     }
 
-    if (w.activeCount >= w.capacity) continue;
+    // If the server physically doesn't have enough estimated memory for this specific profile, OR it's full, skip it.
+    if (w.allocatedMemory + memoryCost > availableMemory || w.activeCount >= w.capacity) {
+      continue;
+    }
     
     if (load < bestLoad) {
       bestLoad = load;
@@ -98,15 +169,23 @@ function assignWorker(userId, projectId) {
 
   const w = workers.get(bestId);
   w.activeCount++;
-  assignments.set(key, bestId);
-  console.log(`[registry] Assigned ${key} → ${bestId} (${w.activeCount}/${w.capacity})`);
+  w.allocatedMemory += memoryCost;
+  
+  const assignmentData = { workerId: bestId, memoryCost };
+  assignments.set(key, assignmentData);
+  
+  // Background Sync (Fire and forget)
+  redis.hset('registry:workers', bestId, JSON.stringify(w)).catch(() => {});
+  redis.hset('registry:assignments', key, JSON.stringify(assignmentData)).catch(() => {});
+  
+  console.log(`[registry] Assigned ${key} (${memoryCost}MB) → ${bestId} (${w.allocatedMemory}MB/${w.totalMemory}MB RAM, ${w.activeCount}/${w.capacity} Slots)`);
   return w.url;
 }
 
 function getWorkerForWorkspace(userId, projectId) {
-  const workerId = assignments.get(`${userId}:${projectId}`);
-  if (!workerId) return null;
-  return workers.get(workerId)?.url ?? null;
+  const existing = assignments.get(`${userId}:${projectId}`);
+  if (!existing) return null;
+  return workers.get(existing.workerId)?.url ?? null;
 }
 
 /**
@@ -115,12 +194,21 @@ function getWorkerForWorkspace(userId, projectId) {
  */
 function releaseWorkspace(userId, projectId) {
   const key = `${userId}:${projectId}`;
-  const workerId = assignments.get(key);
-  if (workerId) {
-    const w = workers.get(workerId);
-    if (w) w.activeCount = Math.max(0, w.activeCount - 1);
+  const existing = assignments.get(key);
+  if (existing) {
+    const w = workers.get(existing.workerId);
+    if (w) {
+      w.activeCount = Math.max(0, w.activeCount - 1);
+      w.allocatedMemory = Math.max(0, w.allocatedMemory - existing.memoryCost);
+      // Background Sync
+      redis.hset('registry:workers', existing.workerId, JSON.stringify(w)).catch(() => {});
+    }
     assignments.delete(key);
-    console.log(`[registry] Released ${key} from ${workerId}`);
+    
+    // Background Sync
+    redis.hdel('registry:assignments', key).catch(() => {});
+    
+    console.log(`[registry] Released ${key} (${existing.memoryCost}MB) from ${existing.workerId}`);
   }
 }
 
@@ -146,6 +234,7 @@ setInterval(() => {
     if (now - w.lastSeen > 120_000) {
       console.log(`[registry] Worker ${id} timed out — removing`);
       workers.delete(id);
+      redis.hdel('registry:workers', id).catch(() => {});
     }
   }
 }, 30_000).unref();

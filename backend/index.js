@@ -41,6 +41,36 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(compression());
 app.use(cors());
+
+// ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
+// IMPORTANT: This must be defined BEFORE express.json(), otherwise body-parser 
+// consumes the stream and causes 504 Gateway Timeouts for POST requests!
+const workerProxies = new Map(); // workerIp -> proxyInstance
+
+function getWorkerProxy(workerIp) {
+  if (workerProxies.has(workerIp)) return workerProxies.get(workerIp);
+
+  const workerPort = process.env.WORKER_PORT || 4000;
+  const proxy = require('http-proxy-middleware').createProxyMiddleware({
+    target: `http://${workerIp}:${workerPort}`,
+    changeOrigin: true,
+    ws: false, // Handle upgrades manually below instead of automatically
+    pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
+    logger: console,
+    onProxyReqWs: (proxyReq, req, socket) => {
+       // Optional: Add custom headers here if needed
+    }
+  });
+
+  workerProxies.set(workerIp, proxy);
+  return proxy;
+}
+
+app.use('/worker/:ip', (req, res, next) => {
+  const proxy = getWorkerProxy(req.params.ip);
+  return proxy(req, res, next);
+});
+
 app.use(express.json());
 app.use(morgan('combined'));
 
@@ -100,39 +130,13 @@ app.use(
   express.static(path.join(__dirname, 'public', 'uploads')),
 );
 
-// ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
-const workerProxies = new Map(); // workerIp -> proxyInstance
-
-function getWorkerProxy(workerIp) {
-  if (workerProxies.has(workerIp)) return workerProxies.get(workerIp);
-
-  const workerPort = process.env.WORKER_PORT || 4000;
-  const proxy = createProxyMiddleware({
-    target: `http://${workerIp}:${workerPort}`,
-    changeOrigin: true,
-    ws: false, // Handle upgrades manually below instead of automatically
-    pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
-    logger: console,
-    onProxyReqWs: (proxyReq, req, socket) => {
-      // Optional: Add custom headers here if needed
-    },
-  });
-
-  workerProxies.set(workerIp, proxy);
-  return proxy;
-}
-
-app.use('/worker/:ip', (req, res, next) => {
-  const proxy = getWorkerProxy(req.params.ip);
-  return proxy(req, res, next);
-});
 
 // ── Internal worker registry endpoints (no auth — internal network only) ────
 app.post('/api/v1/internal/workers/register', (req, res) => {
-  const { id, url, capacity } = req.body;
+  const { id, url, capacity, totalMemory } = req.body;
   if (!id || !url)
     return res.status(400).json({ error: 'id and url required' });
-  registerWorker(id, url, capacity);
+  registerWorker(id, url, capacity, totalMemory);
   res.json({ ok: true });
 });
 
