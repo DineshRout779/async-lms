@@ -41,12 +41,10 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(compression());
 app.use(cors());
-app.use(express.json());
 app.use(morgan('combined'));
 
 // ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
 const workerProxies = new Map(); // workerIp -> proxyInstance
-const { createProxyMiddleware, fixRequestBody } = require('http-proxy-middleware');
 
 function getWorkerProxy(workerIp) {
   if (workerProxies.has(workerIp)) return workerProxies.get(workerIp);
@@ -58,7 +56,6 @@ function getWorkerProxy(workerIp) {
     ws: false, // Handle upgrades manually below instead of automatically
     pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
     logger: console,
-    onProxyReq: fixRequestBody,
     onProxyReqWs: (proxyReq, req, socket) => {
        // Optional: Add custom headers here if needed
     }
@@ -97,6 +94,8 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
 });
+
+app.use(express.json());
 
 const server = http.createServer(app);
 
