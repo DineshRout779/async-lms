@@ -853,6 +853,8 @@ exports.getProjectAnalytics = async (req, res) => {
 
 // ─── Analytics: Batch Dashboard ───────────────────────────────────────────────
 
+const { isUserOnline } = require('../services/presenceService');
+
 exports.getBatchDashboard = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
@@ -911,12 +913,47 @@ exports.getBatchDashboard = async (req, res) => {
           asgComplete = new Set(asgRes.rows.map((r) => r.student_id)).size;
         }
 
+        // Project completion
+        const projRes = await pool.query(
+          `SELECT ps.user_id
+           FROM project_submissions ps
+           JOIN projects p ON p.id = ps.project_id
+           JOIN topics t ON t.id = p.topic_id
+           WHERE ps.user_id = ANY($1::uuid[]) AND t.subject_id = $2::uuid ${topicClause}`,
+          qParams,
+        );
+        const projComplete = new Set(projRes.rows.map((r) => r.user_id)).size;
+
+        // Lesson completion
+        const lessonRes = await pool.query(
+          `SELECT ulp.user_id
+           FROM user_lesson_progress ulp
+           JOIN lesson_content lc ON lc.id = ulp.lesson_content_id
+           JOIN subtopics st ON st.id = lc.subtopic_id
+           JOIN units un ON un.id = st.unit_id
+           JOIN topics t ON t.id = un.topic_id
+           WHERE ulp.is_completed = true AND ulp.user_id = ANY($1::uuid[]) AND t.subject_id = $2::uuid ${topicClause}`,
+          qParams,
+        );
+        const lessonComplete = new Set(lessonRes.rows.map((r) => r.user_id)).size;
+
+        const quizPct = subjEnrolled.length > 0 ? Math.round((attempted.size / subjEnrolled.length) * 100) : 0;
+        const passPct = attempted.size > 0 ? Math.round((passed.size / attempted.size) * 100) : 0;
+        const asgPct = subjEnrolled.length > 0 ? Math.round((asgComplete / subjEnrolled.length) * 100) : 0;
+        const projPct = subjEnrolled.length > 0 ? Math.round((projComplete / subjEnrolled.length) * 100) : 0;
+        const lessonPct = subjEnrolled.length > 0 ? Math.round((lessonComplete / subjEnrolled.length) * 100) : 0;
+        
+        const avgModuleProgress = Math.round((quizPct + asgPct + projPct + lessonPct) / 4);
+
         return {
           id: subj.id,
           name: subj.name,
-          quiz_completion: subjEnrolled.length > 0 ? Math.round((attempted.size / subjEnrolled.length) * 100) : 0,
-          pass_rate: attempted.size > 0 ? Math.round((passed.size / attempted.size) * 100) : 0,
-          assignment_completion: subjEnrolled.length > 0 ? Math.round((asgComplete / subjEnrolled.length) * 100) : 0,
+          quiz_completion: quizPct,
+          pass_rate: passPct,
+          assignment_completion: asgPct,
+          project_completion: projPct,
+          lesson_completion: lessonPct,
+          module_progress: avgModuleProgress
         };
       }),
     );
@@ -962,10 +999,27 @@ exports.getBatchDashboard = async (req, res) => {
     const allAttempted = new Set(allQuizRes.rows.map((r) => r.user_id));
     const allPassed = new Set(allQuizRes.rows.filter((r) => r.is_passed).map((r) => r.user_id));
 
+    // Active students based on presence
+    const activeStudents = enrolledIds.filter(id => isUserOnline(id)).length;
+
+    // Average batch streak
+    const streakRes = await pool.query(
+      `SELECT COALESCE(AVG(current_streak), 0) as avg_streak FROM user_streaks WHERE user_id = ANY($1::uuid[])`,
+      [enrolledIds]
+    );
+    const avgBatchStreak = Math.round(parseFloat(streakRes.rows[0]?.avg_streak || 0));
+
+    // Overall module progress average
+    const totalModuleProgress = subjectRows.reduce((sum, subj) => sum + subj.module_progress, 0);
+    const avgModuleProgress = subjectRows.length > 0 ? Math.round(totalModuleProgress / subjectRows.length) : 0;
+
     res.json({
       success: true,
       data: {
         enrolled: enrolledIds.length,
+        active_students: activeStudents,
+        avg_batch_streak: avgBatchStreak,
+        avg_module_progress: avgModuleProgress,
         quiz_completion_rate: enrolledIds.length > 0 ? Math.round((allAttempted.size / enrolledIds.length) * 100) : 0,
         quiz_pass_rate: allAttempted.size > 0 ? Math.round((allPassed.size / allAttempted.size) * 100) : 0,
         assignment_completion_rate: enrolledIds.length > 0 ? Math.round((asgSubmitted / enrolledIds.length) * 100) : 0,

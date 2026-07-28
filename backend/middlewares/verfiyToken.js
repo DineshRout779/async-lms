@@ -18,6 +18,9 @@ const verifyToken = async (req, res, next) => {
     // 3. Attach the user payload to the request object
     req.user = verified;
 
+    const { markUserActive } = require('../services/presenceService');
+    markUserActive(req.user.id);
+
     console.log('Logged in user role:', req.user.role);
 
     // 4. Move to the next middleware or controller

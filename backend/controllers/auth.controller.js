@@ -33,23 +33,30 @@ exports.signup = async (req, res) => {
     // 2. Hash Password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const userRole = role || 'student';
+    let roleKey = 'STUDENT';
+    if (userRole === 'facilitator') roleKey = 'FACILITATOR';
+    
+    const roleRecord = await pool.query('SELECT id FROM roles WHERE role_key = $1', [roleKey]);
+    const role_id = roleRecord.rowCount > 0 ? roleRecord.rows[0].id : 2;
+
     // 3. Insert User (Identity)
     const result = await pool.query(
       `
-      INSERT INTO users (full_name, email, password_hash, role, onboarding_step, is_verified)
+      INSERT INTO users (full_name, email, password_hash, role_id, onboarding_step, is_verified)
       VALUES ($1, $2, $3, $4, 'college', $5)
-      RETURNING id, full_name, email, role, onboarding_step, is_verified
+      RETURNING id, full_name, email, onboarding_step, is_verified
       `,
       [
         full_name,
         email,
         passwordHash,
-        role || 'student',
+        role_id,
         false,
       ],
     );
 
-    const newUser = result.rows[0];
+    const newUser = { ...result.rows[0], role: userRole };
 
     // 4. If student, create initial profile
     if (newUser.role === 'student') {
@@ -68,6 +75,7 @@ exports.signup = async (req, res) => {
     res.json({ token, user: newUser });
   } catch (err) {
     console.error(`[${logID}] SIGNUP ERROR:`, err);
+    require('fs').writeFileSync('signup_error.log', err.toString() + '\\n' + err.stack);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
@@ -85,10 +93,11 @@ exports.login = async (req, res) => {
 
   try {
     const userRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email, u.password_hash, u.role, u.onboarding_step, u.is_verified,
+      `SELECT u.id, u.full_name, u.email, u.password_hash, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified,
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified
        FROM users u
+       JOIN roles r ON u.role_id = r.id
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1`,
@@ -198,10 +207,11 @@ exports.googleCallback = async (req, res) => {
 
     // Upsert user
     const existingRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified, u.google_id,
+      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified, u.google_id,
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified
        FROM users u
+       JOIN roles r ON u.role_id = r.id
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1`,
@@ -219,13 +229,16 @@ exports.googleCallback = async (req, res) => {
         ]);
       }
     } else {
+      const roleRecord = await pool.query('SELECT id FROM roles WHERE role_key = $1', ['STUDENT']);
+      const role_id = roleRecord.rowCount > 0 ? roleRecord.rows[0].id : 2;
+
       const insertRes = await pool.query(
-        `INSERT INTO users (full_name, email, google_id, role, onboarding_step, is_verified)
-         VALUES ($1, $2, $3, 'student', 'college', false)
-         RETURNING id, full_name, email, role, onboarding_step, is_verified`,
-        [name, email, googleId],
+        `INSERT INTO users (full_name, email, google_id, role_id, onboarding_step, is_verified)
+         VALUES ($1, $2, $3, $4, 'college', false)
+         RETURNING id, full_name, email, onboarding_step, is_verified`,
+        [name, email, googleId, role_id],
       );
-      user = insertRes.rows[0];
+      user = { ...insertRes.rows[0], role: 'student' };
       await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [
         user.id,
       ]);
@@ -264,19 +277,20 @@ exports.getMe = async (req, res) => {
 
   try {
     const userRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified,
+      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified,
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified,
               c.name AS college_name,
               COALESCE(us.current_streak, 0) AS current_streak,
               COALESCE(SUM(pl.points), 0)::integer AS total_points
        FROM users u
+       JOIN roles r ON u.role_id = r.id
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        LEFT JOIN user_streaks us ON us.user_id = u.id
        LEFT JOIN points_log pl ON pl.user_id = u.id
        WHERE u.id = $1
-       GROUP BY u.id, u.full_name, u.email, u.role, u.onboarding_step, u.is_verified,
+       GROUP BY u.id, u.full_name, u.email, r.role_key, u.onboarding_step, u.is_verified,
                 sp.college_id, sp.degree, sp.year, c.is_verified, c.name, us.current_streak`,
       [userID],
     );

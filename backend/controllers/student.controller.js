@@ -12,32 +12,15 @@ const { notify } = require('../services/notificationService');
  * - Yesterday → increment streak
  * - Older     → reset to 1
  */
-async function updateStreak(userId) {
-  await pool.query(
-    `INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity)
-     VALUES ($1, 1, 1, CURRENT_DATE)
-     ON CONFLICT (user_id) DO UPDATE SET
-       current_streak = CASE
-         WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.current_streak
-         WHEN user_streaks.last_activity = CURRENT_DATE - INTERVAL '1 day' THEN user_streaks.current_streak + 1
-         ELSE 1
-       END,
-       longest_streak = GREATEST(
-         user_streaks.longest_streak,
-         CASE
-           WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.current_streak
-           WHEN user_streaks.last_activity = CURRENT_DATE - INTERVAL '1 day' THEN user_streaks.current_streak + 1
-           ELSE 1
-         END
-       ),
-       last_activity = CASE
-         WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.last_activity
-         ELSE CURRENT_DATE
-       END,
-       updated_at = CURRENT_TIMESTAMP`,
-    [userId],
-  );
-}
+const { markActionToday } = require('../services/presenceService');
+
+// ============================================
+// HELPERS
+// ============================================
+
+/**
+ * Streak is now updated by presenceService when both action and time requirements are met.
+ */
 
 // ── XP-based badge definitions ─────────────────────────────────────────────────
 const XP_BADGES = [
@@ -531,7 +514,7 @@ exports.completeLesson = async (req, res) => {
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
         [userId, 'lesson_completion', 10],
       );
-      await updateStreak(userId);
+      markActionToday(userId);
       await checkAndAwardBadges(userId);
     }
 
@@ -704,7 +687,7 @@ exports.submitQuizAttempt = async (req, res) => {
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
         [userId, 'quiz_completion', pointsAwarded],
       );
-      await updateStreak(userId);
+      markActionToday(userId);
       await checkAndAwardBadges(userId);
     }
 
@@ -823,7 +806,7 @@ exports.submitExercise = async (req, res) => {
       'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
       [userId, 'exercise_completion', pointsAwarded],
     );
-    await updateStreak(userId);
+    markActionToday(userId);
     await checkAndAwardBadges(userId);
 
     if (exercise.subtopic_id) {
@@ -1582,7 +1565,7 @@ exports.submitCapstone = async (req, res) => {
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
         [userId, source, 20],
       );
-      await updateStreak(userId);
+      markActionToday(userId);
       await checkAndAwardBadges(userId);
     }
 
