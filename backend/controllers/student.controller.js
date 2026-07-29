@@ -180,17 +180,18 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
     ) AS exercise_done
   `;
 
-  const [lessonDone, quizDone, exerciseDone] = await Promise.all([
-    has_lesson ? pool.query(lessonDoneQuery, [userId, subtopicId]) : null,
-    has_quiz ? pool.query(quizDoneQuery, [userId, subtopicId]) : null,
-    has_exercise ? pool.query(exerciseDoneQuery, [userId, subtopicId]) : null,
-  ]);
+  let lessonDone = null;
+  if (has_lesson) lessonDone = await pool.query(lessonDoneQuery, [userId, subtopicId]);
+  
+  let quizDone = null;
+  if (has_quiz) quizDone = await pool.query(quizDoneQuery, [userId, subtopicId]);
+  
+  let exerciseDone = null;
+  if (has_exercise) exerciseDone = await pool.query(exerciseDoneQuery, [userId, subtopicId]);
 
   const isLessonDone = has_lesson ? lessonDone.rows[0].lesson_done : true;
   const isQuizDone = has_quiz ? quizDone.rows[0].quiz_done : true;
-  const isExerciseDone = has_exercise
-    ? exerciseDone.rows[0].exercise_done
-    : true;
+  const isExerciseDone = has_exercise ? exerciseDone.rows[0].exercise_done : true;
 
   if (!isLessonDone || !isQuizDone || !isExerciseDone) return;
 
