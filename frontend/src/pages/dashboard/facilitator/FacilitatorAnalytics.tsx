@@ -39,7 +39,7 @@ const FacilitatorAnalytics = () => {
       <div>
         <p className="text-[11px] text-slate-400 mb-1">Dashboard / Analytics</p>
         <h1 className="text-2xl font-bold text-slate-800">Analytics Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Quiz, assignment, project, and student performance insights</p>
+        <p className="text-sm text-slate-500 mt-0.5">Quiz, Assignment, Project, and Student Performance Insights</p>
       </div>
 
       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">

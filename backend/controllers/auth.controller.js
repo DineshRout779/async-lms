@@ -43,26 +43,26 @@ exports.signup = async (req, res) => {
     if (!roleRes.rowCount) {
       return res.status(400).json({ message: 'Invalid role' });
     }
+    const role_id = roleRes.rows[0].id;
+    const resolvedRole = roleKey.toLowerCase();
 
     // 4. Insert User (Identity)
     const result = await pool.query(
       `
-      INSERT INTO users (full_name, email, password_hash, role, role_id, onboarding_step, is_verified)
-      VALUES ($1, $2, $3, $4, $5, 'college', $6)
-      RETURNING id, full_name, email, role, onboarding_step, is_verified
+      INSERT INTO users (full_name, email, password_hash, role_id, onboarding_step, is_verified)
+      VALUES ($1, $2, $3, $4, 'college', $5)
+      RETURNING id, full_name, email, onboarding_step, is_verified
       `,
       [
         full_name,
         email,
         passwordHash,
-        roleKey.toLowerCase(),
-        roleRes.rows[0].id,
+        role_id,
         false,
       ],
     );
 
-    const newUser = result.rows[0];
-    newUser.role = roleKey.toLowerCase();
+    const newUser = { ...result.rows[0], role: resolvedRole };
 
     // 5. If student, create initial profile
     if (newUser.role === 'student') {
@@ -81,6 +81,7 @@ exports.signup = async (req, res) => {
     res.json({ token, user: newUser });
   } catch (err) {
     console.error(`[${logID}] SIGNUP ERROR:`, err);
+    require('fs').writeFileSync('signup_error.log', err.toString() + '\\n' + err.stack);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
@@ -238,9 +239,9 @@ exports.googleCallback = async (req, res) => {
         "SELECT id FROM roles WHERE role_key = 'STUDENT'",
       );
       const insertRes = await pool.query(
-        `INSERT INTO users (full_name, email, google_id, role, role_id, onboarding_step, is_verified)
-         VALUES ($1, $2, $3, 'student', $4, 'college', false)
-         RETURNING id, full_name, email, role, onboarding_step, is_verified`,
+        `INSERT INTO users (full_name, email, google_id, role_id, onboarding_step, is_verified)
+         VALUES ($1, $2, $3, $4, 'college', false)
+         RETURNING id, full_name, email, onboarding_step, is_verified`,
         [name, email, googleId, studentRoleRes.rows[0].id],
       );
       user = insertRes.rows[0];
