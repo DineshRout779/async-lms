@@ -2,7 +2,7 @@ const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
-
+const { getTotalXP } = require('../services/xpService');
 // ============================================
 // HELPERS
 // ============================================
@@ -1880,7 +1880,60 @@ exports.getStudentModuleAnalytics = async (req, res) => {
              SELECT 1 FROM projects p WHERE p.topic_id = t.id
            ) THEN 'Not Started'
            ELSE NULL
-         END AS project_status
+         END AS project_status,
+         -- NEW PROGRESS COUNTS
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM user_lesson_progress ulp
+           JOIN lesson_content lc ON lc.id = ulp.lesson_content_id
+           JOIN subtopics st ON st.id = lc.subtopic_id
+           JOIN units un ON un.id = st.unit_id
+           WHERE ulp.is_completed = true AND ulp.user_id = $1 AND un.topic_id = t.id
+         ), 0) AS lessons_completed,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM lesson_content lc
+           JOIN subtopics st ON st.id = lc.subtopic_id
+           JOIN units un ON un.id = st.unit_id
+           WHERE un.topic_id = t.id
+         ), 0) AS lessons_total,
+         COALESCE((
+           SELECT COUNT(DISTINCT q.id)::int
+           FROM quiz_attempts qa
+           JOIN quizzes q ON q.id = qa.quiz_id
+           JOIN units un ON un.id = q.unit_id
+           WHERE qa.user_id = $1 AND qa.is_passed = true AND un.topic_id = t.id
+         ), 0) AS quizzes_passed,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM quizzes q
+           JOIN units un ON un.id = q.unit_id
+           WHERE un.topic_id = t.id
+         ), 0) AS quizzes_total,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM assignment_submissions sub
+           JOIN assignments a ON a.id = sub.assignment_id
+           JOIN units un ON un.id = a.unit_id
+           WHERE sub.user_id = $1 AND un.topic_id = t.id
+         ), 0) AS asg_submitted,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM assignments a
+           JOIN units un ON un.id = a.unit_id
+           WHERE un.topic_id = t.id
+         ), 0) AS asg_total,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM project_submissions sub
+           JOIN projects p ON p.id = sub.project_id
+           WHERE sub.user_id = $1 AND p.topic_id = t.id
+         ), 0) AS proj_submitted,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM projects p
+           WHERE p.topic_id = t.id
+         ), 0) AS proj_total
        FROM topics t
        JOIN subjects s ON s.id = t.subject_id
        JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
@@ -1890,10 +1943,27 @@ exports.getStudentModuleAnalytics = async (req, res) => {
 
     // Group by subject
     const subjectMap = new Map();
+    let totalProgressSum = 0;
+    let totalTopics = 0;
+
     for (const row of result.rows) {
       if (!subjectMap.has(row.subject_id)) {
         subjectMap.set(row.subject_id, { subject_id: row.subject_id, subject_name: row.subject_name, topics: [] });
       }
+
+      // Calculate progress for this topic
+      const calcPct = (completed, total) => total > 0 ? Math.round((completed / total) * 100) : null;
+      const lessonPct = calcPct(row.lessons_completed, row.lessons_total);
+      const quizPct = calcPct(row.quizzes_passed, row.quizzes_total);
+      const asgPct = calcPct(row.asg_submitted, row.asg_total);
+      const projPct = calcPct(row.proj_submitted, row.proj_total);
+      
+      const pcts = [lessonPct, quizPct, asgPct, projPct].filter(p => p !== null);
+      const progress = pcts.length > 0 ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : 0;
+
+      totalProgressSum += progress;
+      totalTopics++;
+
       subjectMap.get(row.subject_id).topics.push({
         topic_id: row.topic_id,
         topic_title: row.topic_title,
@@ -1901,10 +1971,13 @@ exports.getStudentModuleAnalytics = async (req, res) => {
         quiz_max: row.quiz_max,
         assignment_status: row.assignment_status,
         project_status: row.project_status,
+        progress,
       });
     }
 
-    res.json({ success: true, data: Array.from(subjectMap.values()) });
+    const overall_progress = totalTopics > 0 ? Math.round(totalProgressSum / totalTopics) : 0;
+
+    res.json({ success: true, overall_progress, data: Array.from(subjectMap.values()) });
   } catch (err) {
     console.error('getStudentModuleAnalytics error:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch module analytics' });
@@ -1918,47 +1991,53 @@ exports.getStudentModuleAnalytics = async (req, res) => {
 exports.getStudentAnalytics = async (req, res) => {
   const userId = req.user.id;
   try {
-    const [metricsRes, recentQuizzesRes, pendingRes] = await Promise.all([
-      pool.query(
-        `SELECT
-           (SELECT COUNT(*)::int FROM quiz_attempts WHERE user_id = $1)         AS quizzes_attempted,
-           COALESCE((
-             SELECT ROUND(AVG(qa.score::numeric / NULLIF(q.max_score,0) * 100))::int
-             FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id
-             WHERE qa.user_id = $1 AND q.max_score > 0
-           ), 0)                                                                 AS avg_quiz_score,
-           (SELECT COUNT(*)::int FROM assignment_submissions WHERE user_id = $1) AS assignments_submitted,
-           (SELECT COUNT(*)::int FROM project_submissions WHERE user_id = $1 AND is_approved = true)
-                                                                                 AS projects_completed`,
-        [userId],
-      ),
-      pool.query(
-        `SELECT qa.id, un.title AS name,
-                ROUND(qa.score::numeric / NULLIF(q.max_score,0) * 100)::int AS score,
-                CASE WHEN qa.is_passed THEN 'Passed' ELSE 'Failed' END AS status,
-                qa.created_at
-         FROM quiz_attempts qa
-         JOIN quizzes q ON q.id = qa.quiz_id
-         JOIN units un ON un.id = q.unit_id
-         WHERE qa.user_id = $1
-         ORDER BY qa.created_at DESC
-         LIMIT 5`,
-        [userId],
-      ),
-      pool.query(
-        `SELECT COUNT(*)::int AS assignments_pending
-         FROM assignments a
-         JOIN units u ON u.id = a.unit_id
-         JOIN topics t ON t.id = u.topic_id
-         JOIN subjects s ON s.id = t.subject_id
-         JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
-         WHERE NOT EXISTS (
-           SELECT 1 FROM assignment_submissions sub
-           WHERE sub.assignment_id = a.id AND sub.user_id = $1
-         )`,
-        [userId],
-      ),
-    ]);
+    // Fetch data sequentially to prevent Neon connection pool exhaustion/timeouts
+    const metricsRes = await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM quiz_attempts WHERE user_id = $1)         AS quizzes_attempted,
+         COALESCE((
+           SELECT ROUND(AVG(LEAST(100, qa.score::numeric / NULLIF(q.max_score,0) * 100)))::int
+           FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id
+           WHERE qa.user_id = $1 AND q.max_score > 0
+         ), 0)                                                                 AS avg_quiz_score,
+         (SELECT COUNT(*)::int FROM assignment_submissions WHERE user_id = $1) AS assignments_submitted,
+         (SELECT COUNT(*)::int FROM project_submissions WHERE user_id = $1 AND is_approved = true)
+                                                                               AS projects_completed,
+         (SELECT current_streak FROM user_streaks WHERE user_id = $1)          AS current_streak,
+         (SELECT last_activity FROM user_streaks WHERE user_id = $1)           AS last_activity,
+         (SELECT (CURRENT_DATE - last_activity::date) FROM user_streaks WHERE user_id = $1) AS days_since_active`,
+      [userId]
+    );
+
+    const recentQuizzesRes = await pool.query(
+      `SELECT qa.id, un.title AS name,
+              LEAST(100, ROUND(qa.score::numeric / NULLIF(q.max_score,0) * 100))::int AS score,
+              CASE WHEN qa.is_passed THEN 'Passed' ELSE 'Failed' END AS status,
+              qa.created_at
+       FROM quiz_attempts qa
+       JOIN quizzes q ON q.id = qa.quiz_id
+       JOIN units un ON un.id = q.unit_id
+       WHERE qa.user_id = $1
+       ORDER BY qa.created_at DESC
+       LIMIT 5`,
+      [userId]
+    );
+
+    const pendingRes = await pool.query(
+      `SELECT COUNT(*)::int AS assignments_pending
+       FROM assignments a
+       JOIN units u ON u.id = a.unit_id
+       JOIN topics t ON t.id = u.topic_id
+       JOIN subjects s ON s.id = t.subject_id
+       JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       WHERE NOT EXISTS (
+         SELECT 1 FROM assignment_submissions sub
+         WHERE sub.assignment_id = a.id AND sub.user_id = $1
+       )`,
+      [userId]
+    );
+
+    const totalXp = await getTotalXP(userId);
 
     const m = metricsRes.rows[0];
     res.json({
@@ -1970,6 +2049,10 @@ exports.getStudentAnalytics = async (req, res) => {
           assignments_submitted: m.assignments_submitted,
           assignments_pending: pendingRes.rows[0].assignments_pending,
           projects_completed: m.projects_completed,
+          current_streak: m.current_streak || 0,
+          last_activity: m.last_activity || null,
+          days_since_active: m.days_since_active || 0,
+          total_xp: totalXp,
         },
         recent_quizzes: recentQuizzesRes.rows,
       },

@@ -3,7 +3,7 @@ import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 import {
   BookOpen, CheckSquare, FileText, TrendingUp, Trophy,
-  CheckCircle2, XCircle, Loader2,
+  CheckCircle2, XCircle, Loader2, Zap, Star, Clock, Target,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,10 @@ type Metrics = {
   assignments_submitted: number;
   assignments_pending: number;
   projects_completed: number;
+  current_streak: number;
+  last_activity: string | null;
+  days_since_active: number;
+  total_xp: number;
 };
 
 type RecentQuiz = {
@@ -31,6 +35,7 @@ type TopicRow = {
   quiz_max: number;
   assignment_status: 'Submitted' | 'Pending';
   project_status: 'Approved' | 'Submitted' | 'Not Started' | null;
+  progress: number;
 };
 
 type SubjectGroup = {
@@ -76,6 +81,7 @@ export default function StudentAnalytics() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [recentQuizzes, setRecentQuizzes] = useState<RecentQuiz[]>([]);
   const [subjects, setSubjects] = useState<SubjectGroup[]>([]);
+  const [overallProgress, setOverallProgress] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -87,6 +93,7 @@ export default function StudentAnalytics() {
         setMetrics(summaryRes.data.data.metrics);
         setRecentQuizzes(summaryRes.data.data.recent_quizzes);
         setSubjects(modulesRes.data.data);
+        setOverallProgress(modulesRes.data.overall_progress || 0);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -112,34 +119,55 @@ export default function StudentAnalytics() {
       ) : (
         <>
           {/* Summary stat cards */}
-          <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4'>
+          <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+            <StatCard
+              label='Overall Progress'
+              value={`${overallProgress}%`}
+              icon={Target}
+              iconColor='text-indigo-600'
+              bgColor='bg-indigo-50'
+            />
+            <StatCard
+              label='Learning Streak'
+              value={`${metrics?.current_streak ?? 0} Days`}
+              icon={Zap}
+              iconColor='text-orange-600'
+              bgColor='bg-orange-50'
+            />
+            <StatCard
+              label='Total XP Earned'
+              value={metrics?.total_xp ?? 0}
+              icon={Star}
+              iconColor='text-yellow-600'
+              bgColor='bg-yellow-50'
+            />
+            <StatCard
+              label='Last Active'
+              value={metrics?.days_since_active === 0 ? 'Today' : `${metrics?.days_since_active ?? 0}d ago`}
+              icon={Clock}
+              iconColor='text-emerald-600'
+              bgColor='bg-emerald-50'
+            />
             <StatCard
               label='Quizzes Attempted'
               value={metrics?.quizzes_attempted ?? 0}
               icon={BookOpen}
-              iconColor='text-indigo-600'
-              bgColor='bg-indigo-50'
+              iconColor='text-blue-600'
+              bgColor='bg-blue-50'
             />
             <StatCard
               label='Avg Quiz Score'
               value={`${metrics?.avg_quiz_score ?? 0}%`}
               icon={TrendingUp}
-              iconColor='text-emerald-600'
-              bgColor='bg-emerald-50'
+              iconColor='text-teal-600'
+              bgColor='bg-teal-50'
             />
             <StatCard
               label='Assignments Submitted'
               value={metrics?.assignments_submitted ?? 0}
               icon={CheckSquare}
-              iconColor='text-blue-600'
-              bgColor='bg-blue-50'
-            />
-            <StatCard
-              label='Assignments Pending'
-              value={metrics?.assignments_pending ?? 0}
-              icon={FileText}
-              iconColor='text-amber-600'
-              bgColor='bg-amber-50'
+              iconColor='text-cyan-600'
+              bgColor='bg-cyan-50'
             />
             <StatCard
               label='Projects Completed'
@@ -160,7 +188,8 @@ export default function StudentAnalytics() {
                 <table className='w-full text-sm'>
                   <thead className='bg-slate-50 text-xs text-slate-500 uppercase font-semibold'>
                     <tr>
-                      <th className='text-left px-6 py-4'>Module</th>
+                      <th className='text-left px-6 py-4 w-1/3'>Module</th>
+                      <th className='text-left px-6 py-4'>Progress</th>
                       <th className='text-left px-6 py-4'>Quiz Score</th>
                       <th className='text-left px-6 py-4'>Assignment</th>
                       <th className='text-left px-6 py-4'>Project</th>
@@ -170,6 +199,19 @@ export default function StudentAnalytics() {
                     {subject.topics.map((topic) => (
                       <tr key={topic.topic_id} className='hover:bg-slate-50 transition-colors'>
                         <td className='px-6 py-4 font-semibold text-slate-800'>{topic.topic_title}</td>
+                        <td className='px-6 py-4'>
+                          <div className='flex items-center gap-3'>
+                            <div className='w-full bg-slate-100 rounded-full h-2 min-w-[80px] overflow-hidden flex'>
+                              <div
+                                className='bg-indigo-500 h-2 rounded-full transition-all duration-1000'
+                                style={{ width: `${topic.progress}%` }}
+                              />
+                            </div>
+                            <span className='text-sm font-semibold text-slate-700 min-w-[32px]'>
+                              {topic.progress}%
+                            </span>
+                          </div>
+                        </td>
                         <td className='px-6 py-4 text-slate-600'>
                           {topic.quiz_max > 0
                             ? `${topic.quiz_score}/${topic.quiz_max}`

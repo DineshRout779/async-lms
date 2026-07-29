@@ -32,9 +32,10 @@ type ProjectData = {
   students: { id: string; name: string; email: string; status: string }[];
 };
 
-type BatchSubject = { id: string; name: string; quiz_completion: number; pass_rate: number; assignment_completion: number };
+type BatchSubject = { id: string; name: string; quiz_completion: number; pass_rate: number; assignment_completion: number; project_completion: number; lesson_completion: number; module_progress: number; };
 type BatchDashData = {
-  enrolled: number; quiz_completion_rate: number; quiz_pass_rate: number;
+  enrolled: number; active_students: number; avg_batch_streak: number; avg_module_progress: number;
+  quiz_completion_rate: number; quiz_pass_rate: number;
   assignment_completion_rate: number; project_completion_rate: number;
   subjects: BatchSubject[];
 };
@@ -663,8 +664,11 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
         <>
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <StatCard label="Students Enrolled" value={data.enrolled} />
+            <StatCard label="Active Students" value={data.active_students} sub="Online & active today" />
+            <StatCard label="Avg Batch Streak" value={`${data.avg_batch_streak} days`} />
+            <StatCard label="Avg Module Progress" value={`${data.avg_module_progress}%`} />
             <StatCard label="Quiz Completion" value={`${data.quiz_completion_rate}%`} />
             <StatCard label="Quiz Pass Rate" value={`${data.quiz_pass_rate}%`} />
             <StatCard label="Assignment Completion" value={`${data.assignment_completion_rate}%`} />
@@ -683,6 +687,9 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
                     <th className="text-left px-5 py-3">Quiz Completion</th>
                     <th className="text-left px-5 py-3">Pass Rate</th>
                     <th className="text-left px-5 py-3">Assignment Completion</th>
+                    <th className="text-left px-5 py-3">Project Completion</th>
+                    <th className="text-left px-5 py-3">Lessons Read</th>
+                    <th className="text-left px-5 py-3">Avg Progress</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -692,6 +699,9 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
                       <td className="px-5 py-3"><RateBar value={s.quiz_completion} /></td>
                       <td className="px-5 py-3"><RateBar value={s.pass_rate} color="bg-green-500" /></td>
                       <td className="px-5 py-3"><RateBar value={s.assignment_completion} color="bg-amber-500" /></td>
+                      <td className="px-5 py-3"><RateBar value={s.project_completion} color="bg-purple-500" /></td>
+                      <td className="px-5 py-3"><RateBar value={s.lesson_completion} color="bg-blue-500" /></td>
+                      <td className="px-5 py-3"><RateBar value={s.module_progress} color="bg-indigo-600" /></td>
                     </tr>
                   ))}
                 </tbody>
