@@ -90,7 +90,7 @@ jobs:
             npm install
             
             # Restart ONLY the orchestrator process via ecosystem.config.js
-            pm2 start ecosystem.config.js --only orchestrator || pm2 restart orchestrator --update-env
+            pm2 start ecosystem.config.js --only codeguru-lms-prod || pm2 restart codeguru-lms-prod --update-env
 
   # ── Workers → staging: 1x EC2 (t3.medium/4GB) | production: 5x EC2 (t3.large/8GB) ──
   deploy-workers:

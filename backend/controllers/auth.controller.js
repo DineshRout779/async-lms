@@ -33,14 +33,20 @@ exports.signup = async (req, res) => {
     // 2. Hash Password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const userRole = role || 'student';
-    let roleKey = 'STUDENT';
-    if (userRole === 'facilitator') roleKey = 'FACILITATOR';
-    
-    const roleRecord = await pool.query('SELECT id FROM roles WHERE role_key = $1', [roleKey]);
-    const role_id = roleRecord.rowCount > 0 ? roleRecord.rows[0].id : 2;
+    // 3. Resolve role_id from the roles table
+    const roleKey = (role || 'student').toUpperCase();
+    const roleRes = await pool.query(
+      'SELECT id FROM roles WHERE role_key = $1',
+      [roleKey],
+    );
 
-    // 3. Insert User (Identity)
+    if (!roleRes.rowCount) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+    const role_id = roleRes.rows[0].id;
+    const resolvedRole = roleKey.toLowerCase();
+
+    // 4. Insert User (Identity)
     const result = await pool.query(
       `
       INSERT INTO users (full_name, email, password_hash, role_id, onboarding_step, is_verified)
@@ -56,16 +62,16 @@ exports.signup = async (req, res) => {
       ],
     );
 
-    const newUser = { ...result.rows[0], role: userRole };
+    const newUser = { ...result.rows[0], role: resolvedRole };
 
-    // 4. If student, create initial profile
+    // 5. If student, create initial profile
     if (newUser.role === 'student') {
       await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [
         newUser.id,
       ]);
     }
 
-    // 4. Generate JWT (id is a UUID string)
+    // 6. Generate JWT (id is a UUID string)
     const token = jwt.sign(
       { id: newUser.id, role: newUser.role },
       process.env.JWT_SECRET,
@@ -97,7 +103,7 @@ exports.login = async (req, res) => {
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified
        FROM users u
-       JOIN roles r ON u.role_id = r.id
+       LEFT JOIN roles r ON r.id = u.role_id
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1`,
@@ -211,7 +217,7 @@ exports.googleCallback = async (req, res) => {
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified
        FROM users u
-       JOIN roles r ON u.role_id = r.id
+       LEFT JOIN roles r ON r.id = u.role_id
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1`,
@@ -229,16 +235,17 @@ exports.googleCallback = async (req, res) => {
         ]);
       }
     } else {
-      const roleRecord = await pool.query('SELECT id FROM roles WHERE role_key = $1', ['STUDENT']);
-      const role_id = roleRecord.rowCount > 0 ? roleRecord.rows[0].id : 2;
-
+      const studentRoleRes = await pool.query(
+        "SELECT id FROM roles WHERE role_key = 'STUDENT'",
+      );
       const insertRes = await pool.query(
         `INSERT INTO users (full_name, email, google_id, role_id, onboarding_step, is_verified)
          VALUES ($1, $2, $3, $4, 'college', false)
          RETURNING id, full_name, email, onboarding_step, is_verified`,
-        [name, email, googleId, role_id],
+        [name, email, googleId, studentRoleRes.rows[0].id],
       );
-      user = { ...insertRes.rows[0], role: 'student' };
+      user = insertRes.rows[0];
+      user.role = 'student';
       await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [
         user.id,
       ]);
@@ -284,7 +291,7 @@ exports.getMe = async (req, res) => {
               COALESCE(us.current_streak, 0) AS current_streak,
               COALESCE(SUM(pl.points), 0)::integer AS total_points
        FROM users u
-       JOIN roles r ON u.role_id = r.id
+       LEFT JOIN roles r ON r.id = u.role_id
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        LEFT JOIN user_streaks us ON us.user_id = u.id

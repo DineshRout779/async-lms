@@ -1,5 +1,6 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
+const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
 
 // ============================================
@@ -1126,7 +1127,7 @@ exports.getOverallLeaderboard = async (req, res) => {
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN colleges c ON sp.college_id = c.id
         LEFT JOIN points_log pl ON pl.user_id = u.id
-        WHERE u.role = 'student'
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id, u.full_name, c.name
       )
       SELECT * FROM ranked ORDER BY rank LIMIT $1`,
@@ -1141,7 +1142,7 @@ exports.getOverallLeaderboard = async (req, res) => {
           RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
         FROM users u
         LEFT JOIN points_log pl ON pl.user_id = u.id
-        WHERE u.role = 'student'
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id
       ) ranked WHERE user_id = $1`,
       [userId],
@@ -1187,7 +1188,7 @@ exports.getWeeklyLeaderboard = async (req, res) => {
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN colleges c ON sp.college_id = c.id
         LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $2
-        WHERE u.role = 'student'
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id, u.full_name, c.name
       )
       SELECT * FROM ranked ORDER BY rank LIMIT $1`,
@@ -1202,7 +1203,7 @@ exports.getWeeklyLeaderboard = async (req, res) => {
           RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
         FROM users u
         LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $2
-        WHERE u.role = 'student'
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id
       ) ranked WHERE user_id = $1`,
       [userId, weekStartStr],
@@ -1245,7 +1246,7 @@ exports.getCollegeLeaderboard = async (req, res) => {
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN points_log pl ON pl.user_id = u.id
-        WHERE u.role = 'student' AND sp.college_id = $2
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = $2
         GROUP BY u.id, u.full_name
       )
       SELECT * FROM ranked ORDER BY rank LIMIT $1`,
@@ -1261,7 +1262,7 @@ exports.getCollegeLeaderboard = async (req, res) => {
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN points_log pl ON pl.user_id = u.id
-        WHERE u.role = 'student' AND sp.college_id = $2
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = $2
         GROUP BY u.id
       ) ranked WHERE user_id = $1`,
       [userId, collegeId],
@@ -1292,7 +1293,7 @@ exports.getStudentProjects = async (req, res) => {
     const result = await pool.query(
       `SELECT id, name, profile, created_at, updated_at
        FROM student_projects
-       WHERE user_id = $1
+       WHERE user_id = $1 AND is_deleted = false
        ORDER BY updated_at DESC`,
       [userId],
     );
@@ -1341,7 +1342,7 @@ exports.deleteStudentProject = async (req, res) => {
     const { id } = req.params;
 
     const result = await pool.query(
-      `DELETE FROM student_projects WHERE id = $1 AND user_id = $2 RETURNING id`,
+      `UPDATE student_projects SET is_deleted = true WHERE id = $1 AND user_id = $2 AND is_deleted = false RETURNING *`,
       [id, userId],
     );
 
@@ -1349,6 +1350,7 @@ exports.deleteStudentProject = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
+    logAction({ req, action: 'DELETE', entityType: 'student_project', entityId: id, details: { name: result.rows[0].name } });
     res.json({ success: true, message: 'Project deleted' });
   } catch (error) {
     console.error('Error deleting student project:', error);
