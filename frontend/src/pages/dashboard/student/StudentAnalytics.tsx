@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 import {
-  BookOpen, CheckSquare, FileText, TrendingUp, Trophy,
+  BookOpen, CheckSquare, TrendingUp, Trophy,
   CheckCircle2, XCircle, Loader2, Zap, Star, Clock, Target,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
