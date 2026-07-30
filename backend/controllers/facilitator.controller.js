@@ -905,18 +905,24 @@ exports.getBatchDashboard = async (req, res) => {
         const attempted = new Set(quizRes.rows.map((r) => r.user_id));
         const passed = new Set(quizRes.rows.filter((r) => r.is_passed).map((r) => r.user_id));
 
-        // Assignment completion: college assignments for this college
-        let asgComplete = 0;
-        if (colleges.length) {
-          const asgRes = await pool.query(
-            `SELECT cas.student_id
-             FROM college_assignment_submissions cas
-             JOIN college_assignments ca ON ca.id = cas.assignment_id
-             WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])`,
-            [colleges, subjEnrolled],
-          );
-          asgComplete = new Set(asgRes.rows.map((r) => r.student_id)).size;
+        // Assignment completion: Curriculum assignments for this subject/topic
+        const aParams = [subjEnrolled, subj.id];
+        let aTopicClause = '';
+        if (topic_id) {
+          aParams.push(topic_id);
+          aTopicClause = `AND t.id = $${aParams.length}::uuid`;
         }
+
+        const asgRes = await pool.query(
+          `SELECT cas.user_id as student_id
+           FROM assignment_submissions cas
+           JOIN assignments a ON a.id = cas.assignment_id
+           JOIN units un ON un.id = a.unit_id
+           JOIN topics t ON t.id = un.topic_id
+           WHERE cas.user_id = ANY($1::uuid[]) AND t.subject_id = $2::uuid ${aTopicClause}`,
+          aParams,
+        );
+        const asgComplete = new Set(asgRes.rows.map((r) => r.student_id)).size;
 
         // Project completion
         const projRes = await pool.query(
@@ -1084,15 +1090,63 @@ exports.getStudentAnalytics = async (req, res) => {
     );
     const quizMap = new Map(quizRes.rows.map((r) => [r.user_id, r]));
 
-    // Assignment submissions
-    const asgRes = await pool.query(
-      `SELECT DISTINCT cas.student_id
-       FROM college_assignment_submissions cas
-       JOIN college_assignments ca ON ca.id = cas.assignment_id
-       WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])`,
-      [colleges, enrolledIds],
-    );
-    const asgSubmitted = new Set(asgRes.rows.map((r) => r.student_id));
+    // Expected Total Assignments Count per student (Curriculum Assignments)
+    let expectedMap = new Map();
+    let asgParams = [enrolledIds];
+    let aTopicClause = '';
+    
+    if (topic_id) {
+      asgParams.push(topic_id);
+      aTopicClause = `AND t.id = $${asgParams.length}::uuid`;
+      // Expected total is just the count of assignments for this topic.
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT a.id)::int as total 
+        FROM assignments a
+        JOIN units un ON un.id = a.unit_id
+        WHERE un.topic_id = $1::uuid
+      `, [topic_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedMap.set(id, total));
+    } else if (subject_id) {
+      asgParams.push(subject_id);
+      aTopicClause = `AND t.subject_id = $${asgParams.length}::uuid`;
+      // Expected total is just the count of assignments for this subject.
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT a.id)::int as total 
+        FROM assignments a
+        JOIN units un ON un.id = a.unit_id
+        JOIN topics t ON t.id = un.topic_id
+        WHERE t.subject_id = $1::uuid
+      `, [subject_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedMap.set(id, total));
+    } else {
+      // "All Subjects" selected. Calculate personalized expected total per student based on their enrollments.
+      const personalizedRes = await pool.query(`
+        SELECT us.user_id as student_id, COUNT(DISTINCT a.id)::int as expected_total
+        FROM user_subjects us
+        JOIN subjects s ON s.id = us.subject_id
+        JOIN topics t ON t.subject_id = s.id
+        JOIN units un ON un.topic_id = t.id
+        JOIN assignments a ON a.unit_id = un.id
+        WHERE us.user_id = ANY($1::uuid[])
+        GROUP BY us.user_id
+      `, [enrolledIds]);
+      personalizedRes.rows.forEach(r => expectedMap.set(r.student_id, r.expected_total));
+    }
+
+    // Assignment submissions per student
+    let asgQuery = `
+      SELECT cas.user_id as student_id, COUNT(DISTINCT cas.assignment_id)::int as submitted_count
+      FROM assignment_submissions cas
+      JOIN assignments a ON a.id = cas.assignment_id
+      JOIN units un ON un.id = a.unit_id
+      JOIN topics t ON t.id = un.topic_id
+      WHERE cas.user_id = ANY($1::uuid[]) ${aTopicClause}
+      GROUP BY cas.user_id
+    `;
+    const asgRes = await pool.query(asgQuery, asgParams);
+    const asgSubmittedMap = new Map(asgRes.rows.map(r => [r.student_id, r.submitted_count]));
 
     // Project submissions
     const psParams = [enrolledIds];
@@ -1129,7 +1183,8 @@ exports.getStudentAnalytics = async (req, res) => {
         email: s.email,
         quiz_avg_pct: quiz ? quiz.avg_pct : null,
         quiz_attempts: quiz ? parseInt(quiz.total_attempts) : 0,
-        assignment_status: asgSubmitted.has(s.id) ? 'Submitted' : 'Pending',
+        assignment_submitted_count: asgSubmittedMap.get(s.id) || 0,
+        assignment_total_count: expectedMap.get(s.id) || 0,
         project_status: projStatus,
       };
     });

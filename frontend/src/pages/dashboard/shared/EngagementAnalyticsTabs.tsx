@@ -43,7 +43,7 @@ type BatchDashData = {
 type StudentRow = {
   id: string; name: string; email: string;
   quiz_avg_pct: number | null; quiz_attempts: number;
-  assignment_status: string; project_status: string;
+  assignment_submitted_count: number; assignment_total_count: number; project_status: string;
 };
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -813,7 +813,18 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                         <span className="text-slate-400 text-xs">No attempts</span>
                       )}
                     </td>
-                    <td className="px-5 py-3"><StatusBadge status={s.assignment_status} /></td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={
+                          s.assignment_submitted_count === 0 ? 'Not Started'
+                            : s.assignment_submitted_count >= s.assignment_total_count ? 'Completed'
+                            : 'In Progress'
+                        } />
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({s.assignment_submitted_count} / {s.assignment_total_count})
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-5 py-3"><StatusBadge status={s.project_status} /></td>
                   </tr>
                 ))}

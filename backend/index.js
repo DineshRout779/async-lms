@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-// Temporary patch to prevent Neon Database serverless WebSocket driver
 // from crashing Node 24 due to a read-only ErrorEvent.message property.
 process.on('uncaughtException', (err) => {
   if (
