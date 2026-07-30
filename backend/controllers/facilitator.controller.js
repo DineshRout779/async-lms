@@ -1239,7 +1239,18 @@ exports.getStudentAnalytics = async (req, res) => {
       };
     });
 
-    res.json({ success: true, data: data.slice(sOffset, sOffset + sLimit), total: data.length });
+    const aggregates = {
+      quizzes_attempted: data.filter((s) => s.quiz_submitted_count > 0).length,
+      assignments_submitted: data.filter((s) => s.assignment_submitted_count > 0).length,
+      projects_completed: data.filter((s) => s.project_submitted_count > 0).length,
+    };
+
+    res.json({ 
+      success: true, 
+      data: data.slice(sOffset, sOffset + sLimit), 
+      total: data.length, 
+      aggregates 
+    });
   } catch (err) {
     serverError(res, err, 'getStudentAnalytics');
   }

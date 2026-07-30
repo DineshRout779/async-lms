@@ -729,6 +729,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [aggregates, setAggregates] = useState({ quizzes_attempted: 0, assignments_submitted: 0, projects_completed: 0 });
 
   useEffect(() => {
     if (!subject) { setTopics([]); setTopic(''); return; }
@@ -750,9 +751,11 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       const res = await apiClient.get(`/facilitator/analytics/students?${params}`);
       setData(res.data.data ?? []);
       setTotal(res.data.total ?? 0);
+      setAggregates(res.data.aggregates ?? { quizzes_attempted: 0, assignments_submitted: 0, projects_completed: 0 });
     } catch {
       setData([]);
       setTotal(0);
+      setAggregates({ quizzes_attempted: 0, assignments_submitted: 0, projects_completed: 0 });
     } finally {
       setLoading(false);
     }
@@ -762,9 +765,6 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
 
   useEffect(() => { setPage(1); load(1); }, [load]);
 
-  const quizAttemptedCount = data.filter((s) => s.quiz_submitted_count > 0).length;
-  const submittedCount = data.filter((s) => s.assignment_submitted_count > 0).length;
-  const completedProjects = data.filter((s) => s.project_submitted_count > 0).length;
   const totalPages = Math.ceil(total / STUDENTS_PAGE_SIZE);
 
   return (
@@ -779,9 +779,9 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       {loading ? <LoadingState /> : total === 0 ? <EmptyState message="No students found" /> : (
         <>
           <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Quizzes Attempted" value={quizAttemptedCount} sub={`out of ${total} students`} />
-            <StatCard label="Assignments Submitted" value={submittedCount} sub={`out of ${total} students`} />
-            <StatCard label="Projects Completed" value={completedProjects} sub="Approved capstone projects" />
+            <StatCard label="Quizzes Attempted" value={aggregates.quizzes_attempted} sub={`out of ${total} students`} />
+            <StatCard label="Assignments Submitted" value={aggregates.assignments_submitted} sub={`out of ${total} students`} />
+            <StatCard label="Projects Completed" value={aggregates.projects_completed} sub={`out of ${total} students`} />
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
