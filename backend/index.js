@@ -219,6 +219,21 @@ server.on('upgrade', (req, socket, head) => {
   // The built-in socket.io listeners will handle the upgrade automatically.
 });
 
+// ── Automated Background Jobs ───────────────────────────────────────────────
+const pool = require('./config/pg');
+
+// Runs once a day to permanently delete users in the bin > 30 days
+setInterval(async () => {
+  try {
+    const res = await pool.query(`DELETE FROM users WHERE deleted_at < NOW() - INTERVAL '30 days'`);
+    if (res.rowCount > 0) {
+      console.log(`[Cron] Purged ${res.rowCount} users from recycle bin older than 30 days.`);
+    }
+  } catch (error) {
+    console.error('[Cron Error] Failed to purge recycle bin:', error);
+  }
+}, 24 * 60 * 60 * 1000); // 24 hours
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   const ct = new Date().toLocaleTimeString();

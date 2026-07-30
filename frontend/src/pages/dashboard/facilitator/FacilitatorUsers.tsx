@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Eye, ShieldCheck, ShieldX, Pencil } from 'lucide-react';
+import { Search, Eye, ShieldCheck, ShieldX, Pencil, Archive, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function FacilitatorUsersSkeleton() {
@@ -57,6 +57,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import {
   Table,
@@ -67,6 +77,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import apiClient from '@/services/api';
+import RecycleBinModal from '@/components/common/RecycleBinModal';
 
 interface StudentRow {
   id: string;
@@ -99,6 +110,20 @@ const FacilitatorStudents = () => {
   const [editStudent, setEditStudent] = useState<StudentRow | null>(null);
   const [editForm, setEditForm] = useState({ degree: '', current_academic_year: '', expected_graduation_year: '' });
   const [saving, setSaving] = useState(false);
+  const [isBinOpen, setIsBinOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<StudentRow | null>(null);
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+      await apiClient.delete(`/facilitator/students/${userToDelete.id}`);
+      toast.success('Student moved to recycle bin');
+      setUserToDelete(null);
+      await fetchStudents();
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to move to bin'));
+    }
+  };
 
   const fetchStudents = async () => {
     try {
@@ -190,23 +215,32 @@ const FacilitatorStudents = () => {
         </p>
       </div>
 
-      <div className='flex gap-1 rounded-lg bg-slate-100 p-1 w-fit'>
+      <div className='flex items-center justify-between'>
+        <div className='flex gap-1 rounded-lg bg-slate-100 p-1 w-fit'>
+          <button
+            onClick={() => setTab('all')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'all' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            All Students
+          </button>
+          <button
+            onClick={() => setTab('pending')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${tab === 'pending' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Pending Verification
+            {pendingCount > 0 && (
+              <span className='bg-yellow-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none'>
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        </div>
         <button
-          onClick={() => setTab('all')}
-          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'all' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+          onClick={() => setIsBinOpen(true)}
+          className='flex items-center gap-2 px-4 py-1.5 rounded-md border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm'
         >
-          All Students
-        </button>
-        <button
-          onClick={() => setTab('pending')}
-          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${tab === 'pending' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          Pending Verification
-          {pendingCount > 0 && (
-            <span className='bg-yellow-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none'>
-              {pendingCount}
-            </span>
-          )}
+          <Archive className="h-4 w-4 text-slate-500" />
+          Recycle Bin
         </button>
       </div>
 
@@ -376,6 +410,13 @@ const FacilitatorStudents = () => {
                         <ShieldCheck className='w-4 h-4' />
                       )}
                     </button>
+                    <button
+                      onClick={() => setUserToDelete(student)}
+                      className='p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors'
+                      title='Move to recycle bin'
+                    >
+                      <Trash2 className='w-4 h-4' />
+                    </button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -464,6 +505,31 @@ const FacilitatorStudents = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RecycleBinModal
+        open={isBinOpen}
+        onClose={() => setIsBinOpen(false)}
+        apiPrefix="facilitator"
+        onRestored={fetchStudents}
+      />
+
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Move to Recycle Bin?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will move <strong>{userToDelete?.full_name}</strong> to the Recycle Bin. 
+              They will not be able to log in, but their progress is preserved. You can restore them later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} className="bg-red-600 hover:bg-red-700">
+              Move to Bin
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

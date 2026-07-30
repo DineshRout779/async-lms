@@ -106,13 +106,13 @@ exports.login = async (req, res) => {
        LEFT JOIN roles r ON r.id = u.role_id
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
-       WHERE u.email = $1`,
+       WHERE u.email = $1 AND u.deleted_at IS NULL`,
       [email],
     );
 
     if (!userRes.rowCount) {
-      console.log(`[LOGIN FAILED] User not found for email: ${email}`);
-      return res.status(401).json({ message: 'Invalid email or password' });
+      console.log(`[LOGIN FAILED] User not found or deleted for email: ${email}`);
+      return res.status(401).json({ message: 'Invalid email or password, or account is disabled' });
     }
 
     const user = userRes.rows[0];
@@ -220,7 +220,7 @@ exports.googleCallback = async (req, res) => {
        LEFT JOIN roles r ON r.id = u.role_id
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
-       WHERE u.email = $1`,
+       WHERE u.email = $1 AND u.deleted_at IS NULL`,
       [email],
     );
 

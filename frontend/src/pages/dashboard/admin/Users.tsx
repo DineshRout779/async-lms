@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Eye, Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pencil, Eye, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import FacilitatorProfileDialog from '@/components/common/FacilitatorProfileDialog';
+import RecycleBinModal from '@/components/common/RecycleBinModal';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -17,6 +18,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -88,6 +99,7 @@ const Users = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [facilitatorProfileId, setFacilitatorProfileId] = useState<string | null>(null);
+  const [isBinOpen, setIsBinOpen] = useState(false);
   const [form, setForm] = useState<EditForm>({
     full_name: '',
     degree: '',
@@ -229,6 +241,20 @@ const Users = () => {
     }
   };
 
+  const [userToDelete, setUserToDelete] = useState<UserRow | null>(null);
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+      await apiClient.delete(`/users/${userToDelete.id}`);
+      toast.success('User moved to recycle bin');
+      setUserToDelete(null);
+      await fetchUsers();
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to delete user'));
+    }
+  };
+
   if (loading) {
     return (
       <div className='space-y-6 p-6'>
@@ -316,10 +342,16 @@ const Users = () => {
           </select>
         </div>
 
-        <p className='text-sm font-medium text-slate-500'>
-          Showing <span className='text-slate-900'>{filteredUsers.length}</span>{' '}
-          {activeTab === 'student' ? 'students' : 'facilitators'}
-        </p>
+        <div className='flex items-center gap-4'>
+          <Button variant="outline" onClick={() => setIsBinOpen(true)} className="gap-2">
+            <Archive className="h-4 w-4" />
+            Recycle Bin
+          </Button>
+          <p className='text-sm font-medium text-slate-500'>
+            Showing <span className='text-slate-900'>{filteredUsers.length}</span>{' '}
+            {activeTab === 'student' ? 'students' : 'facilitators'}
+          </p>
+        </div>
       </div>
 
       <Tabs
@@ -432,6 +464,14 @@ const Users = () => {
                         onClick={() => openEditModal(user)}
                       >
                         <Pencil className='h-4 w-4' />
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        className='text-slate-400 hover:text-red-600 hover:bg-red-50'
+                        onClick={() => setUserToDelete(user)}
+                      >
+                        <Trash2 className='h-4 w-4' />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -588,6 +628,14 @@ const Users = () => {
                         onClick={() => openEditModal(user)}
                       >
                         <Pencil className='h-4 w-4' />
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        className='text-slate-400 hover:text-red-600 hover:bg-red-50'
+                        onClick={() => setUserToDelete(user)}
+                      >
+                        <Trash2 className='h-4 w-4' />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -793,6 +841,31 @@ const Users = () => {
       <FacilitatorProfileDialog
         facilitatorId={facilitatorProfileId}
         onClose={() => setFacilitatorProfileId(null)}
+      />
+
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will move <strong>{userToDelete?.full_name}</strong> to the Recycle Bin. 
+              They will not be able to log in, but their progress is preserved. You can restore them later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} className="bg-red-600 hover:bg-red-700">
+              Move to Bin
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <RecycleBinModal
+        open={isBinOpen}
+        onClose={() => setIsBinOpen(false)}
+        apiPrefix="admin"
+        onRestored={fetchUsers}
       />
     </div>
   );
