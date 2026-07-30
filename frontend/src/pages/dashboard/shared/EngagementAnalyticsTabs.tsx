@@ -42,8 +42,9 @@ type BatchDashData = {
 
 type StudentRow = {
   id: string; name: string; email: string;
-  quiz_avg_pct: number | null; quiz_attempts: number;
-  assignment_submitted_count: number; assignment_total_count: number; project_status: string;
+  quiz_submitted_count: number; quiz_total_count: number;
+  assignment_submitted_count: number; assignment_total_count: number; 
+  project_submitted_count: number; project_total_count: number;
 };
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -761,12 +762,9 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
 
   useEffect(() => { setPage(1); load(1); }, [load]);
 
-  const attempted = data.filter((s) => s.quiz_avg_pct !== null);
-  const totalQuizAvg = attempted.length
-    ? Math.round(attempted.reduce((acc, s) => acc + (s.quiz_avg_pct ?? 0), 0) / attempted.length)
-    : 0;
-  const submittedCount = data.filter((s) => s.assignment_status === 'Submitted').length;
-  const completedProjects = data.filter((s) => s.project_status === 'Approved').length;
+  const quizAttemptedCount = data.filter((s) => s.quiz_submitted_count > 0).length;
+  const submittedCount = data.filter((s) => s.assignment_submitted_count > 0).length;
+  const completedProjects = data.filter((s) => s.project_submitted_count > 0).length;
   const totalPages = Math.ceil(total / STUDENTS_PAGE_SIZE);
 
   return (
@@ -781,7 +779,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       {loading ? <LoadingState /> : total === 0 ? <EmptyState message="No students found" /> : (
         <>
           <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Total Quiz Avg" value={`${totalQuizAvg}%`} sub="Across all attempted quizzes" />
+            <StatCard label="Quizzes Attempted" value={quizAttemptedCount} sub={`out of ${total} students`} />
             <StatCard label="Assignments Submitted" value={submittedCount} sub={`out of ${total} students`} />
             <StatCard label="Projects Completed" value={completedProjects} sub="Approved capstone projects" />
           </div>
@@ -791,12 +789,12 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
               <h3 className="text-sm font-semibold text-slate-700">Per-Student Performance</h3>
             </div>
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+              <thead className="bg-slate-50 border-b border-slate-100 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <th className="text-left px-5 py-3">Student</th>
-                  <th className="text-left px-5 py-3">Quiz Score</th>
-                  <th className="text-left px-5 py-3">Assignment</th>
-                  <th className="text-left px-5 py-3">Project</th>
+                  <th className="px-5 py-4">Student</th>
+                  <th className="px-5 py-4">Quizzes</th>
+                  <th className="px-5 py-4">Assignment</th>
+                  <th className="px-5 py-4">Project</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -807,11 +805,16 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                       <p className="text-xs text-slate-400">{s.email}</p>
                     </td>
                     <td className="px-5 py-3">
-                      {s.quiz_avg_pct !== null ? (
-                        <RateBar value={s.quiz_avg_pct} />
-                      ) : (
-                        <span className="text-slate-400 text-xs">No attempts</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={
+                          s.quiz_submitted_count === 0 ? 'Not Started'
+                            : s.quiz_submitted_count >= s.quiz_total_count ? 'Completed'
+                            : 'In Progress'
+                        } />
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({s.quiz_submitted_count} / {s.quiz_total_count})
+                        </span>
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
@@ -825,7 +828,18 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                         </span>
                       </div>
                     </td>
-                    <td className="px-5 py-3"><StatusBadge status={s.project_status} /></td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={
+                          s.project_submitted_count === 0 ? 'Not Started'
+                            : s.project_submitted_count >= s.project_total_count ? 'Completed'
+                            : 'In Progress'
+                        } />
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({s.project_submitted_count} / {s.project_total_count})
+                        </span>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

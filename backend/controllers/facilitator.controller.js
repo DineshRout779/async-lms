@@ -1062,33 +1062,59 @@ exports.getStudentAnalytics = async (req, res) => {
       [enrolledIds],
     );
 
-    // Quiz scores per student
-    const quizParams = [enrolledIds];
-    let subjQuizClause = '';
+    // Expected Total Quizzes Count per student
+    let expectedQuizMap = new Map();
+    let qParams = [enrolledIds];
+    let qTopicClause = '';
     
     if (topic_id) {
-      quizParams.push(topic_id);
-      subjQuizClause = `AND t.id = $${quizParams.length}::uuid`;
+      qParams.push(topic_id);
+      qTopicClause = `AND t.id = $${qParams.length}::uuid`;
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT q.id)::int as total 
+        FROM quizzes q
+        JOIN units un ON un.id = q.unit_id
+        WHERE un.topic_id = $1::uuid
+      `, [topic_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedQuizMap.set(id, total));
     } else if (subject_id) {
-      quizParams.push(subject_id);
-      subjQuizClause = `AND t.subject_id = $${quizParams.length}::uuid`;
+      qParams.push(subject_id);
+      qTopicClause = `AND t.subject_id = $${qParams.length}::uuid`;
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT q.id)::int as total 
+        FROM quizzes q
+        JOIN units un ON un.id = q.unit_id
+        JOIN topics t ON t.id = un.topic_id
+        WHERE t.subject_id = $1::uuid
+      `, [subject_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedQuizMap.set(id, total));
+    } else {
+      const personalizedRes = await pool.query(`
+        SELECT us.user_id as student_id, COUNT(DISTINCT q.id)::int as expected_total
+        FROM user_subjects us
+        JOIN subjects s ON s.id = us.subject_id
+        JOIN topics t ON t.subject_id = s.id
+        JOIN units un ON un.topic_id = t.id
+        JOIN quizzes q ON q.unit_id = un.id
+        WHERE us.user_id = ANY($1::uuid[])
+        GROUP BY us.user_id
+      `, [enrolledIds]);
+      personalizedRes.rows.forEach(r => expectedQuizMap.set(r.student_id, r.expected_total));
     }
-    const quizRes = await pool.query(
-        `SELECT qa.user_id,
-                ROUND(AVG(CASE WHEN (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id) > 0
-                          THEN qa.score::float / (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id) * 100
-                          ELSE 0 END))::int AS avg_pct,
-              COUNT(*) AS total_attempts,
-              SUM(CASE WHEN qa.is_passed THEN 1 ELSE 0 END) AS passed_count
-       FROM quiz_attempts qa
-       JOIN quizzes q ON q.id = qa.quiz_id
-       JOIN units un ON un.id = q.unit_id
-       JOIN topics t ON t.id = un.topic_id
-       WHERE qa.user_id = ANY($1::uuid[]) ${subjQuizClause}
-       GROUP BY qa.user_id`,
-      quizParams,
-    );
-    const quizMap = new Map(quizRes.rows.map((r) => [r.user_id, r]));
+
+    // Quiz attempts per student
+    const quizRes = await pool.query(`
+        SELECT qa.user_id as student_id, COUNT(DISTINCT qa.quiz_id)::int as submitted_count
+        FROM quiz_attempts qa
+        JOIN quizzes q ON q.id = qa.quiz_id
+        JOIN units un ON un.id = q.unit_id
+        JOIN topics t ON t.id = un.topic_id
+        WHERE qa.user_id = ANY($1::uuid[]) ${qTopicClause}
+        GROUP BY qa.user_id
+      `, qParams);
+    const quizSubmittedMap = new Map(quizRes.rows.map((r) => [r.student_id, r.submitted_count]));
 
     // Expected Total Assignments Count per student (Curriculum Assignments)
     let expectedMap = new Map();
@@ -1148,44 +1174,68 @@ exports.getStudentAnalytics = async (req, res) => {
     const asgRes = await pool.query(asgQuery, asgParams);
     const asgSubmittedMap = new Map(asgRes.rows.map(r => [r.student_id, r.submitted_count]));
 
-    // Project submissions
-    const psParams = [enrolledIds];
-    let projSubjClause = '';
+    // Expected Total Projects Count per student
+    let expectedProjMap = new Map();
+    let pParams = [enrolledIds];
+    let pTopicClause = '';
     
     if (topic_id) {
-      psParams.push(topic_id);
-      projSubjClause = `AND t.id = $${psParams.length}::uuid`;
+      pParams.push(topic_id);
+      pTopicClause = `AND t.id = $${pParams.length}::uuid`;
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT p.id)::int as total 
+        FROM projects p
+        WHERE p.topic_id = $1::uuid
+      `, [topic_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedProjMap.set(id, total));
     } else if (subject_id) {
-      psParams.push(subject_id);
-      projSubjClause = `AND t.subject_id = $${psParams.length}::uuid`;
+      pParams.push(subject_id);
+      pTopicClause = `AND t.subject_id = $${pParams.length}::uuid`;
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT p.id)::int as total 
+        FROM projects p
+        JOIN topics t ON t.id = p.topic_id
+        WHERE t.subject_id = $1::uuid
+      `, [subject_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedProjMap.set(id, total));
+    } else {
+      const personalizedRes = await pool.query(`
+        SELECT us.user_id as student_id, COUNT(DISTINCT p.id)::int as expected_total
+        FROM user_subjects us
+        JOIN subjects s ON s.id = us.subject_id
+        JOIN topics t ON t.subject_id = s.id
+        JOIN projects p ON p.topic_id = t.id
+        WHERE us.user_id = ANY($1::uuid[])
+        GROUP BY us.user_id
+      `, [enrolledIds]);
+      personalizedRes.rows.forEach(r => expectedProjMap.set(r.student_id, r.expected_total));
     }
-    const projRes = await pool.query(
-      `SELECT ps.user_id, ps.is_approved
-       FROM project_submissions ps
-       JOIN projects p ON p.id = ps.project_id
-       JOIN topics t ON t.id = p.topic_id
-       WHERE ps.user_id = ANY($1::uuid[]) ${projSubjClause}`,
-      psParams,
-    );
-    const projMap = new Map();
-    projRes.rows.forEach((r) => {
-      const ex = projMap.get(r.user_id);
-      if (!ex || r.is_approved) projMap.set(r.user_id, r.is_approved);
-    });
+
+    // Project submissions per student
+    let pQuery = `
+      SELECT ps.user_id as student_id, COUNT(DISTINCT ps.project_id)::int as submitted_count
+      FROM project_submissions ps
+      JOIN projects p ON p.id = ps.project_id
+      JOIN topics t ON t.id = p.topic_id
+      WHERE ps.user_id = ANY($1::uuid[]) ${pTopicClause}
+      GROUP BY ps.user_id
+    `;
+    const projRes = await pool.query(pQuery, pParams);
+    const projSubmittedMap = new Map(projRes.rows.map(r => [r.student_id, r.submitted_count]));
 
     const data = namesRes.rows.map((s) => {
-      const quiz = quizMap.get(s.id);
-      let projStatus = 'Not Started';
-      if (projMap.has(s.id)) projStatus = projMap.get(s.id) ? 'Approved' : 'Submitted';
       return {
         id: s.id,
         name: s.full_name,
         email: s.email,
-        quiz_avg_pct: quiz ? quiz.avg_pct : null,
-        quiz_attempts: quiz ? parseInt(quiz.total_attempts) : 0,
+        quiz_submitted_count: quizSubmittedMap.get(s.id) || 0,
+        quiz_total_count: expectedQuizMap.get(s.id) || 0,
         assignment_submitted_count: asgSubmittedMap.get(s.id) || 0,
         assignment_total_count: expectedMap.get(s.id) || 0,
-        project_status: projStatus,
+        project_submitted_count: projSubmittedMap.get(s.id) || 0,
+        project_total_count: expectedProjMap.get(s.id) || 0,
       };
     });
 
