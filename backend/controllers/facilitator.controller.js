@@ -225,6 +225,200 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
   }
 };
 
+/**
+ * Facilitator access to student per-module analytics breakdown
+ * GET /api/facilitator/students/:id/modules
+ */
+exports.getFacilitatorStudentModuleAnalytics = async (req, res) => {
+  const facilitatorId = req.user.id;
+  const studentId = req.params.id;
+  try {
+    // 1. Verify access
+    let accessCheck;
+    if (req.user.role === 'admin') {
+      accessCheck = { rows: [{}] }; // Admins have full access
+    } else {
+      const colRes = await pool.query(
+        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+        [facilitatorId],
+      );
+      const collegeIds = colRes.rows.map((r) => r.college_id);
+
+      accessCheck = await pool.query(
+        'SELECT 1 FROM student_profiles WHERE user_id = $1 AND college_id = ANY($2)',
+        [studentId, collegeIds],
+      );
+    }
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // 2. Fetch basic topics
+    const result = await pool.query(
+      `SELECT
+         t.id AS topic_id,
+         t.title AS topic_title,
+         s.id AS subject_id,
+         s.name AS subject_name
+       FROM topics t
+       JOIN subjects s ON s.id = t.subject_id
+       JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       ORDER BY s.name, t.order_index`,
+      [studentId]
+    );
+
+    const topicIds = result.rows.map(r => r.topic_id);
+
+    let assignmentsData = { rows: [] };
+    let projectsData = { rows: [] };
+    let quizzesData = { rows: [] };
+    let lessonsData = { rows: [] };
+
+    if (topicIds.length > 0) {
+      // Fetch assignments
+      assignmentsData = await pool.query(
+        `SELECT a.id, a.title, u.topic_id, 
+                CASE WHEN EXISTS(SELECT 1 FROM assignment_submissions WHERE assignment_id = a.id AND user_id = $1) 
+                     THEN 'Submitted' ELSE 'Pending' END as status
+         FROM assignments a
+         JOIN units u ON a.unit_id = u.id
+         WHERE u.topic_id = ANY($2::uuid[])`,
+        [studentId, topicIds]
+      );
+
+      // Fetch projects
+      projectsData = await pool.query(
+        `SELECT p.id, p.title, p.topic_id, 
+                CASE WHEN EXISTS(SELECT 1 FROM project_submissions WHERE project_id = p.id AND user_id = $1 AND is_approved = true) THEN 'Approved'
+                     WHEN EXISTS(SELECT 1 FROM project_submissions WHERE project_id = p.id AND user_id = $1) THEN 'Submitted'
+                     ELSE 'Not Started' END as status
+         FROM projects p
+         WHERE p.topic_id = ANY($2::uuid[])`,
+        [studentId, topicIds]
+      );
+
+      // Fetch quizzes
+      quizzesData = await pool.query(
+        `SELECT q.id, u.title, q.max_score, u.topic_id, 
+                COALESCE((SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1), 0) as score,
+                CASE WHEN EXISTS(SELECT 1 FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1 AND is_passed = true) THEN 'Passed'
+                     WHEN EXISTS(SELECT 1 FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1) THEN 'Failed'
+                     ELSE 'Pending' END as status
+         FROM quizzes q
+         JOIN units u ON q.unit_id = u.id
+         WHERE u.topic_id = ANY($2::uuid[])`,
+        [studentId, topicIds]
+      );
+
+      // Fetch lessons
+      lessonsData = await pool.query(
+        `SELECT 
+           un.topic_id,
+           COUNT(lc.id)::int AS lessons_total,
+           COUNT(CASE WHEN EXISTS(
+               SELECT 1 FROM user_lesson_progress ulp 
+               WHERE ulp.lesson_content_id = lc.id AND ulp.user_id = $1 AND ulp.is_completed = true
+           ) THEN 1 END)::int AS lessons_completed
+         FROM lesson_content lc
+         JOIN subtopics st ON st.id = lc.subtopic_id
+         JOIN units un ON un.id = st.unit_id
+         WHERE un.topic_id = ANY($2::uuid[])
+         GROUP BY un.topic_id`,
+        [studentId, topicIds]
+      );
+    }
+
+    // Map data by topic_id
+    const assignmentsByTopic = {};
+    const projectsByTopic = {};
+    const quizzesByTopic = {};
+    const lessonsByTopic = {};
+
+    topicIds.forEach(id => {
+      assignmentsByTopic[id] = [];
+      projectsByTopic[id] = [];
+      quizzesByTopic[id] = [];
+      lessonsByTopic[id] = { completed: 0, total: 0 };
+    });
+
+    assignmentsData.rows.forEach(r => assignmentsByTopic[r.topic_id].push(r));
+    projectsData.rows.forEach(r => projectsByTopic[r.topic_id].push(r));
+    quizzesData.rows.forEach(r => quizzesByTopic[r.topic_id].push(r));
+    lessonsData.rows.forEach(r => {
+      lessonsByTopic[r.topic_id] = { completed: r.lessons_completed, total: r.lessons_total };
+    });
+
+    const subjectMap = new Map();
+    let totalProgressSum = 0;
+    let totalTopics = 0;
+
+    for (const row of result.rows) {
+      if (!subjectMap.has(row.subject_id)) {
+        subjectMap.set(row.subject_id, { subject_id: row.subject_id, subject_name: row.subject_name, topics: [] });
+      }
+
+      const tid = row.topic_id;
+      const asgs = assignmentsByTopic[tid];
+      const projs = projectsByTopic[tid];
+      const qzs = quizzesByTopic[tid];
+      const less = lessonsByTopic[tid];
+
+      const asg_total = asgs.length;
+      const asg_submitted = asgs.filter(a => a.status === 'Submitted').length;
+      const assignment_status = asg_total === 0 ? 'Pending' : (asg_submitted > 0 ? 'Submitted' : 'Pending');
+
+      const proj_total = projs.length;
+      const proj_submitted = projs.filter(p => p.status === 'Submitted' || p.status === 'Approved').length;
+      const proj_approved = projs.filter(p => p.status === 'Approved').length;
+      let project_status = null;
+      if (proj_approved > 0) project_status = 'Approved';
+      else if (proj_submitted > 0) project_status = 'Submitted';
+      else if (proj_total > 0) project_status = 'Not Started';
+
+      const quizzes_total = qzs.length;
+      const quizzes_passed = qzs.filter(q => q.status === 'Passed').length;
+      const quiz_score = qzs.reduce((acc, q) => acc + parseInt(q.score || 0), 0);
+      const quiz_max = qzs.reduce((acc, q) => acc + parseInt(q.max_score || 0), 0);
+
+      const lessons_total = less.total;
+      const lessons_completed = less.completed;
+
+      const calcPct = (completed, total) => total > 0 ? Math.round((completed / total) * 100) : null;
+      const lessonPct = calcPct(lessons_completed, lessons_total);
+      const quizPct = calcPct(quizzes_passed, quizzes_total);
+      const asgPct = calcPct(asg_submitted, asg_total);
+      const projPct = calcPct(proj_submitted, proj_total);
+      
+      const pcts = [lessonPct, quizPct, asgPct, projPct].filter(p => p !== null);
+      const progress = pcts.length > 0 ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : 0;
+
+      totalProgressSum += progress;
+      totalTopics++;
+
+      subjectMap.get(row.subject_id).topics.push({
+        topic_id: row.topic_id,
+        topic_title: row.topic_title,
+        quiz_score,
+        quiz_max,
+        assignment_status,
+        project_status,
+        progress,
+        assignments_list: asgs,
+        projects_list: projs,
+        quizzes_list: qzs,
+      });
+    }
+
+    const overall_progress = totalTopics > 0 ? Math.round(totalProgressSum / totalTopics) : 0;
+
+    res.json({ success: true, overall_progress, data: Array.from(subjectMap.values()) });
+  } catch (err) {
+    console.error('getFacilitatorStudentModuleAnalytics error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch module analytics' });
+  }
+};
+
 exports.getBatches = async (req, res) => {
   try {
     const facilitatorId = req.user.id;
