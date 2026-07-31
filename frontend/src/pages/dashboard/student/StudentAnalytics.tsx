@@ -49,13 +49,15 @@ function StatCard({ label, value, icon: Icon, iconColor, bgColor }: {
   icon: React.ElementType; iconColor: string; bgColor: string;
 }) {
   return (
-    <Card className='border-none shadow-sm hover:shadow-md transition-all duration-300'>
-      <CardContent className='pt-6 flex flex-col items-center text-center'>
-        <div className={`p-3 rounded-full mb-3 ${bgColor}`}>
-          <Icon className={`w-6 h-6 ${iconColor}`} />
+    <Card className='border-none shadow-sm hover:shadow-md transition-all duration-300 h-full w-full'>
+      <CardContent className='p-2 sm:p-3 flex flex-col justify-between items-center text-center h-full'>
+        <div className={`p-2 rounded-full mb-1 ${bgColor}`}>
+          <Icon className={`w-4 h-4 ${iconColor}`} />
         </div>
-        <div className='text-3xl font-bold tracking-tight text-slate-900'>{value}</div>
-        <p className='text-[11px] uppercase font-bold text-slate-500 tracking-widest mt-1'>{label}</p>
+        <div className='text-lg xl:text-xl font-bold tracking-tight text-slate-900 mb-1'>{value}</div>
+        <div className='h-6 flex items-start justify-center'>
+            <p className='text-[8px] lg:text-[9px] uppercase font-bold text-slate-500 tracking-tight leading-tight line-clamp-2'>{label}</p>
+        </div>
       </CardContent>
     </Card>
   );
@@ -119,7 +121,7 @@ export default function StudentAnalytics() {
       ) : (
         <>
           {/* Summary stat cards */}
-          <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+          <div className='grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3'>
             <StatCard
               label='Overall Progress'
               value={`${overallProgress}%`}

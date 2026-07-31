@@ -51,10 +51,18 @@ type StudentRow = {
 
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col gap-1">
-      <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{label}</p>
-      <p className="text-2xl font-bold text-slate-800">{value}</p>
-      {sub && <p className="text-xs text-slate-400">{sub}</p>}
+    <div className="bg-white rounded-xl border border-slate-200 p-2 sm:p-3 flex flex-col justify-between h-full w-full">
+      <div className="flex-1 flex items-end justify-center pb-1 min-h-[32px]">
+        <p className="text-[9px] lg:text-[10px] text-slate-500 font-bold uppercase tracking-tight leading-tight text-center line-clamp-2">
+          {label}
+        </p>
+      </div>
+      <div className="text-center">
+        <p className="text-lg xl:text-xl font-bold text-slate-800">{value}</p>
+      </div>
+      <div className="h-3 mt-1 text-center flex items-center justify-center">
+        {sub ? <p className="text-[8px] text-slate-400 leading-none">{sub}</p> : null}
+      </div>
     </div>
   );
 }
@@ -665,7 +673,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
         <>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             <StatCard label="Students Enrolled" value={data.enrolled} />
             <StatCard label="Active Students" value={data.active_students} sub="Online & active today" />
             <StatCard label="Avg Batch Streak" value={`${data.avg_batch_streak} days`} />
