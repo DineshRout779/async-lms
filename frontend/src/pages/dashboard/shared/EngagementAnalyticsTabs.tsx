@@ -32,27 +32,37 @@ type ProjectData = {
   students: { id: string; name: string; email: string; status: string }[];
 };
 
-type BatchSubject = { id: string; name: string; quiz_completion: number; pass_rate: number; assignment_completion: number };
+type BatchSubject = { id: string; name: string; quiz_completion: number; pass_rate: number; assignment_completion: number; project_completion: number; lesson_completion: number; module_progress: number; };
 type BatchDashData = {
-  enrolled: number; quiz_completion_rate: number; quiz_pass_rate: number;
+  enrolled: number; active_students: number; avg_batch_streak: number; avg_module_progress: number;
+  quiz_completion_rate: number; quiz_pass_rate: number;
   assignment_completion_rate: number; project_completion_rate: number;
   subjects: BatchSubject[];
 };
 
 type StudentRow = {
   id: string; name: string; email: string;
-  quiz_avg_pct: number | null; quiz_attempts: number;
-  assignment_status: string; project_status: string;
+  quiz_submitted_count: number; quiz_total_count: number;
+  assignment_submitted_count: number; assignment_total_count: number; 
+  project_submitted_count: number; project_total_count: number;
 };
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col gap-1">
-      <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{label}</p>
-      <p className="text-2xl font-bold text-slate-800">{value}</p>
-      {sub && <p className="text-xs text-slate-400">{sub}</p>}
+    <div className="bg-white rounded-xl border border-slate-200 p-2 sm:p-3 flex flex-col justify-between h-full w-full">
+      <div className="flex-1 flex items-end justify-center pb-1 min-h-[32px]">
+        <p className="text-[9px] lg:text-[10px] text-slate-500 font-bold uppercase tracking-tight leading-tight text-center line-clamp-2">
+          {label}
+        </p>
+      </div>
+      <div className="text-center">
+        <p className="text-lg xl:text-xl font-bold text-slate-800">{value}</p>
+      </div>
+      <div className="h-3 mt-1 text-center flex items-center justify-center">
+        {sub ? <p className="text-[8px] text-slate-400 leading-none">{sub}</p> : null}
+      </div>
     </div>
   );
 }
@@ -663,8 +673,11 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
         <>
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             <StatCard label="Students Enrolled" value={data.enrolled} />
+            <StatCard label="Active Students" value={data.active_students} sub="Online & active today" />
+            <StatCard label="Avg Batch Streak" value={`${data.avg_batch_streak} days`} />
+            <StatCard label="Avg Module Progress" value={`${data.avg_module_progress}%`} />
             <StatCard label="Quiz Completion" value={`${data.quiz_completion_rate}%`} />
             <StatCard label="Quiz Pass Rate" value={`${data.quiz_pass_rate}%`} />
             <StatCard label="Assignment Completion" value={`${data.assignment_completion_rate}%`} />
@@ -683,6 +696,9 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
                     <th className="text-left px-5 py-3">Quiz Completion</th>
                     <th className="text-left px-5 py-3">Pass Rate</th>
                     <th className="text-left px-5 py-3">Assignment Completion</th>
+                    <th className="text-left px-5 py-3">Project Completion</th>
+                    <th className="text-left px-5 py-3">Lessons Read</th>
+                    <th className="text-left px-5 py-3">Avg Progress</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -692,6 +708,9 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
                       <td className="px-5 py-3"><RateBar value={s.quiz_completion} /></td>
                       <td className="px-5 py-3"><RateBar value={s.pass_rate} color="bg-green-500" /></td>
                       <td className="px-5 py-3"><RateBar value={s.assignment_completion} color="bg-amber-500" /></td>
+                      <td className="px-5 py-3"><RateBar value={s.project_completion} color="bg-purple-500" /></td>
+                      <td className="px-5 py-3"><RateBar value={s.lesson_completion} color="bg-blue-500" /></td>
+                      <td className="px-5 py-3"><RateBar value={s.module_progress} color="bg-indigo-600" /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -718,6 +737,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [aggregates, setAggregates] = useState({ quizzes_attempted: 0, assignments_submitted: 0, projects_completed: 0 });
 
   useEffect(() => {
     if (!subject) { setTopics([]); setTopic(''); return; }
@@ -739,9 +759,11 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       const res = await apiClient.get(`/facilitator/analytics/students?${params}`);
       setData(res.data.data ?? []);
       setTotal(res.data.total ?? 0);
+      setAggregates(res.data.aggregates ?? { quizzes_attempted: 0, assignments_submitted: 0, projects_completed: 0 });
     } catch {
       setData([]);
       setTotal(0);
+      setAggregates({ quizzes_attempted: 0, assignments_submitted: 0, projects_completed: 0 });
     } finally {
       setLoading(false);
     }
@@ -751,12 +773,6 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
 
   useEffect(() => { setPage(1); load(1); }, [load]);
 
-  const attempted = data.filter((s) => s.quiz_avg_pct !== null);
-  const totalQuizAvg = attempted.length
-    ? Math.round(attempted.reduce((acc, s) => acc + (s.quiz_avg_pct ?? 0), 0) / attempted.length)
-    : 0;
-  const submittedCount = data.filter((s) => s.assignment_status === 'Submitted').length;
-  const completedProjects = data.filter((s) => s.project_status === 'Approved').length;
   const totalPages = Math.ceil(total / STUDENTS_PAGE_SIZE);
 
   return (
@@ -771,9 +787,9 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       {loading ? <LoadingState /> : total === 0 ? <EmptyState message="No students found" /> : (
         <>
           <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Total Quiz Avg" value={`${totalQuizAvg}%`} sub="Across all attempted quizzes" />
-            <StatCard label="Assignments Submitted" value={submittedCount} sub={`out of ${total} students`} />
-            <StatCard label="Projects Completed" value={completedProjects} sub="Approved capstone projects" />
+            <StatCard label="Quizzes Attempted" value={aggregates.quizzes_attempted} sub={`out of ${total} students`} />
+            <StatCard label="Assignments Submitted" value={aggregates.assignments_submitted} sub={`out of ${total} students`} />
+            <StatCard label="Projects Completed" value={aggregates.projects_completed} sub={`out of ${total} students`} />
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -781,12 +797,12 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
               <h3 className="text-sm font-semibold text-slate-700">Per-Student Performance</h3>
             </div>
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+              <thead className="bg-slate-50 border-b border-slate-100 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <th className="text-left px-5 py-3">Student</th>
-                  <th className="text-left px-5 py-3">Quiz Score</th>
-                  <th className="text-left px-5 py-3">Assignment</th>
-                  <th className="text-left px-5 py-3">Project</th>
+                  <th className="px-5 py-4">Student</th>
+                  <th className="px-5 py-4">Quizzes</th>
+                  <th className="px-5 py-4">Assignment</th>
+                  <th className="px-5 py-4">Project</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -797,14 +813,41 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                       <p className="text-xs text-slate-400">{s.email}</p>
                     </td>
                     <td className="px-5 py-3">
-                      {s.quiz_avg_pct !== null ? (
-                        <RateBar value={s.quiz_avg_pct} />
-                      ) : (
-                        <span className="text-slate-400 text-xs">No attempts</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={
+                          s.quiz_submitted_count === 0 ? 'Not Started'
+                            : s.quiz_submitted_count >= s.quiz_total_count ? 'Completed'
+                            : 'In Progress'
+                        } />
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({s.quiz_submitted_count} / {s.quiz_total_count})
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-5 py-3"><StatusBadge status={s.assignment_status} /></td>
-                    <td className="px-5 py-3"><StatusBadge status={s.project_status} /></td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={
+                          s.assignment_submitted_count === 0 ? 'Not Started'
+                            : s.assignment_submitted_count >= s.assignment_total_count ? 'Completed'
+                            : 'In Progress'
+                        } />
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({s.assignment_submitted_count} / {s.assignment_total_count})
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={
+                          s.project_submitted_count === 0 ? 'Not Started'
+                            : s.project_submitted_count >= s.project_total_count ? 'Completed'
+                            : 'In Progress'
+                        } />
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({s.project_submitted_count} / {s.project_total_count})
+                        </span>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

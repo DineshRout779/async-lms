@@ -905,18 +905,24 @@ exports.getBatchDashboard = async (req, res) => {
         const attempted = new Set(quizRes.rows.map((r) => r.user_id));
         const passed = new Set(quizRes.rows.filter((r) => r.is_passed).map((r) => r.user_id));
 
-        // Assignment completion: college assignments for this college
-        let asgComplete = 0;
-        if (colleges.length) {
-          const asgRes = await pool.query(
-            `SELECT cas.student_id
-             FROM college_assignment_submissions cas
-             JOIN college_assignments ca ON ca.id = cas.assignment_id
-             WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])`,
-            [colleges, subjEnrolled],
-          );
-          asgComplete = new Set(asgRes.rows.map((r) => r.student_id)).size;
+        // Assignment completion: Curriculum assignments for this subject/topic
+        const aParams = [subjEnrolled, subj.id];
+        let aTopicClause = '';
+        if (topic_id) {
+          aParams.push(topic_id);
+          aTopicClause = `AND t.id = $${aParams.length}::uuid`;
         }
+
+        const asgRes = await pool.query(
+          `SELECT cas.user_id as student_id
+           FROM assignment_submissions cas
+           JOIN assignments a ON a.id = cas.assignment_id
+           JOIN units un ON un.id = a.unit_id
+           JOIN topics t ON t.id = un.topic_id
+           WHERE cas.user_id = ANY($1::uuid[]) AND t.subject_id = $2::uuid ${aTopicClause}`,
+          aParams,
+        );
+        const asgComplete = new Set(asgRes.rows.map((r) => r.student_id)).size;
 
         // Project completion
         const projRes = await pool.query(
@@ -1056,85 +1062,195 @@ exports.getStudentAnalytics = async (req, res) => {
       [enrolledIds],
     );
 
-    // Quiz scores per student
-    const quizParams = [enrolledIds];
-    let subjQuizClause = '';
+    // Expected Total Quizzes Count per student
+    let expectedQuizMap = new Map();
+    let qParams = [enrolledIds];
+    let qTopicClause = '';
     
     if (topic_id) {
-      quizParams.push(topic_id);
-      subjQuizClause = `AND t.id = $${quizParams.length}::uuid`;
+      qParams.push(topic_id);
+      qTopicClause = `AND t.id = $${qParams.length}::uuid`;
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT q.id)::int as total 
+        FROM quizzes q
+        JOIN units un ON un.id = q.unit_id
+        WHERE un.topic_id = $1::uuid
+      `, [topic_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedQuizMap.set(id, total));
     } else if (subject_id) {
-      quizParams.push(subject_id);
-      subjQuizClause = `AND t.subject_id = $${quizParams.length}::uuid`;
+      qParams.push(subject_id);
+      qTopicClause = `AND t.subject_id = $${qParams.length}::uuid`;
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT q.id)::int as total 
+        FROM quizzes q
+        JOIN units un ON un.id = q.unit_id
+        JOIN topics t ON t.id = un.topic_id
+        WHERE t.subject_id = $1::uuid
+      `, [subject_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedQuizMap.set(id, total));
+    } else {
+      const personalizedRes = await pool.query(`
+        SELECT us.user_id as student_id, COUNT(DISTINCT q.id)::int as expected_total
+        FROM user_subjects us
+        JOIN subjects s ON s.id = us.subject_id
+        JOIN topics t ON t.subject_id = s.id
+        JOIN units un ON un.topic_id = t.id
+        JOIN quizzes q ON q.unit_id = un.id
+        WHERE us.user_id = ANY($1::uuid[])
+        GROUP BY us.user_id
+      `, [enrolledIds]);
+      personalizedRes.rows.forEach(r => expectedQuizMap.set(r.student_id, r.expected_total));
     }
-    const quizRes = await pool.query(
-        `SELECT qa.user_id,
-                ROUND(AVG(CASE WHEN (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id) > 0
-                          THEN qa.score::float / (SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id) * 100
-                          ELSE 0 END))::int AS avg_pct,
-              COUNT(*) AS total_attempts,
-              SUM(CASE WHEN qa.is_passed THEN 1 ELSE 0 END) AS passed_count
-       FROM quiz_attempts qa
-       JOIN quizzes q ON q.id = qa.quiz_id
-       JOIN units un ON un.id = q.unit_id
-       JOIN topics t ON t.id = un.topic_id
-       WHERE qa.user_id = ANY($1::uuid[]) ${subjQuizClause}
-       GROUP BY qa.user_id`,
-      quizParams,
-    );
-    const quizMap = new Map(quizRes.rows.map((r) => [r.user_id, r]));
 
-    // Assignment submissions
-    const asgRes = await pool.query(
-      `SELECT DISTINCT cas.student_id
-       FROM college_assignment_submissions cas
-       JOIN college_assignments ca ON ca.id = cas.assignment_id
-       WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])`,
-      [colleges, enrolledIds],
-    );
-    const asgSubmitted = new Set(asgRes.rows.map((r) => r.student_id));
+    // Quiz attempts per student
+    const quizRes = await pool.query(`
+        SELECT qa.user_id as student_id, COUNT(DISTINCT qa.quiz_id)::int as submitted_count
+        FROM quiz_attempts qa
+        JOIN quizzes q ON q.id = qa.quiz_id
+        JOIN units un ON un.id = q.unit_id
+        JOIN topics t ON t.id = un.topic_id
+        WHERE qa.user_id = ANY($1::uuid[]) ${qTopicClause}
+        GROUP BY qa.user_id
+      `, qParams);
+    const quizSubmittedMap = new Map(quizRes.rows.map((r) => [r.student_id, r.submitted_count]));
 
-    // Project submissions
-    const psParams = [enrolledIds];
-    let projSubjClause = '';
+    // Expected Total Assignments Count per student (Curriculum Assignments)
+    let expectedMap = new Map();
+    let asgParams = [enrolledIds];
+    let aTopicClause = '';
     
     if (topic_id) {
-      psParams.push(topic_id);
-      projSubjClause = `AND t.id = $${psParams.length}::uuid`;
+      asgParams.push(topic_id);
+      aTopicClause = `AND t.id = $${asgParams.length}::uuid`;
+      // Expected total is just the count of assignments for this topic.
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT a.id)::int as total 
+        FROM assignments a
+        JOIN units un ON un.id = a.unit_id
+        WHERE un.topic_id = $1::uuid
+      `, [topic_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedMap.set(id, total));
     } else if (subject_id) {
-      psParams.push(subject_id);
-      projSubjClause = `AND t.subject_id = $${psParams.length}::uuid`;
+      asgParams.push(subject_id);
+      aTopicClause = `AND t.subject_id = $${asgParams.length}::uuid`;
+      // Expected total is just the count of assignments for this subject.
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT a.id)::int as total 
+        FROM assignments a
+        JOIN units un ON un.id = a.unit_id
+        JOIN topics t ON t.id = un.topic_id
+        WHERE t.subject_id = $1::uuid
+      `, [subject_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedMap.set(id, total));
+    } else {
+      // "All Subjects" selected. Calculate personalized expected total per student based on their enrollments.
+      const personalizedRes = await pool.query(`
+        SELECT us.user_id as student_id, COUNT(DISTINCT a.id)::int as expected_total
+        FROM user_subjects us
+        JOIN subjects s ON s.id = us.subject_id
+        JOIN topics t ON t.subject_id = s.id
+        JOIN units un ON un.topic_id = t.id
+        JOIN assignments a ON a.unit_id = un.id
+        WHERE us.user_id = ANY($1::uuid[])
+        GROUP BY us.user_id
+      `, [enrolledIds]);
+      personalizedRes.rows.forEach(r => expectedMap.set(r.student_id, r.expected_total));
     }
-    const projRes = await pool.query(
-      `SELECT ps.user_id, ps.is_approved
-       FROM project_submissions ps
-       JOIN projects p ON p.id = ps.project_id
-       JOIN topics t ON t.id = p.topic_id
-       WHERE ps.user_id = ANY($1::uuid[]) ${projSubjClause}`,
-      psParams,
-    );
-    const projMap = new Map();
-    projRes.rows.forEach((r) => {
-      const ex = projMap.get(r.user_id);
-      if (!ex || r.is_approved) projMap.set(r.user_id, r.is_approved);
-    });
+
+    // Assignment submissions per student
+    let asgQuery = `
+      SELECT cas.user_id as student_id, COUNT(DISTINCT cas.assignment_id)::int as submitted_count
+      FROM assignment_submissions cas
+      JOIN assignments a ON a.id = cas.assignment_id
+      JOIN units un ON un.id = a.unit_id
+      JOIN topics t ON t.id = un.topic_id
+      WHERE cas.user_id = ANY($1::uuid[]) ${aTopicClause}
+      GROUP BY cas.user_id
+    `;
+    const asgRes = await pool.query(asgQuery, asgParams);
+    const asgSubmittedMap = new Map(asgRes.rows.map(r => [r.student_id, r.submitted_count]));
+
+    // Expected Total Projects Count per student
+    let expectedProjMap = new Map();
+    let pParams = [enrolledIds];
+    let pTopicClause = '';
+    
+    if (topic_id) {
+      pParams.push(topic_id);
+      pTopicClause = `AND t.id = $${pParams.length}::uuid`;
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT p.id)::int as total 
+        FROM projects p
+        WHERE p.topic_id = $1::uuid
+      `, [topic_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedProjMap.set(id, total));
+    } else if (subject_id) {
+      pParams.push(subject_id);
+      pTopicClause = `AND t.subject_id = $${pParams.length}::uuid`;
+      const totalRes = await pool.query(`
+        SELECT COUNT(DISTINCT p.id)::int as total 
+        FROM projects p
+        JOIN topics t ON t.id = p.topic_id
+        WHERE t.subject_id = $1::uuid
+      `, [subject_id]);
+      const total = totalRes.rows[0].total || 0;
+      enrolledIds.forEach(id => expectedProjMap.set(id, total));
+    } else {
+      const personalizedRes = await pool.query(`
+        SELECT us.user_id as student_id, COUNT(DISTINCT p.id)::int as expected_total
+        FROM user_subjects us
+        JOIN subjects s ON s.id = us.subject_id
+        JOIN topics t ON t.subject_id = s.id
+        JOIN projects p ON p.topic_id = t.id
+        WHERE us.user_id = ANY($1::uuid[])
+        GROUP BY us.user_id
+      `, [enrolledIds]);
+      personalizedRes.rows.forEach(r => expectedProjMap.set(r.student_id, r.expected_total));
+    }
+
+    // Project submissions per student
+    let pQuery = `
+      SELECT ps.user_id as student_id, COUNT(DISTINCT ps.project_id)::int as submitted_count
+      FROM project_submissions ps
+      JOIN projects p ON p.id = ps.project_id
+      JOIN topics t ON t.id = p.topic_id
+      WHERE ps.user_id = ANY($1::uuid[]) ${pTopicClause}
+      GROUP BY ps.user_id
+    `;
+    const projRes = await pool.query(pQuery, pParams);
+    const projSubmittedMap = new Map(projRes.rows.map(r => [r.student_id, r.submitted_count]));
 
     const data = namesRes.rows.map((s) => {
-      const quiz = quizMap.get(s.id);
-      let projStatus = 'Not Started';
-      if (projMap.has(s.id)) projStatus = projMap.get(s.id) ? 'Approved' : 'Submitted';
       return {
         id: s.id,
         name: s.full_name,
         email: s.email,
-        quiz_avg_pct: quiz ? quiz.avg_pct : null,
-        quiz_attempts: quiz ? parseInt(quiz.total_attempts) : 0,
-        assignment_status: asgSubmitted.has(s.id) ? 'Submitted' : 'Pending',
-        project_status: projStatus,
+        quiz_submitted_count: quizSubmittedMap.get(s.id) || 0,
+        quiz_total_count: expectedQuizMap.get(s.id) || 0,
+        assignment_submitted_count: asgSubmittedMap.get(s.id) || 0,
+        assignment_total_count: expectedMap.get(s.id) || 0,
+        project_submitted_count: projSubmittedMap.get(s.id) || 0,
+        project_total_count: expectedProjMap.get(s.id) || 0,
       };
     });
 
-    res.json({ success: true, data: data.slice(sOffset, sOffset + sLimit), total: data.length });
+    const aggregates = {
+      quizzes_attempted: data.filter((s) => s.quiz_submitted_count > 0).length,
+      assignments_submitted: data.filter((s) => s.assignment_submitted_count > 0).length,
+      projects_completed: data.filter((s) => s.project_submitted_count > 0).length,
+    };
+
+    res.json({ 
+      success: true, 
+      data: data.slice(sOffset, sOffset + sLimit), 
+      total: data.length, 
+      aggregates 
+    });
   } catch (err) {
     serverError(res, err, 'getStudentAnalytics');
   }
