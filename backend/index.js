@@ -10,6 +10,7 @@ process.on('uncaughtException', (err) => {
     console.warn('⚠️ [Neon DB] Ignored harmless WebSocket ErrorEvent bug.');
     return;
   }
+
   console.error('Uncaught Exception:', err);
   process.exit(1);
 });

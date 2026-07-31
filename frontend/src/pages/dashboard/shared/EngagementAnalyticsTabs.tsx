@@ -5,6 +5,7 @@ import apiClient from '@/services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell,
 } from 'recharts';
+import { StudentDetailsModal } from './StudentDetailsModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -738,6 +739,9 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [aggregates, setAggregates] = useState({ quizzes_attempted: 0, assignments_submitted: 0, projects_completed: 0 });
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [selectedStudentName, setSelectedStudentName] = useState<string>('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     if (!subject) { setTopics([]); setTopic(''); return; }
@@ -803,6 +807,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                   <th className="px-5 py-4">Quizzes</th>
                   <th className="px-5 py-4">Assignment</th>
                   <th className="px-5 py-4">Project</th>
+                  <th className="px-5 py-4"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -848,6 +853,18 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                         </span>
                       </div>
                     </td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        onClick={() => {
+                          setSelectedStudentId(s.id);
+                          setSelectedStudentName(s.name);
+                          setIsModalOpen(true);
+                        }}
+                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors"
+                      >
+                        View Progress
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -859,6 +876,13 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
               </div>
             )}
           </div>
+
+          <StudentDetailsModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            studentId={selectedStudentId}
+            studentName={selectedStudentName}
+          />
         </>
       )}
     </div>
