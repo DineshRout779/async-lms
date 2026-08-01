@@ -1242,7 +1242,7 @@ exports.getBatchDashboard = async (req, res) => {
 exports.getStudentAnalytics = async (req, res) => {
   try {
     const { id: facilitatorId, role } = req.user;
-    const { college_id, batch, subject_id, topic_id, page, limit } = req.query;
+    const { college_id, batch, subject_id, topic_id, page, limit, search } = req.query;
     const sLimit = Math.min(parseInt(limit, 10) || 20, 100);
     const sOffset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * sLimit;
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
@@ -1251,9 +1251,17 @@ exports.getStudentAnalytics = async (req, res) => {
     const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id);
     if (!enrolledIds.length) return res.json({ success: true, data: [], total: 0 });
 
+    let nameParams = [enrolledIds];
+    let searchClause = '';
+    
+    if (search) {
+      nameParams.push(`%${search}%`);
+      searchClause = `AND u.full_name ILIKE $${nameParams.length}`;
+    }
+
     const namesRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email FROM users u WHERE u.id = ANY($1::uuid[]) ORDER BY u.full_name`,
-      [enrolledIds],
+      `SELECT u.id, u.full_name, u.email FROM users u WHERE u.id = ANY($1::uuid[]) ${searchClause} ORDER BY u.full_name`,
+      nameParams,
     );
 
     // Expected Total Quizzes Count per student
