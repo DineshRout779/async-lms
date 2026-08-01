@@ -30,6 +30,8 @@ const STATUS_COLORS: Record<string, string> = {
   Failed: 'bg-red-50 text-red-700',
   Pending: 'bg-amber-50 text-amber-700',
   'Not Started': 'bg-slate-100 text-slate-500',
+  Completed: 'bg-emerald-50 text-emerald-700',
+  'In Progress': 'bg-purple-50 text-purple-700',
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -44,6 +46,20 @@ function TopicRowView({ topic }: { topic: TopicRow }) {
   const [expanded, setExpanded] = useState(false);
   
   const hasItems = topic.assignments_list.length > 0 || topic.projects_list.length > 0 || topic.quizzes_list.length > 0;
+
+  const asgTotal = topic.assignments_list.length;
+  const asgSubmitted = topic.assignments_list.filter(a => ['Submitted', 'Approved', 'Passed'].includes(a.status)).length;
+  const asgStatus = asgTotal === 0 ? 'Not Started' 
+                    : asgSubmitted >= asgTotal ? 'Completed' 
+                    : asgSubmitted > 0 ? 'In Progress' 
+                    : 'Not Started';
+
+  const projTotal = topic.projects_list.length;
+  const projSubmitted = topic.projects_list.filter(p => ['Submitted', 'Approved', 'Passed'].includes(p.status)).length;
+  const projStatus = projTotal === 0 ? 'Not Started' 
+                     : projSubmitted >= projTotal ? 'Completed' 
+                     : projSubmitted > 0 ? 'In Progress' 
+                     : 'Not Started';
 
   return (
     <Fragment>
@@ -82,13 +98,27 @@ function TopicRowView({ topic }: { topic: TopicRow }) {
           )}
         </td>
         <td className="px-4 py-3">
-          <StatusBadge status={topic.assignment_status} />
+          {asgTotal === 0 ? (
+            <span className="text-slate-400 text-xs">No assignment</span>
+          ) : (
+            <div className="flex items-center gap-2">
+              <StatusBadge status={asgStatus} />
+              <span className="text-xs text-slate-500 font-medium">
+                ({asgSubmitted} / {asgTotal})
+              </span>
+            </div>
+          )}
         </td>
         <td className="px-4 py-3">
-          {topic.project_status ? (
-            <StatusBadge status={topic.project_status} />
-          ) : (
+          {projTotal === 0 ? (
             <span className="text-slate-400 text-xs">No project</span>
+          ) : (
+            <div className="flex items-center gap-2">
+              <StatusBadge status={projStatus} />
+              <span className="text-xs text-slate-500 font-medium">
+                ({projSubmitted} / {projTotal})
+              </span>
+            </div>
           )}
         </td>
       </tr>
