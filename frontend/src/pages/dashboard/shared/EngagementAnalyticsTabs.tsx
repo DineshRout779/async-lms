@@ -54,7 +54,7 @@ export function StatCard({ label, value, sub }: { label: string; value: string |
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-2 sm:p-3 flex flex-col justify-between h-full w-full">
       <div className="flex-1 flex items-end justify-center pb-1 min-h-[32px]">
-        <p className="text-[9px] lg:text-[10px] text-slate-500 font-bold uppercase tracking-tight leading-tight text-center line-clamp-2">
+        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis">
           {label}
         </p>
       </div>
