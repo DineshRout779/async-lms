@@ -1,6 +1,6 @@
 // Shared engagement analytics tab components used by both FacilitatorAnalytics and admin Analytics.
 import { useEffect, useState, useCallback } from 'react';
-import { Loader2, ListChecks } from 'lucide-react';
+import { Loader2, ListChecks, Search } from 'lucide-react';
 import apiClient from '@/services/api';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell,
@@ -742,6 +742,15 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedStudentName, setSelectedStudentName] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (!subject) { setTopics([]); setTopic(''); return; }
@@ -758,6 +767,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
       if (topic) params.set('topic_id', topic);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       params.set('page', String(p));
       params.set('limit', String(STUDENTS_PAGE_SIZE));
       const res = await apiClient.get(`/facilitator/analytics/students?${params}`);
@@ -771,7 +781,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject, topic]);
+  }, [college, batch, subject, topic, debouncedSearch]);
 
   const handlePageChange = (p: number) => { setPage(p); load(p); };
 
@@ -788,18 +798,33 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
         <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
       </div>
 
-      {loading ? <LoadingState /> : total === 0 ? <EmptyState message="No students found" /> : (
-        <>
-          <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Quizzes Attempted" value={aggregates.quizzes_attempted} sub={`out of ${total} students`} />
-            <StatCard label="Assignments Submitted" value={aggregates.assignments_submitted} sub={`out of ${total} students`} />
-            <StatCard label="Projects Completed" value={aggregates.projects_completed} sub={`out of ${total} students`} />
-          </div>
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="Quizzes Attempted" value={aggregates.quizzes_attempted} sub={`out of ${total} students`} />
+        <StatCard label="Assignments Submitted" value={aggregates.assignments_submitted} sub={`out of ${total} students`} />
+        <StatCard label="Projects Completed" value={aggregates.projects_completed} sub={`out of ${total} students`} />
+      </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100">
-              <h3 className="text-sm font-semibold text-slate-700">Per-Student Performance</h3>
-            </div>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-700">Per-Student Performance</h3>
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search students..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+            />
+          </div>
+        </div>
+        
+        {loading ? (
+          <LoadingState />
+        ) : total === 0 ? (
+          <EmptyState message="No students found" />
+        ) : (
+          <>
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-100 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 <tr>
@@ -875,16 +900,16 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                 <PaginationControls page={page} totalPages={totalPages} onPageChange={handlePageChange} />
               </div>
             )}
-          </div>
+          </>
+        )}
+      </div>
 
-          <StudentDetailsModal
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            studentId={selectedStudentId}
-            studentName={selectedStudentName}
-          />
-        </>
-      )}
+      <StudentDetailsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        studentId={selectedStudentId}
+        studentName={selectedStudentName}
+      />
     </div>
   );
 }
