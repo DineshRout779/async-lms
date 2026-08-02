@@ -12,4 +12,7 @@ export const signupSchema = Yup.object({
   confirmPassword: Yup.string()
     .oneOf([Yup.ref('password')], 'Passwords do not match')
     .required('Please confirm your password'),
+  role: Yup.string()
+    .oneOf(['student', 'facilitator'], 'Select a valid role')
+    .required('Please select a role'),
 });
