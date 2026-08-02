@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
+import Logo from '@/components/common/Logo';
 import {
   Select,
   SelectContent,
@@ -12,23 +13,30 @@ import {
 } from '@/components/ui/select';
 
 export default function BatchStep() {
-  const [currentAcademicYear, setCurrentAcademicYear] = useState<string>('1st year');
-  const [expectedGraduationYear, setExpectedGraduationYear] = useState<string>('2027-28');
+  const [currentAcademicYear, setCurrentAcademicYear] =
+    useState<string>('1st year');
+  const [expectedGraduationYear, setExpectedGraduationYear] =
+    useState<string>('2027-28');
   const [degree, setDegree] = useState<string>('B.Tech');
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
   useEffect(() => {
-    apiClient.get('/users/profile').then((res) => {
-      const p = res.data.data;
-      if (p?.degree) setDegree(p.degree);
-      if (p?.current_academic_year) {
-        setCurrentAcademicYear(p.current_academic_year);
-        setExpectedGraduationYear(calculateGradYear(p.current_academic_year, p.degree || degree));
-      }
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    apiClient
+      .get('/users/profile')
+      .then((res) => {
+        const p = res.data.data;
+        if (p?.degree) setDegree(p.degree);
+        if (p?.current_academic_year) {
+          setCurrentAcademicYear(p.current_academic_year);
+          setExpectedGraduationYear(
+            calculateGradYear(p.current_academic_year, p.degree || degree),
+          );
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getDuration = (deg: string) => {
@@ -39,13 +47,13 @@ export default function BatchStep() {
 
   const calculateGradYear = (yearStr: string, deg: string) => {
     const baseYear = 2024; // Fixed base year or new Date().getFullYear()
-    let currentYearNum = parseInt(yearStr.charAt(0)) || 1;
-    
+    const currentYearNum = parseInt(yearStr.charAt(0)) || 1;
+
     const duration = getDuration(deg);
     const yearsLeft = Math.max(0, duration - currentYearNum);
-    const gradYearNum = baseYear + yearsLeft; 
+    const gradYearNum = baseYear + yearsLeft;
     const nextYearNum = (gradYearNum + 1).toString().slice(2);
-    
+
     return `${gradYearNum}-${nextYearNum}`;
   };
 
@@ -65,7 +73,7 @@ export default function BatchStep() {
       await apiClient.post('/onboarding/batch', {
         degree: degree,
         current_academic_year: currentAcademicYear,
-        expected_graduation_year: expectedGraduationYear
+        expected_graduation_year: expectedGraduationYear,
       });
 
       navigate('/onboarding/program');
@@ -78,21 +86,38 @@ export default function BatchStep() {
 
   return (
     <div
-      className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
+      className='min-h-screen w-full relative bg-cover bg-center overflow-hidden flex flex-col items-center justify-center p-4'
+      style={{
+        backgroundImage: 'url("/bg-students.jpg")',
+        fontFamily: "'Noto Sans', sans-serif",
+      }}
     >
-      <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
+      {/* Blue tinted overlay */}
+      <div className='absolute inset-0 bg-[#344499]/70 backdrop-blur-[2px]' />
 
-        <div className="flex-1">
+      <div className='flex flex-col items-center mb-6 relative z-10'>
+        <Logo className='h-14 w-14 mb-2' />
+        <span className='text-white font-bold text-lg tracking-wider'>
+          CodeGuru
+        </span>
+      </div>
+
+      <div className='relative z-10 w-full max-w-120 bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_8px_50px_rgba(0,0,0,0.25)] flex flex-col min-h-125 text-slate-800'>
+        <div className='flex-1'>
           <Stepper current='batch' />
 
-          <div className="mb-8 mt-6">
-            <h2 className='text-2xl font-bold text-[#344499]'>Select your batch</h2>
-            <p className="text-[13px] text-slate-400 font-medium mt-1.5 leading-relaxed tracking-wide">Used for cohort tracking and leaderboard ranking</p>
+          <div className='mb-8 mt-6'>
+            <h2 className='text-2xl font-bold text-[#344499]'>
+              Select your batch
+            </h2>
+            <p className='text-[13px] text-slate-400 font-medium mt-1.5 leading-relaxed tracking-wide'>
+              Used for cohort tracking and leaderboard ranking
+            </p>
           </div>
 
           <div className='space-y-5 w-full'>
             <div className='w-full'>
-              <label className="text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block">
+              <label className='text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block'>
                 Degree Program
               </label>
               <Select value={degree} onValueChange={handleDegreeChange}>
@@ -111,10 +136,13 @@ export default function BatchStep() {
             </div>
 
             <div className='w-full'>
-              <label className="text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block">
+              <label className='text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block'>
                 Batch (Academic Year)
               </label>
-              <Select value={currentAcademicYear} onValueChange={handleYearChange}>
+              <Select
+                value={currentAcademicYear}
+                onValueChange={handleYearChange}
+              >
                 <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                   <SelectValue placeholder='Select Batch' />
                 </SelectTrigger>
@@ -128,10 +156,13 @@ export default function BatchStep() {
             </div>
 
             <div className='w-full'>
-              <label className="text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block">
+              <label className='text-[13px] font-semibold text-[#344499] tracking-wide mb-1.5 block'>
                 Expected Graduation Year
               </label>
-              <Select value={expectedGraduationYear} onValueChange={setExpectedGraduationYear}>
+              <Select
+                value={expectedGraduationYear}
+                onValueChange={setExpectedGraduationYear}
+              >
                 <SelectTrigger className='w-full h-11 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                   <SelectValue placeholder='Select Graduation Year' />
                 </SelectTrigger>
@@ -152,25 +183,24 @@ export default function BatchStep() {
           </div>
         </div>
 
-        <div className="flex justify-between items-center mt-10 pt-4">
+        <div className='flex justify-between items-center mt-10 pt-4'>
           <Button
-            variant="ghost"
+            variant='ghost'
             onClick={() => navigate(-1)}
-            type="button"
-            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg transition-colors"
+            type='button'
+            className='bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg transition-colors'
           >
             Back
           </Button>
           <Button
-            type="button"
-            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg shadow-md transition-colors"
+            type='button'
+            className='bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg shadow-md transition-colors'
             disabled={loading}
             onClick={handleContinue}
           >
             Continue
           </Button>
         </div>
-
       </div>
     </div>
   );

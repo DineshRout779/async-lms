@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
+import Logo from '@/components/common/Logo';
 import { Info } from 'lucide-react';
 import { useAppDispatch } from '@/app/hooks';
 import { loadUser } from '@/features/auth/authThunks';
@@ -56,9 +57,14 @@ export default function CollegeStep() {
         const name = customCollegeName.trim();
         const city = customCollegeAddress.trim();
         const words = name.split(/\s+/);
-        const shortCode = words.length > 1 
-          ? words.map(w => w[0]).join('').toUpperCase().substring(0, 5)
-          : name.substring(0, 5).toUpperCase();
+        const shortCode =
+          words.length > 1
+            ? words
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase()
+                .substring(0, 5)
+            : name.substring(0, 5).toUpperCase();
 
         const createRes = await apiClient.post('/colleges', {
           name,
@@ -86,25 +92,52 @@ export default function CollegeStep() {
   };
 
   return (
-    <div 
-      className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
+    <div
+      className='min-h-screen w-full relative bg-cover bg-center overflow-hidden flex flex-col items-center justify-center p-4'
+      style={{
+        backgroundImage: 'url("/bg-students.jpg")',
+        fontFamily: "'Noto Sans', sans-serif",
+      }}
     >
-      <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
-        
-        <div className="flex-1">
+      {/* Blue tinted overlay */}
+      <div className='absolute inset-0 bg-[#344499]/70 backdrop-blur-[2px]' />
+
+      <div className='flex flex-col items-center mb-6 relative z-10'>
+        <Logo className='h-14 w-14 mb-2' />
+        <span className='text-white font-bold text-lg tracking-wider'>
+          CodeGuru
+        </span>
+      </div>
+
+      <div className='relative z-10 w-full max-w-120 bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_8px_50px_rgba(0,0,0,0.25)] flex flex-col min-h-125 text-slate-800'>
+        <div className='flex-1'>
           <Stepper current='college' />
 
-          <div className="mb-8 mt-6">
-            <h2 className='text-2xl font-bold text-[#344499]'>Select your college</h2>
-            <p className="text-[13px] text-slate-400 font-medium mt-1.5 leading-relaxed tracking-wide">Required for mapping batches and cohorts</p>
+          <div className='mb-8 mt-6'>
+            <h2 className='text-2xl font-bold text-[#344499]'>
+              Select your college
+            </h2>
+            <p className='text-[13px] text-slate-400 font-medium mt-1.5 leading-relaxed tracking-wide'>
+              Required for mapping batches and cohorts
+            </p>
           </div>
 
-          <div className="space-y-2 mb-6">
-            <label className="text-[13px] font-semibold text-[#344499] tracking-wide">College name</label>
-            <Select value={collegeId || ''} onValueChange={setCollegeId} disabled={isLoading || submitting}>
+          <div className='space-y-2 mb-6'>
+            <label className='text-[13px] font-semibold text-[#344499] tracking-wide'>
+              College name
+            </label>
+            <Select
+              value={collegeId || ''}
+              onValueChange={setCollegeId}
+              disabled={isLoading || submitting}
+            >
               <SelectTrigger className='w-full h-11 text-[13px] text-slate-500 bg-white border border-slate-200 focus:ring-[#344499] focus:border-[#344499] shadow-sm'>
                 <SelectValue
-                  placeholder={isLoading ? 'Loading colleges...' : 'Search or select your college'}
+                  placeholder={
+                    isLoading
+                      ? 'Loading colleges...'
+                      : 'Search or select your college'
+                  }
                 />
               </SelectTrigger>
               <SelectContent>
@@ -116,53 +149,61 @@ export default function CollegeStep() {
                 <SelectItem value='OTHER'>Other</SelectItem>
               </SelectContent>
             </Select>
-            <div className="flex items-center gap-1.5 mt-2.5">
-               <Info className="h-3.5 w-3.5 text-[#344499]" />
-               <button type="button" onClick={() => setCollegeId('OTHER')} className="text-[11px] font-bold tracking-wide text-[#344499] hover:underline">
-                 My college is not listed
-               </button>
+            <div className='flex items-center gap-1.5 mt-2.5'>
+              <Info className='h-3.5 w-3.5 text-[#344499]' />
+              <button
+                type='button'
+                onClick={() => setCollegeId('OTHER')}
+                className='text-[14px] font-bold tracking-wide text-[#344499] hover:underline'
+              >
+                My college is not listed
+              </button>
             </div>
           </div>
 
           {/* Show when "Other" is selected */}
           {isOtherSelected && (
-             <div className='space-y-4 mb-6 border-t border-slate-100 pt-6 mt-6'>
-              <div className="space-y-1.5">
-                 <label className="text-[13px] font-semibold text-[#344499] tracking-wide">Enter college name</label>
-                 <Input
-                   className="h-11 border-slate-200 text-sm shadow-sm"
-                   placeholder='e.g. Stanford University'
-                   value={customCollegeName}
-                   onChange={(e) => setCustomCollegeName(e.target.value)}
-                 />
+            <div className='space-y-4 mb-6 border-t border-slate-100 pt-6 mt-6'>
+              <div className='space-y-1.5'>
+                <label className='text-[13px] font-semibold text-[#344499] tracking-wide'>
+                  Enter college name
+                </label>
+                <Input
+                  className='h-11 border-slate-200 text-sm shadow-sm'
+                  placeholder='e.g. Stanford University'
+                  value={customCollegeName}
+                  onChange={(e) => setCustomCollegeName(e.target.value)}
+                />
               </div>
 
-              <div className="space-y-1.5">
-                 <label className="text-[13px] font-semibold text-[#344499] tracking-wide">Enter college address (City)</label>
-                 <Input
-                   className="h-11 border-slate-200 text-sm shadow-sm"
-                   placeholder='e.g. Stanford, California'
-                   value={customCollegeAddress}
-                   onChange={(e) => setCustomCollegeAddress(e.target.value)}
-                 />
+              <div className='space-y-1.5'>
+                <label className='text-[13px] font-semibold text-[#344499] tracking-wide'>
+                  Enter college address (City)
+                </label>
+                <Input
+                  className='h-11 border-slate-200 text-sm shadow-sm'
+                  placeholder='e.g. Stanford, California'
+                  value={customCollegeAddress}
+                  onChange={(e) => setCustomCollegeAddress(e.target.value)}
+                />
               </div>
             </div>
           )}
         </div>
 
         {/* Footer buttons */}
-        <div className="flex justify-between items-center mt-8 pt-4">
-          <Button 
-            variant="ghost" 
+        <div className='flex justify-between items-center mt-8 pt-4'>
+          <Button
+            variant='ghost'
             onClick={() => navigate(-1)}
-            type="button"
-            className="bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg transition-colors"
+            type='button'
+            className='bg-[#f8faff] text-[#344499] hover:bg-[#eff4ff] hover:text-[#2c3983] px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg transition-colors'
           >
             Back
           </Button>
           <Button
-            type="button"
-            className="bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg shadow-md transition-colors"
+            type='button'
+            className='bg-[#344499] hover:bg-[#2c3983] text-white px-9 h-11 text-[14px] font-semibold tracking-wide rounded-lg shadow-md transition-colors'
             disabled={
               isLoading ||
               submitting ||
@@ -174,7 +215,6 @@ export default function CollegeStep() {
             {submitting ? 'Saving...' : 'Continue'}
           </Button>
         </div>
-
       </div>
     </div>
   );

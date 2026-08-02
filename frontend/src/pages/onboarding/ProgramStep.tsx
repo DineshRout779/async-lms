@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
+import Logo from '@/components/common/Logo';
 import { usePublishedSubjects } from '@/hooks/queries/useOnboarding';
 import {
   Select,
@@ -47,11 +48,25 @@ export default function ProgramStep() {
   };
 
   return (
-    <div 
-      className='min-h-screen flex items-center justify-center bg-[#344499] p-4 text-slate-800'
+    <div
+      className='min-h-screen w-full relative bg-cover bg-center overflow-hidden flex flex-col items-center justify-center p-4'
+      style={{
+        backgroundImage: 'url("/bg-students.jpg")',
+        fontFamily: "'Noto Sans', sans-serif",
+      }}
     >
-      <div className='w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_4px_40px_rgba(0,0,0,0.15)] flex flex-col min-h-[500px]'>
-        
+      {/* Blue tinted overlay */}
+      <div className='absolute inset-0 bg-[#344499]/70 backdrop-blur-[2px]' />
+
+      <div className='flex flex-col items-center mb-6 relative z-10'>
+        <Logo className='h-14 w-14 mb-2' />
+        <span className='text-white font-bold text-lg tracking-wider'>
+          CodeGuru
+        </span>
+      </div>
+
+      <div className='relative z-10 w-full max-w-[480px] bg-white p-8 sm:px-12 sm:py-10 rounded-3xl shadow-[0_8px_50px_rgba(0,0,0,0.25)] flex flex-col min-h-[500px] text-slate-800'>
+
         <div className="flex-1">
           <Stepper current='program' />
 
