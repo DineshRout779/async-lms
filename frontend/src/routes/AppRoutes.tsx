@@ -191,7 +191,12 @@ const router = createBrowserRouter([
               { path: 'success', element: <SuccessStep /> },
             ],
           },
+        ],
+      },
 
+      {
+        element: <PrivateRoute allowedRoles={['student']} />,
+        children: [
           {
             path: 'dashboard/student',
             element: <StudentDashboardLayout />,
@@ -236,7 +241,12 @@ const router = createBrowserRouter([
               },
             ],
           },
+        ],
+      },
 
+      {
+        element: <PrivateRoute allowedRoles={['facilitator']} />,
+        children: [
           {
             path: 'dashboard/facilitator',
             element: <FacilitatorDashboardLayout />,
@@ -260,7 +270,12 @@ const router = createBrowserRouter([
               { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
             ],
           },
+        ],
+      },
 
+      {
+        element: <PrivateRoute allowedRoles={['admin']} />,
+        children: [
           {
             path: 'dashboard/admin',
             element: <AdminDashboardLayout />,
@@ -295,7 +310,12 @@ const router = createBrowserRouter([
               { path: 'ai-curriculum/:id/review', element: <AiCurriculumReview /> },
             ],
           },
+        ],
+      },
 
+      {
+        element: <PrivateRoute allowedRoles={['curriculum_developer']} />,
+        children: [
           {
             path: 'dashboard/curriculum-developer',
             element: <CurriculumDeveloperDashboardLayout />,

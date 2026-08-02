@@ -3,7 +3,11 @@ import { selectAuth } from '@/features/auth/authSelectors';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { Loader2 } from 'lucide-react';
 
-const PrivateRoute = () => {
+interface PrivateRouteProps {
+  allowedRoles?: string[];
+}
+
+const PrivateRoute = ({ allowedRoles }: PrivateRouteProps) => {
   const { token, user, status } = useAppSelector(selectAuth);
   const location = useLocation();
 
@@ -39,6 +43,15 @@ const PrivateRoute = () => {
     if (user.role === 'facilitator' && user.onboarding_step === 'done' && !user.is_verified) {
       return <Navigate to='/pending-verification' replace />;
     }
+  }
+
+  if (
+    user &&
+    !isOnOnboarding &&
+    allowedRoles &&
+    !allowedRoles.includes(user.role)
+  ) {
+    return <Navigate to='/' replace />;
   }
 
   return <Outlet />;
