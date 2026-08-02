@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Settings,
   Plus,
@@ -59,6 +60,7 @@ import AdminLessonPreviewModal from '@/components/common/admin/AdminLessonPrevie
 
 const LearningFlow: React.FC = () => {
   const dispatch = useAppDispatch();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Redux State
   const { items: subjects, status: subjectsStatus } = useAppSelector(
@@ -129,6 +131,10 @@ const LearningFlow: React.FC = () => {
     useState<string>('');
   const [showLessonPreview, setShowLessonPreview] = useState(false);
   const [lessonPreviewContent, setLessonPreviewContent] = useState('');
+  const [lessonPreviewLoading, setLessonPreviewLoading] = useState(false);
+  const [lessonPreviewError, setLessonPreviewError] = useState<string | null>(
+    null,
+  );
   const [lessonPreviewVideoUrl, setLessonPreviewVideoUrl] = useState<
     string | undefined
   >(undefined);
@@ -153,14 +159,33 @@ const LearningFlow: React.FC = () => {
     dispatch(fetchSubjects());
   }, [dispatch]);
 
-  // 2. Load structure when subjects load or active subject changes
+  // 2. Load structure when subjects load or active subject changes.
+  // Picks the subject from the `subject` URL query param if present (so a
+  // reload keeps whatever course was being edited), falling back to the
+  // first subject otherwise — and keeps the URL in sync either way.
   useEffect(() => {
-    if (subjects.length > 0 && !activeSubjectId) {
-      // Default to first subject if none selected
-      dispatch(setActiveSubject(subjects[0].id));
-      dispatch(fetchCourseStructure(subjects[0].slug));
+    if (subjects.length === 0 || activeSubjectId) return;
+
+    const subjectSlugFromUrl = searchParams.get('subject');
+    const target =
+      (subjectSlugFromUrl &&
+        subjects.find((s) => s.slug === subjectSlugFromUrl)) ||
+      subjects[0];
+
+    dispatch(setActiveSubject(target.slug));
+    dispatch(fetchCourseStructure(target.slug));
+
+    if (subjectSlugFromUrl !== target.slug) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('subject', target.slug);
+          return next;
+        },
+        { replace: true },
+      );
     }
-  }, [subjects, activeSubjectId, dispatch]);
+  }, [subjects, activeSubjectId, searchParams, setSearchParams, dispatch]);
 
   // Toggle topic expansion
   const toggleTopic = (topicId: string) => {
@@ -530,19 +555,26 @@ const LearningFlow: React.FC = () => {
     }
   };
 
-  // Create quiz instantly with defaults, then open questions modal
-  const handleInstantCreateQuiz = async (unit: Unit) => {
+  // Create quiz with admin-chosen scores, then open questions modal
+  const handleCreateQuiz = async (data: {
+    passing_score: number;
+    max_score: number;
+  }) => {
+    if (!selectedUnitForQuiz) return;
+
     try {
       const response = await apiClient.post('/admin/quizzes', {
-        unit_id: unit.id,
-        passing_score: 70,
-        max_score: 100,
+        unit_id: selectedUnitForQuiz.id,
+        passing_score: data.passing_score,
+        max_score: data.max_score,
       });
       if (response.data.success) {
         toast.success('Quiz created');
         await refreshStructure();
         setSelectedQuizForQuestions(response.data.data);
-        setSelectedUnitTitleForQuestions(unit.title);
+        setSelectedUnitTitleForQuestions(selectedUnitForQuiz.title);
+        setQuizModalOpen(false);
+        setSelectedUnitForQuiz(null);
         setQuestionsModalOpen(true);
       }
     } catch (error) {
@@ -886,18 +918,26 @@ const LearningFlow: React.FC = () => {
     setShowLessonPreview(true);
     setLessonPreviewVideoUrl(undefined);
     setLessonPreviewContent('');
+    setLessonPreviewError(null);
     const type =
       forceType ??
       (content.video_url && !content.markdown_path ? 'video' : 'markdown');
     if (type === 'video' && content.video_url) {
       setLessonPreviewVideoUrl(content.video_url ?? undefined);
     } else if (content.markdown_path) {
+      setLessonPreviewLoading(true);
       try {
         const res = await apiClient.post('/subjects/markdown-content', {
           markdownPathURL: content.markdown_path,
         });
         setLessonPreviewContent(res.data.data);
-      } catch (error) {}
+      } catch (error) {
+        setLessonPreviewError(
+          getErrorMessage(error, 'Failed to load lesson content'),
+        );
+      } finally {
+        setLessonPreviewLoading(false);
+      }
     }
   };
 
@@ -905,6 +945,8 @@ const LearningFlow: React.FC = () => {
     setShowLessonPreview(false);
     setLessonPreviewContent('');
     setLessonPreviewVideoUrl(undefined);
+    setLessonPreviewError(null);
+    setLessonPreviewLoading(false);
   };
 
   if (loading) {
@@ -992,7 +1034,10 @@ const LearningFlow: React.FC = () => {
                                 {topic.title}
                               </p>
                               {topic.description && (
-                                <p className='text-xs text-slate-500 truncate max-w-xs' title={topic.description}>
+                                <p
+                                  className='text-xs text-slate-500 truncate max-w-xs'
+                                  title={topic.description}
+                                >
                                   {topic.description}
                                 </p>
                               )}
@@ -1041,7 +1086,9 @@ const LearningFlow: React.FC = () => {
                             />
                             <div className='mx-1 h-4 w-px bg-slate-200' />
                             <Trash2
-                              onClick={() => requestDeleteTopic(topic.id, topic.title)}
+                              onClick={() =>
+                                requestDeleteTopic(topic.id, topic.title)
+                              }
                               className='h-4 w-4 cursor-pointer hover:text-red-500'
                             />
                           </div>
@@ -1097,7 +1144,10 @@ const LearningFlow: React.FC = () => {
                                               {unit.title}
                                             </h2>
                                             {unit.description && (
-                                              <p className='hidden text-xs text-slate-400 md:block truncate max-w-xs' title={unit.description}>
+                                              <p
+                                                className='hidden text-xs text-slate-400 md:block truncate max-w-xs'
+                                                title={unit.description}
+                                              >
                                                 {unit.description}
                                               </p>
                                             )}
@@ -1146,9 +1196,11 @@ const LearningFlow: React.FC = () => {
                                           )}
                                           {!unit.quizzes?.length && (
                                             <button
-                                              onClick={() =>
-                                                handleInstantCreateQuiz(unit)
-                                              }
+                                              onClick={() => {
+                                                setEditingQuiz(null);
+                                                setSelectedUnitForQuiz(unit);
+                                                setQuizModalOpen(true);
+                                              }}
                                               className='flex items-center gap-1 rounded-md border border-slate-100 px-2 py-1 text-xs text-slate-500 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-600 transition-colors'
                                               title='Add Quiz'
                                             >
@@ -1170,7 +1222,10 @@ const LearningFlow: React.FC = () => {
                                           </button>
                                           <button
                                             onClick={() =>
-                                              requestDeleteUnit(unit.id, unit.title)
+                                              requestDeleteUnit(
+                                                unit.id,
+                                                unit.title,
+                                              )
                                             }
                                             className='rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors'
                                           >
@@ -1241,13 +1296,13 @@ const LearningFlow: React.FC = () => {
                                               ),
                                             )}
                                             {unit.quizzes?.map(
-                                              (quiz: Quiz, qIndex: number) => (
+                                              (quiz: Quiz) => (
                                                 <div
                                                   key={quiz.id}
                                                   className='group flex items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 pl-2.5 pr-1.5 py-1 text-xs font-medium text-violet-700'
                                                 >
                                                   <ListChecks className='h-3 w-3 shrink-0' />
-                                                  <span>Quiz {qIndex + 1}</span>
+                                                  <span>Quiz</span>
                                                   <div className='flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity'>
                                                     <button
                                                       onClick={() => {
@@ -1282,7 +1337,7 @@ const LearningFlow: React.FC = () => {
                                                       onClick={() =>
                                                         requestDeleteQuiz(
                                                           quiz.id,
-                                                          `Quiz ${qIndex + 1}`,
+                                                          `Quiz`,
                                                         )
                                                       }
                                                       className='rounded-full p-0.5 hover:bg-red-100 hover:text-red-600'
@@ -1353,7 +1408,12 @@ const LearningFlow: React.FC = () => {
                                                             {sub.title}
                                                           </span>
                                                           {sub.description && (
-                                                            <p className='text-xs text-slate-400 truncate max-w-xs' title={sub.description}>
+                                                            <p
+                                                              className='text-xs text-slate-400 truncate max-w-xs'
+                                                              title={
+                                                                sub.description
+                                                              }
+                                                            >
                                                               {sub.description}
                                                             </p>
                                                           )}
@@ -1566,7 +1626,12 @@ const LearningFlow: React.FC = () => {
                                                                     requestDeleteContent(
                                                                       content.id,
                                                                       content.markdown_path
-                                                                        ? content.markdown_path.split('/').pop() ?? 'this content'
+                                                                        ? (content.markdown_path
+                                                                            .split(
+                                                                              '/',
+                                                                            )
+                                                                            .pop() ??
+                                                                            'this content')
                                                                         : 'this content',
                                                                     )
                                                                   }
@@ -1789,6 +1854,14 @@ const LearningFlow: React.FC = () => {
                     if (subject) {
                       dispatch(setActiveSubject(subject.slug));
                       dispatch(fetchCourseStructure(subject.slug));
+                      setSearchParams(
+                        (prev) => {
+                          const next = new URLSearchParams(prev);
+                          next.set('subject', subject.slug);
+                          return next;
+                        },
+                        { replace: true },
+                      );
                     }
                   }}
                 >
@@ -1954,7 +2027,11 @@ const LearningFlow: React.FC = () => {
         onSave={async (data) => {
           setModalLoading(true);
           try {
-            await handleUpdateQuiz(data);
+            if (editingQuiz) {
+              await handleUpdateQuiz(data);
+            } else {
+              await handleCreateQuiz(data);
+            }
           } finally {
             setModalLoading(false);
           }
@@ -2068,6 +2145,8 @@ const LearningFlow: React.FC = () => {
         onClose={closeLessonPreview}
         content={lessonPreviewContent}
         videoUrl={lessonPreviewVideoUrl}
+        loading={lessonPreviewLoading}
+        error={lessonPreviewError}
       />
 
       {questionsModalOpen && selectedQuizForQuestions && (

@@ -1172,6 +1172,7 @@ exports.createLessonContent = async (req, res) => {
           WHEN EXCLUDED.content_type = 'markdown' THEN 'markdown'
           ELSE EXCLUDED.content_type
         END,
+        is_deleted = false,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *;
     `;
@@ -1363,14 +1364,26 @@ exports.publishLessonContent = async (req, res) => {
 // QUIZ MANAGEMENT
 // ============================================
 
+// max_score is always 100 — passing_score/max_score exist purely to derive a
+// pass-threshold percentage (applied against the real point total of a quiz's
+// questions at grading time), not a literal points target. See submitQuizAttempt.
+const QUIZ_MAX_SCORE = 100;
+
 exports.createQuiz = async (req, res) => {
   try {
-    const { unit_id, passing_score, max_score } = req.body;
+    const { unit_id, passing_score } = req.body;
 
-    if (!unit_id || !passing_score || !max_score) {
+    if (!unit_id || !passing_score) {
       return res.status(400).json({
         success: false,
-        message: 'Unit ID, passing score, and max score are required',
+        message: 'Unit ID and passing threshold are required',
+      });
+    }
+
+    if (passing_score < 1 || passing_score > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passing threshold must be between 1 and 100',
       });
     }
 
@@ -1380,7 +1393,11 @@ exports.createQuiz = async (req, res) => {
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [unit_id, passing_score, max_score]);
+    const result = await pool.query(query, [
+      unit_id,
+      passing_score,
+      QUIZ_MAX_SCORE,
+    ]);
 
     logAction({ req, action: 'CREATE', entityType: 'quiz', entityId: result.rows[0].id, details: { unit_id: result.rows[0].unit_id } });
 
@@ -1402,19 +1419,21 @@ exports.createQuiz = async (req, res) => {
 exports.updateQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    const { passing_score, max_score } = req.body;
+    const { passing_score } = req.body;
 
     const updates = [];
     const values = [];
     let paramCount = 1;
 
     if (passing_score !== undefined) {
+      if (passing_score < 1 || passing_score > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Passing threshold must be between 1 and 100',
+        });
+      }
       updates.push(`passing_score = $${paramCount++}`);
       values.push(passing_score);
-    }
-    if (max_score !== undefined) {
-      updates.push(`max_score = $${paramCount++}`);
-      values.push(max_score);
     }
 
     if (updates.length === 0) {
