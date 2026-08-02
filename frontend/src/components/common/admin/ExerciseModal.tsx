@@ -400,6 +400,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
             <label className='mb-2 block text-sm font-medium text-slate-700'>Exercise Title</label>
             <input
               type='text'
+              autoFocus
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder='e.g., Implement Binary Search'

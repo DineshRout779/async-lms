@@ -90,6 +90,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
             </label>
             <input
               type='text'
+              autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder='e.g., Build a REST API'
