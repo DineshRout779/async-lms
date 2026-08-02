@@ -48,6 +48,86 @@ const fetchTextFromUrl = (url) =>
       .on('error', reject);
   });
 
+// Minimum number of attempts a student must make on a quiz before answer
+// explanations are revealed — prevents leaking answers to a struggling student.
+const MIN_ATTEMPTS_FOR_EXPLANATION = 3;
+
+// Attaches each quiz's most recent attempt (if any) by this user as `last_attempt`,
+// and strips question explanations for students who haven't attempted the quiz
+// MIN_ATTEMPTS_FOR_EXPLANATION times yet.
+async function attachLastAttempts(quizzes, userId, userRole) {
+  if (quizzes.length === 0) return quizzes;
+  if (!userId) {
+    // No authenticated user — never reveal explanations.
+    return quizzes.map((q) => ({
+      ...q,
+      last_attempt: null,
+      questions: q.questions?.map((qu) => ({ ...qu, explanation: null })),
+    }));
+  }
+
+  const quizIds = quizzes.map((q) => q.id);
+  const { rows } = await pool.query(
+    `SELECT quiz_id,
+            COUNT(*) AS attempt_count,
+            (ARRAY_AGG(score ORDER BY attempted_at DESC))[1] AS score,
+            (ARRAY_AGG(is_passed ORDER BY attempted_at DESC))[1] AS is_passed,
+            (ARRAY_AGG(attempted_at ORDER BY attempted_at DESC))[1] AS attempted_at
+     FROM quiz_attempts
+     WHERE user_id = $1 AND quiz_id = ANY($2::uuid[])
+     GROUP BY quiz_id`,
+    [userId, quizIds],
+  );
+
+  const attemptsByQuiz = new Map(rows.map((r) => [r.quiz_id, r]));
+  return quizzes.map((q) => {
+    const attempt = attemptsByQuiz.get(q.id);
+    const attemptCount = attempt ? parseInt(attempt.attempt_count, 10) : 0;
+    // Non-students (facilitators/admins previewing content) always see explanations.
+    const canSeeExplanation =
+      userRole !== 'student' || attemptCount >= MIN_ATTEMPTS_FOR_EXPLANATION;
+
+    return {
+      ...q,
+      last_attempt: attempt
+        ? {
+            score: attempt.score,
+            is_passed: attempt.is_passed,
+            attempted_at: attempt.attempted_at,
+          }
+        : null,
+      questions: q.questions?.map((qu) => ({
+        ...qu,
+        explanation: canSeeExplanation ? qu.explanation : null,
+      })),
+    };
+  });
+}
+
+// Get subjects for the dropdown switcher — drafts included only for admin/facilitator,
+// students only ever see published subjects.
+exports.getSubjectsDropdown = async (req, res) => {
+  try {
+    const canSeeDrafts = req.user?.role === 'admin' || req.user?.role === 'facilitator';
+    const { rows } = await pool.query(`
+      SELECT s.*,
+             COUNT(DISTINCT t.id)::int as topics_count,
+             COUNT(DISTINCT st.id)::int as units_count
+      FROM subjects s
+      LEFT JOIN topics t ON s.id = t.subject_id
+      LEFT JOIN units u ON t.id = u.topic_id
+      LEFT JOIN subtopics st ON u.id = st.unit_id
+      WHERE s.is_deleted = false ${canSeeDrafts ? '' : 'AND s.is_published = true'}
+      GROUP BY s.id
+      ORDER BY s.order_index ASC
+    `);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('Error | getSubjectsDropdown:', err);
+    res.status(500).json({ message: 'Error fetching subjects' });
+  }
+};
+
 // 1. Get all published subjects
 exports.getAllSubjects = async (req, res) => {
   try {
@@ -545,10 +625,14 @@ exports.getSubtopicContent = async (req, res) => {
           video_url: videoRow?.video_url || null,
         },
         lesson_completed: lessonCompleted,
-        quizzes: Array.from(quizzesMap.values()).map((q) => ({
-          ...q,
-          questions: Array.from(q.questions.values()),
-        })),
+        quizzes: await attachLastAttempts(
+          Array.from(quizzesMap.values()).map((q) => ({
+            ...q,
+            questions: Array.from(q.questions.values()),
+          })),
+          userId,
+          userRole,
+        ),
         exercises: Array.from(exercisesMap.values()),
       },
     });
@@ -811,9 +895,11 @@ exports.getExerciseContent = async (req, res) => {
 exports.getQuizContent = async (req, res) => {
   try {
     const { quizId } = req.params;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
 
     const query = `
-      SELECT 
+      SELECT
         q.id AS quiz_id,
         q.passing_score,
         q.max_score,
@@ -879,14 +965,18 @@ exports.getQuizContent = async (req, res) => {
           content_type: 'quiz',
           markdown_content: 'Please complete the quiz to proceed.',
         },
-        quizzes: [
-          {
-            id: base.quiz_id,
-            passing_score: base.passing_score,
-            max_score: base.max_score,
-            questions: Array.from(questionsMap.values()),
-          },
-        ],
+        quizzes: await attachLastAttempts(
+          [
+            {
+              id: base.quiz_id,
+              passing_score: base.passing_score,
+              max_score: base.max_score,
+              questions: Array.from(questionsMap.values()),
+            },
+          ],
+          userId,
+          userRole,
+        ),
         exercises: [],
       },
     });
@@ -899,10 +989,13 @@ exports.getQuizContent = async (req, res) => {
 exports.getMarkdownContent = async (req, res) => {
   try {
     const { markdownPathURL } = req.body;
-    const content = await fetchTextFromUrl(markdownPathURL);
+    const fetchUrl = await presignIfS3(markdownPathURL);
+    const content = await fetchTextFromUrl(fetchUrl);
     res.json({ success: true, data: content });
   } catch (err) {
     console.error('Error | getMarkdownContent:', err);
-    res.status(500).json({ message: 'Failed to load markdown content' });
+    res
+      .status(500)
+      .json({ success: false, message: 'Failed to load markdown content' });
   }
 };
