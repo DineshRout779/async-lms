@@ -7,6 +7,10 @@ const {
   getLatestEvaluationByAssignment,
   getAvailableEvaluators,
 } = require("../controllers/evaluation.controller");
+const verifyToken = require("../middlewares/verfiyToken");
+const isAdminOrFacilitator = require("../middlewares/isAdminOrFacilitator");
+
+router.use(verifyToken, isAdminOrFacilitator);
 
 // 🚀 Run evaluation
 router.post("/run", runEvaluation);
