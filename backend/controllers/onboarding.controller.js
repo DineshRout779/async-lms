@@ -99,9 +99,8 @@ exports.selectSubjects = async (req, res) => {
     await client.query(insertQuery, [userId, subjectIds]);
 
     // Seed progress for all subtopics:
-    //  - Unit 1 subtopics are always unlocked
-    //  - Other subtopics inherit admin-applied lock decisions from cohort_admin_locks
-    //    (not peer progression state, which would lock content that peers haven't reached yet)
+    //  - Unlocked by default (peer-progression locking is not enforced yet)
+    //  - Only locked if an admin explicitly locked it via cohort_admin_locks
     //  - ON CONFLICT: never re-lock a row that is already unlocked
     const seedProgressQuery = `
       WITH new_student_profile AS (
@@ -129,9 +128,8 @@ exports.selectSubjects = async (req, res) => {
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT $1, ss.subtopic_id,
         CASE
-          WHEN ss.unit_rn = 1       THEN true   -- first unit: always open
-          WHEN al.is_locked = false THEN true    -- admin explicitly unlocked
-          ELSE false                             -- default locked; progression unlocks
+          WHEN al.is_locked = true THEN false   -- admin explicitly locked
+          ELSE true                             -- unlocked by default; locking mechanism TBD
         END
       FROM subject_subtopics ss
       LEFT JOIN admin_locks al ON al.subtopic_id = ss.subtopic_id
