@@ -28,3 +28,5 @@ schema_check.js
 # Database dumps
 db_dump.json
 *.json.dump
+
+/modules

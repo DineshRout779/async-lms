@@ -89,7 +89,8 @@ const CourseIntro = () => {
 
         setCourse({
           name: data.name || 'Course Overview',
-          description: data.description || "Welcome to this course. Let's get started!",
+          description:
+            data.description || "Welcome to this course. Let's get started!",
           total_topics: data.data.length,
           total_subtopics: totalSubtopics,
           first_lesson_slug: firstLesson,
@@ -103,9 +104,12 @@ const CourseIntro = () => {
             .then((res) => {
               const d = res.data?.data;
               if (d) {
-                const pct = d.total_subtopics > 0
-                  ? Math.round((d.completed_subtopics / d.total_subtopics) * 100)
-                  : 0;
+                const pct =
+                  d.total_subtopics > 0
+                    ? Math.round(
+                        (d.completed_subtopics / d.total_subtopics) * 100,
+                      )
+                    : 0;
                 setProgressPercent(pct);
                 setLastAccessedSlug(d.last_accessed_subtopic_slug ?? null);
               }
@@ -140,8 +144,12 @@ const CourseIntro = () => {
     return (
       <div className='max-w-2xl mx-auto p-8 text-center space-y-4'>
         <BookOpen className='w-12 h-12 text-slate-300 mx-auto' />
-        <h2 className='text-2xl font-bold text-slate-700'>{course?.name ?? 'Course'}</h2>
-        <p className='text-slate-500'>This course has no content yet. Check back soon!</p>
+        <h2 className='text-2xl font-bold text-slate-700'>
+          {course?.name ?? 'Course'}
+        </h2>
+        <p className='text-slate-500'>
+          This course has no content yet. Check back soon!
+        </p>
       </div>
     );
   }
@@ -153,7 +161,7 @@ const CourseIntro = () => {
       {/* Hero Section */}
       <div className='relative overflow-hidden rounded-3xl bg-[#1e2653] p-10 text-white shadow-2xl'>
         <div className='relative z-10 space-y-6 max-w-2xl'>
-          <h1 className='text-4xl md:text-5xl font-black tracking-tight leading-tight'>
+          <h1 className='text-4xl capitalize md:text-5xl font-black tracking-tight leading-tight'>
             {course?.name}
           </h1>
           <p className='text-blue-100 text-lg leading-relaxed opacity-90'>
@@ -219,7 +227,8 @@ const CourseIntro = () => {
             onClick={continueLearning}
             disabled={!course?.first_lesson_slug}
           >
-            {isInProgress ? 'Continue' : 'View Syllabus'} <ChevronRight className='w-4 h-4 ml-1' />
+            {isInProgress ? 'Continue' : 'View Syllabus'}{' '}
+            <ChevronRight className='w-4 h-4 ml-1' />
           </Button>
         </div>
       </div>

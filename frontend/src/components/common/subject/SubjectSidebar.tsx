@@ -99,7 +99,7 @@ export const SubjectSidebar = () => {
                     </NavLink>
                   ))}
 
-                  {unit.quizzes?.map((quiz: any, qIdx: number) => (
+                  {unit.quizzes?.map((quiz: any) => (
                     <NavLink
                       key={quiz.id}
                       to={`/dashboard/student/courses/${slug}/quiz/${quiz.id}`}
@@ -112,7 +112,7 @@ export const SubjectSidebar = () => {
                       }
                     >
                       <ListChecks className='h-4 w-4 shrink-0' />
-                      <span>Quiz {qIdx + 1}</span>
+                      <span>Quiz</span>
                     </NavLink>
                   ))}
 

@@ -209,7 +209,7 @@ const MyCourses = () => {
                   </div>
 
                   <div>
-                    <h3 className='text-2xl font-bold text-[#1e293b] leading-tight'>
+                    <h3 className='text-2xl capitalize font-bold text-[#1e293b] leading-tight'>
                       {course.name}
                     </h3>
                     <p className='text-slate-400 text-sm mt-2'>

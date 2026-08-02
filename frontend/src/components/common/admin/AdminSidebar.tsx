@@ -126,8 +126,8 @@ export default function AdminSidebar({
               <p className='text-sm font-bold text-white truncate'>
                 {currentUser?.full_name || 'Admin'}
               </p>
-              <p className='text-[11px] text-yellow-400 font-medium truncate leading-tight'>
-                {currentUser?.email}
+              <p className='text-[11px] text-yellow-400 font-medium truncate leading-tight capitalize'>
+                {currentUser?.role?.replace(/_/g, ' ') || 'Admin'}
               </p>
             </div>
           )}
