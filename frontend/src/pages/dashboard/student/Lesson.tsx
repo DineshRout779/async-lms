@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import {
-  CheckCircle2,
-  XCircle,
-  Award,
-  TrendingUp,
-} from 'lucide-react';
+import { CheckCircle2, XCircle, Award, TrendingUp } from 'lucide-react';
 import ExerciseEditor from '@/components/common/ExerciseEditor';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -73,6 +68,9 @@ const Lesson = () => {
 
   const [isNavigating, setIsNavigating] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [retakingQuizIds, setRetakingQuizIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const loading = status === 'loading';
 
@@ -127,10 +125,20 @@ const Lesson = () => {
      Data Processing
   ======================= */
 
-  const buildNextUrl = (item: { type: 'subtopic' | 'quiz' | 'assignment'; slug?: string; id?: string } | null, courseSlug: string | undefined): string => {
-    if (!item || !courseSlug) return `/dashboard/student/courses/${courseSlug ?? ''}`;
-    if (item.type === 'subtopic') return `/dashboard/student/courses/${courseSlug}/lesson/${item.slug}`;
-    if (item.type === 'assignment') return `/dashboard/student/courses/${courseSlug}/assignment/${item.id}`;
+  const buildNextUrl = (
+    item: {
+      type: 'subtopic' | 'quiz' | 'assignment';
+      slug?: string;
+      id?: string;
+    } | null,
+    courseSlug: string | undefined,
+  ): string => {
+    if (!item || !courseSlug)
+      return `/dashboard/student/courses/${courseSlug ?? ''}`;
+    if (item.type === 'subtopic')
+      return `/dashboard/student/courses/${courseSlug}/lesson/${item.slug}`;
+    if (item.type === 'assignment')
+      return `/dashboard/student/courses/${courseSlug}/assignment/${item.id}`;
     return `/dashboard/student/courses/${courseSlug}/quiz/${item.id}`;
   };
 
@@ -185,10 +193,10 @@ const Lesson = () => {
       totalLessons: total || null,
       nextItem: next
         ? {
-          type: next.type,
-          slug: next.slug,
-          id: next.id || next.quiz_id,
-        }
+            type: next.type,
+            slug: next.slug,
+            id: next.id || next.quiz_id,
+          }
         : null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,8 +269,15 @@ const Lesson = () => {
   };
 
   const handleRetakeQuiz = () => {
-    if (!window.confirm('Retake the quiz? Your current answers will be cleared.')) return;
+    if (
+      !window.confirm('Retake the quiz? Your current answers will be cleared.')
+    )
+      return;
     dispatch(resetQuiz());
+  };
+
+  const handleStartRetake = (quizId: string) => {
+    setRetakingQuizIds((prev) => new Set(prev).add(quizId));
   };
 
   /* =======================
@@ -416,8 +431,6 @@ const Lesson = () => {
                 </p>
               ) : null}
             </div>
-
-
           </div>
         </Card>
       )}
@@ -435,13 +448,24 @@ const Lesson = () => {
               (sum, q) => sum + q.points,
               0,
             );
+            const passingRatio =
+              quiz.max_score > 0
+                ? Math.min(1, quiz.passing_score / quiz.max_score)
+                : 0.7;
+            const displayPassingScore = Math.ceil(effectiveMax * passingRatio);
             const answeredCount = quiz.questions.filter(
               (q) => quizAnswers[q.id],
             ).length;
             const isPassed =
               quizSubmitted &&
               quizResults &&
-              (quizResults.attempt.is_passed ?? quizResults.attempt.score >= (quizResults.effective_passing_score ?? quiz.passing_score));
+              (quizResults.attempt.is_passed ??
+                quizResults.attempt.score >=
+                  (quizResults.effective_passing_score ?? quiz.passing_score));
+            const showPreviousAttempt =
+              !!quiz.last_attempt &&
+              !quizSubmitted &&
+              !retakingQuizIds.has(quiz.id);
 
             return (
               <Card key={quiz.id} className='p-6'>
@@ -453,204 +477,273 @@ const Lesson = () => {
                     </p>
                     <p className='text-xs text-slate-500 mt-0.5'>
                       {quiz.questions.length} questions &bull; Pass at{' '}
-                      {quiz.passing_score}/{effectiveMax} pts
+                      {displayPassingScore}/{effectiveMax} pts
                     </p>
                   </div>
-                  {!quizSubmitted && (
+                  {!quizSubmitted && !showPreviousAttempt && (
                     <span className='shrink-0 rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-600'>
                       {answeredCount}/{quiz.questions.length} answered
                     </span>
                   )}
                 </div>
 
-                {/* Questions */}
-                <div className='space-y-6'>
-                  {quiz.questions.map((question, idx) => (
-                    <div key={question.id} className='space-y-3'>
-                      <div className='flex items-start justify-between gap-2'>
-                        <div className='font-medium flex items-start gap-1 flex-1 prose prose-sm max-w-none'>
-                          <span className='shrink-0'>{idx + 1}.</span>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {question.question_text}
-                          </ReactMarkdown>
-                        </div>
-                        <span className='shrink-0 rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600'>
-                          {question.points} pt{question.points !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-
-                      {/* Multiple Choice */}
-                      {question.question_type === 'multiple_choice' && (
-                        <div className='space-y-2'>
-                          {question.options.map((option) => {
-                            const isSelected =
-                              quizAnswers[question.id] === option.id;
-                            const qResult =
-                              quizResults?.question_results?.[question.id];
-                            const isCorrect =
-                              quizSubmitted &&
-                              qResult?.correct_option_id === option.id;
-                            const isWrong =
-                              quizSubmitted &&
-                              isSelected &&
-                              !qResult?.is_correct;
-                            return (
-                              <label
-                                key={option.id}
-                                className={`flex items-center gap-3 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${!quizSubmitted
-                                    ? isSelected
-                                      ? 'border-indigo-500 bg-indigo-50'
-                                      : 'border-slate-200 hover:bg-slate-50'
-                                    : isCorrect
-                                      ? 'border-green-500 bg-green-50'
-                                      : isWrong
-                                        ? 'border-red-500 bg-red-50'
-                                        : 'border-slate-200'
-                                  }`}
-                              >
-                                <input
-                                  type='radio'
-                                  name={question.id}
-                                  checked={isSelected}
-                                  onChange={() =>
-                                    !quizSubmitted &&
-                                    handleQuizAnswerChange(
-                                      question.id,
-                                      option.id,
-                                    )
-                                  }
-                                  disabled={quizSubmitted}
-                                  className='text-indigo-600'
-                                />
-                                <span className='flex-1'>
-                                  {option.option_text}
-                                </span>
-                                {isCorrect && (
-                                  <CheckCircle2 className='h-4 w-4 text-green-600' />
-                                )}
-                                {isWrong && (
-                                  <XCircle className='h-4 w-4 text-red-600' />
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* True / False */}
-                      {question.question_type === 'true_false' && (
-                        <div className='flex gap-4'>
-                          {['True', 'False'].map((value) => {
-                            const isSelected =
-                              quizAnswers[question.id] === value;
-                            const qResult =
-                              quizResults?.question_results?.[question.id];
-                            const isCorrect =
-                              quizSubmitted &&
-                              qResult?.correct_option_text === value;
-                            const isWrong =
-                              quizSubmitted &&
-                              isSelected &&
-                              !qResult?.is_correct;
-                            return (
-                              <label
-                                key={value}
-                                className={`flex items-center gap-2 rounded-lg border px-6 py-3 cursor-pointer transition-colors ${!quizSubmitted
-                                    ? isSelected
-                                      ? 'border-indigo-500 bg-indigo-50'
-                                      : 'border-slate-200 hover:bg-slate-50'
-                                    : isCorrect
-                                      ? 'border-green-500 bg-green-50'
-                                      : isWrong
-                                        ? 'border-red-500 bg-red-50'
-                                        : 'border-slate-200'
-                                  }`}
-                              >
-                                <input
-                                  type='radio'
-                                  name={question.id}
-                                  checked={isSelected}
-                                  onChange={() =>
-                                    !quizSubmitted &&
-                                    handleQuizAnswerChange(question.id, value)
-                                  }
-                                  disabled={quizSubmitted}
-                                />
-                                {value}
-                                {isCorrect && (
-                                  <CheckCircle2 className='ml-1 h-4 w-4 text-green-600' />
-                                )}
-                                {isWrong && (
-                                  <XCircle className='ml-1 h-4 w-4 text-red-600' />
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Short Answer */}
-                      {question.question_type === 'short_answer' && (
-                        <div>
-                          <textarea
-                            value={quizAnswers[question.id] || ''}
-                            onChange={(e) =>
-                              !quizSubmitted &&
-                              handleQuizAnswerChange(
-                                question.id,
-                                e.target.value,
-                              )
-                            }
-                            disabled={quizSubmitted}
-                            rows={3}
-                            placeholder='Write your answer here...'
-                            className='w-full rounded-lg border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200'
-                          />
-                          {quizSubmitted && (
-                            <p className='mt-1 text-xs italic text-slate-400'>
-                              Short answers are reviewed manually.
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Explanation after submission */}
-                      {quizSubmitted && question.explanation && (
-                        <div className='rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm'>
-                          <p className='font-semibold text-blue-900 mb-1'>
-                            Explanation:
-                          </p>
-                          <div className='text-blue-800 prose prose-sm max-w-none prose-p:my-0'>
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {question.explanation}
-                            </ReactMarkdown>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Submit Button */}
-                {!quizSubmitted && (
-                  <div className='mt-8 border-t border-slate-100 pt-6'>
-                    <Button
-                      onClick={() => handleSubmitQuiz(quiz)}
-                      loading={submittingQuiz}
-                      className='w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-base font-semibold'
+                {/* Previously Attempted */}
+                {showPreviousAttempt && quiz.last_attempt && (
+                  <div
+                    className={`rounded-2xl border p-6 text-center ${
+                      quiz.last_attempt.is_passed
+                        ? 'bg-emerald-50 border-emerald-200'
+                        : 'bg-orange-50 border-orange-200'
+                    }`}
+                  >
+                    {quiz.last_attempt.is_passed ? (
+                      <CheckCircle2 className='mx-auto mb-3 h-10 w-10 text-emerald-600' />
+                    ) : (
+                      <XCircle className='mx-auto mb-3 h-10 w-10 text-orange-500' />
+                    )}
+                    <p
+                      className={`text-lg font-bold ${
+                        quiz.last_attempt.is_passed
+                          ? 'text-emerald-800'
+                          : 'text-orange-800'
+                      }`}
                     >
-                      Submit Quiz
+                      You've already attempted this quiz
+                    </p>
+                    <p className='mt-2 text-sm text-slate-600'>
+                      Score: {quiz.last_attempt.score} pts &bull;{' '}
+                      {quiz.last_attempt.is_passed ? 'Passed' : 'Not passed'}
+                    </p>
+                    <Button
+                      variant='outline'
+                      onClick={() => handleStartRetake(quiz.id)}
+                      className='mt-6'
+                    >
+                      Retake Quiz
                     </Button>
                   </div>
                 )}
 
-                {/* Results Panel */}
+                {/* Questions */}
+                {!showPreviousAttempt && (
+                  <>
+                    <div className='space-y-6'>
+                      {quiz.questions.map((question, idx) => (
+                        <div key={question.id} className='space-y-3'>
+                          <div className='flex items-start justify-between gap-2'>
+                            <div className='flex items-start gap-1 flex-1 min-w-0 font-medium'>
+                              <span className='shrink-0'>{idx + 1}.</span>
+                              <div className='min-w-0 flex-1 prose prose-sm max-w-none prose-pre:overflow-x-auto prose-pre:max-w-full'>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {question.question_text}
+                                </ReactMarkdown>
+                              </div>
+                            </div>
+                            <span className='shrink-0 rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600'>
+                              {question.points} pt{question.points !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+
+                          {/* Multiple Choice */}
+                          {question.question_type === 'multiple_choice' && (
+                            <div className='space-y-2'>
+                              {question.options.map((option) => {
+                                const isSelected =
+                                  quizAnswers[question.id] === option.id;
+                                const qResult =
+                                  quizResults?.question_results?.[question.id];
+                                // Only mark the student's own selection as
+                                // right/wrong — the correct option is only
+                                // ever revealed once the backend includes it
+                                // (after enough attempts), never guessed here.
+                                const isSelectedCorrect =
+                                  quizSubmitted && isSelected && !!qResult?.is_correct;
+                                const isSelectedWrong =
+                                  quizSubmitted &&
+                                  isSelected &&
+                                  qResult != null &&
+                                  !qResult.is_correct;
+                                const isRevealedCorrect =
+                                  quizSubmitted &&
+                                  !isSelected &&
+                                  !!qResult?.correct_option_id &&
+                                  qResult.correct_option_id === option.id;
+                                return (
+                                  <label
+                                    key={option.id}
+                                    className={`flex items-center gap-3 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${
+                                      !quizSubmitted
+                                        ? isSelected
+                                          ? 'border-indigo-500 bg-indigo-50'
+                                          : 'border-slate-200 hover:bg-slate-50'
+                                        : isSelectedCorrect || isRevealedCorrect
+                                          ? 'border-green-500 bg-green-50'
+                                          : isSelectedWrong
+                                            ? 'border-red-500 bg-red-50'
+                                            : 'border-slate-200'
+                                    }`}
+                                  >
+                                    <input
+                                      type='radio'
+                                      name={question.id}
+                                      checked={isSelected}
+                                      onChange={() =>
+                                        !quizSubmitted &&
+                                        handleQuizAnswerChange(
+                                          question.id,
+                                          option.id,
+                                        )
+                                      }
+                                      disabled={quizSubmitted}
+                                      className='text-indigo-600'
+                                    />
+                                    <span className='flex-1'>
+                                      {option.option_text}
+                                    </span>
+                                    {(isSelectedCorrect || isRevealedCorrect) && (
+                                      <CheckCircle2 className='h-4 w-4 text-green-600' />
+                                    )}
+                                    {isSelectedWrong && (
+                                      <XCircle className='h-4 w-4 text-red-600' />
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* True / False */}
+                          {question.question_type === 'true_false' && (
+                            <div className='flex gap-4'>
+                              {['True', 'False'].map((value) => {
+                                const isSelected =
+                                  quizAnswers[question.id] === value;
+                                const qResult =
+                                  quizResults?.question_results?.[question.id];
+                                const isSelectedCorrect =
+                                  quizSubmitted && isSelected && !!qResult?.is_correct;
+                                const isSelectedWrong =
+                                  quizSubmitted &&
+                                  isSelected &&
+                                  qResult != null &&
+                                  !qResult.is_correct;
+                                const isRevealedCorrect =
+                                  quizSubmitted &&
+                                  !isSelected &&
+                                  !!qResult?.correct_option_text &&
+                                  qResult.correct_option_text === value;
+                                return (
+                                  <label
+                                    key={value}
+                                    className={`flex items-center gap-2 rounded-lg border px-6 py-3 cursor-pointer transition-colors ${
+                                      !quizSubmitted
+                                        ? isSelected
+                                          ? 'border-indigo-500 bg-indigo-50'
+                                          : 'border-slate-200 hover:bg-slate-50'
+                                        : isSelectedCorrect || isRevealedCorrect
+                                          ? 'border-green-500 bg-green-50'
+                                          : isSelectedWrong
+                                            ? 'border-red-500 bg-red-50'
+                                            : 'border-slate-200'
+                                    }`}
+                                  >
+                                    <input
+                                      type='radio'
+                                      name={question.id}
+                                      checked={isSelected}
+                                      onChange={() =>
+                                        !quizSubmitted &&
+                                        handleQuizAnswerChange(
+                                          question.id,
+                                          value,
+                                        )
+                                      }
+                                      disabled={quizSubmitted}
+                                    />
+                                    {value}
+                                    {(isSelectedCorrect || isRevealedCorrect) && (
+                                      <CheckCircle2 className='ml-1 h-4 w-4 text-green-600' />
+                                    )}
+                                    {isSelectedWrong && (
+                                      <XCircle className='ml-1 h-4 w-4 text-red-600' />
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Short Answer */}
+                          {question.question_type === 'short_answer' && (
+                            <div>
+                              <textarea
+                                value={quizAnswers[question.id] || ''}
+                                onChange={(e) =>
+                                  !quizSubmitted &&
+                                  handleQuizAnswerChange(
+                                    question.id,
+                                    e.target.value,
+                                  )
+                                }
+                                disabled={quizSubmitted}
+                                rows={3}
+                                placeholder='Write your answer here...'
+                                className='w-full rounded-lg border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200'
+                              />
+                              {quizSubmitted && (
+                                <p className='mt-1 text-xs italic text-slate-400'>
+                                  Short answers are reviewed manually.
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Explanation — only revealed once the student has attempted
+                          this quiz 3+ times (server withholds it otherwise) */}
+                          {quizSubmitted &&
+                            quizResults?.question_results[question.id]
+                              ?.explanation && (
+                              <div className='rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm'>
+                                <p className='font-semibold text-blue-900 mb-1'>
+                                  Explanation:
+                                </p>
+                                <div className='text-blue-800 prose prose-sm max-w-none prose-p:my-0'>
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {
+                                      quizResults.question_results[question.id]!
+                                        .explanation as string
+                                    }
+                                  </ReactMarkdown>
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Submit Button */}
+                    {!quizSubmitted && (
+                      <div className='mt-8 border-t border-slate-100 pt-6'>
+                        <Button
+                          onClick={() => handleSubmitQuiz(quiz)}
+                          loading={submittingQuiz}
+                          className='w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-base font-semibold'
+                        >
+                          Submit Quiz
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Results Panel — only for a submission made this session */}
                 {quizSubmitted && quizResults && (
                   <div
-                    className={`mt-8 rounded-2xl border p-6 text-center ${isPassed
+                    className={`mt-8 rounded-2xl border p-6 text-center ${
+                      isPassed
                         ? 'bg-emerald-50 border-emerald-200'
                         : 'bg-orange-50 border-orange-200'
-                      }`}
+                    }`}
                   >
                     {isPassed ? (
                       <CheckCircle2 className='mx-auto mb-3 h-10 w-10 text-emerald-600' />
@@ -658,14 +751,17 @@ const Lesson = () => {
                       <XCircle className='mx-auto mb-3 h-10 w-10 text-orange-500' />
                     )}
                     <p
-                      className={`text-lg font-bold ${isPassed ? 'text-emerald-800' : 'text-orange-800'
-                        }`}
+                      className={`text-lg font-bold ${
+                        isPassed ? 'text-emerald-800' : 'text-orange-800'
+                      }`}
                     >
                       {isPassed ? 'Quiz Passed! 🎉' : 'Not quite — try again!'}
                     </p>
                     {(() => {
                       const results = quizResults.question_results ?? {};
-                      const correctCount = Object.values(results).filter((r: any) => r.is_correct).length;
+                      const correctCount = Object.values(results).filter(
+                        (r: any) => r.is_correct,
+                      ).length;
                       const totalCount = quiz.questions.length;
                       return (
                         <>
@@ -677,7 +773,10 @@ const Lesson = () => {
                           </p>
                           <p className='mt-1 text-sm text-slate-500'>
                             {quizResults.attempt.score} pts
-                            {' · '}Passing: {quizResults.effective_passing_score ?? quiz.passing_score} pts
+                            {' · '}Passing:{' '}
+                            {quizResults.effective_passing_score ??
+                              quiz.passing_score}{' '}
+                            pts
                             {quizResults.points_awarded > 0 &&
                               ` • +${quizResults.points_awarded} XP earned`}
                           </p>
@@ -689,10 +788,11 @@ const Lesson = () => {
                       <Button
                         variant='outline'
                         onClick={handleRetakeQuiz}
-                        className={`flex-1 ${isPassed
+                        className={`flex-1 ${
+                          isPassed
                             ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700'
                             : 'border-orange-300 text-orange-700 hover:bg-orange-100 hover:text-orange-700'
-                          }`}
+                        }`}
                       >
                         Retake Quiz
                       </Button>

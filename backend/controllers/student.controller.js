@@ -25,12 +25,42 @@ const { markActionToday } = require('../services/presenceService');
 
 // ── XP-based badge definitions ─────────────────────────────────────────────────
 const XP_BADGES = [
-  { name: 'First Steps',    description: 'Earned your first 10 XP',    icon: '🌱', threshold: 10   },
-  { name: 'Learner',        description: 'Reached 100 XP',             icon: '📚', threshold: 100  },
-  { name: 'Scholar',        description: 'Reached 500 XP',             icon: '🎓', threshold: 500  },
-  { name: 'Expert',         description: 'Reached 1,000 XP',           icon: '⚡', threshold: 1000 },
-  { name: 'Master',         description: 'Reached 2,500 XP',           icon: '🏆', threshold: 2500 },
-  { name: 'Legend',         description: 'Reached 5,000 XP',           icon: '🌟', threshold: 5000 },
+  {
+    name: 'First Steps',
+    description: 'Earned your first 10 XP',
+    icon: '🌱',
+    threshold: 10,
+  },
+  {
+    name: 'Learner',
+    description: 'Reached 100 XP',
+    icon: '📚',
+    threshold: 100,
+  },
+  {
+    name: 'Scholar',
+    description: 'Reached 500 XP',
+    icon: '🎓',
+    threshold: 500,
+  },
+  {
+    name: 'Expert',
+    description: 'Reached 1,000 XP',
+    icon: '⚡',
+    threshold: 1000,
+  },
+  {
+    name: 'Master',
+    description: 'Reached 2,500 XP',
+    icon: '🏆',
+    threshold: 2500,
+  },
+  {
+    name: 'Legend',
+    description: 'Reached 5,000 XP',
+    icon: '🌟',
+    threshold: 5000,
+  },
 ];
 
 async function checkAndAwardBadges(userId) {
@@ -181,17 +211,22 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
   `;
 
   let lessonDone = null;
-  if (has_lesson) lessonDone = await pool.query(lessonDoneQuery, [userId, subtopicId]);
-  
+  if (has_lesson)
+    lessonDone = await pool.query(lessonDoneQuery, [userId, subtopicId]);
+
   let quizDone = null;
-  if (has_quiz) quizDone = await pool.query(quizDoneQuery, [userId, subtopicId]);
-  
+  if (has_quiz)
+    quizDone = await pool.query(quizDoneQuery, [userId, subtopicId]);
+
   let exerciseDone = null;
-  if (has_exercise) exerciseDone = await pool.query(exerciseDoneQuery, [userId, subtopicId]);
+  if (has_exercise)
+    exerciseDone = await pool.query(exerciseDoneQuery, [userId, subtopicId]);
 
   const isLessonDone = has_lesson ? lessonDone.rows[0].lesson_done : true;
   const isQuizDone = has_quiz ? quizDone.rows[0].quiz_done : true;
-  const isExerciseDone = has_exercise ? exerciseDone.rows[0].exercise_done : true;
+  const isExerciseDone = has_exercise
+    ? exerciseDone.rows[0].exercise_done
+    : true;
 
   if (!isLessonDone || !isQuizDone || !isExerciseDone) return;
 
@@ -224,7 +259,9 @@ exports.getMyProgress = async (req, res) => {
       [userId, subjectId],
     );
     if (enrollment.rows.length === 0) {
-      return res.status(403).json({ success: false, message: 'Not enrolled in this subject' });
+      return res
+        .status(403)
+        .json({ success: false, message: 'Not enrolled in this subject' });
     }
 
     const query = `
@@ -418,11 +455,14 @@ exports.getMyProgress = async (req, res) => {
       total_points: 0,
     };
 
-    const enrollmentRow = await pool.query(
-      `SELECT last_accessed_subtopic_slug FROM user_subjects WHERE user_id = $1 AND subject_id = $2`,
-      [userId, subjectId],
-    ).catch(() => ({ rows: [] }));
-    const lastAccessedSlug = enrollmentRow.rows[0]?.last_accessed_subtopic_slug ?? null;
+    const enrollmentRow = await pool
+      .query(
+        `SELECT last_accessed_subtopic_slug FROM user_subjects WHERE user_id = $1 AND subject_id = $2`,
+        [userId, subjectId],
+      )
+      .catch(() => ({ rows: [] }));
+    const lastAccessedSlug =
+      enrollmentRow.rows[0]?.last_accessed_subtopic_slug ?? null;
 
     res.json({
       success: true,
@@ -472,12 +512,14 @@ exports.startSubtopic = async (req, res) => {
 
     // Track last accessed subtopic for "Continue Learning"
     if (lockCheck.rows[0]?.subject_id && lockCheck.rows[0]?.slug) {
-      await pool.query(
-        `UPDATE user_subjects
+      await pool
+        .query(
+          `UPDATE user_subjects
          SET last_accessed_subtopic_slug = $1, last_accessed_at = NOW()
          WHERE user_id = $2 AND subject_id = $3`,
-        [lockCheck.rows[0].slug, userId, lockCheck.rows[0].subject_id],
-      ).catch(() => {}); // non-critical — column may not exist yet
+          [lockCheck.rows[0].slug, userId, lockCheck.rows[0].subject_id],
+        )
+        .catch(() => {}); // non-critical — column may not exist yet
     }
 
     res.json({
@@ -558,24 +600,28 @@ exports.submitQuizAttempt = async (req, res) => {
     const { answers } = req.body; // { [question_id]: string }
 
     if (!answers || typeof answers !== 'object') {
-      return res.status(400).json({ success: false, message: 'answers object is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'answers object is required' });
     }
 
     // Fetch quiz + all questions + correct options in one query
     const quizQuery = await pool.query(
       `SELECT q.passing_score, q.max_score,
-              qq.id AS question_id, qq.question_type, qq.points,
+              qq.id AS question_id, qq.question_type, qq.points, qq.explanation,
               qo.id AS option_id, qo.option_text, qo.is_correct
        FROM quizzes q
-       LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
-       LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id
-       WHERE q.id = $1
+       LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id AND qq.is_deleted = false
+       LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id AND qo.is_deleted = false
+       WHERE q.id = $1 and q.is_deleted = false
        ORDER BY qq.order_index, qo.order_index`,
       [quizId],
     );
 
     if (quizQuery.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Quiz not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Quiz not found' });
     }
 
     const { passing_score, max_score } = quizQuery.rows[0];
@@ -589,6 +635,7 @@ exports.submitQuizAttempt = async (req, res) => {
           id: row.question_id,
           type: row.question_type,
           points: row.points,
+          explanation: row.explanation,
           options: [],
         });
       }
@@ -615,7 +662,9 @@ exports.submitQuizAttempt = async (req, res) => {
 
       if (question.type === 'multiple_choice') {
         correctOption = question.options.find((o) => o.is_correct);
-        const selectedOption = question.options.find((o) => o.id === userAnswer);
+        const selectedOption = question.options.find(
+          (o) => o.id === userAnswer,
+        );
         selectedOptionId = selectedOption?.id ?? null;
         if (correctOption && userAnswer === correctOption.id) {
           score += question.points;
@@ -623,7 +672,9 @@ exports.submitQuizAttempt = async (req, res) => {
         }
       } else if (question.type === 'true_false') {
         correctOption = question.options.find((o) => o.is_correct);
-        const selectedOption = question.options.find((o) => o.option_text === userAnswer);
+        const selectedOption = question.options.find(
+          (o) => o.option_text === userAnswer,
+        );
         selectedOptionId = selectedOption?.id ?? null;
         if (correctOption && userAnswer === correctOption.option_text) {
           score += question.points;
@@ -632,20 +683,29 @@ exports.submitQuizAttempt = async (req, res) => {
       }
       // short_answer: skipped (manual review, no auto-score)
 
+      // correct_option_id/text are withheld until the reveal threshold below —
+      // otherwise a failing attempt would hand the student the answer key.
+      question.correctOptionId = correctOption?.id ?? null;
+      question.correctOptionText = correctOption?.option_text ?? null;
+
       question_results[questionId] = {
         is_correct: userIsCorrect,
         selected_option_id: selectedOptionId,
-        correct_option_id: correctOption?.id ?? null,
-        correct_option_text: correctOption?.option_text ?? null,
+        correct_option_id: null,
+        correct_option_text: null,
       };
     }
 
     // Derive passing threshold from actual question points to handle cases where
     // the stored max_score is out of sync with real question points.
-    const passingRatio = max_score > 0 ? passing_score / max_score : 0.7;
-    const effectivePassingScore = actual_max_score > 0
-      ? Math.ceil(actual_max_score * passingRatio)
-      : passing_score;
+    // Clamp to 1 so a stale/misconfigured passing_score > max_score can never
+    // produce a threshold higher than the actual achievable score.
+    const passingRatio =
+      max_score > 0 ? Math.min(1, passing_score / max_score) : 0.7;
+    const effectivePassingScore =
+      actual_max_score > 0
+        ? Math.ceil(actual_max_score * passingRatio)
+        : passing_score;
     const isPassed = score >= effectivePassingScore;
 
     const result = await pool.query(
@@ -655,13 +715,39 @@ exports.submitQuizAttempt = async (req, res) => {
       [quizId, userId, score, isPassed],
     );
 
+    // Only reveal the correct answer + explanation once the student has
+    // attempted the quiz MIN_ATTEMPTS_FOR_REVEAL times — otherwise a failing
+    // attempt would hand them the answer key outright. Until then, students
+    // only learn whether their own selection was right or wrong.
+    const MIN_ATTEMPTS_FOR_REVEAL = 3;
+    const attemptCountResult = await pool.query(
+      'SELECT COUNT(*) AS count FROM quiz_attempts WHERE quiz_id = $1 AND user_id = $2',
+      [quizId, userId],
+    );
+    const attemptCount = parseInt(attemptCountResult.rows[0].count, 10);
+    const canRevealAnswer = attemptCount >= MIN_ATTEMPTS_FOR_REVEAL;
+    if (canRevealAnswer) {
+      for (const [questionId, question] of questionsMap) {
+        if (question_results[questionId]) {
+          question_results[questionId].explanation = question.explanation;
+          question_results[questionId].correct_option_id =
+            question.correctOptionId;
+          question_results[questionId].correct_option_text =
+            question.correctOptionText;
+        }
+      }
+    }
+
     // Save per-question results for analytics
     const attemptId = result.rows[0].id;
     const answerRows = Object.entries(question_results);
     if (answerRows.length > 0) {
       // Each row: (quiz_attempt_id, question_id, selected_option_id, is_correct, points_earned)
       const vals = answerRows
-        .map((_, i) => `($1, $${i * 4 + 2}::uuid, $${i * 4 + 3}::uuid, $${i * 4 + 4}, $${i * 4 + 5})`)
+        .map(
+          (_, i) =>
+            `($1, $${i * 4 + 2}::uuid, $${i * 4 + 3}::uuid, $${i * 4 + 4}, $${i * 4 + 5})`,
+        )
         .join(', ');
       const params = [
         attemptId,
@@ -740,7 +826,9 @@ exports.submitExercise = async (req, res) => {
     );
 
     if (exerciseQuery.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Exercise not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
     }
 
     const exercise = exerciseQuery.rows[0];
@@ -757,35 +845,71 @@ exports.submitExercise = async (req, res) => {
 
       for (const task of exercise.tasks) {
         if (!task.test_cases || task.test_cases.length === 0) continue;
-        const taskWorkspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}-task-${task.id}`);
+        const taskWorkspaceDir = path.join(
+          WORKSPACE_ROOT,
+          String(userId),
+          `exercise-${exerciseId}-task-${task.id}`,
+        );
         if (!fs.existsSync(taskWorkspaceDir)) continue;
         try {
-          const result = await runTestCases(taskWorkspaceDir, exercise.language, task.test_cases);
+          const result = await runTestCases(
+            taskWorkspaceDir,
+            exercise.language,
+            task.test_cases,
+          );
           totalPassed += result.passed;
           totalTests += result.total;
-          taskResults.push({ taskId: task.id, taskTitle: task.title, ...result });
+          taskResults.push({
+            taskId: task.id,
+            taskTitle: task.title,
+            ...result,
+          });
         } catch (err) {
           // count all tests in this task as failed
           totalTests += task.test_cases.length;
-          taskResults.push({ taskId: task.id, taskTitle: task.title, passed: 0, failed: task.test_cases.length, total: task.test_cases.length, error: err.message });
+          taskResults.push({
+            taskId: task.id,
+            taskTitle: task.title,
+            passed: 0,
+            failed: task.test_cases.length,
+            total: task.test_cases.length,
+            error: err.message,
+          });
         }
       }
 
-      score = totalTests > 0
-        ? Math.round((totalPassed / totalTests) * exercise.max_score)
-        : exercise.max_score;
+      score =
+        totalTests > 0
+          ? Math.round((totalPassed / totalTests) * exercise.max_score)
+          : exercise.max_score;
       testResults = { totalPassed, totalTests, taskResults };
     } else if (exercise.test_cases && exercise.test_cases.length > 0) {
       // Legacy: single workspace test cases
-      const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}`);
+      const workspaceDir = path.join(
+        WORKSPACE_ROOT,
+        String(userId),
+        `exercise-${exerciseId}`,
+      );
       if (!fs.existsSync(workspaceDir)) {
-        return res.status(400).json({ success: false, message: 'Workspace not initialised. Open the exercise first.' });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: 'Workspace not initialised. Open the exercise first.',
+          });
       }
       try {
-        testResults = await runTestCases(workspaceDir, exercise.language, exercise.test_cases);
-        score = testResults.total > 0
-          ? Math.round((testResults.passed / testResults.total) * exercise.max_score)
-          : 0;
+        testResults = await runTestCases(
+          workspaceDir,
+          exercise.language,
+          exercise.test_cases,
+        );
+        score =
+          testResults.total > 0
+            ? Math.round(
+                (testResults.passed / testResults.total) * exercise.max_score,
+              )
+            : 0;
       } catch (err) {
         return serverError(res, err);
       }
@@ -841,16 +965,37 @@ const runnerService = require('../services/runnerService');
 const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
 const EXERCISE_RUNNER = {
-  javascript: { image: 'workspace-node',   cmd: ['node',    'index.js'] },
-  python:     { image: 'workspace-python', cmd: ['python3', 'main.py']  },
-  java:       { image: 'workspace-java',   cmd: ['sh', '-c', 'cd /workspace && javac Main.java 2>&1 && java -cp /workspace Main'] },
-  sql:        { image: 'workspace-sql',    cmd: ['sh', '-c', 'sqlite3 -column -header :memory: < /workspace/solution.sql'] },
+  javascript: { image: 'workspace-node', cmd: ['node', 'index.js'] },
+  python: { image: 'workspace-python', cmd: ['python3', 'main.py'] },
+  java: {
+    image: 'workspace-java',
+    cmd: [
+      'sh',
+      '-c',
+      'cd /workspace && javac Main.java 2>&1 && java -cp /workspace Main',
+    ],
+  },
+  sql: {
+    image: 'workspace-sql',
+    cmd: [
+      'sh',
+      '-c',
+      'sqlite3 -column -header :memory: < /workspace/solution.sql',
+    ],
+  },
 };
 
 const TEST_RUNNER_CMD = {
-  javascript: { image: 'workspace-node',   cmd: ['node',    '__tests__.js']  },
-  python:     { image: 'workspace-python', cmd: ['python3', '__tests__.py']  },
-  java:       { image: 'workspace-java',   cmd: ['sh', '-c', 'cd /workspace && javac Main.java __Tests__.java 2>&1 && java -cp /workspace __Tests__'] },
+  javascript: { image: 'workspace-node', cmd: ['node', '__tests__.js'] },
+  python: { image: 'workspace-python', cmd: ['python3', '__tests__.py'] },
+  java: {
+    image: 'workspace-java',
+    cmd: [
+      'sh',
+      '-c',
+      'cd /workspace && javac Main.java __Tests__.java 2>&1 && java -cp /workspace __Tests__',
+    ],
+  },
   // sql: not supported — no test runner for SQL exercises
 };
 
@@ -911,23 +1056,44 @@ async function runTestCases(workspaceDir, language, testCases) {
   let header, footer, testFile;
 
   if (language === 'python') {
-    const studentCode = fs.readFileSync(path.join(workspaceDir, 'main.py'), 'utf-8');
-    const escapedCode = studentCode.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"');
-    header   = `studentCodeString = """${escapedCode}"""\n` + studentCode + `\n` + PY_TEST_HEADER;
-    footer   = PY_TEST_FOOTER;
+    const studentCode = fs.readFileSync(
+      path.join(workspaceDir, 'main.py'),
+      'utf-8',
+    );
+    const escapedCode = studentCode
+      .replace(/\\/g, '\\\\')
+      .replace(/"""/g, '\\"\\"\\"');
+    header =
+      `studentCodeString = """${escapedCode}"""\n` +
+      studentCode +
+      `\n` +
+      PY_TEST_HEADER;
+    footer = PY_TEST_FOOTER;
     testFile = path.join(workspaceDir, '__tests__.py');
   } else if (language === 'java') {
-    header   = JAVA_TEST_HEADER;
-    footer   = JAVA_TEST_FOOTER;
+    header = JAVA_TEST_HEADER;
+    footer = JAVA_TEST_FOOTER;
     testFile = path.join(workspaceDir, '__Tests__.java');
   } else if (language === 'sql') {
-    throw new Error('Automated test cases are not supported for SQL exercises.');
+    throw new Error(
+      'Automated test cases are not supported for SQL exercises.',
+    );
   } else {
     // javascript (default)
-    const studentCode = fs.readFileSync(path.join(workspaceDir, 'index.js'), 'utf-8');
-    const escapedCode = studentCode.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
-    header   = `const studentCodeString = \`${escapedCode}\`;\n` + studentCode + `\n` + JS_TEST_HEADER;
-    footer   = JS_TEST_FOOTER;
+    const studentCode = fs.readFileSync(
+      path.join(workspaceDir, 'index.js'),
+      'utf-8',
+    );
+    const escapedCode = studentCode
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$/g, '\\$');
+    header =
+      `const studentCodeString = \`${escapedCode}\`;\n` +
+      studentCode +
+      `\n` +
+      JS_TEST_HEADER;
+    footer = JS_TEST_FOOTER;
     testFile = path.join(workspaceDir, '__tests__.js');
   }
 
@@ -935,7 +1101,8 @@ async function runTestCases(workspaceDir, language, testCases) {
   fs.writeFileSync(testFile, header + testCode + footer, 'utf-8');
 
   const result = await runnerService.executeTests(workspaceDir, language);
-  if (!result) throw new Error('Test execution is not supported for this language.');
+  if (!result)
+    throw new Error('Test execution is not supported for this language.');
 
   const { output } = result;
   const lines = output.trim().split('\n');
@@ -949,10 +1116,16 @@ async function runTestCases(workspaceDir, language, testCases) {
 }
 
 const DEFAULT_INITIAL_FILES = {
-  javascript: [{ name: 'index.js',    content: '// Write your solution here\n' }],
-  python:     [{ name: 'main.py',     content: '# Write your solution here\n'  }],
-  java:       [{ name: 'Main.java',   content: 'public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n' }],
-  sql:        [{ name: 'solution.sql', content: '-- Write your SQL here\n' }],
+  javascript: [{ name: 'index.js', content: '// Write your solution here\n' }],
+  python: [{ name: 'main.py', content: '# Write your solution here\n' }],
+  java: [
+    {
+      name: 'Main.java',
+      content:
+        'public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n',
+    },
+  ],
+  sql: [{ name: 'solution.sql', content: '-- Write your SQL here\n' }],
 };
 
 /**
@@ -972,7 +1145,9 @@ exports.initExerciseWorkspace = async (req, res) => {
     );
 
     if (exerciseResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Exercise not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
     }
 
     const { language, initial_files, tasks } = exerciseResult.rows[0];
@@ -980,14 +1155,19 @@ exports.initExerciseWorkspace = async (req, res) => {
     // Determine which files to seed: task-specific or exercise-level
     let filesToSeedFromDb = null;
     if (taskId && Array.isArray(tasks) && tasks.length > 0) {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task)
+        return res
+          .status(404)
+          .json({ success: false, message: 'Task not found' });
       filesToSeedFromDb = task.initial_files;
     } else {
       filesToSeedFromDb = initial_files;
     }
 
-    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
     const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
 
     fs.mkdirSync(workspaceDir, { recursive: true });
@@ -995,9 +1175,10 @@ exports.initExerciseWorkspace = async (req, res) => {
     const existing = fs.readdirSync(workspaceDir);
     if (existing.length === 0) {
       const filesToSeed =
-        (Array.isArray(filesToSeedFromDb) && filesToSeedFromDb.length > 0)
+        Array.isArray(filesToSeedFromDb) && filesToSeedFromDb.length > 0
           ? filesToSeedFromDb
-          : (DEFAULT_INITIAL_FILES[language] ?? DEFAULT_INITIAL_FILES.javascript);
+          : (DEFAULT_INITIAL_FILES[language] ??
+            DEFAULT_INITIAL_FILES.javascript);
 
       for (const file of filesToSeed) {
         const filePath = path.join(workspaceDir, file.name);
@@ -1007,9 +1188,10 @@ exports.initExerciseWorkspace = async (req, res) => {
     }
 
     // Return current files from disk so returning students see their saved work
-    const files = fs.readdirSync(workspaceDir)
-      .filter(f => fs.statSync(path.join(workspaceDir, f)).isFile())
-      .map(name => ({
+    const files = fs
+      .readdirSync(workspaceDir)
+      .filter((f) => fs.statSync(path.join(workspaceDir, f)).isFile())
+      .map((name) => ({
         name,
         content: fs.readFileSync(path.join(workspaceDir, name), 'utf-8'),
       }));
@@ -1037,19 +1219,28 @@ exports.runExercise = async (req, res) => {
     );
 
     if (exerciseResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Exercise not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
     }
 
     const { language } = exerciseResult.rows[0];
     const runner = EXERCISE_RUNNER[language] ?? EXERCISE_RUNNER.javascript;
-    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
     const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
 
     if (!fs.existsSync(workspaceDir)) {
-      return res.status(400).json({ success: false, message: 'Workspace not initialised' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'Workspace not initialised' });
     }
 
-    const { output, exitCode } = await runnerService.execute(workspaceDir, language);
+    const { output, exitCode } = await runnerService.execute(
+      workspaceDir,
+      language,
+    );
     res.json({ success: true, data: { output, exitCode } });
   } catch (error) {
     console.error('Error running exercise:', error);
@@ -1072,7 +1263,9 @@ exports.runExerciseTests = async (req, res) => {
       [exerciseId],
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Exercise not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
     }
 
     const { language, test_cases, tasks } = result.rows[0];
@@ -1080,22 +1273,36 @@ exports.runExerciseTests = async (req, res) => {
     // Resolve which test cases to run
     let testCasesToRun = test_cases;
     if (taskId && Array.isArray(tasks) && tasks.length > 0) {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task)
+        return res
+          .status(404)
+          .json({ success: false, message: 'Task not found' });
       testCasesToRun = task.test_cases;
     }
 
     if (!testCasesToRun || testCasesToRun.length === 0) {
-      return res.json({ success: true, data: { message: 'No test cases defined for this task' } });
+      return res.json({
+        success: true,
+        data: { message: 'No test cases defined for this task' },
+      });
     }
 
-    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
     const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
     if (!fs.existsSync(workspaceDir)) {
-      return res.status(400).json({ success: false, message: 'Workspace not initialised' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'Workspace not initialised' });
     }
 
-    const testResult = await runTestCases(workspaceDir, language, testCasesToRun);
+    const testResult = await runTestCases(
+      workspaceDir,
+      language,
+      testCasesToRun,
+    );
     res.json({ success: true, data: testResult });
   } catch (error) {
     console.error('Error running exercise tests:', error);
@@ -1230,9 +1437,17 @@ exports.getCollegeLeaderboard = async (req, res) => {
     const userId = req.user.id;
     const { limit = 50 } = req.query;
 
-    const userQuery = await pool.query('SELECT college_id FROM student_profiles WHERE user_id = $1', [userId]);
+    const userQuery = await pool.query(
+      'SELECT college_id FROM student_profiles WHERE user_id = $1',
+      [userId],
+    );
     if (!userQuery.rows[0]?.college_id) {
-      return res.status(400).json({ success: false, message: 'User is not associated with any college' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: 'User is not associated with any college',
+        });
     }
 
     const collegeId = userQuery.rows[0].college_id;
@@ -1316,7 +1531,9 @@ exports.createStudentProject = async (req, res) => {
     const { name, profile } = req.body;
 
     if (!name || !profile) {
-      return res.status(400).json({ success: false, message: 'name and profile are required' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'name and profile are required' });
     }
 
     const result = await pool.query(
@@ -1348,10 +1565,18 @@ exports.deleteStudentProject = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Project not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Project not found' });
     }
 
-    logAction({ req, action: 'DELETE', entityType: 'student_project', entityId: id, details: { name: result.rows[0].name } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'student_project',
+      entityId: id,
+      details: { name: result.rows[0].name },
+    });
     res.json({ success: true, message: 'Project deleted' });
   } catch (error) {
     console.error('Error deleting student project:', error);
@@ -1394,7 +1619,9 @@ exports.getAssignmentById = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Assignment not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
     }
 
     res.json({ success: true, data: result.rows[0] });
@@ -1415,7 +1642,9 @@ exports.submitAssignment = async (req, res) => {
     const { submission_link } = req.body;
 
     if (!submission_link || !submission_link.trim()) {
-      return res.status(400).json({ success: false, message: 'submission_link is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'submission_link is required' });
     }
 
     // Verify the student is enrolled in the subject this assignment belongs to
@@ -1430,7 +1659,9 @@ exports.submitAssignment = async (req, res) => {
     );
 
     if (enrolled.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Assignment not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
     }
 
     const result = await pool.query(
@@ -1510,7 +1741,9 @@ exports.getCapstone = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Capstone project not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Capstone project not found' });
     }
 
     res.json({ success: true, data: result.rows[0] });
@@ -1531,7 +1764,9 @@ exports.submitCapstone = async (req, res) => {
     const { submission_link } = req.body;
 
     if (!submission_link || !submission_link.trim()) {
-      return res.status(400).json({ success: false, message: 'submission_link is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'submission_link is required' });
     }
 
     // Verify enrollment
@@ -1545,7 +1780,9 @@ exports.submitCapstone = async (req, res) => {
     );
 
     if (enrolled.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Project not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Project not found' });
     }
 
     const result = await pool.query(
@@ -1598,7 +1835,10 @@ exports.enrollInSubject = async (req, res) => {
       await client.query('ROLLBACK');
       return res
         .status(404)
-        .json({ success: false, message: 'Subject not found or not available' });
+        .json({
+          success: false,
+          message: 'Subject not found or not available',
+        });
     }
 
     // Insert enrollment (idempotent)
@@ -1609,8 +1849,8 @@ exports.enrollInSubject = async (req, res) => {
       [userId, subjectId],
     );
 
-    // Seed subtopic progress: unit 1 always unlocked; other units inherit
-    // admin-applied lock decisions only (not peer progression state).
+    // Seed subtopic progress: unlocked by default (peer-progression locking
+    // not enforced yet); only locked if an admin explicitly locked it.
     await client.query(
       `WITH new_student_profile AS (
         SELECT college_id, year FROM student_profiles WHERE user_id = $1
@@ -1637,9 +1877,8 @@ exports.enrollInSubject = async (req, res) => {
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT $1, ss.subtopic_id,
         CASE
-          WHEN ss.unit_rn = 1       THEN true   -- first unit: always open
-          WHEN al.is_locked = false THEN true    -- admin explicitly unlocked
-          ELSE false                             -- default locked; progression unlocks
+          WHEN al.is_locked = true THEN false   -- admin explicitly locked
+          ELSE true                             -- unlocked by default; locking mechanism TBD
         END
       FROM subject_subtopics ss
       LEFT JOIN admin_locks al ON al.subtopic_id = ss.subtopic_id
@@ -1820,7 +2059,11 @@ exports.getStudentScorecard = async (req, res) => {
     console.error('Error fetching scorecard:', error);
     res
       .status(500)
-      .json({ success: false, message: 'Failed to fetch scorecard', error: error.message });
+      .json({
+        success: false,
+        message: 'Failed to fetch scorecard',
+        error: error.message,
+      });
   }
 };
 
@@ -1949,18 +2192,28 @@ exports.getStudentModuleAnalytics = async (req, res) => {
 
     for (const row of result.rows) {
       if (!subjectMap.has(row.subject_id)) {
-        subjectMap.set(row.subject_id, { subject_id: row.subject_id, subject_name: row.subject_name, topics: [] });
+        subjectMap.set(row.subject_id, {
+          subject_id: row.subject_id,
+          subject_name: row.subject_name,
+          topics: [],
+        });
       }
 
       // Calculate progress for this topic
-      const calcPct = (completed, total) => total > 0 ? Math.round((completed / total) * 100) : null;
+      const calcPct = (completed, total) =>
+        total > 0 ? Math.round((completed / total) * 100) : null;
       const lessonPct = calcPct(row.lessons_completed, row.lessons_total);
       const quizPct = calcPct(row.quizzes_passed, row.quizzes_total);
       const asgPct = calcPct(row.asg_submitted, row.asg_total);
       const projPct = calcPct(row.proj_submitted, row.proj_total);
-      
-      const pcts = [lessonPct, quizPct, asgPct, projPct].filter(p => p !== null);
-      const progress = pcts.length > 0 ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : 0;
+
+      const pcts = [lessonPct, quizPct, asgPct, projPct].filter(
+        (p) => p !== null,
+      );
+      const progress =
+        pcts.length > 0
+          ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
+          : 0;
 
       totalProgressSum += progress;
       totalTopics++;
@@ -1976,12 +2229,19 @@ exports.getStudentModuleAnalytics = async (req, res) => {
       });
     }
 
-    const overall_progress = totalTopics > 0 ? Math.round(totalProgressSum / totalTopics) : 0;
+    const overall_progress =
+      totalTopics > 0 ? Math.round(totalProgressSum / totalTopics) : 0;
 
-    res.json({ success: true, overall_progress, data: Array.from(subjectMap.values()) });
+    res.json({
+      success: true,
+      overall_progress,
+      data: Array.from(subjectMap.values()),
+    });
   } catch (err) {
     console.error('getStudentModuleAnalytics error:', err);
-    res.status(500).json({ success: false, message: 'Failed to fetch module analytics' });
+    res
+      .status(500)
+      .json({ success: false, message: 'Failed to fetch module analytics' });
   }
 };
 
@@ -2007,7 +2267,7 @@ exports.getStudentAnalytics = async (req, res) => {
          (SELECT current_streak FROM user_streaks WHERE user_id = $1)          AS current_streak,
          (SELECT last_activity FROM user_streaks WHERE user_id = $1)           AS last_activity,
          (SELECT (CURRENT_DATE - last_activity::date) FROM user_streaks WHERE user_id = $1) AS days_since_active`,
-      [userId]
+      [userId],
     );
 
     const recentQuizzesRes = await pool.query(
@@ -2021,7 +2281,7 @@ exports.getStudentAnalytics = async (req, res) => {
        WHERE qa.user_id = $1
        ORDER BY qa.created_at DESC
        LIMIT 5`,
-      [userId]
+      [userId],
     );
 
     const pendingRes = await pool.query(
@@ -2035,7 +2295,7 @@ exports.getStudentAnalytics = async (req, res) => {
          SELECT 1 FROM assignment_submissions sub
          WHERE sub.assignment_id = a.id AND sub.user_id = $1
        )`,
-      [userId]
+      [userId],
     );
 
     const totalXp = await getTotalXP(userId);
@@ -2060,7 +2320,9 @@ exports.getStudentAnalytics = async (req, res) => {
     });
   } catch (err) {
     console.error('getStudentAnalytics error:', err);
-    res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
+    res
+      .status(500)
+      .json({ success: false, message: 'Failed to fetch analytics' });
   }
 };
 
