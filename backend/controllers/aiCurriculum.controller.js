@@ -1577,7 +1577,7 @@ exports.generateContentFromResource = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Could not extract text from file' });
     }
     
-    const aiContent = await aiCurriculumService.generateContentFromFile(fileText, title);
+    const aiContent = await generateContentFromFile(fileText, title);
     res.json({ success: true, content: aiContent });
   } catch (error) {
     console.error('generateContentFromResource error:', error);
