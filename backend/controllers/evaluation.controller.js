@@ -87,6 +87,10 @@ exports.runEvaluation = async (req, res) => {
       throw new Error("No submissions found to evaluate");
     }
 
+    // Default to 'AI' if no specific evaluator is set — used for both the
+    // stored record and the actual dispatch so they can never disagree.
+    const evaluatorType = assignment.evaluator_type || "AI";
+
     //  Create evaluation
     // college assignments use a separate FK column to avoid violating assignments FK
     const evalRes = await client.query(
@@ -101,15 +105,12 @@ exports.runEvaluation = async (req, res) => {
            RETURNING *`,
       [
         assignmentId,
-        assignment.evaluator_type || "JS",
+        evaluatorType,
         submissions.length,
       ]
     );
 
     const evaluation = evalRes.rows[0];
-
-    // Default to 'AI' if no specific evaluator is set
-    const evaluatorType = assignment.evaluator_type || "AI";
 
     //validation
     if (evaluatorType === "JS" && !assignment.test_cases) {
@@ -162,6 +163,7 @@ exports.runEvaluation = async (req, res) => {
 
     let results = [];
     let csvUrl = null;
+    let isMock = false;
 
     try {
       // 5. Attempt Real Evaluation
@@ -171,35 +173,40 @@ exports.runEvaluation = async (req, res) => {
       console.log("Evaluation successful via API");
     } catch (apiError) {
       console.warn("Evaluator API failed or suspended. Using Mock Evaluation.", apiError.message);
+      isMock = true;
 
-      // 6. Mock Fallback (Simulates AI Evaluation for testing)
+      // 6. Mock Fallback (Simulates AI Evaluation for testing) — clearly flagged
+      // as simulated via isMock/status so callers never mistake it for a real grade.
       results = submissions.map((s) => {
         const score = Math.floor(Math.random() * (98 - 80 + 1) + 80);
         let feedback = "";
-        if (score >= 95) feedback = `Flawless submission for "${assignment.title}". Best practices were strictly followed. (Automated Simulation)`;
-        else if (score >= 90) feedback = `Excellent submission for "${assignment.title}". The logic is sound. (Automated Simulation)`;
-        else if (score >= 85) feedback = `Great effort on "${assignment.title}". Minor optimizations are possible. (Automated Simulation)`;
-        else feedback = `Good attempt at "${assignment.title}". Ensure edge cases are handled correctly next time. (Automated Simulation)`;
+        if (score >= 95) feedback = `Flawless submission for "${assignment.title}". Best practices were strictly followed. (Automated Simulation — evaluator service unavailable)`;
+        else if (score >= 90) feedback = `Excellent submission for "${assignment.title}". The logic is sound. (Automated Simulation — evaluator service unavailable)`;
+        else if (score >= 85) feedback = `Great effort on "${assignment.title}". Minor optimizations are possible. (Automated Simulation — evaluator service unavailable)`;
+        else feedback = `Good attempt at "${assignment.title}". Ensure edge cases are handled correctly next time. (Automated Simulation — evaluator service unavailable)`;
 
         return {
+          submissionId: s.submission_id,
           student: s.student_name,
           marks: score,
           feedback: feedback,
         };
       });
-      csvUrl = "https://mock-results.csv";
+      csvUrl = null;
     }
 
     console.log("Processing results:", results.length);
 
-    //  Save results
+    //  Save results — match by submissionId (echoed back or set by the mock
+    // fallback) first, falling back to student-name match only for real
+    // evaluator responses that don't echo it back.
     for (const r of results) {
-      const matched = submissions.find(
-        (s) => s.student_name === r.student
-      );
+      const matched =
+        submissions.find((s) => s.submission_id === r.submissionId) ||
+        submissions.find((s) => s.student_name === r.student);
 
       await client.query(
-        `INSERT INTO evaluation_results 
+        `INSERT INTO evaluation_results
          (evaluation_id, submission_id, student_id, student_name, marks, feedback)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [
@@ -213,21 +220,24 @@ exports.runEvaluation = async (req, res) => {
       );
     }
 
-    // 7️⃣ Update evaluation
+    // 7️⃣ Update evaluation — status is 'completed_mock' (not 'completed') when the
+    // external evaluator was unreachable, so mock runs are distinguishable at a glance.
     await client.query(
       `UPDATE evaluations
-       SET status = 'completed',
-           csv_url = $1,
-           evaluated_submissions = $2
-       WHERE id = $3`,
-      [csvUrl, results.length, evaluation.id]
+       SET status = $1,
+           csv_url = $2,
+           evaluated_submissions = $3
+       WHERE id = $4`,
+      [isMock ? 'completed_mock' : 'completed', csvUrl, results.length, evaluation.id]
     );
 
     await client.query("COMMIT");
 
     // Notify each evaluated student of their result
     for (const r of results) {
-      const matched = submissions.find((s) => s.student_name === r.student);
+      const matched =
+        submissions.find((s) => s.submission_id === r.submissionId) ||
+        submissions.find((s) => s.student_name === r.student);
       if (matched?.user_id) {
         notify({
           userId: matched.user_id,
@@ -242,6 +252,7 @@ exports.runEvaluation = async (req, res) => {
     return res.json({
       success: true,
       evaluationId: evaluation.id,
+      isMock,
     });
 
   } catch (error) {
