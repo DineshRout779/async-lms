@@ -768,16 +768,24 @@ exports.submitQuizAttempt = async (req, res) => {
       );
     }
 
-    // Delta System for Quizzes: Only award XP if they haven't passed this quiz before
-    const prevPassRes = await pool.query(
-      `SELECT 1 FROM quiz_attempts 
-       WHERE user_id = $1 AND quiz_id = $2 AND id != $3 AND is_passed = true 
-       LIMIT 1`,
+    // Delta System for Quizzes: Proportional XP up to 15 points
+    const prevMaxRes = await pool.query(
+      `SELECT MAX(score) as max_score 
+       FROM quiz_attempts 
+       WHERE user_id = $1 AND quiz_id = $2 AND id != $3 AND is_passed = true`,
       [userId, quizId, attemptId]
     );
-    const hasPassedBefore = prevPassRes.rows.length > 0;
+    const prevMaxScore = prevMaxRes.rows[0].max_score || 0;
 
-    const pointsAwarded = (isPassed && !hasPassedBefore) ? 15 : 0;
+    const maxPossiblePoints = 15;
+    const prevPoints = actual_max_score > 0 ? Math.round((prevMaxScore / actual_max_score) * maxPossiblePoints) : 0;
+    const newPoints = actual_max_score > 0 ? Math.round((score / actual_max_score) * maxPossiblePoints) : 0;
+    
+    let pointsAwarded = 0;
+    if (isPassed) {
+      pointsAwarded = Math.max(0, newPoints - prevPoints);
+    }
+
     if (pointsAwarded > 0) {
       await pool.query(
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
