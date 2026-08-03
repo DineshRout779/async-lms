@@ -117,7 +117,7 @@ export default function Login() {
         className='min-h-screen w-full relative bg-cover bg-center overflow-hidden flex items-center justify-center p-4'
         style={{
           backgroundImage: 'url("/bg-students.jpg")',
-          fontFamily: "'Noto Sans', sans-serif",
+          fontFamily: "'Inter', sans-serif",
         }}
       >
         {/* Blue tinted overlay */}
