@@ -81,7 +81,6 @@ exports.signup = async (req, res) => {
     res.json({ token, user: newUser });
   } catch (err) {
     console.error(`[${logID}] SIGNUP ERROR:`, err);
-    require('fs').writeFileSync('signup_error.log', err.toString() + '\\n' + err.stack);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
