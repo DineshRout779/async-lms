@@ -1713,14 +1713,17 @@ exports.getAssignment = async (req, res) => {
   }
 };
 
+// max_score is always 100 — not client-configurable, mirrors QUIZ_MAX_SCORE above.
+const ASSIGNMENT_MAX_SCORE = 100;
+
 exports.createAssignment = async (req, res) => {
   try {
-    const { unit_id, title, instructions, max_score } = req.body;
+    const { unit_id, title, instructions } = req.body;
 
-    if (!unit_id || !title || !max_score) {
+    if (!unit_id || !title) {
       return res.status(400).json({
         success: false,
-        message: 'Unit ID, title, and max score are required',
+        message: 'Unit ID and title are required',
       });
     }
 
@@ -1734,7 +1737,7 @@ exports.createAssignment = async (req, res) => {
       unit_id,
       title,
       instructions,
-      max_score,
+      ASSIGNMENT_MAX_SCORE,
     ]);
 
     logAction({ req, action: 'CREATE', entityType: 'assignment', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
@@ -1757,7 +1760,7 @@ exports.createAssignment = async (req, res) => {
 exports.updateAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score } = req.body;
+    const { title, instructions } = req.body;
 
     const updates = [];
     const values = [];
@@ -1770,10 +1773,6 @@ exports.updateAssignment = async (req, res) => {
     if (instructions !== undefined) {
       updates.push(`instructions = $${paramCount++}`);
       values.push(instructions);
-    }
-    if (max_score !== undefined) {
-      updates.push(`max_score = $${paramCount++}`);
-      values.push(max_score);
     }
 
     if (updates.length === 0) {
