@@ -2271,15 +2271,16 @@ exports.getStudentAnalytics = async (req, res) => {
     );
 
     const recentQuizzesRes = await pool.query(
-      `SELECT qa.id, un.title AS name,
-              LEAST(100, ROUND(qa.score::numeric / NULLIF(q.max_score,0) * 100))::int AS score,
-              CASE WHEN qa.is_passed THEN 'Passed' ELSE 'Failed' END AS status,
-              qa.created_at
+      `SELECT q.id AS id, un.title AS name,
+              MAX(qa.score)::int AS score,
+              CASE WHEN bool_or(qa.is_passed) THEN 'Passed' ELSE 'Failed' END AS status,
+              MAX(qa.created_at) AS created_at
        FROM quiz_attempts qa
        JOIN quizzes q ON q.id = qa.quiz_id
        JOIN units un ON un.id = q.unit_id
        WHERE qa.user_id = $1
-       ORDER BY qa.created_at DESC
+       GROUP BY q.id, un.title
+       ORDER BY created_at DESC
        LIMIT 5`,
       [userId],
     );

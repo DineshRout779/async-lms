@@ -258,7 +258,7 @@ export default function StudentAnalytics() {
                     {recentQuizzes.map((quiz) => (
                       <tr key={quiz.id} className='hover:bg-slate-50 transition-colors'>
                         <td className='px-6 py-4 font-semibold text-slate-800'>{quiz.name}</td>
-                        <td className='px-6 py-4 font-medium text-slate-600'>{quiz.score}%</td>
+                        <td className='px-6 py-4 font-medium text-slate-600'>{quiz.score}</td>
                         <td className='px-6 py-4'>
                           {quiz.status === 'Passed' ? (
                             <Badge className='bg-emerald-50 hover:bg-emerald-50 text-emerald-600 font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1.5 w-fit'>

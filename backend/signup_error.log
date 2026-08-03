@@ -1,0 +1,4 @@
+Error: Connection terminated due to connection timeout\nError: Connection terminated due to connection timeout
+    at C:\Users\kirsa\OneDrive\Desktop\code guru ui fix\async-lms\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async exports.signup (C:\Users\kirsa\OneDrive\Desktop\code guru ui fix\async-lms\backend\controllers\auth.controller.js:25:20)
