@@ -768,16 +768,24 @@ exports.submitQuizAttempt = async (req, res) => {
       );
     }
 
-    // Award XP only when quiz is passed
-    const pointsAwarded = isPassed ? 15 : 0;
-    if (isPassed) {
+    // Delta System for Quizzes: Only award XP if they haven't passed this quiz before
+    const prevPassRes = await pool.query(
+      `SELECT 1 FROM quiz_attempts 
+       WHERE user_id = $1 AND quiz_id = $2 AND id != $3 AND is_passed = true 
+       LIMIT 1`,
+      [userId, quizId, attemptId]
+    );
+    const hasPassedBefore = prevPassRes.rows.length > 0;
+
+    const pointsAwarded = (isPassed && !hasPassedBefore) ? 15 : 0;
+    if (pointsAwarded > 0) {
       await pool.query(
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
         [userId, 'quiz_completion', pointsAwarded],
       );
-      markActionToday(userId);
-      await checkAndAwardBadges(userId);
     }
+    markActionToday(userId);
+    await checkAndAwardBadges(userId);
 
     // Trigger completion check for ALL subtopics in the unit (not just the first)
     const unitResult = await pool.query(
@@ -927,11 +935,25 @@ exports.submitExercise = async (req, res) => {
       [exerciseId, userId, score, isPassed],
     );
 
-    const pointsAwarded = Math.round((score / exercise.max_score) * 100);
-    await pool.query(
-      'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
-      [userId, 'exercise_completion', pointsAwarded],
+    // Delta System: Find previous highest score for this exercise
+    const prevMaxRes = await pool.query(
+      `SELECT MAX(score) as max_score 
+       FROM exercise_submissions 
+       WHERE user_id = $1 AND exercise_id = $2 AND id != $3`,
+      [userId, exerciseId, submissionResult.rows[0].id]
     );
+    const prevMaxScore = prevMaxRes.rows[0].max_score || 0;
+    
+    const prevPoints = Math.round((prevMaxScore / exercise.max_score) * 100);
+    const newPoints = Math.round((score / exercise.max_score) * 100);
+    const pointsAwarded = Math.max(0, newPoints - prevPoints);
+
+    if (pointsAwarded > 0) {
+      await pool.query(
+        'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
+        [userId, 'exercise_completion', pointsAwarded],
+      );
+    }
     markActionToday(userId);
     await checkAndAwardBadges(userId);
 
