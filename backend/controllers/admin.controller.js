@@ -1155,23 +1155,12 @@ exports.createLessonContent = async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, 1)
       ON CONFLICT (subtopic_id, version)
       DO UPDATE SET
-        markdown_path = CASE
-          WHEN EXCLUDED.content_type = 'markdown' AND EXCLUDED.markdown_path <> ''
-            THEN EXCLUDED.markdown_path
-          ELSE lesson_content.markdown_path
-        END,
-        video_url = CASE
-          WHEN EXCLUDED.video_url IS NOT NULL AND EXCLUDED.video_url <> ''
-            THEN EXCLUDED.video_url
-          ELSE lesson_content.video_url
-        END,
-        estimated_read_time = COALESCE(EXCLUDED.estimated_read_time, lesson_content.estimated_read_time),
-        is_published = COALESCE(EXCLUDED.is_published, lesson_content.is_published),
-        content_type = CASE
-          WHEN lesson_content.markdown_path <> '' THEN 'markdown'
-          WHEN EXCLUDED.content_type = 'markdown' THEN 'markdown'
-          ELSE EXCLUDED.content_type
-        END,
+        markdown_path = EXCLUDED.markdown_path,
+        video_url = EXCLUDED.video_url,
+        estimated_read_time = EXCLUDED.estimated_read_time,
+        is_published = EXCLUDED.is_published,
+        content_type = EXCLUDED.content_type,
+        is_deleted = false,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *;
     `;
