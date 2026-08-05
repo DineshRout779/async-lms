@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
-import {
-  Loader2,
-  XCircle,
-  Trophy,
-  CheckCircle2,
-  Link2,
-} from 'lucide-react';
+import { Loader2, XCircle, Trophy, CheckCircle2, Link2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import apiClient from '@/services/api';
@@ -86,6 +80,7 @@ export default function CapstoneView() {
       toast.error(getErrorMessage(error, 'Failed to submit capstone'));
     } finally {
       setSubmitting(false);
+      setLink('');
     }
   };
 
@@ -104,7 +99,9 @@ export default function CapstoneView() {
         <p className='text-lg font-semibold text-slate-700'>
           Failed to load capstone project
         </p>
-        <p className='text-sm text-slate-500'>Please try refreshing the page.</p>
+        <p className='text-sm text-slate-500'>
+          Please try refreshing the page.
+        </p>
       </div>
     );
   }
@@ -156,7 +153,9 @@ export default function CapstoneView() {
           {capstone.instructions ? (
             <div className='prose prose-slate max-w-none lg:prose-lg'>
               {/^<[a-z][\s\S]*>/i.test(capstone.instructions.trimStart()) ? (
-                <div dangerouslySetInnerHTML={{ __html: capstone.instructions }} />
+                <div
+                  dangerouslySetInnerHTML={{ __html: capstone.instructions }}
+                />
               ) : (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {capstone.instructions}
