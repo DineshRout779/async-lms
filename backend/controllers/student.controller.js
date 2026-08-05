@@ -2122,39 +2122,31 @@ exports.getStudentModuleAnalytics = async (req, res) => {
              GROUP BY qa.quiz_id
            ) bq
          ), 0)::int AS quiz_score,
+         -- Real max achievable points (sum of question points) for quizzes
+         -- ATTEMPTED so far, not the quizzes.max_score column (a fixed
+         -- constant, can be out of sync with actual question points — see
+         -- submitQuizAttempt's actual_max_score) and not all quizzes in the
+         -- topic (quiz_score/quiz_max should reflect accuracy on what's been
+         -- attempted; quizzes_attempted/quizzes_total below covers completion).
          COALESCE((
-           SELECT SUM(q.max_score)
-           FROM quizzes q
+           SELECT SUM(qq.points)
+           FROM quiz_questions qq
+           JOIN quizzes q ON q.id = qq.quiz_id
            JOIN units un ON un.id = q.unit_id
-           WHERE un.topic_id = t.id
+           WHERE un.topic_id = t.id AND qq.is_deleted = false
+             AND EXISTS (
+               SELECT 1 FROM quiz_attempts qa
+               WHERE qa.quiz_id = q.id AND qa.user_id = $1
+             )
          ), 0)::int AS quiz_max,
-         -- Assignment status: Submitted if any submission exists for this topic
-         CASE
-           WHEN EXISTS (
-             SELECT 1 FROM assignment_submissions asub
-             JOIN assignments a ON a.id = asub.assignment_id
-             JOIN units un ON un.id = a.unit_id
-             WHERE asub.user_id = $1 AND un.topic_id = t.id
-           ) THEN 'Submitted'
-           ELSE 'Pending'
-         END AS assignment_status,
-         -- Project status
-         CASE
-           WHEN EXISTS (
-             SELECT 1 FROM project_submissions ps
-             JOIN projects p ON p.id = ps.project_id
-             WHERE ps.user_id = $1 AND p.topic_id = t.id AND ps.is_approved = true
-           ) THEN 'Approved'
-           WHEN EXISTS (
-             SELECT 1 FROM project_submissions ps
-             JOIN projects p ON p.id = ps.project_id
-             WHERE ps.user_id = $1 AND p.topic_id = t.id
-           ) THEN 'Submitted'
-           WHEN EXISTS (
-             SELECT 1 FROM projects p WHERE p.topic_id = t.id
-           ) THEN 'Not Started'
-           ELSE NULL
-         END AS project_status,
+         -- Assignment status is now derived in JS from asg_submitted/asg_total
+         -- (below) instead of a binary EXISTS check, so partial completion
+         -- across multiple assignments in a topic isn't hidden behind a
+         -- single Submitted/Pending flag.
+         -- Project status is now derived in JS from proj_submitted/proj_approved/
+         -- proj_total (below), same reasoning as assignment_status: a binary
+         -- EXISTS check would hide partial completion across multiple projects
+         -- in one topic.
          -- NEW PROGRESS COUNTS
          COALESCE((
            SELECT COUNT(*)::int
@@ -2178,6 +2170,17 @@ exports.getStudentModuleAnalytics = async (req, res) => {
            JOIN units un ON un.id = q.unit_id
            WHERE qa.user_id = $1 AND qa.is_passed = true AND un.topic_id = t.id
          ), 0) AS quizzes_passed,
+         -- Distinct quizzes attempted at all (pass or fail) — used to show
+         -- completion ("2 of 5 quizzes attempted") separately from accuracy
+         -- (quiz_score/quiz_max), so an un-attempted quiz doesn't silently
+         -- drag down the accuracy percentage as if it were scored 0.
+         COALESCE((
+           SELECT COUNT(DISTINCT q.id)::int
+           FROM quiz_attempts qa
+           JOIN quizzes q ON q.id = qa.quiz_id
+           JOIN units un ON un.id = q.unit_id
+           WHERE qa.user_id = $1 AND un.topic_id = t.id
+         ), 0) AS quizzes_attempted,
          COALESCE((
            SELECT COUNT(*)::int
            FROM quizzes q
@@ -2203,6 +2206,12 @@ exports.getStudentModuleAnalytics = async (req, res) => {
            JOIN projects p ON p.id = sub.project_id
            WHERE sub.user_id = $1 AND p.topic_id = t.id
          ), 0) AS proj_submitted,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM project_submissions sub
+           JOIN projects p ON p.id = sub.project_id
+           WHERE sub.user_id = $1 AND p.topic_id = t.id AND sub.is_approved = true
+         ), 0) AS proj_approved,
          COALESCE((
            SELECT COUNT(*)::int
            FROM projects p
@@ -2248,13 +2257,47 @@ exports.getStudentModuleAnalytics = async (req, res) => {
       totalProgressSum += progress;
       totalTopics++;
 
+      // Derived from counts (not a binary EXISTS check) so partial
+      // completion across multiple assignments in a topic is visible
+      // instead of collapsing to a single Submitted/Pending flag.
+      let assignmentStatus = null;
+      if (row.asg_total > 0) {
+        assignmentStatus =
+          row.asg_submitted === 0
+            ? 'Pending'
+            : row.asg_submitted < row.asg_total
+              ? 'Partial'
+              : 'Submitted';
+      }
+
+      // Same reasoning as assignmentStatus above — distinguishes "no
+      // projects in this topic" from partial/full submission and approval.
+      let projectStatus = null;
+      if (row.proj_total > 0) {
+        projectStatus =
+          row.proj_submitted === 0
+            ? 'Not Started'
+            : row.proj_approved === row.proj_total
+              ? 'Approved'
+              : row.proj_submitted < row.proj_total
+                ? 'Partial'
+                : 'Submitted';
+      }
+
       subjectMap.get(row.subject_id).topics.push({
         topic_id: row.topic_id,
         topic_title: row.topic_title,
         quiz_score: row.quiz_score,
         quiz_max: row.quiz_max,
-        assignment_status: row.assignment_status,
-        project_status: row.project_status,
+        quizzes_attempted: row.quizzes_attempted,
+        quizzes_total: row.quizzes_total,
+        assignment_status: assignmentStatus,
+        assignments_submitted: row.asg_submitted,
+        assignments_total: row.asg_total,
+        project_status: projectStatus,
+        projects_submitted: row.proj_submitted,
+        projects_approved: row.proj_approved,
+        projects_total: row.proj_total,
         progress,
       });
     }

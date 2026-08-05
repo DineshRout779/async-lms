@@ -29,7 +29,7 @@ const {
 } = require('../controllers/student.controller');
 
 // ===== PROGRESS TRACKING =====
-router.get('/progress/:subjectId', verifyToken, isStudent, getMyProgress);
+router.get('/progress', verifyToken, isStudent, getMyProgress);
 router.post(
   '/progress/subtopic/:subtopicId/start',
   verifyToken,
@@ -45,17 +45,37 @@ router.post(
 
 // ===== QUIZ & EXERCISE SUBMISSION =====
 router.post('/quiz/:quizId/submit', verifyToken, isStudent, submitQuizAttempt);
-router.post('/exercise/:exerciseId/submit', verifyToken, isStudent, submitExercise);
+router.post(
+  '/exercise/:exerciseId/submit',
+  verifyToken,
+  isStudent,
+  submitExercise,
+);
 
 // ===== EXERCISE WORKSPACE =====
-router.post('/exercise/:exerciseId/workspace/init', verifyToken, isStudent, initExerciseWorkspace);
+router.post(
+  '/exercise/:exerciseId/workspace/init',
+  verifyToken,
+  isStudent,
+  initExerciseWorkspace,
+);
 router.post('/exercise/:exerciseId/run', verifyToken, isStudent, runExercise);
-router.post('/exercise/:exerciseId/run-tests', verifyToken, isStudent, runExerciseTests);
+router.post(
+  '/exercise/:exerciseId/run-tests',
+  verifyToken,
+  isStudent,
+  runExerciseTests,
+);
 
 // ===== ASSIGNMENTS =====
 router.get('/assignments', verifyToken, isStudent, getStudentAssignments);
 router.get('/assignments/:id', verifyToken, isStudent, getAssignmentById);
-router.post('/assignments/:id/submit', verifyToken, isStudent, submitAssignment);
+router.post(
+  '/assignments/:id/submit',
+  verifyToken,
+  isStudent,
+  submitAssignment,
+);
 
 // ===== PERSONAL PROJECTS =====
 router.get('/projects', verifyToken, isStudent, getStudentProjects);
@@ -64,17 +84,32 @@ router.delete('/projects/:id', verifyToken, isStudent, deleteStudentProject);
 
 // ===== CAPSTONE PROJECTS =====
 router.get('/capstone/:projectId', verifyToken, isStudent, getCapstone);
-router.post('/capstone/:projectId/submit', verifyToken, isStudent, submitCapstone);
+router.post(
+  '/capstone/:projectId/submit',
+  verifyToken,
+  isStudent,
+  submitCapstone,
+);
 
 // ===== ENROLLMENT =====
-router.post('/subjects/:subjectId/enroll', verifyToken, isStudent, enrollInSubject);
+router.post(
+  '/subjects/:subjectId/enroll',
+  verifyToken,
+  isStudent,
+  enrollInSubject,
+);
 
 // ===== SCORECARD =====
 router.get('/scorecard', verifyToken, isStudent, getStudentScorecard);
 
 // ===== ANALYTICS =====
 router.get('/analytics', verifyToken, isStudent, getStudentAnalytics);
-router.get('/analytics/modules', verifyToken, isStudent, getStudentModuleAnalytics);
+router.get(
+  '/analytics/modules',
+  verifyToken,
+  isStudent,
+  getStudentModuleAnalytics,
+);
 
 // ===== LEADERBOARDS =====
 router.get(
