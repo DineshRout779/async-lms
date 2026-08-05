@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, NavLink } from 'react-router'; // Use react-router
 import apiClient from '@/services/api';
-import { Loader2, PlayCircle, ListChecks, Trophy } from 'lucide-react';
+import { Loader2, PlayCircle, ListChecks, FileText, Trophy, CheckCircle2 } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -14,20 +14,35 @@ export const SubjectSidebar = () => {
   const [structure, setStructure] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedValue, setExpandedValue] = useState<string[]>([]);
+  const hasAutoExpandedRef = useRef(false);
 
   useEffect(() => {
-    const fetchStructure = async () => {
+    const fetchStructure = async (showLoader: boolean) => {
       try {
-        setLoading(true);
+        if (showLoader) setLoading(true);
         const { data } = await apiClient.get(`/subjects/${slug}`);
         setStructure(data.data);
       } catch {
         // structure remains null — sidebar renders empty gracefully
       } finally {
-        setLoading(false);
+        if (showLoader) setLoading(false);
       }
     };
-    if (slug) fetchStructure();
+
+    if (!slug) return;
+    hasAutoExpandedRef.current = false;
+    fetchStructure(true);
+
+    // Re-fetch (silently, no loading spinner) whenever a lesson/quiz/
+    // assignment completion happens elsewhere on the page, so completion
+    // checkmarks update without needing a full page reload.
+    const handleProgressUpdate = () => fetchStructure(false);
+    window.addEventListener('course-progress-updated', handleProgressUpdate);
+    return () =>
+      window.removeEventListener(
+        'course-progress-updated',
+        handleProgressUpdate,
+      );
   }, [slug]);
 
   // Auto-expand topic when a lesson/content within it is active
@@ -48,6 +63,19 @@ export const SubjectSidebar = () => {
       setExpandedValue((prev) =>
         prev.includes(itemValue) ? prev : [...prev, itemValue],
       );
+      hasAutoExpandedRef.current = true;
+    } else if (!hasAutoExpandedRef.current) {
+      // First load with no active lesson/quiz/assignment to match (e.g. the
+      // course overview page) — default to expanding the first topic instead
+      // of leaving the whole sidebar collapsed.
+      const firstTopic = structure[0];
+      if (firstTopic) {
+        const itemValue = `item-${firstTopic.id}`;
+        setExpandedValue((prev) =>
+          prev.includes(itemValue) ? prev : [...prev, itemValue],
+        );
+        hasAutoExpandedRef.current = true;
+      }
     }
   }, [structure, subtopicSlug, exerciseId, quizId]);
 
@@ -95,7 +123,10 @@ export const SubjectSidebar = () => {
                       }
                     >
                       <PlayCircle className='h-4 w-4 shrink-0' />
-                      <span>{sub.title}</span>
+                      <span className='flex-1'>{sub.title}</span>
+                      {sub.is_completed && (
+                        <CheckCircle2 className='h-4 w-4 shrink-0 text-emerald-500' />
+                      )}
                     </NavLink>
                   ))}
 
@@ -112,7 +143,10 @@ export const SubjectSidebar = () => {
                       }
                     >
                       <ListChecks className='h-4 w-4 shrink-0' />
-                      <span>Quiz</span>
+                      <span className='flex-1'>Quiz</span>
+                      {quiz.is_passed && (
+                        <CheckCircle2 className='h-4 w-4 shrink-0 text-emerald-500' />
+                      )}
                     </NavLink>
                   ))}
 
@@ -128,8 +162,11 @@ export const SubjectSidebar = () => {
                         }`
                       }
                     >
-                      <ListChecks className='h-4 w-4 shrink-0' />
-                      <span>{a.title}</span>
+                      <FileText className='h-4 w-4 shrink-0' />
+                      <span className='flex-1'>{a.title}</span>
+                      {a.is_submitted && (
+                        <CheckCircle2 className='h-4 w-4 shrink-0 text-emerald-500' />
+                      )}
                     </NavLink>
                   ))}
                 </div>

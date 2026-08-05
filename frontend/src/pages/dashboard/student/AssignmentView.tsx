@@ -83,10 +83,12 @@ export default function AssignmentView() {
       });
       setAssignment((prev) => (prev ? { ...prev, ...res.data.data } : prev));
       toast.success('Assignment submitted successfully!');
+      window.dispatchEvent(new Event('course-progress-updated'));
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit assignment'));
     } finally {
       setSubmitting(false);
+      setLink('');
     }
   };
 
@@ -159,7 +161,9 @@ export default function AssignmentView() {
           {assignment.instructions ? (
             <div className='prose prose-slate max-w-none lg:prose-lg'>
               {/^<[a-z][\s\S]*>/i.test(assignment.instructions.trimStart()) ? (
-                <div dangerouslySetInnerHTML={{ __html: assignment.instructions }} />
+                <div
+                  dangerouslySetInnerHTML={{ __html: assignment.instructions }}
+                />
               ) : (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {assignment.instructions}

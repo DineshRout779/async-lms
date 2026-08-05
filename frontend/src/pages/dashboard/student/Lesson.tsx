@@ -216,6 +216,7 @@ const Lesson = () => {
     try {
       await dispatch(completeLesson(lessonId)).unwrap();
       toast.success('Lesson completed! +10 points 🎉');
+      window.dispatchEvent(new Event('course-progress-updated'));
       setIsNavigating(true);
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to mark lesson complete'));
@@ -258,6 +259,7 @@ const Lesson = () => {
       const result = await dispatch(
         submitQuiz({ quizId: quiz.id, answers: quizAnswers }),
       ).unwrap();
+      window.dispatchEvent(new Event('course-progress-updated'));
       if (result.attempt.is_passed) {
         toast.success(`Quiz passed! 🎉`);
       } else {

@@ -179,6 +179,7 @@ exports.getAllPublishedSubjects = async (req, res) => {
 exports.getCourseStructure = async (req, res) => {
   try {
     const { slug } = req.params;
+    const userId = req.user?.id;
 
     // 1. Fetch subject
     const subjectResult = await pool.query(
@@ -224,11 +225,18 @@ exports.getCourseStructure = async (req, res) => {
         lc.estimated_read_time AS lesson_read_time,
         lc.version AS lesson_version,
         lc.video_url AS lesson_video_url,
+        COALESCE(ulp.is_completed, false) AS lesson_is_completed,
 
         -- Quiz (presence only — questions/options fetched on demand via /subjects/quiz/:id)
         q.id AS quiz_id,
         q.passing_score AS quiz_passing_score,
         q.max_score AS quiz_max_score,
+        (
+          SELECT EXISTS(
+            SELECT 1 FROM quiz_attempts qa
+            WHERE qa.quiz_id = q.id AND qa.user_id = $2 AND qa.is_passed = true
+          )
+        ) AS quiz_is_passed,
 
         -- Exercise (subtopic-level)
         e.id AS exercise_id,
@@ -241,6 +249,12 @@ exports.getCourseStructure = async (req, res) => {
         a.title AS assignment_title,
         a.instructions AS assignment_instructions,
         a.max_score AS assignment_max_score,
+        (
+          SELECT EXISTS(
+            SELECT 1 FROM assignment_submissions asub
+            WHERE asub.assignment_id = a.id AND asub.user_id = $2
+          )
+        ) AS assignment_is_submitted,
 
         -- Capstone (topic-level)
         p.id AS capstone_id,
@@ -254,6 +268,8 @@ exports.getCourseStructure = async (req, res) => {
       LEFT JOIN subtopics st ON u.id = st.unit_id AND st.is_deleted = false
       LEFT JOIN lesson_content lc
         ON st.id = lc.subtopic_id AND lc.is_published = true AND lc.is_deleted = false
+      LEFT JOIN user_lesson_progress ulp
+        ON ulp.lesson_content_id = lc.id AND ulp.user_id = $2
       LEFT JOIN quizzes q ON u.id = q.unit_id AND q.is_deleted = false
       LEFT JOIN exercises e ON st.id = e.subtopic_id AND e.is_deleted = false
       LEFT JOIN assignments a ON u.id = a.unit_id AND a.is_deleted = false
@@ -265,7 +281,7 @@ exports.getCourseStructure = async (req, res) => {
         st.order_index;
     `;
 
-    const { rows } = await pool.query(query, [subject.id]);
+    const { rows } = await pool.query(query, [subject.id, userId ?? null]);
 
     // 3. Build hierarchy safely
     const topicsMap = new Map();
@@ -311,6 +327,7 @@ exports.getCourseStructure = async (req, res) => {
           slug: row.subtopic_slug,
           description: row.subtopic_description,
           order_index: row.subtopic_order,
+          is_completed: false,
           lesson_content: [],
           exercises: [],
         });
@@ -330,6 +347,9 @@ exports.getCourseStructure = async (req, res) => {
             video_url: row.lesson_video_url,
           });
         }
+        if (row.lesson_is_completed) {
+          subtopic.is_completed = true;
+        }
       }
 
       // Quiz (presence only)
@@ -339,6 +359,7 @@ exports.getCourseStructure = async (req, res) => {
             id: row.quiz_id,
             passing_score: row.quiz_passing_score,
             max_score: row.quiz_max_score,
+            is_passed: row.quiz_is_passed || false,
           });
         }
       }
@@ -363,6 +384,7 @@ exports.getCourseStructure = async (req, res) => {
             title: row.assignment_title,
             instructions: row.assignment_instructions,
             max_score: row.assignment_max_score,
+            is_submitted: row.assignment_is_submitted || false,
           });
         }
       }
@@ -391,6 +413,7 @@ exports.getCourseStructure = async (req, res) => {
 
     res.json({
       success: true,
+      id: subject.id,
       name: subject.name,
       description: subject.description,
       data: structure,
