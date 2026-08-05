@@ -8,6 +8,8 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
   family: 4,
   connectionTimeoutMillis: 30000, // Increased to 30s so sleeping Neon DBs have time to wake up!
+  idleTimeoutMillis: 10000, // Close idle connections after 10s to prevent Neon pooler disconnects
+  keepAlive: true,
 });
 
 pool.on('error', (err, client) => {

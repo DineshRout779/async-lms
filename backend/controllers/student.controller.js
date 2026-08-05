@@ -768,16 +768,32 @@ exports.submitQuizAttempt = async (req, res) => {
       );
     }
 
-    // Award XP only when quiz is passed
-    const pointsAwarded = isPassed ? 15 : 0;
+    // Delta System for Quizzes: Proportional XP up to 15 points
+    const prevMaxRes = await pool.query(
+      `SELECT MAX(score) as max_score 
+       FROM quiz_attempts 
+       WHERE user_id = $1 AND quiz_id = $2 AND id != $3 AND is_passed = true`,
+      [userId, quizId, attemptId]
+    );
+    const prevMaxScore = prevMaxRes.rows[0].max_score || 0;
+
+    const maxPossiblePoints = 15;
+    const prevPoints = actual_max_score > 0 ? Math.round((prevMaxScore / actual_max_score) * maxPossiblePoints) : 0;
+    const newPoints = actual_max_score > 0 ? Math.round((score / actual_max_score) * maxPossiblePoints) : 0;
+    
+    let pointsAwarded = 0;
     if (isPassed) {
+      pointsAwarded = Math.max(0, newPoints - prevPoints);
+    }
+
+    if (pointsAwarded > 0) {
       await pool.query(
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
         [userId, 'quiz_completion', pointsAwarded],
       );
-      markActionToday(userId);
-      await checkAndAwardBadges(userId);
     }
+    markActionToday(userId);
+    await checkAndAwardBadges(userId);
 
     // Trigger completion check for ALL subtopics in the unit (not just the first)
     const unitResult = await pool.query(
@@ -927,11 +943,25 @@ exports.submitExercise = async (req, res) => {
       [exerciseId, userId, score, isPassed],
     );
 
-    const pointsAwarded = Math.round((score / exercise.max_score) * 100);
-    await pool.query(
-      'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
-      [userId, 'exercise_completion', pointsAwarded],
+    // Delta System: Find previous highest score for this exercise
+    const prevMaxRes = await pool.query(
+      `SELECT MAX(score) as max_score 
+       FROM exercise_submissions 
+       WHERE user_id = $1 AND exercise_id = $2 AND id != $3`,
+      [userId, exerciseId, submissionResult.rows[0].id]
     );
+    const prevMaxScore = prevMaxRes.rows[0].max_score || 0;
+    
+    const prevPoints = Math.round((prevMaxScore / exercise.max_score) * 100);
+    const newPoints = Math.round((score / exercise.max_score) * 100);
+    const pointsAwarded = Math.max(0, newPoints - prevPoints);
+
+    if (pointsAwarded > 0) {
+      await pool.query(
+        'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
+        [userId, 'exercise_completion', pointsAwarded],
+      );
+    }
     markActionToday(userId);
     await checkAndAwardBadges(userId);
 
@@ -2271,15 +2301,16 @@ exports.getStudentAnalytics = async (req, res) => {
     );
 
     const recentQuizzesRes = await pool.query(
-      `SELECT qa.id, un.title AS name,
-              LEAST(100, ROUND(qa.score::numeric / NULLIF(q.max_score,0) * 100))::int AS score,
-              CASE WHEN qa.is_passed THEN 'Passed' ELSE 'Failed' END AS status,
-              qa.created_at
+      `SELECT q.id AS id, un.title AS name,
+              MAX(qa.score)::int AS score,
+              CASE WHEN bool_or(qa.is_passed) THEN 'Passed' ELSE 'Failed' END AS status,
+              MAX(qa.created_at) AS created_at
        FROM quiz_attempts qa
        JOIN quizzes q ON q.id = qa.quiz_id
        JOIN units un ON un.id = q.unit_id
        WHERE qa.user_id = $1
-       ORDER BY qa.created_at DESC
+       GROUP BY q.id, un.title
+       ORDER BY created_at DESC
        LIMIT 5`,
       [userId],
     );
