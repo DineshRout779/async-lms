@@ -1351,7 +1351,9 @@ exports.runExerciseTests = async (req, res) => {
 exports.getOverallLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     const result = await pool.query(
       `WITH ranked AS (
@@ -1360,7 +1362,8 @@ exports.getOverallLeaderboard = async (req, res) => {
           u.full_name,
           c.name AS college_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN colleges c ON sp.college_id = c.id
@@ -1368,8 +1371,8 @@ exports.getOverallLeaderboard = async (req, res) => {
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id, u.full_name, c.name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset],
     );
 
     const userRank = await pool.query(
@@ -1386,9 +1389,18 @@ exports.getOverallLeaderboard = async (req, res) => {
       [userId],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
@@ -1403,7 +1415,9 @@ exports.getOverallLeaderboard = async (req, res) => {
 exports.getWeeklyLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     // ISO Monday of current week
     const now = new Date();
@@ -1421,16 +1435,17 @@ exports.getWeeklyLeaderboard = async (req, res) => {
           u.full_name,
           c.name AS college_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN colleges c ON sp.college_id = c.id
-        LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $2
+        LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $3
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id, u.full_name, c.name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit, weekStartStr],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset, weekStartStr],
     );
 
     const userRank = await pool.query(
@@ -1447,10 +1462,19 @@ exports.getWeeklyLeaderboard = async (req, res) => {
       [userId, weekStartStr],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
       week_start: weekStartStr,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching weekly leaderboard:', error);
@@ -1465,7 +1489,9 @@ exports.getWeeklyLeaderboard = async (req, res) => {
 exports.getCollegeLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     const userQuery = await pool.query(
       'SELECT college_id FROM student_profiles WHERE user_id = $1',
@@ -1488,15 +1514,16 @@ exports.getCollegeLeaderboard = async (req, res) => {
           u.id AS user_id,
           u.full_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN points_log pl ON pl.user_id = u.id
-        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = $2
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = $3
         GROUP BY u.id, u.full_name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit, collegeId],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset, collegeId],
     );
 
     const userRank = await pool.query(
@@ -1514,10 +1541,19 @@ exports.getCollegeLeaderboard = async (req, res) => {
       [userId, collegeId],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
       college_id: collegeId,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching college leaderboard:', error);
