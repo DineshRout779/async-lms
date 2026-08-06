@@ -118,15 +118,32 @@ exports.getUserBadges = async (req, res) => {
 exports.getUserActivity = async (req, res) => {
   try {
     const userId = req.user.id;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20));
+    const offset = (page - 1) * pageSize;
+
     const result = await pool.query(
-      `SELECT source, points, created_at
+      `SELECT source, points, created_at, COUNT(*) OVER ()::integer as total_count
        FROM public.points_log
        WHERE user_id = $1
        ORDER BY created_at DESC
-       LIMIT 20`,
-      [userId],
+       LIMIT $2 OFFSET $3`,
+      [userId, pageSize, offset],
     );
-    res.json({ success: true, data: result.rows });
+
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const data = result.rows.map(({ total_count, ...row }) => row);
+
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
+    });
   } catch (err) {
     console.error('getUserActivity error:', err.message);
     res.status(500).json({ success: false, message: 'Server error' });

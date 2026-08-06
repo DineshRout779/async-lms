@@ -65,13 +65,15 @@ const XP_BADGES = [
 
 async function checkAndAwardBadges(userId) {
   try {
-    // Ensure all XP badge definitions exist (upsert by name using a safe SELECT-then-INSERT)
+    // Ensure all XP badge definitions exist (upsert by title using a safe SELECT-then-INSERT)
+    // Note: the badge's emoji (b.icon) is baked into the notification text below since
+    // the `badges` table has no icon column — title/description are all it stores.
     for (const b of XP_BADGES) {
       await pool.query(
-        `INSERT INTO badges (name, description, icon)
-         SELECT $1, $2, $3
-         WHERE NOT EXISTS (SELECT 1 FROM badges WHERE name = $1)`,
-        [b.name, b.description, b.icon],
+        `INSERT INTO badges (title, description)
+         SELECT $1::text, $2::text
+         WHERE NOT EXISTS (SELECT 1 FROM badges WHERE title = $1::text)`,
+        [b.name, b.description],
       );
     }
 
@@ -87,7 +89,7 @@ async function checkAndAwardBadges(userId) {
       if (totalXP >= b.threshold) {
         const badgeInsert = await pool.query(
           `INSERT INTO user_badges (user_id, badge_id)
-           SELECT $1, id FROM badges WHERE name = $2
+           SELECT $1, id FROM badges WHERE title = $2
            ON CONFLICT (user_id, badge_id) DO NOTHING
            RETURNING user_id`,
           [userId, b.name],
