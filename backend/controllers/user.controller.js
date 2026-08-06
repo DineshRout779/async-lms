@@ -242,6 +242,7 @@ exports.getAllUsers = async (req, res) => {
         WHERE fc.facilitator_id = u.id
       ) as facilitator_meta ON r.role_key = 'FACILITATOR'
       ORDER BY u.created_at DESC
+      LIMIT 1000
     `;
     const result = await pool.query(query);
     res.json(result.rows);

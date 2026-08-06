@@ -2128,7 +2128,6 @@ exports.getStudentScorecard = async (req, res) => {
       .json({
         success: false,
         message: 'Failed to fetch scorecard',
-        error: error.message,
       });
   }
 };

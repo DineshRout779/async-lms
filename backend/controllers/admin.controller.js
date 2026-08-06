@@ -43,7 +43,7 @@ exports.getAdminStats = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: 'Error fetching dashboard data', error: error.message });
+      .json({ message: 'Error fetching dashboard data' });
   }
 };
 
@@ -172,7 +172,7 @@ exports.getAdminAnalytics = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: 'Error fetching analytics', error: error.message });
+      .json({ message: 'Error fetching analytics' });
   }
 };
 
@@ -197,6 +197,7 @@ exports.getAllStudents = async (req, res) => {
       LEFT JOIN public.colleges c ON sp.college_id = c.id
       WHERE r.role_key = 'STUDENT'
       ORDER BY u.created_at DESC
+      LIMIT 1000
     `;
 
     const result = await pool.query(query);
@@ -223,8 +224,9 @@ exports.getProjectSubmissions = async (req, res) => {
       JOIN public.projects p ON ps.project_id = p.id    
       JOIN public.topics t ON p.topic_id = t.id         
       JOIN public.subjects s ON t.subject_id = s.id     
-      WHERE ps.is_approved IS NOT TRUE                 
-      ORDER BY ps.submitted_at DESC;
+      WHERE ps.is_approved IS NOT TRUE
+      ORDER BY ps.submitted_at DESC
+      LIMIT 1000;
     `;
 
     const result = await pool.query(query);
@@ -501,7 +503,6 @@ exports.createTopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create topic',
-      error: error.message,
     });
   }
 };
@@ -568,7 +569,6 @@ exports.updateTopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update topic',
-      error: error.message,
     });
   }
 };
@@ -672,7 +672,6 @@ exports.deleteTopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete topic',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -741,7 +740,6 @@ exports.createUnit = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create unit',
-      error: error.message,
     });
   }
 };
@@ -820,7 +818,6 @@ exports.updateUnit = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update unit',
-      error: error.message,
     });
   }
 };
@@ -899,7 +896,6 @@ exports.deleteUnit = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete unit',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -967,7 +963,6 @@ exports.createSubtopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create subtopic',
-      error: error.message,
     });
   }
 };
@@ -1046,7 +1041,6 @@ exports.updateSubtopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update subtopic',
-      error: error.message,
     });
   }
 };
@@ -1096,7 +1090,6 @@ exports.deleteSubtopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete subtopic',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -1200,7 +1193,6 @@ exports.createLessonContent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create lesson content',
-      error: error.message,
     });
   }
 };
@@ -1285,7 +1277,6 @@ exports.updateLessonContent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update lesson content',
-      error: error.message,
     });
   }
 };
@@ -1316,7 +1307,6 @@ exports.deleteLessonContent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete lesson content',
-      error: error.message,
     });
   }
 };
@@ -1355,7 +1345,6 @@ exports.publishLessonContent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to publish lesson content',
-      error: error.message,
     });
   }
 };
@@ -1411,7 +1400,6 @@ exports.createQuiz = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create quiz',
-      error: error.message,
     });
   }
 };
@@ -1469,7 +1457,6 @@ exports.updateQuiz = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update quiz',
-      error: error.message,
     });
   }
 };
@@ -1519,7 +1506,6 @@ exports.deleteQuiz = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete quiz',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -1584,7 +1570,6 @@ exports.createExercise = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create exercise',
-      error: error.message,
     });
   }
 };
@@ -1660,7 +1645,6 @@ exports.updateExercise = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update exercise',
-      error: error.message,
     });
   }
 };
@@ -1690,7 +1674,6 @@ exports.deleteExercise = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete exercise',
-      error: error.message,
     });
   }
 };
@@ -1752,7 +1735,6 @@ exports.createAssignment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create assignment',
-      error: error.message,
     });
   }
 };
@@ -1808,7 +1790,6 @@ exports.updateAssignment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update assignment',
-      error: error.message,
     });
   }
 };
@@ -1838,7 +1819,6 @@ exports.deleteAssignment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete assignment',
-      error: error.message,
     });
   }
 };
@@ -1878,7 +1858,6 @@ exports.createProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create project',
-      error: error.message,
     });
   }
 };
@@ -1934,7 +1913,6 @@ exports.updateProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update project',
-      error: error.message,
     });
   }
 };
@@ -1964,7 +1942,6 @@ exports.deleteProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete project',
-      error: error.message,
     });
   }
 };
@@ -2027,7 +2004,6 @@ exports.createQuizQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create quiz question',
-      error: error.message,
     });
   }
 };
@@ -2104,7 +2080,6 @@ exports.updateQuizQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update quiz question',
-      error: error.message,
     });
   }
 };
@@ -2153,7 +2128,6 @@ exports.deleteQuizQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete quiz question',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -2196,7 +2170,6 @@ exports.getQuizQuestions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch quiz questions',
-      error: error.message,
     });
   }
 };
@@ -2250,7 +2223,6 @@ exports.createQuizQuestionOption = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create quiz option',
-      error: error.message,
     });
   }
 };
@@ -2318,7 +2290,6 @@ exports.updateQuizQuestionOption = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update quiz option',
-      error: error.message,
     });
   }
 };
@@ -2353,7 +2324,6 @@ exports.deleteQuizQuestionOption = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete quiz option',
-      error: error.message,
     });
   }
 };
@@ -2409,7 +2379,6 @@ exports.uploadLessonMarkdown = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to upload markdown',
-      error: error.message,
     });
   }
 };
@@ -2471,7 +2440,6 @@ exports.uploadFile = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to upload file',
-      error: error.message,
     });
   }
 };
@@ -2502,7 +2470,6 @@ exports.getQuizQuestionOptions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch quiz options',
-      error: error.message,
     });
   }
 };
@@ -2613,7 +2580,6 @@ exports.getStudentProgress = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch student progress',
-      error: error.message,
     });
   }
 };
@@ -2625,9 +2591,12 @@ exports.getStudentProgress = async (req, res) => {
 exports.getAllStudentsProgressSummary = async (req, res) => {
   try {
     const { subjectId } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(200, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     let query = `
-      SELECT 
+      SELECT
         u.id as user_id,
         u.full_name,
         u.email,
@@ -2635,7 +2604,8 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
         COUNT(DISTINCT usp.subtopic_id) FILTER (WHERE usp.is_completed = true) as completed_subtopics,
         COUNT(DISTINCT usp.subtopic_id) as total_assigned_subtopics,
         COALESCE(SUM(pl.points), 0) as total_points,
-        MAX(us.current_streak) as current_streak
+        MAX(us.current_streak) as current_streak,
+        COUNT(*) OVER ()::integer as total_count
       FROM users u
       LEFT JOIN student_profiles sp ON u.id = sp.user_id
       LEFT JOIN colleges c ON sp.college_id = c.id
@@ -2658,21 +2628,30 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
 
     query += `
       GROUP BY u.id, u.full_name, u.email, c.name
-      ORDER BY total_points DESC;
+      ORDER BY total_points DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2};
     `;
+    params.push(pageSize, offset);
 
     const result = await pool.query(query, params);
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const data = result.rows.map(({ total_count, ...row }) => row);
 
     res.json({
       success: true,
-      data: result.rows,
+      data,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching students progress summary:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch students progress summary',
-      error: error.message,
     });
   }
 };
@@ -2715,7 +2694,6 @@ exports.getLockControlBatches = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch batches',
-      error: error.message,
     });
   }
 };
@@ -2875,7 +2853,6 @@ exports.getLockControlOverview = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch lock control overview',
-      error: error.message,
     });
   }
 };
@@ -3060,7 +3037,6 @@ exports.getOverallLeaderboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch overall leaderboard',
-      error: error.message,
     });
   }
 };
@@ -3102,7 +3078,6 @@ exports.getWeeklyLeaderboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch weekly leaderboard',
-      error: error.message,
     });
   }
 };
@@ -3145,7 +3120,6 @@ exports.getTopicLeaderboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch topic leaderboard',
-      error: error.message,
     });
   }
 };
@@ -3185,7 +3159,6 @@ exports.getCollegeLeaderboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch college leaderboard',
-      error: error.message,
     });
   }
 };
@@ -3233,7 +3206,6 @@ exports.updateLeaderboards = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update leaderboards',
-      error: error.message,
     });
   }
 };
@@ -3282,7 +3254,6 @@ exports.verifyUser = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update verification status',
-      error: error.message,
     });
   }
 };
