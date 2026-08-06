@@ -100,11 +100,11 @@ exports.getUserBadges = async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
-      `SELECT b.id, b.name, b.description, b.icon, ub.awarded_at
+      `SELECT b.id, b.title AS name, b.description, ub.earned_at AS awarded_at
        FROM public.user_badges ub
        JOIN public.badges b ON b.id = ub.badge_id
        WHERE ub.user_id = $1
-       ORDER BY ub.awarded_at DESC`,
+       ORDER BY ub.earned_at DESC`,
       [userId],
     );
     res.json({ success: true, data: result.rows });
