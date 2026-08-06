@@ -29,87 +29,99 @@ export default function Assignments() {
     fetchAssignments();
   }, []);
 
+  const isSubmitted = (item: CollegeAssignment) =>
+    Boolean(item.submission_link || item.submission_file_url);
+
   const filteredAssignments = assignments.filter((item) => {
-    const isSubmitted = Boolean(item.submission_link || item.submission_file_url);
-    if (activeTab === 'Pending' && isSubmitted) return false;
-    if (activeTab === 'Completed' && !isSubmitted) return false;
+    if (activeTab === 'Pending' && isSubmitted(item)) return false;
+    if (activeTab === 'Completed' && !isSubmitted(item)) return false;
     return true;
   });
 
-  const tabs: TabType[] = ['All', 'Pending', 'Completed'];
+  const tabs: { id: TabType; label: string; count: number }[] = [
+    { id: 'All', label: 'All', count: assignments.length },
+    {
+      id: 'Pending',
+      label: 'Pending',
+      count: assignments.filter((a) => !isSubmitted(a)).length,
+    },
+    {
+      id: 'Completed',
+      label: 'Completed',
+      count: assignments.filter(isSubmitted).length,
+    },
+  ];
 
   return (
-    <div className='min-h-screen bg-[#F8FAFC] p-6 md:p-12 animate-in fade-in duration-500'>
-      <div className='max-w-7xl mx-auto space-y-10'>
-        {/* Header Section */}
-        <div className='flex flex-col md:flex-row md:items-start justify-between gap-6'>
-          <div className='space-y-1'>
-            <h1 className='text-3xl font-bold text-[#1E293B]'>
-              Assignments
-            </h1>
-            <p className='text-[#64748B] text-sm'>
-              Track and submit your projects
-            </p>
-          </div>
-
-          <div className='flex items-center p-1 bg-[#F1F5F9] rounded-xl'>
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-5 py-2 text-xs font-semibold rounded-lg transition-all ${
-                  activeTab === tab
-                    ? 'bg-[#1E293B] text-white shadow-sm'
-                    : 'text-[#64748B] hover:text-[#1E293B]'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Content Section */}
-        {loading ? (
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className='bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-4'>
-                <div className='flex items-start justify-between'>
-                  <Skeleton className='h-5 w-2/3' />
-                  <Skeleton className='h-6 w-16 rounded-full' />
-                </div>
-                <Skeleton className='h-4 w-1/2' />
-                <Skeleton className='h-4 w-3/4' />
-                <Skeleton className='h-10 w-full rounded-xl mt-2' />
-              </div>
-            ))}
-          </div>
-        ) : filteredAssignments.length > 0 ? (
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-            {filteredAssignments.map((item) => (
-              <CollegeAssignmentCard
-                key={item.id}
-                assignment={item}
-                onClick={() => navigate(`/dashboard/student/assignments/${item.id}`)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className='bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem] py-24 text-center space-y-4'>
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
-               <FileText className="w-8 h-8" />
-            </div>
-            <div className="space-y-1">
-              <p className='text-slate-900 font-bold text-xl'>
-                No assignments found
-              </p>
-              <p className="text-slate-500 max-w-xs mx-auto text-sm">
-                Try adjusting your search or filters to find what you're looking for.
-              </p>
-            </div>
-          </div>
-        )}
+    <div className='p-8 max-w-7xl mx-auto space-y-8'>
+      <div>
+        <h1 className='text-3xl font-bold text-[#1e293b]'>Assignments</h1>
+        <p className='text-slate-500 mt-1'>Track and submit your projects</p>
       </div>
+
+      <div className='flex items-center gap-1 border-b border-slate-200'>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+              activeTab === tab.id
+                ? 'border-[#333D7C] text-[#333D7C]'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            {tab.label}
+            <span
+              className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                activeTab === tab.id
+                  ? 'bg-[#333D7C]/10 text-[#333D7C]'
+                  : 'bg-slate-100 text-slate-500'
+              }`}
+            >
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className='bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 space-y-5'
+            >
+              <div className='flex items-start justify-between'>
+                <Skeleton className='h-11 w-11 rounded-2xl' />
+                <Skeleton className='h-5 w-20 rounded-full' />
+              </div>
+              <Skeleton className='h-6 w-3/4' />
+              <Skeleton className='h-4 w-full' />
+              <Skeleton className='h-4 w-2/3' />
+              <Skeleton className='h-11 w-full rounded-xl mt-2' />
+            </div>
+          ))}
+        </div>
+      ) : filteredAssignments.length > 0 ? (
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
+          {filteredAssignments.map((item) => (
+            <CollegeAssignmentCard
+              key={item.id}
+              assignment={item}
+              onClick={() => navigate(`/dashboard/student/assignments/${item.id}`)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className='flex flex-col items-center justify-center h-60 text-slate-400 gap-3'>
+          <FileText className='w-10 h-10 text-slate-300' />
+          <p className='text-sm'>
+            {activeTab === 'All'
+              ? "You don't have any assignments yet."
+              : `No ${activeTab.toLowerCase()} assignments.`}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
