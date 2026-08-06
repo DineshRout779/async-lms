@@ -3,7 +3,10 @@ import { Button } from '@/components/ui/button';
 import type { CollegeAssignment } from '@/utils/types';
 
 function stripHtml(html: string) {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function formatDueDate(dateStr: string) {
@@ -24,7 +27,9 @@ interface Props {
 
 export const CollegeAssignmentCard = ({ assignment, onClick }: Props) => {
   const due = assignment.due_date ? formatDueDate(assignment.due_date) : null;
-  const isSubmitted = Boolean(assignment.submission_link || assignment.submission_file_url);
+  const isSubmitted = Boolean(
+    assignment.submission_link || assignment.submission_file_url,
+  );
 
   return (
     <div
@@ -34,7 +39,9 @@ export const CollegeAssignmentCard = ({ assignment, onClick }: Props) => {
       <div className='flex items-start justify-between'>
         <div
           className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
-            isSubmitted ? 'bg-emerald-50 text-emerald-600' : 'bg-[#333D7C]/10 text-[#333D7C]'
+            isSubmitted
+              ? 'bg-emerald-50 text-emerald-600'
+              : 'bg-[#333D7C]/10 text-[#333D7C]'
           }`}
         >
           {isSubmitted ? (
@@ -76,7 +83,9 @@ export const CollegeAssignmentCard = ({ assignment, onClick }: Props) => {
         {due && (
           <div className='flex items-center justify-between'>
             <span className='text-slate-400'>Due date</span>
-            <span className={`text-right font-semibold ${due.isPast ? 'text-red-500' : 'text-orange-500'}`}>
+            <span
+              className={`text-right font-semibold ${due.isPast ? 'text-red-500' : 'text-orange-500'}`}
+            >
               {due.label}
             </span>
           </div>
@@ -87,7 +96,9 @@ export const CollegeAssignmentCard = ({ assignment, onClick }: Props) => {
         {isSubmitted ? (
           <div className='bg-emerald-50 rounded-xl p-3 flex items-center justify-center gap-2'>
             <CheckCircle2 className='w-4 h-4 text-emerald-600' />
-            <span className='text-emerald-700 font-semibold text-sm'>Submitted</span>
+            <span className='text-emerald-700 font-semibold text-sm'>
+              Submitted
+            </span>
           </div>
         ) : (
           <Button
@@ -98,7 +109,7 @@ export const CollegeAssignmentCard = ({ assignment, onClick }: Props) => {
               onClick?.();
             }}
           >
-            View Details & Submit
+            View Details
           </Button>
         )}
       </div>
