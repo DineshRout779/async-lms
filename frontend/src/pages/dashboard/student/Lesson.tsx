@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
+import { fireConfetti } from '@/lib/confetti';
 
 import LessonAssistant from '@/components/common/LessonAssistant';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -148,7 +149,7 @@ const Lesson = () => {
     return 'Quiz';
   };
 
-  const { lessonIndex, totalLessons, nextItem } = useMemo<{
+  const { lessonIndex, totalLessons, nextItem, isCourseComplete } = useMemo<{
     lessonIndex: number | null;
     totalLessons: number | null;
     nextItem: {
@@ -156,6 +157,11 @@ const Lesson = () => {
       slug?: string;
       id?: string;
     } | null;
+    // True only when the current item was actually found in the flattened
+    // course sequence AND has nothing after it — distinct from "not found"
+    // (e.g. on an exercise page, which isn't in this sequence at all), so
+    // we don't mistake "unknown position" for "course finished".
+    isCourseComplete: boolean;
   }>(() => {
     const flattened: FlattenedItem[] = [];
     courseStructure.forEach((topic) => {
@@ -198,6 +204,7 @@ const Lesson = () => {
             id: next.id || next.quiz_id,
           }
         : null,
+      isCourseComplete: currentIndex >= 0 && currentIndex === total - 1,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseStructure, subtopicSlug, exerciseId, quizId]);
@@ -226,16 +233,27 @@ const Lesson = () => {
   };
 
   useEffect(() => {
-    if (lessonCompleted && isNavigating && nextItem && slug) {
-      const nextUrl = buildNextUrl(nextItem, slug);
+    if (!lessonCompleted || !isNavigating || !slug) return;
+    // Unchanged from before: only navigate if there's a concrete next item,
+    // or this was confirmed to be the actual last item in the course
+    // (isCourseComplete) — an exercise page (not part of this sequence at
+    // all) still does nothing, exactly as before.
+    if (!nextItem && !isCourseComplete) return;
 
-      const timer = setTimeout(() => {
-        navigate(nextUrl);
-        setIsNavigating(false);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [lessonCompleted, isNavigating, nextItem, slug, navigate]);
+    const nextUrl = isCourseComplete
+      ? `/dashboard/student/courses/${slug}`
+      : buildNextUrl(nextItem, slug);
+
+    const timer = setTimeout(() => {
+      if (isCourseComplete) {
+        fireConfetti();
+        toast.success('🎉 Course completed! Great work!');
+      }
+      navigate(nextUrl);
+      setIsNavigating(false);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [lessonCompleted, isNavigating, nextItem, isCourseComplete, slug, navigate]);
 
   /* =======================
      Quiz Submission
@@ -573,16 +591,20 @@ const Lesson = () => {
                                 return (
                                   <label
                                     key={option.id}
-                                    className={`flex items-center gap-3 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${
+                                    className={`flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${
                                       !quizSubmitted
-                                        ? isSelected
-                                          ? 'border-indigo-500 bg-indigo-50'
-                                          : 'border-slate-200 hover:bg-slate-50'
-                                        : isSelectedCorrect || isRevealedCorrect
-                                          ? 'border-green-500 bg-green-50'
-                                          : isSelectedWrong
-                                            ? 'border-red-500 bg-red-50'
-                                            : 'border-slate-200'
+                                        ? `cursor-pointer ${
+                                            isSelected
+                                              ? 'border-indigo-500 bg-indigo-50'
+                                              : 'border-slate-200 hover:bg-slate-50'
+                                          }`
+                                        : `cursor-default ${
+                                            isSelectedCorrect || isRevealedCorrect
+                                              ? 'border-green-500 bg-green-50'
+                                              : isSelectedWrong
+                                                ? 'border-red-500 bg-red-50'
+                                                : 'border-slate-200'
+                                          }`
                                     }`}
                                   >
                                     <input
@@ -637,16 +659,20 @@ const Lesson = () => {
                                 return (
                                   <label
                                     key={value}
-                                    className={`flex items-center gap-2 rounded-lg border px-6 py-3 cursor-pointer transition-colors ${
+                                    className={`flex items-center gap-2 rounded-lg border px-6 py-3 transition-colors ${
                                       !quizSubmitted
-                                        ? isSelected
-                                          ? 'border-indigo-500 bg-indigo-50'
-                                          : 'border-slate-200 hover:bg-slate-50'
-                                        : isSelectedCorrect || isRevealedCorrect
-                                          ? 'border-green-500 bg-green-50'
-                                          : isSelectedWrong
-                                            ? 'border-red-500 bg-red-50'
-                                            : 'border-slate-200'
+                                        ? `cursor-pointer ${
+                                            isSelected
+                                              ? 'border-indigo-500 bg-indigo-50'
+                                              : 'border-slate-200 hover:bg-slate-50'
+                                          }`
+                                        : `cursor-default ${
+                                            isSelectedCorrect || isRevealedCorrect
+                                              ? 'border-green-500 bg-green-50'
+                                              : isSelectedWrong
+                                                ? 'border-red-500 bg-red-50'
+                                                : 'border-slate-200'
+                                          }`
                                     }`}
                                   >
                                     <input
