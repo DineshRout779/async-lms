@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import apiClient from "@/services/api";
 
 type Props = {
   open: boolean;
@@ -11,30 +12,32 @@ type Props = {
 
 const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComplete }: Props) => {
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState<"running" | "completed">("running");
+  const [status, setStatus] = useState<"idle" | "running" | "completed">("idle");
+  const [evaluatorType, setEvaluatorType] = useState<string>("");
   const [evaluationId, setEvaluationId] = useState("");
   const navigate = useNavigate();
 
+  // Reset state when modal opens
   useEffect(() => {
-  if (!open) return;
+    if (open) {
+      setStatus("idle");
+      setProgress(0);
+      setEvaluatorType("");
+      setEvaluationId("");
+    }
+  }, [open]);
 
   const runEvaluation = async () => {
     try {
       setStatus("running");
       setProgress(20);
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/evaluations/run`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ assignmentId }),
-        // body: JSON.stringify({
-        //   assignmentId: "59550bf7-32b7-4c20-aa87-e456f217a648", // 🔥 IMPORTANT
-        // }),
+      const res = await apiClient.post("/evaluations/run", {
+        assignmentId,
+        evaluatorType: evaluatorType || undefined
       });
 
-      const data = await res.json();
+      const data = res.data;
 
       if (!data.success) {
         throw new Error(data.message);
@@ -45,16 +48,41 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
       // ✅ store evaluationId
       setEvaluationId(data.evaluationId);
 
-      setProgress(100);
-      setStatus("completed");
-      onComplete(); //refresh table
-    } catch (err) {
+      // 🔄 Start polling Central Evaluators
+      const checkStatus = async () => {
+        try {
+          const syncRes = await apiClient.get(`/evaluations/sync/${data.evaluationId}`);
+          const syncData = syncRes.data;
+          
+          if (syncData.success && syncData.progress) {
+             const p = syncData.progress;
+             const percent = Math.floor((p.completed / Math.max(1, p.total)) * 80) + 20; // scale 20-100%
+             setProgress(percent);
+             
+             if (p.isFinished) {
+               setProgress(100);
+               setStatus("completed");
+               onComplete();
+             } else {
+               setTimeout(checkStatus, 3000); // Check again in 3s
+             }
+          } else {
+             setTimeout(checkStatus, 3000);
+          }
+        } catch (err) {
+          console.error("Polling failed", err);
+          setTimeout(checkStatus, 5000); // Retry on error
+        }
+      };
+
+      checkStatus();
+    } catch (err: any) {
       console.error("Evaluation failed", err);
+      const msg = err.response?.data?.message || err.message || "Failed to start evaluation";
+      alert("Evaluation failed: " + msg);
+      setStatus("idle"); // reset so they can try again
     }
   };
-
-  runEvaluation();
-}, [open]);
 
     
     // await axios.post("/run-evaluation", { assignmentName })
@@ -78,6 +106,46 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-[8px] p-6 w-[429px] text-center shadow-lg">
+
+        {/* ================= IDLE STATE ================= */}
+        {status === "idle" && (
+          <>
+            <h2 className="text-lg font-semibold mb-2">Configure Evaluation</h2>
+            <p className="text-sm text-gray-500 mb-6">{assignmentName}</p>
+
+            <div className="text-left mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Evaluator Type</label>
+              <select 
+                className="w-full border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={evaluatorType}
+                onChange={(e) => setEvaluatorType(e.target.value)}
+              >
+                <option value="">Auto-Detect (Use Database Default)</option>
+                <option value="VISUAL">Visual / DOM Evaluator</option>
+                <option value="JS">JavaScript Evaluator</option>
+                <option value="REACT">React Evaluator</option>
+                <option value="AI">AI / Backend Evaluator</option>
+                <option value="FULLSTACK">Fullstack Evaluator</option>
+                <option value="PYTHON">Python Evaluator</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runEvaluation}
+                className="px-4 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Start Evaluation
+              </button>
+            </div>
+          </>
+        )}
 
         {/* ================= RUNNING STATE ================= */}
         {status === "running" && (
