@@ -154,6 +154,20 @@ exports.runEvaluation = async (req, res) => {
       // visual and javascript accept arrays. backend and react accept singles.
       if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual') {
         const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : evaluatorType);
+        
+        let jsConfig = { testCases: assignment.test_cases };
+        
+        // If test_cases is a JSON object containing advanced JS configs, extract them
+        if (payloadType === 'javascript' && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
+           jsConfig = {
+             testCases: assignment.test_cases.testCases || [],
+             evaluationMode: assignment.test_cases.evaluationMode || 'function',
+             entryFunction: assignment.test_cases.entryFunction,
+             functions: assignment.test_cases.functions,
+             expectedLogs: assignment.test_cases.expectedLogs
+           };
+        }
+
         const payload = {
           type: payloadType,
           submissions: validSubmissions.map(s => ({
@@ -162,7 +176,7 @@ exports.runEvaluation = async (req, res) => {
             studentName: s.student_name,
             studentId: s.user_id || s.student_id
           })),
-          testCases: assignment.test_cases,
+          ...jsConfig,
           rubricText: assignment.rubric ? JSON.stringify(assignment.rubric) : "Standard evaluation",
           expectedUrl: assignment.expected_url || "https://example.com"
         };
@@ -483,5 +497,71 @@ exports.getAvailableEvaluators = (req, res) => {
     res.json({ success: true, data: evaluators });
   } catch (error) {
     serverError(res, error);
+  }
+};
+
+const OpenAI = require('openai');
+const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
+
+exports.generateTestCases = async (req, res) => {
+  try {
+    const { title, instructions, evaluatorType } = req.body;
+
+    if (!instructions) {
+      return res.status(400).json({ success: false, message: "Instructions are required to generate test cases." });
+    }
+
+    const systemPrompt = `You are an expert technical curriculum designer. Your task is to generate strict JSON test case configurations for an automated code grading system.
+    
+Based on the Assignment Title and Instructions provided by the user, you must output ONLY a raw JSON object that will be used by our JavaScript automated evaluator. DO NOT output any markdown blocks like \`\`\`json, just output the raw JSON string starting with { and ending with }.
+
+If the assignment asks students to write global variables and use console.log (e.g. basic variables assignment), use "script" mode.
+Example output for script mode:
+{
+  "evaluationMode": "script",
+  "expectedLogs": ["Expected log 1", "Expected log 2"]
+}
+
+If the assignment asks students to write a specific function with inputs and expected return values, use "function" mode.
+Example output for function mode:
+{
+  "evaluationMode": "function",
+  "entryFunction": "functionName",
+  "testCases": [
+    { "input": [arg1, arg2], "expected": expectedResult }
+  ]
+}
+
+If you are unsure or it doesn't fit neatly into function mode, fallback to script mode.
+Do not include any explanation.`;
+
+    const userPrompt = `Assignment Title: ${title || 'Untitled'}\n\nInstructions:\n${instructions}`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.1,
+    });
+
+    let rawJson = completion.choices[0].message.content.trim();
+    // In case the model outputs markdown anyway, clean it
+    if (rawJson.startsWith('```json')) rawJson = rawJson.substring(7);
+    if (rawJson.startsWith('```')) rawJson = rawJson.substring(3);
+    if (rawJson.endsWith('```')) rawJson = rawJson.substring(0, rawJson.length - 3);
+    rawJson = rawJson.trim();
+
+    // Verify it parses correctly
+    const parsedJson = JSON.parse(rawJson);
+
+    return res.json({
+      success: true,
+      testCases: JSON.stringify(parsedJson, null, 2)
+    });
+  } catch (error) {
+    console.error("AI Generation Error:", error);
+    return serverError(res, error);
   }
 };

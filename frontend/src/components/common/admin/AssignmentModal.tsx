@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Save, X } from 'lucide-react';
+import { Save, X, Wand2, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import RichTextEditor from '@/components/common/RichTextEditor';
 import MarkdownEditor from '@/components/common/MarkdownEditor';
@@ -12,11 +12,15 @@ interface AssignmentModalProps {
     title: string;
     instructions: string;
     max_score: number;
+    evaluator_type?: string | null;
+    test_cases?: string | null;
   }) => void;
   editData?: {
     title: string;
     instructions?: string;
     max_score: number;
+    evaluator_type?: string | null;
+    test_cases?: any;
   };
   unitTitle: string;
   loading?: boolean;
@@ -33,15 +37,47 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
   const [title, setTitle] = useState(editData?.title ?? '');
   const [instructions, setInstructions] = useState(editData?.instructions ?? '');
   const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
+  const [evaluatorType, setEvaluatorType] = useState<string>(editData?.evaluator_type || '');
+  const [testCases, setTestCases] = useState<string>(
+    editData?.test_cases ? (typeof editData.test_cases === 'string' ? editData.test_cases : JSON.stringify(editData.test_cases, null, 2)) : ''
+  );
   const [editorType, setEditorType] = useState<'rich' | 'markdown'>('rich');
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setTitle(editData?.title ?? '');
       setInstructions(editData?.instructions ?? '');
       setMaxScore(editData?.max_score ?? 100);
+      setEvaluatorType(editData?.evaluator_type || '');
+      setTestCases(editData?.test_cases ? (typeof editData.test_cases === 'string' ? editData.test_cases : JSON.stringify(editData.test_cases, null, 2)) : '');
     }
   }, [isOpen, editData]);
+
+  const handleGenerateTestCases = async () => {
+    if (!title.trim() || !instructions.trim()) {
+      toast.error('Title and Instructions are required to generate test cases.');
+      return;
+    }
+    setGenerating(true);
+    try {
+      // @ts-ignore
+      const { default: apiClient } = await import('@/services/api');
+      const res = await apiClient.post('/evaluations/generate-test-cases', {
+        title,
+        instructions,
+        evaluatorType
+      });
+      if (res.data.success && res.data.testCases) {
+        setTestCases(res.data.testCases);
+        toast.success('Test cases generated successfully!');
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to generate test cases');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -52,14 +88,26 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
       toast.error('Max score must be greater than 0');
       return;
     }
+    if (testCases.trim()) {
+      try {
+        JSON.parse(testCases);
+      } catch (e) {
+        toast.error('Test Cases must be valid JSON');
+        return;
+      }
+    }
     onSave({
       title: title.trim(),
       instructions: instructions.trim(),
       max_score: maxScore,
+      evaluator_type: evaluatorType || null,
+      test_cases: testCases.trim() || null
     });
     setTitle('');
     setInstructions('');
     setMaxScore(100);
+    setEvaluatorType('');
+    setTestCases('');
   };
 
   if (!isOpen) return null;
@@ -146,6 +194,48 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
               placeholder='100'
               min='1'
               className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+
+          <div>
+            <label className='mb-2 block text-sm font-medium text-slate-700'>
+              Evaluator Type (Optional)
+            </label>
+            <select
+              value={evaluatorType}
+              onChange={(e) => setEvaluatorType(e.target.value)}
+              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 bg-white'
+            >
+              <option value=''>None (Manual Grading)</option>
+              <option value='JS'>JS Evaluator</option>
+              <option value='VISUAL'>Visual Evaluator</option>
+            </select>
+          </div>
+
+          <div>
+            <div className='mb-2 flex items-center justify-between'>
+              <label className='text-sm font-medium text-slate-700'>Test Cases (JSON)</label>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={handleGenerateTestCases}
+                disabled={generating || !evaluatorType}
+                className='h-7 text-xs bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-700'
+              >
+                {generating ? (
+                  <Loader2 className='mr-1.5 h-3.5 w-3.5 animate-spin' />
+                ) : (
+                  <Wand2 className='mr-1.5 h-3.5 w-3.5' />
+                )}
+                ✨ Auto-Generate Test Cases
+              </Button>
+            </div>
+            <textarea
+              value={testCases}
+              onChange={(e) => setTestCases(e.target.value)}
+              placeholder='{\n  "evaluationMode": "script",\n  "expectedLogs": []\n}'
+              className='w-full min-h-[140px] rounded-lg border border-slate-300 p-3 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
             />
           </div>
         </div>

@@ -1715,7 +1715,7 @@ exports.getAssignment = async (req, res) => {
 
 exports.createAssignment = async (req, res) => {
   try {
-    const { unit_id, title, instructions, max_score } = req.body;
+    const { unit_id, title, instructions, max_score, evaluator_type, test_cases } = req.body;
 
     if (!unit_id || !title || !max_score) {
       return res.status(400).json({
@@ -1725,16 +1725,27 @@ exports.createAssignment = async (req, res) => {
     }
 
     const query = `
-      INSERT INTO assignments (unit_id, title, instructions, max_score)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO assignments (unit_id, title, instructions, max_score, evaluator_type, test_cases)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
+
+    let testCasesObj = test_cases;
+    if (typeof test_cases === 'string') {
+        try {
+            testCasesObj = JSON.parse(test_cases);
+        } catch (e) {
+            // keep as string or handle error
+        }
+    }
 
     const result = await pool.query(query, [
       unit_id,
       title,
       instructions,
       max_score,
+      evaluator_type || null,
+      testCasesObj || null
     ]);
 
     logAction({ req, action: 'CREATE', entityType: 'assignment', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
@@ -1757,7 +1768,7 @@ exports.createAssignment = async (req, res) => {
 exports.updateAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score } = req.body;
+    const { title, instructions, max_score, test_cases, evaluator_type } = req.body;
 
     const updates = [];
     const values = [];
@@ -1774,6 +1785,18 @@ exports.updateAssignment = async (req, res) => {
     if (max_score !== undefined) {
       updates.push(`max_score = $${paramCount++}`);
       values.push(max_score);
+    }
+    if (evaluator_type !== undefined) {
+      updates.push(`evaluator_type = $${paramCount++}`);
+      values.push(evaluator_type);
+    }
+    if (test_cases !== undefined) {
+      let testCasesObj = test_cases;
+      if (typeof test_cases === 'string') {
+        try { testCasesObj = JSON.parse(test_cases); } catch (e) {}
+      }
+      updates.push(`test_cases = $${paramCount++}`);
+      values.push(testCasesObj);
     }
 
     if (updates.length === 0) {
