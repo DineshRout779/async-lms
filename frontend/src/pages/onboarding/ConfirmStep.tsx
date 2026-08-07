@@ -43,7 +43,6 @@ export default function ConfirmStep() {
     fetchData();
   }, []);
 
-
   const handleConfirm = async () => {
     try {
       setLoading(true);
@@ -62,7 +61,7 @@ export default function ConfirmStep() {
       className='min-h-screen w-full relative bg-cover bg-center overflow-hidden flex flex-col items-center justify-center p-4'
       style={{
         backgroundImage: 'url("/bg-students.jpg")',
-        fontFamily: "'Noto Sans', sans-serif",
+        fontFamily: "'Inter', sans-serif",
       }}
     >
       {/* Blue tinted overlay */}
@@ -149,7 +148,9 @@ export default function ConfirmStep() {
                     Batch
                   </span>
                   <span className='text-[12px] text-slate-800 font-semibold'>
-                    {profile ? (profile.current_academic_year || 'N/A') : 'Loading...'}
+                    {profile
+                      ? profile.current_academic_year || 'N/A'
+                      : 'Loading...'}
                   </span>
                 </div>
               </div>

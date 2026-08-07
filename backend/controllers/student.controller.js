@@ -65,13 +65,15 @@ const XP_BADGES = [
 
 async function checkAndAwardBadges(userId) {
   try {
-    // Ensure all XP badge definitions exist (upsert by name using a safe SELECT-then-INSERT)
+    // Ensure all XP badge definitions exist (upsert by title using a safe SELECT-then-INSERT)
+    // Note: the badge's emoji (b.icon) is baked into the notification text below since
+    // the `badges` table has no icon column — title/description are all it stores.
     for (const b of XP_BADGES) {
       await pool.query(
-        `INSERT INTO badges (name, description, icon)
-         SELECT $1, $2, $3
-         WHERE NOT EXISTS (SELECT 1 FROM badges WHERE name = $1)`,
-        [b.name, b.description, b.icon],
+        `INSERT INTO badges (title, description)
+         SELECT $1::text, $2::text
+         WHERE NOT EXISTS (SELECT 1 FROM badges WHERE title = $1::text)`,
+        [b.name, b.description],
       );
     }
 
@@ -87,7 +89,7 @@ async function checkAndAwardBadges(userId) {
       if (totalXP >= b.threshold) {
         const badgeInsert = await pool.query(
           `INSERT INTO user_badges (user_id, badge_id)
-           SELECT $1, id FROM badges WHERE name = $2
+           SELECT $1, id FROM badges WHERE title = $2
            ON CONFLICT (user_id, badge_id) DO NOTHING
            RETURNING user_id`,
           [userId, b.name],
@@ -1351,7 +1353,9 @@ exports.runExerciseTests = async (req, res) => {
 exports.getOverallLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     const result = await pool.query(
       `WITH ranked AS (
@@ -1360,7 +1364,8 @@ exports.getOverallLeaderboard = async (req, res) => {
           u.full_name,
           c.name AS college_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN colleges c ON sp.college_id = c.id
@@ -1368,8 +1373,8 @@ exports.getOverallLeaderboard = async (req, res) => {
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id, u.full_name, c.name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset],
     );
 
     const userRank = await pool.query(
@@ -1386,9 +1391,18 @@ exports.getOverallLeaderboard = async (req, res) => {
       [userId],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
@@ -1403,7 +1417,9 @@ exports.getOverallLeaderboard = async (req, res) => {
 exports.getWeeklyLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     // ISO Monday of current week
     const now = new Date();
@@ -1421,16 +1437,17 @@ exports.getWeeklyLeaderboard = async (req, res) => {
           u.full_name,
           c.name AS college_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN colleges c ON sp.college_id = c.id
-        LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $2
+        LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $3
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id, u.full_name, c.name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit, weekStartStr],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset, weekStartStr],
     );
 
     const userRank = await pool.query(
@@ -1447,10 +1464,19 @@ exports.getWeeklyLeaderboard = async (req, res) => {
       [userId, weekStartStr],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
       week_start: weekStartStr,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching weekly leaderboard:', error);
@@ -1465,7 +1491,9 @@ exports.getWeeklyLeaderboard = async (req, res) => {
 exports.getCollegeLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     const userQuery = await pool.query(
       'SELECT college_id FROM student_profiles WHERE user_id = $1',
@@ -1488,15 +1516,16 @@ exports.getCollegeLeaderboard = async (req, res) => {
           u.id AS user_id,
           u.full_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN points_log pl ON pl.user_id = u.id
-        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = $2
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = $3
         GROUP BY u.id, u.full_name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit, collegeId],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset, collegeId],
     );
 
     const userRank = await pool.query(
@@ -1514,10 +1543,19 @@ exports.getCollegeLeaderboard = async (req, res) => {
       [userId, collegeId],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
       college_id: collegeId,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching college leaderboard:', error);
@@ -2092,7 +2130,6 @@ exports.getStudentScorecard = async (req, res) => {
       .json({
         success: false,
         message: 'Failed to fetch scorecard',
-        error: error.message,
       });
   }
 };
@@ -2122,39 +2159,31 @@ exports.getStudentModuleAnalytics = async (req, res) => {
              GROUP BY qa.quiz_id
            ) bq
          ), 0)::int AS quiz_score,
+         -- Real max achievable points (sum of question points) for quizzes
+         -- ATTEMPTED so far, not the quizzes.max_score column (a fixed
+         -- constant, can be out of sync with actual question points — see
+         -- submitQuizAttempt's actual_max_score) and not all quizzes in the
+         -- topic (quiz_score/quiz_max should reflect accuracy on what's been
+         -- attempted; quizzes_attempted/quizzes_total below covers completion).
          COALESCE((
-           SELECT SUM(q.max_score)
-           FROM quizzes q
+           SELECT SUM(qq.points)
+           FROM quiz_questions qq
+           JOIN quizzes q ON q.id = qq.quiz_id
            JOIN units un ON un.id = q.unit_id
-           WHERE un.topic_id = t.id
+           WHERE un.topic_id = t.id AND qq.is_deleted = false
+             AND EXISTS (
+               SELECT 1 FROM quiz_attempts qa
+               WHERE qa.quiz_id = q.id AND qa.user_id = $1
+             )
          ), 0)::int AS quiz_max,
-         -- Assignment status: Submitted if any submission exists for this topic
-         CASE
-           WHEN EXISTS (
-             SELECT 1 FROM assignment_submissions asub
-             JOIN assignments a ON a.id = asub.assignment_id
-             JOIN units un ON un.id = a.unit_id
-             WHERE asub.user_id = $1 AND un.topic_id = t.id
-           ) THEN 'Submitted'
-           ELSE 'Pending'
-         END AS assignment_status,
-         -- Project status
-         CASE
-           WHEN EXISTS (
-             SELECT 1 FROM project_submissions ps
-             JOIN projects p ON p.id = ps.project_id
-             WHERE ps.user_id = $1 AND p.topic_id = t.id AND ps.is_approved = true
-           ) THEN 'Approved'
-           WHEN EXISTS (
-             SELECT 1 FROM project_submissions ps
-             JOIN projects p ON p.id = ps.project_id
-             WHERE ps.user_id = $1 AND p.topic_id = t.id
-           ) THEN 'Submitted'
-           WHEN EXISTS (
-             SELECT 1 FROM projects p WHERE p.topic_id = t.id
-           ) THEN 'Not Started'
-           ELSE NULL
-         END AS project_status,
+         -- Assignment status is now derived in JS from asg_submitted/asg_total
+         -- (below) instead of a binary EXISTS check, so partial completion
+         -- across multiple assignments in a topic isn't hidden behind a
+         -- single Submitted/Pending flag.
+         -- Project status is now derived in JS from proj_submitted/proj_approved/
+         -- proj_total (below), same reasoning as assignment_status: a binary
+         -- EXISTS check would hide partial completion across multiple projects
+         -- in one topic.
          -- NEW PROGRESS COUNTS
          COALESCE((
            SELECT COUNT(*)::int
@@ -2178,6 +2207,17 @@ exports.getStudentModuleAnalytics = async (req, res) => {
            JOIN units un ON un.id = q.unit_id
            WHERE qa.user_id = $1 AND qa.is_passed = true AND un.topic_id = t.id
          ), 0) AS quizzes_passed,
+         -- Distinct quizzes attempted at all (pass or fail) — used to show
+         -- completion ("2 of 5 quizzes attempted") separately from accuracy
+         -- (quiz_score/quiz_max), so an un-attempted quiz doesn't silently
+         -- drag down the accuracy percentage as if it were scored 0.
+         COALESCE((
+           SELECT COUNT(DISTINCT q.id)::int
+           FROM quiz_attempts qa
+           JOIN quizzes q ON q.id = qa.quiz_id
+           JOIN units un ON un.id = q.unit_id
+           WHERE qa.user_id = $1 AND un.topic_id = t.id
+         ), 0) AS quizzes_attempted,
          COALESCE((
            SELECT COUNT(*)::int
            FROM quizzes q
@@ -2203,6 +2243,12 @@ exports.getStudentModuleAnalytics = async (req, res) => {
            JOIN projects p ON p.id = sub.project_id
            WHERE sub.user_id = $1 AND p.topic_id = t.id
          ), 0) AS proj_submitted,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM project_submissions sub
+           JOIN projects p ON p.id = sub.project_id
+           WHERE sub.user_id = $1 AND p.topic_id = t.id AND sub.is_approved = true
+         ), 0) AS proj_approved,
          COALESCE((
            SELECT COUNT(*)::int
            FROM projects p
@@ -2248,13 +2294,47 @@ exports.getStudentModuleAnalytics = async (req, res) => {
       totalProgressSum += progress;
       totalTopics++;
 
+      // Derived from counts (not a binary EXISTS check) so partial
+      // completion across multiple assignments in a topic is visible
+      // instead of collapsing to a single Submitted/Pending flag.
+      let assignmentStatus = null;
+      if (row.asg_total > 0) {
+        assignmentStatus =
+          row.asg_submitted === 0
+            ? 'Pending'
+            : row.asg_submitted < row.asg_total
+              ? 'Partial'
+              : 'Submitted';
+      }
+
+      // Same reasoning as assignmentStatus above — distinguishes "no
+      // projects in this topic" from partial/full submission and approval.
+      let projectStatus = null;
+      if (row.proj_total > 0) {
+        projectStatus =
+          row.proj_submitted === 0
+            ? 'Not Started'
+            : row.proj_approved === row.proj_total
+              ? 'Approved'
+              : row.proj_submitted < row.proj_total
+                ? 'Partial'
+                : 'Submitted';
+      }
+
       subjectMap.get(row.subject_id).topics.push({
         topic_id: row.topic_id,
         topic_title: row.topic_title,
         quiz_score: row.quiz_score,
         quiz_max: row.quiz_max,
-        assignment_status: row.assignment_status,
-        project_status: row.project_status,
+        quizzes_attempted: row.quizzes_attempted,
+        quizzes_total: row.quizzes_total,
+        assignment_status: assignmentStatus,
+        assignments_submitted: row.asg_submitted,
+        assignments_total: row.asg_total,
+        project_status: projectStatus,
+        projects_submitted: row.proj_submitted,
+        projects_approved: row.proj_approved,
+        projects_total: row.proj_total,
         progress,
       });
     }

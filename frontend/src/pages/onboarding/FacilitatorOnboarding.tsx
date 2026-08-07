@@ -66,9 +66,14 @@ export default function FacilitatorOnboarding() {
         const name = customName.trim();
         const city = customCity.trim();
         const words = name.split(/\s+/);
-        const shortCode = words.length > 1 
-          ? words.map(w => w[0]).join('').toUpperCase().substring(0, 5)
-          : name.substring(0, 5).toUpperCase();
+        const shortCode =
+          words.length > 1
+            ? words
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase()
+                .substring(0, 5)
+            : name.substring(0, 5).toUpperCase();
 
         const collegeRes = await apiClient.post('/colleges', {
           name,
@@ -98,7 +103,7 @@ export default function FacilitatorOnboarding() {
       className='min-h-screen w-full relative bg-cover bg-center overflow-hidden flex flex-col items-center justify-center p-6'
       style={{
         backgroundImage: 'url("/bg-students.jpg")',
-        fontFamily: "'Noto Sans', sans-serif",
+        fontFamily: "'Inter', sans-serif",
       }}
     >
       {/* Blue tinted overlay */}
@@ -117,7 +122,9 @@ export default function FacilitatorOnboarding() {
             <GraduationCap className='h-7 w-7' />
           </div>
           <div>
-            <h1 className='text-2xl font-bold text-white'>Facilitator Onboarding</h1>
+            <h1 className='text-2xl font-bold text-white'>
+              Facilitator Onboarding
+            </h1>
             <p className='text-sm text-slate-200'>
               Step 1: Assign your colleges
             </p>
@@ -182,7 +189,9 @@ export default function FacilitatorOnboarding() {
             ) : (
               <div className='p-4 border border-dashed rounded-lg bg-muted/20 space-y-3 animate-in zoom-in-95 duration-200'>
                 <div className='flex items-center justify-between'>
-                  <p className='text-xs font-bold uppercase tracking-wider text-muted-foreground'>Add Custom College</p>
+                  <p className='text-xs font-bold uppercase tracking-wider text-muted-foreground'>
+                    Add Custom College
+                  </p>
                   <button
                     type='button'
                     onClick={() => setShowCustomCollege(false)}
@@ -193,7 +202,9 @@ export default function FacilitatorOnboarding() {
                 </div>
                 <div className='grid grid-cols-2 gap-3'>
                   <div className='space-y-1'>
-                    <label className='text-[10px] font-bold text-muted-foreground'>College Name</label>
+                    <label className='text-[10px] font-bold text-muted-foreground'>
+                      College Name
+                    </label>
                     <input
                       type='text'
                       placeholder='e.g. Stanford University'
@@ -203,7 +214,9 @@ export default function FacilitatorOnboarding() {
                     />
                   </div>
                   <div className='space-y-1'>
-                    <label className='text-[10px] font-bold text-muted-foreground'>City</label>
+                    <label className='text-[10px] font-bold text-muted-foreground'>
+                      City
+                    </label>
                     <input
                       type='text'
                       placeholder='e.g. Palo Alto'
@@ -220,7 +233,11 @@ export default function FacilitatorOnboarding() {
           <Button
             className='w-full py-6 text-lg rounded-xl shadow-xl hover:shadow-primary/25 transition-all group'
             onClick={handleSubmit}
-            disabled={loading || isSubmitting || (selectedIds.length === 0 && !showCustomCollege)}
+            disabled={
+              loading ||
+              isSubmitting ||
+              (selectedIds.length === 0 && !showCustomCollege)
+            }
           >
             {isSubmitting ? (
               'Processing...'

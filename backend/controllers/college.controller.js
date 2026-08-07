@@ -35,7 +35,6 @@ exports.createCollege = async (req, res) => {
     res.status(400).json({
       success: false,
       message: 'Error creating college',
-      error: error.message,
     });
   }
 };
@@ -60,7 +59,6 @@ exports.updateCollege = async (req, res) => {
     res.status(400).json({
       success: false,
       message: 'Error updating college',
-      error: error.message,
     });
   }
 };

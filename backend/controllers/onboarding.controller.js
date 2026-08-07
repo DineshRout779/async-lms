@@ -187,7 +187,7 @@ exports.selectSubjects = async (req, res) => {
     console.error('Transaction Error:', err);
     res
       .status(500)
-      .json({ message: 'Failed to save subjects', error: err.message });
+      .json({ message: 'Failed to save subjects' });
   } finally {
     client.release();
   }
@@ -236,7 +236,7 @@ exports.selectFacilitatorColleges = async (req, res) => {
     console.error('Facilitator Onboarding Error:', err);
     res
       .status(500)
-      .json({ message: 'Failed to save colleges', error: err.message });
+      .json({ message: 'Failed to save colleges' });
   } finally {
     client.release();
   }

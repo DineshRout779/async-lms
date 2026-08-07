@@ -65,7 +65,7 @@ exports.getFacilitatorStats = async (req, res) => {
     console.error('Facilitator Stats Error:', error);
     res
       .status(500)
-      .json({ message: 'Error fetching stats', error: error.message });
+      .json({ message: 'Error fetching stats' });
   }
 };
 
@@ -123,6 +123,7 @@ exports.getFacilitatorStudents = async (req, res) => {
       ) sm ON true
       WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1)
       ORDER BY u.created_at DESC
+      LIMIT 1000
     `;
 
     const result = await pool.query(query, [collegeIds]);

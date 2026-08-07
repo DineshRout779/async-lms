@@ -100,11 +100,11 @@ exports.getUserBadges = async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
-      `SELECT b.id, b.name, b.description, b.icon, ub.awarded_at
+      `SELECT b.id, b.title AS name, b.description, ub.earned_at AS awarded_at
        FROM public.user_badges ub
        JOIN public.badges b ON b.id = ub.badge_id
        WHERE ub.user_id = $1
-       ORDER BY ub.awarded_at DESC`,
+       ORDER BY ub.earned_at DESC`,
       [userId],
     );
     res.json({ success: true, data: result.rows });
@@ -118,15 +118,32 @@ exports.getUserBadges = async (req, res) => {
 exports.getUserActivity = async (req, res) => {
   try {
     const userId = req.user.id;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20));
+    const offset = (page - 1) * pageSize;
+
     const result = await pool.query(
-      `SELECT source, points, created_at
+      `SELECT source, points, created_at, COUNT(*) OVER ()::integer as total_count
        FROM public.points_log
        WHERE user_id = $1
        ORDER BY created_at DESC
-       LIMIT 20`,
-      [userId],
+       LIMIT $2 OFFSET $3`,
+      [userId, pageSize, offset],
     );
-    res.json({ success: true, data: result.rows });
+
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const data = result.rows.map(({ total_count, ...row }) => row);
+
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
+    });
   } catch (err) {
     console.error('getUserActivity error:', err.message);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -242,6 +259,7 @@ exports.getAllUsers = async (req, res) => {
         WHERE fc.facilitator_id = u.id
       ) as facilitator_meta ON r.role_key = 'FACILITATOR'
       ORDER BY u.created_at DESC
+      LIMIT 1000
     `;
     const result = await pool.query(query);
     res.json(result.rows);
