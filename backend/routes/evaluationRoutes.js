@@ -6,6 +6,7 @@ const {
   getEvaluationResults,
   getLatestEvaluationByAssignment,
   getAvailableEvaluators,
+  syncEvaluationStatus,
 } = require("../controllers/evaluation.controller");
 const verifyToken = require("../middlewares/verfiyToken");
 const isAdminOrFacilitator = require("../middlewares/isAdminOrFacilitator");
@@ -20,6 +21,9 @@ router.get("/evaluators", getAvailableEvaluators);
 
 // 📊 Get latest evaluation by assignment
 router.get("/by-assignment/:assignmentId", getLatestEvaluationByAssignment);
+
+// 🔄 Sync evaluation status
+router.get("/sync/:id", syncEvaluationStatus);
 
 // 📊 Get results by evaluationId
 router.get("/:id", getEvaluationResults);
