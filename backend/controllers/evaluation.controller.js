@@ -516,6 +516,11 @@ exports.generateTestCases = async (req, res) => {
 Based on the Assignment Title and Instructions provided by the user, you must output ONLY a raw JSON object that will be used by our JavaScript automated evaluator. DO NOT output any markdown blocks like \`\`\`json, just output the raw JSON string starting with { and ending with }.
 
 If the assignment asks students to write global variables and use console.log (e.g. basic variables assignment), use "script" mode.
+CRITICAL RULES FOR SCRIPT MODE:
+1. A script executes exactly ONCE from top to bottom. It cannot test multiple conflicting variable values in a single run (like Test Case 1 vs Test Case 2 for the same variable).
+2. If the instructions list multiple different scenarios for the SAME variables, ONLY generate \`expectedLogs\` for the VERY FIRST scenario. Ignore the other scenarios, as the student's script can only have one hardcoded state at a time.
+3. Our evaluator uses an AI Judge to evaluate script outputs, so it's okay to just provide the core expected values (e.g. ["Rohit Sharma", "20"]). The AI Judge will handle students who add conversational text like "My name is Rohit Sharma".
+
 Example output for script mode:
 {
   "evaluationMode": "script",
