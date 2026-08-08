@@ -87,6 +87,16 @@ exports.selectSubjects = async (req, res) => {
       .json({ message: 'Please select at least one subject' });
   }
 
+  const existingRes = await pool.query(
+    'SELECT id FROM subjects WHERE id = ANY($1::uuid[])',
+    [subjectIds],
+  );
+  if (existingRes.rows.length !== subjectIds.length) {
+    return res
+      .status(400)
+      .json({ message: 'One or more selected subjects do not exist' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
