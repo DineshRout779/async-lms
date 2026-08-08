@@ -39,7 +39,10 @@ export default function AdminCourses() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Subject | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<{ id: string; label?: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    id: string;
+    label?: string;
+  } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -52,7 +55,9 @@ export default function AdminCourses() {
       await dispatch(deleteSubject(id)).unwrap();
       toast.success('Course deleted');
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to delete course. Please try again.'));
+      toast.error(
+        getErrorMessage(error, 'Failed to delete course. Please try again.'),
+      );
     } finally {
       setDeleting(false);
     }
@@ -101,8 +106,9 @@ export default function AdminCourses() {
               className='border py-0 border-slate-200 overflow-hidden bg-white rounded-xl shadow-sm'
             >
               <div
-                className={`h-1.5 w-full ${course.is_published ? 'bg-green-500' : 'bg-amber-500'
-                  }`}
+                className={`h-1.5 w-full ${
+                  course.is_published ? 'bg-green-500' : 'bg-amber-500'
+                }`}
               />
               <CardHeader className='p-6 pb-4 space-y-4 overflow-hidden'>
                 <div className='flex justify-between items-start gap-2'>
@@ -136,13 +142,20 @@ export default function AdminCourses() {
                         }}
                         className='gap-2 cursor-pointer'
                       >
-                        <Edit2 className='w-4 h-4' /> Edit Details
+                        <Edit2 className='w-4 h-4 hover:text-white' /> Edit
+                        Details
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => setConfirmDelete({ id: course.id, label: course.name })}
-                        className='gap-2 text-red-600 cursor-pointer focus:text-red-600'
+                        onClick={() =>
+                          setConfirmDelete({
+                            id: course.id,
+                            label: course.name,
+                          })
+                        }
+                        className='gap-2 cursor-pointer'
                       >
-                        <Trash2 className='w-4 h-4' /> Delete Course
+                        <Trash2 className='w-4 h-4 hover:text-white' />
+                        Delete Course
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -209,8 +222,10 @@ export default function AdminCourses() {
         description={
           <>
             Are you sure you want to delete{' '}
-            <span className='font-semibold'>{confirmDelete?.label ?? 'this course'}</span>? This
-            action cannot be undone.
+            <span className='font-semibold'>
+              {confirmDelete?.label ?? 'this course'}
+            </span>
+            ? This action cannot be undone.
           </>
         }
         confirmLabel='Delete'

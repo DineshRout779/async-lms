@@ -94,7 +94,7 @@ export const AssignmentCard = ({ assignment }: { assignment: Assignment }) => {
             variant='outline'
             className='w-full border-indigo-900 text-indigo-900 hover:bg-indigo-50 font-bold'
           >
-            View Details & Submit
+            View Details
           </Button>
         </CardFooter>
       )}

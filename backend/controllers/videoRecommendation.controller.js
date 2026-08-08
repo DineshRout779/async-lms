@@ -23,6 +23,7 @@ exports.addChannelToWhitelist = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Channel is already whitelisted' });
     }
 
+    logAction({ req, action: 'CREATE', entityType: 'channel_whitelist', entityId: result.rows[0].id, details: { channel_name } });
     return res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error adding channel to whitelist:', error);

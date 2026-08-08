@@ -1,5 +1,6 @@
 const serverError = require('../utils/serverError');
 const fsService = require('../services/fileSystemService');
+const { logAction } = require('../utils/auditLogger');
 
 // Helper: returns 403 if the requesting user is not the workspace owner
 function assertOwner(req, res, userId) {
@@ -42,6 +43,7 @@ exports.create = (req, res) => {
   if (type === 'file') fsService.createFile(userId, projectId, path);
   else fsService.createFolder(userId, projectId, path);
 
+  logAction({ req, action: 'CREATE', entityType: 'workspace_file', entityId: projectId, details: { path, type } });
   res.json({ status: 'created' });
 };
 
@@ -49,6 +51,7 @@ exports.delete = (req, res) => {
   const { userId, projectId, path } = req.body;
   if (!assertOwner(req, res, userId)) return;
   fsService.deletePath(userId, projectId, path);
+  logAction({ req, action: 'DELETE', entityType: 'workspace_file', entityId: projectId, details: { path } });
   res.json({ status: 'deleted' });
 };
 
@@ -56,6 +59,7 @@ exports.rename = (req, res) => {
   const { userId, projectId, oldPath, newPath } = req.body;
   if (!assertOwner(req, res, userId)) return;
   fsService.renamePath(userId, projectId, oldPath, newPath);
+  logAction({ req, action: 'UPDATE', entityType: 'workspace_file', entityId: projectId, details: { oldPath, newPath } });
   res.json({ status: 'renamed' });
 };
 

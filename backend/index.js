@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-// Temporary patch to prevent Neon Database serverless WebSocket driver
 // from crashing Node 24 due to a read-only ErrorEvent.message property.
 process.on('uncaughtException', (err) => {
   if (
@@ -11,6 +10,7 @@ process.on('uncaughtException', (err) => {
     console.warn('⚠️ [Neon DB] Ignored harmless WebSocket ErrorEvent bug.');
     return;
   }
+
   console.error('Uncaught Exception:', err);
   process.exit(1);
 });
@@ -92,7 +92,7 @@ const authLimiter = rateLimit({
   max: 50,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' },
+  message: { message: 'Too many requests, please try again later.' },
 });
 
 app.use(express.json());

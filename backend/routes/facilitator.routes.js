@@ -12,6 +12,7 @@ router.get('/colleges', facilitatorController.getFacilitatorColleges);
 router.get('/batches', facilitatorController.getBatches);
 router.get('/students', facilitatorController.getFacilitatorStudents);
 router.get('/students/:id', facilitatorController.getFacilitatorStudentProfile);
+router.get('/students/:id/modules', facilitatorController.getFacilitatorStudentModuleAnalytics);
 router.patch('/students/:id/verify', verifyStudent);
 router.patch('/students/:id', editStudent);
 

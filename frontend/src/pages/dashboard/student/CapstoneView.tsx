@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate } from 'react-router';
 import {
   Loader2,
   XCircle,
   Trophy,
   CheckCircle2,
   Link2,
+  ArrowRight,
+  PartyPopper,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,6 +18,48 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
+import { fireConfetti } from '@/lib/confetti';
+
+/* =======================
+   Course-wide "next item" navigation
+   (mirrors the flattening logic in Lesson.tsx/AssignmentView.tsx, scoped
+   here since CapstoneView is a separate route/component)
+======================= */
+
+type FlatItem =
+  | { type: 'subtopic'; id: string; slug: string; title: string }
+  | { type: 'quiz'; id: string; title: string }
+  | { type: 'assignment'; id: string; title: string }
+  | { type: 'capstone'; id: string; title: string };
+
+function flattenCourseStructure(topics: any[]): FlatItem[] {
+  const flat: FlatItem[] = [];
+  topics.forEach((topic) => {
+    (topic.units || []).forEach((unit: any) => {
+      (unit.subtopics || []).forEach((sub: any) =>
+        flat.push({ type: 'subtopic', id: sub.id, slug: sub.slug, title: sub.title }),
+      );
+      (unit.quizzes || []).forEach((quiz: any) =>
+        flat.push({ type: 'quiz', id: quiz.id, title: `Unit Quiz: ${unit.title}` }),
+      );
+      (unit.assignments || []).forEach((a: any) =>
+        flat.push({ type: 'assignment', id: a.id, title: a.title }),
+      );
+    });
+    if (topic.capstone) {
+      flat.push({ type: 'capstone', id: topic.capstone.id, title: topic.capstone.title });
+    }
+  });
+  return flat;
+}
+
+function buildItemUrl(slug: string, item: FlatItem): string {
+  const base = `/dashboard/student/courses/${slug}`;
+  if (item.type === 'subtopic') return `${base}/lesson/${item.slug}`;
+  if (item.type === 'quiz') return `${base}/quiz/${item.id}`;
+  if (item.type === 'capstone') return `${base}/capstone/${item.id}`;
+  return `${base}/assignment/${item.id}`;
+}
 
 interface CapstoneDetail {
   id: string;
@@ -28,13 +72,46 @@ interface CapstoneDetail {
 }
 
 export default function CapstoneView() {
-  const { projectId } = useParams();
+  const { projectId, slug } = useParams();
+  const navigate = useNavigate();
   const [capstone, setCapstone] = useState<CapstoneDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [courseStructure, setCourseStructure] = useState<any[]>([]);
 
   const [link, setLink] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!slug) return;
+    apiClient
+      .get(`/subjects/${slug}`)
+      .then((res) => setCourseStructure(res.data?.data || []))
+      .catch(() => {
+        // Non-critical — only drives the "Next" button; page still works without it.
+      });
+  }, [slug]);
+
+  const nextItem = useMemo(() => {
+    if (!courseStructure.length || !projectId) return undefined;
+    const flat = flattenCourseStructure(courseStructure);
+    const currentIndex = flat.findIndex(
+      (item) => item.type === 'capstone' && item.id === projectId,
+    );
+    if (currentIndex === -1) return undefined;
+    return flat[currentIndex + 1] ?? null;
+  }, [courseStructure, projectId]);
+
+  const goToNext = () => {
+    if (!slug) return;
+    if (nextItem) {
+      navigate(buildItemUrl(slug, nextItem));
+    } else {
+      fireConfetti();
+      toast.success('🎉 Course completed! Great work!');
+      setTimeout(() => navigate(`/dashboard/student/courses/${slug}`), 800);
+    }
+  };
 
   useEffect(() => {
     if (!projectId) return;
@@ -82,10 +159,12 @@ export default function CapstoneView() {
       });
       setCapstone((prev) => (prev ? { ...prev, ...res.data.data } : prev));
       toast.success('Capstone submitted! +20 XP');
+      window.dispatchEvent(new Event('course-progress-updated'));
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit capstone'));
     } finally {
       setSubmitting(false);
+      setLink('');
     }
   };
 
@@ -104,7 +183,9 @@ export default function CapstoneView() {
         <p className='text-lg font-semibold text-slate-700'>
           Failed to load capstone project
         </p>
-        <p className='text-sm text-slate-500'>Please try refreshing the page.</p>
+        <p className='text-sm text-slate-500'>
+          Please try refreshing the page.
+        </p>
       </div>
     );
   }
@@ -156,7 +237,9 @@ export default function CapstoneView() {
           {capstone.instructions ? (
             <div className='prose prose-slate max-w-none lg:prose-lg'>
               {/^<[a-z][\s\S]*>/i.test(capstone.instructions.trimStart()) ? (
-                <div dangerouslySetInnerHTML={{ __html: capstone.instructions }} />
+                <div
+                  dangerouslySetInnerHTML={{ __html: capstone.instructions }}
+                />
               ) : (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {capstone.instructions}
@@ -217,6 +300,27 @@ export default function CapstoneView() {
           </div>
         </div>
       </Card>
+
+      {isSubmitted && nextItem !== undefined && (
+        <div className='flex justify-end'>
+          <Button
+            onClick={goToNext}
+            className='bg-emerald-600 hover:bg-emerald-700 gap-2'
+          >
+            {nextItem ? (
+              <>
+                Next: {nextItem.title}
+                <ArrowRight className='h-4 w-4' />
+              </>
+            ) : (
+              <>
+                Finish Course
+                <PartyPopper className='h-4 w-4' />
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

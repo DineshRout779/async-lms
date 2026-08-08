@@ -236,6 +236,7 @@ exports.saveCourse = async (req, res) => {
     }
 
     await client.query('COMMIT');
+    logAction({ req, action: 'CREATE', entityType: 'ai_course', entityId: course.id, details: { title } });
     res.status(201).json({ success: true, data: { id: course.id } });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -398,6 +399,7 @@ exports.updateCourse = async (req, res) => {
     updates.push(`updated_at = NOW()`);
     values.push(id);
     await pool.query(`UPDATE ai_courses SET ${updates.join(', ')} WHERE id = $${i}`, values);
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course', entityId: id, details: { fields: Object.keys(req.body) } });
     res.json({ success: true });
   } catch (err) {
     console.error('updateCourse error:', err);
@@ -438,6 +440,7 @@ exports.submitForReview = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course', entityId: id, details: { status: 'in_review' } });
     res.json({ success: true });
   } catch (err) {
     console.error('submitForReview error:', err);
@@ -480,6 +483,8 @@ exports.reviewCourse = async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    logAction({ req, action: action === 'approved' ? 'APPROVE' : action === 'rejected' ? 'REJECT' : 'UPDATE', entityType: 'ai_course', entityId: id, details: { action, feedback } });
 
     // Notify the creator
     const notifMessages = {
@@ -688,6 +693,8 @@ exports.publishCourse = async (req, res) => {
 
     await client.query('COMMIT');
 
+    logAction({ req, action: 'PUBLISH', entityType: 'ai_course', entityId: id, details: { title: course.title, subject_id: subjectId } });
+
     // Notify creator
     notify({
       userId: course.created_by,
@@ -724,6 +731,7 @@ exports.updateModule = async (req, res) => {
        practice_tasks ? JSON.stringify(practice_tasks) : null,
        case_studies ? JSON.stringify(case_studies) : null, id],
     );
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_module', entityId: id, details: { title } });
     res.json({ success: true });
   } catch (err) {
     serverError(res, err);
@@ -744,6 +752,7 @@ exports.updateTopic = async (req, res) => {
     if (!sets.length) return res.status(400).json({ success: false, message: 'Nothing to update' });
     vals.push(id);
     await pool.query(`UPDATE ai_course_topics SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_topic', entityId: id, details: { title } });
     res.json({ success: true });
   } catch (err) {
     serverError(res, err);
@@ -771,6 +780,7 @@ exports.updateLesson = async (req, res) => {
     if (!sets.length) return res.status(400).json({ success: false, message: 'Nothing to update' });
     vals.push(id);
     await pool.query(`UPDATE ai_course_lessons SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_lesson', entityId: id, details: { title } });
     res.json({ success: true });
   } catch (err) {
     serverError(res, err);
@@ -793,6 +803,7 @@ exports.addModule = async (req, res) => {
        VALUES ($1,$2,'',${orderIndex},'[]','[]') RETURNING *`,
       [course_id, title],
     );
+    logAction({ req, action: 'CREATE', entityType: 'ai_course_module', entityId: result.rows[0].id, details: { title } });
     res.status(201).json({ success: true, data: { ...result.rows[0], topics: [] } });
   } catch (err) {
     serverError(res, err);
@@ -813,6 +824,7 @@ exports.addTopic = async (req, res) => {
        VALUES ($1,$2,'',$3) RETURNING *`,
       [module_id, title, orderIndex],
     );
+    logAction({ req, action: 'CREATE', entityType: 'ai_course_topic', entityId: result.rows[0].id, details: { title } });
     res.status(201).json({ success: true, data: { ...result.rows[0], lessons: [] } });
   } catch (err) {
     serverError(res, err);
@@ -835,6 +847,7 @@ exports.addLesson = async (req, res) => {
        VALUES ($1,$2,'','','','[]',$3,15,NULL,'[]',NULL,$4) RETURNING *`,
       [topic_id, title, lesson_type || 'video', orderIndex],
     );
+    logAction({ req, action: 'CREATE', entityType: 'ai_course_lesson', entityId: result.rows[0].id, details: { title } });
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     serverError(res, err);
@@ -930,6 +943,7 @@ exports.reorderModules = async (req, res) => {
       await client.query(`UPDATE ai_course_modules SET order_index = $1 WHERE id = $2`, [order_index, id]);
     }
     await client.query('COMMIT');
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_module', entityId: null, details: { reordered: ordered_ids.length } });
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -950,6 +964,7 @@ exports.reorderTopics = async (req, res) => {
       await client.query(`UPDATE ai_course_topics SET order_index = $1 WHERE id = $2`, [order_index, id]);
     }
     await client.query('COMMIT');
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_topic', entityId: null, details: { reordered: ordered_ids.length } });
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -998,6 +1013,7 @@ exports.duplicateModule = async (req, res) => {
       newTopics.push({ ...newTopic.rows[0], lessons: newLessons });
     }
     await client.query('COMMIT');
+    logAction({ req, action: 'CREATE', entityType: 'ai_course_module', entityId: newModId, details: { duplicated_from: id } });
     res.status(201).json({ success: true, data: { ...newMod.rows[0], topics: newTopics } });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1039,6 +1055,7 @@ exports.duplicateTopic = async (req, res) => {
       newLessons.push(newLesson.rows[0]);
     }
     await client.query('COMMIT');
+    logAction({ req, action: 'CREATE', entityType: 'ai_course_topic', entityId: newTopicId, details: { duplicated_from: id } });
     res.status(201).json({ success: true, data: { ...newTopic.rows[0], lessons: newLessons } });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1060,6 +1077,7 @@ exports.duplicateLesson = async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [l.topic_id, `${l.title} (Copy)`, l.explanation, l.example, l.activity, l.interview_questions, l.lesson_type, l.duration_mins, l.video_url, l.quiz_questions, l.exercise_data, orderRes.rows[0].next],
     );
+    logAction({ req, action: 'CREATE', entityType: 'ai_course_lesson', entityId: result.rows[0].id, details: { duplicated_from: id } });
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     serverError(res, err);
@@ -1102,6 +1120,7 @@ exports.regenerateLesson = async (req, res) => {
        updated.activity, JSON.stringify(updated.interview_questions || []), id],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_lesson', entityId: id, details: { instruction } });
     res.json({ success: true, data: updated });
   } catch (err) {
     console.error('regenerateLesson error:', err);
@@ -1185,6 +1204,7 @@ exports.generateAndSaveUnits = async (req, res) => {
       created.push({ ...r.rows[0], lessons: [] });
     }
     await client.query('COMMIT');
+    logAction({ req, action: 'CREATE', entityType: 'ai_course_topic', entityId: module_id, details: { created: created.length } });
     res.status(201).json({ success: true, data: created });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1256,6 +1276,7 @@ exports.generateAndSaveSubtopics = async (req, res) => {
       created.push(r.rows[0]);
     }
     await client.query('COMMIT');
+    logAction({ req, action: 'CREATE', entityType: 'ai_course_lesson', entityId: topic_id, details: { created: created.length } });
     res.status(201).json({ success: true, data: created });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1325,6 +1346,7 @@ exports.generateAndSaveLessonContent = async (req, res) => {
       updateVals,
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_lesson', entityId: id, details: { type } });
     res.json({ success: true, data: result });
   } catch (err) {
     console.error('generateAndSaveLessonContent error:', err);
@@ -1366,6 +1388,7 @@ exports.generateAndSaveUnitQuiz = async (req, res) => {
       [JSON.stringify(result.quiz_questions), id],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_topic', entityId: id, details: { quiz_questions: true } });
     res.json({ success: true, data: result.quiz_questions });
   } catch (err) {
     console.error('generateAndSaveUnitQuiz error:', err);
@@ -1400,6 +1423,7 @@ exports.generateAndSaveUnitAssignment = async (req, res) => {
       [JSON.stringify(result.assignment), id],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_topic', entityId: id, details: { assignment: true } });
     res.json({ success: true, data: result.assignment });
   } catch (err) {
     console.error('generateAndSaveUnitAssignment error:', err);
@@ -1439,6 +1463,7 @@ exports.generateAndSaveCapstone = async (req, res) => {
       [JSON.stringify(result.capstone_project), id],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course_module', entityId: id, details: { capstone_project: true } });
     res.json({ success: true, data: result.capstone_project });
   } catch (err) {
     console.error('generateAndSaveCapstone error:', err);
@@ -1508,6 +1533,7 @@ exports.uploadResource = async (req, res) => {
     // Presign the URL immediately so the frontend can preview it without refreshing
     const presignedUrl = await presignS3Url(url);
 
+    logAction({ req, action: 'CREATE', entityType: 'ai_curriculum_resource', entityId: null, details: { url, name } });
     res.json({ success: true, url: presignedUrl, filename: name });
   } catch (error) {
     console.error('uploadResource error:', error);
@@ -1529,6 +1555,7 @@ exports.deleteResource = async (req, res) => {
     if (s3Configured() && bucket === process.env.AWS_S3_BUCKET) {
       await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     }
+    logAction({ req, action: 'DELETE', entityType: 'ai_curriculum_resource', entityId: null, details: { url } });
     res.json({ success: true });
   } catch (error) {
     console.error('deleteResource error:', error);
@@ -1577,7 +1604,7 @@ exports.generateContentFromResource = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Could not extract text from file' });
     }
     
-    const aiContent = await aiCurriculumService.generateContentFromFile(fileText, title);
+    const aiContent = await generateContentFromFile(fileText, title);
     res.json({ success: true, content: aiContent });
   } catch (error) {
     console.error('generateContentFromResource error:', error);

@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
-import StatusBadge from "./StatusBadge";
-import ActionButton from "./ActionButton";
-import EvaluationModal from "./EvaluationModal";
-import SubmissionsModal from "./SubmissionsModal";
-import apiClient from "@/services/api";
-import { getErrorMessage } from "@/lib/utils";
-import toast from "react-hot-toast";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Eye } from "lucide-react";
+import { useState, useEffect } from 'react';
+import StatusBadge from './StatusBadge';
+import ActionButton from './ActionButton';
+import EvaluationModal from './EvaluationModal';
+import SubmissionsModal from './SubmissionsModal';
+import apiClient from '@/services/api';
+import { getErrorMessage } from '@/lib/utils';
+import toast from 'react-hot-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Eye } from 'lucide-react';
+import { Link } from 'react-router';
 
 type Props = {
   search: string;
@@ -28,28 +29,53 @@ type Assignment = {
   submissions_count?: number;
   status: string;
   evaluation_id?: string;
-}
+};
 
-const EvaluationTable = ({ search, selectedCollege, selectedDomain, selectedBatch, refresh, onEvaluationComplete }: Props) => {
+const PAGE_SIZE = 10;
+
+const EvaluationTable = ({
+  search,
+  selectedCollege,
+  selectedDomain,
+  selectedBatch,
+  refresh,
+  onEvaluationComplete,
+}: Props) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState("");
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+  const [selectedAssignment, setSelectedAssignment] = useState('');
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState('');
   const [submissionsOpen, setSubmissionsOpen] = useState(false);
-  const [submissionsAssignment, setSubmissionsAssignment] = useState({ id: "", title: "" });
+  const [submissionsAssignment, setSubmissionsAssignment] = useState({
+    id: '',
+    title: '',
+  });
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const fetchAssignments = async () => {
     try {
       setLoading(true);
-      const params: Record<string, string> = {};
+      const params: Record<string, string | number> = {
+        page,
+        pageSize: PAGE_SIZE,
+      };
       if (selectedCollege) params.collegeId = selectedCollege;
       if (selectedDomain) params.domain = selectedDomain;
       if (selectedBatch) params.batch = selectedBatch;
       if (search) params.search = search;
 
-      const res = await apiClient.get('/college-assignments/evaluation-filters', { params });
-      if (res.data.success) setAssignments(res.data.data);
+      const res = await apiClient.get(
+        '/college-assignments/evaluation-filters',
+        { params },
+      );
+      if (res.data.success) {
+        setAssignments(res.data.data);
+        setTotalPages(res.data.pagination?.totalPages ?? 1);
+        setTotal(res.data.pagination?.total ?? res.data.data.length);
+      }
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to fetch assignments'));
     } finally {
@@ -57,24 +83,36 @@ const EvaluationTable = ({ search, selectedCollege, selectedDomain, selectedBatc
     }
   };
 
+  // Reset to page 1 whenever filters/search change (a filter change can
+  // easily land the current page past the new, smaller result set).
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedCollege, selectedDomain, selectedBatch]);
+
   useEffect(() => {
     fetchAssignments();
-  }, [search, selectedCollege, selectedDomain, selectedBatch, refresh]);
+  }, [search, selectedCollege, selectedDomain, selectedBatch, refresh, page]);
 
   if (loading) {
     return (
-      <div className="mt-6 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="grid grid-cols-7 gap-4 px-4 py-3 border-b">
-          {[...Array(7)].map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
+      <div className='mt-6 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden'>
+        <div className='grid grid-cols-8 gap-4 px-4 py-3 border-b'>
+          {[...Array(8)].map((_, i) => (
+            <Skeleton key={i} className='h-3 w-full' />
+          ))}
         </div>
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="grid grid-cols-7 gap-4 px-4 py-4 border-b border-slate-100 items-center">
-            <Skeleton className="h-4 w-full col-span-2" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-8" />
-            <Skeleton className="h-6 w-20 rounded-full" />
-            <Skeleton className="h-8 w-20 rounded ml-auto" />
+          <div
+            key={i}
+            className='grid grid-cols-8 gap-4 px-4 py-4 border-b border-slate-100 items-center'
+          >
+            <Skeleton className='h-4 w-6' />
+            <Skeleton className='h-4 w-full col-span-2' />
+            <Skeleton className='h-4 w-full' />
+            <Skeleton className='h-4 w-full' />
+            <Skeleton className='h-4 w-8' />
+            <Skeleton className='h-6 w-20 rounded-full' />
+            <Skeleton className='h-8 w-20 rounded ml-auto' />
           </div>
         ))}
       </div>
@@ -82,73 +120,129 @@ const EvaluationTable = ({ search, selectedCollege, selectedDomain, selectedBatc
   }
 
   return (
-    <div className="mt-6 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <table className="w-full text-sm border-separate border-spacing-0">
-        <thead className="text-slate-500 text-[12px] uppercase">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium">Assignment Name</th>
-            <th className="px-4 py-3 text-left font-medium">Type</th>
-            <th className="px-4 py-3 text-left font-medium">Course / Domain</th>
-            <th className="px-4 py-3 text-left font-medium">Colleges</th>
-            <th className="px-4 py-3 text-left font-medium">Submissions</th>
-            <th className="px-4 py-3 text-left font-medium">Status</th>
-            <th className="px-4 py-3 text-right font-medium">Action</th>
-          </tr>
-        </thead>
-
-        <tbody className="[&>tr:first-child]:border-t-0">
-          {assignments.map((item) => (
-            <tr
-              key={item.id}
-              className="border-t border-slate-100 hover:bg-slate-50 transition"
-            >
-              <td className="px-4 py-3 font-medium text-slate-800 text-[14px]">{item.title}</td>
-              <td className="px-4 py-3">
-                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
-                  item.type === 'unit' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {item.type === 'unit' ? 'Curriculum' : 'College'}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-slate-500 text-[14px]">{item.course}</td>
-              <td className="px-4 py-3 text-slate-700 text-[14px]">{item.college_name}</td>
-              <td className="px-4 py-3 text-slate-700 font-medium text-[14px]">{item.submissions_count}</td>
-              <td className="px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <StatusBadge status={item.status} />
-                  {item.status === 'evaluated' && item.evaluation_id && (
-                    <a
-                      href={`/dashboard/facilitator/results/${item.evaluation_id}`}
-                      className="text-[10px] text-blue-600 hover:underline font-medium"
-                    >
-                      View Results
-                    </a>
-                  )}
-                </div>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => { setSubmissionsAssignment({ id: item.id, title: item.title }); setSubmissionsOpen(true); }}
-                    className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded px-2 py-1 transition"
-                    title="View student submissions"
-                  >
-                    <Eye size={12} /> Submissions
-                  </button>
-                  <ActionButton
-                    status={item.status}
-                    onClick={() => {
-                      setSelectedAssignment(item.title);
-                      setSelectedAssignmentId(item.id);
-                      setOpen(true);
-                    }}
-                  />
-                </div>
-              </td>
+    <div className='mt-6 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden'>
+      <div className='overflow-x-auto'>
+        <table className='w-full min-w-180 text-sm border-separate border-spacing-0'>
+          <thead className='text-slate-500 text-[12px] uppercase'>
+            <tr>
+              <th className='px-4 py-3 text-left font-medium'>#</th>
+              <th className='px-4 py-3 text-left font-medium'>
+                Assignment Name
+              </th>
+              <th className='px-4 py-3 text-left font-medium'>Type</th>
+              <th className='px-4 py-3 text-left font-medium'>
+                Course / Domain
+              </th>
+              <th className='px-4 py-3 text-left font-medium'>Colleges</th>
+              <th className='px-4 py-3 text-left font-medium'>Submissions</th>
+              <th className='px-4 py-3 text-left font-medium'>Status</th>
+              <th className='px-4 py-3 text-right font-medium'>Action</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody className='[&>tr:first-child]:border-t-0'>
+            {assignments.map((item, index) => (
+              <tr
+                key={`${item.id}-${item.evaluation_id ?? 'none'}-${index}`}
+                className='border-t border-slate-100 hover:bg-slate-50 transition'
+              >
+                <td className='px-4 py-3 text-slate-500 text-[14px]'>
+                  {index + 1}
+                </td>
+                <td className='px-4 py-3 font-medium text-slate-800 text-[14px]'>
+                  {item.title}
+                </td>
+                <td className='px-4 py-3'>
+                  <span
+                    className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                      item.type === 'unit'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {item.type === 'unit' ? 'Curriculum' : 'College'}
+                  </span>
+                </td>
+                <td className='px-4 py-3 text-slate-500 text-[14px]'>
+                  {item.course}
+                </td>
+                <td className='px-4 py-3 text-slate-700 text-[14px]'>
+                  {item.college_name}
+                </td>
+                <td className='px-4 py-3 text-slate-700 font-medium text-[14px]'>
+                  {item.submissions_count}
+                </td>
+                <td className='px-4 py-3'>
+                  <div className='flex flex-col gap-1'>
+                    <StatusBadge status={item.status} />
+                    {item.status === 'evaluated' && item.evaluation_id && (
+                      <Link
+                        to={`/dashboard/facilitator/results/${item.evaluation_id}`}
+                        className='text-[10px] text-blue-600 hover:underline font-medium'
+                      >
+                        View Results
+                      </Link>
+                    )}
+                  </div>
+                </td>
+                <td className='px-4 py-3 text-right'>
+                  <div className='flex items-center justify-end gap-2'>
+                    <button
+                      onClick={() => {
+                        setSubmissionsAssignment({
+                          id: item.id,
+                          title: item.title,
+                        });
+                        setSubmissionsOpen(true);
+                      }}
+                      className='inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded px-2 py-1 transition'
+                      title='View student submissions'
+                    >
+                      <Eye size={12} /> Submissions
+                    </button>
+                    <ActionButton
+                      status={item.status}
+                      onClick={() => {
+                        setSelectedAssignment(item.title);
+                        setSelectedAssignmentId(item.id);
+                        setOpen(true);
+                      }}
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {assignments.length > 0 && (
+        <div className='flex items-center justify-between px-4 py-3 border-t border-slate-100 text-sm'>
+          <span className='text-slate-500'>
+            Showing {(page - 1) * PAGE_SIZE + 1}–
+            {Math.min(page * PAGE_SIZE, total)} of {total}
+          </span>
+          <div className='flex items-center gap-2'>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className='px-3 py-1 rounded border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50'
+            >
+              Previous
+            </button>
+            <span className='text-slate-500 px-1'>
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className='px-3 py-1 rounded border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50'
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       <EvaluationModal
         open={open}

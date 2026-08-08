@@ -2,7 +2,7 @@ const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
-
+const { getTotalXP } = require('../services/xpService');
 // ============================================
 // HELPERS
 // ============================================
@@ -13,52 +13,70 @@ const { notify } = require('../services/notificationService');
  * - Yesterday → increment streak
  * - Older     → reset to 1
  */
-async function updateStreak(userId) {
-  await pool.query(
-    `INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity)
-     VALUES ($1, 1, 1, CURRENT_DATE)
-     ON CONFLICT (user_id) DO UPDATE SET
-       current_streak = CASE
-         WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.current_streak
-         WHEN user_streaks.last_activity = CURRENT_DATE - INTERVAL '1 day' THEN user_streaks.current_streak + 1
-         ELSE 1
-       END,
-       longest_streak = GREATEST(
-         user_streaks.longest_streak,
-         CASE
-           WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.current_streak
-           WHEN user_streaks.last_activity = CURRENT_DATE - INTERVAL '1 day' THEN user_streaks.current_streak + 1
-           ELSE 1
-         END
-       ),
-       last_activity = CASE
-         WHEN user_streaks.last_activity = CURRENT_DATE THEN user_streaks.last_activity
-         ELSE CURRENT_DATE
-       END,
-       updated_at = CURRENT_TIMESTAMP`,
-    [userId],
-  );
-}
+const { markActionToday } = require('../services/presenceService');
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ============================================
+// HELPERS
+// ============================================
+
+/**
+ * Streak is now updated by presenceService when both action and time requirements are met.
+ */
 
 // ── XP-based badge definitions ─────────────────────────────────────────────────
 const XP_BADGES = [
-  { name: 'First Steps',    description: 'Earned your first 10 XP',    icon: '🌱', threshold: 10   },
-  { name: 'Learner',        description: 'Reached 100 XP',             icon: '📚', threshold: 100  },
-  { name: 'Scholar',        description: 'Reached 500 XP',             icon: '🎓', threshold: 500  },
-  { name: 'Expert',         description: 'Reached 1,000 XP',           icon: '⚡', threshold: 1000 },
-  { name: 'Master',         description: 'Reached 2,500 XP',           icon: '🏆', threshold: 2500 },
-  { name: 'Legend',         description: 'Reached 5,000 XP',           icon: '🌟', threshold: 5000 },
+  {
+    name: 'First Steps',
+    description: 'Earned your first 10 XP',
+    icon: '🌱',
+    threshold: 10,
+  },
+  {
+    name: 'Learner',
+    description: 'Reached 100 XP',
+    icon: '📚',
+    threshold: 100,
+  },
+  {
+    name: 'Scholar',
+    description: 'Reached 500 XP',
+    icon: '🎓',
+    threshold: 500,
+  },
+  {
+    name: 'Expert',
+    description: 'Reached 1,000 XP',
+    icon: '⚡',
+    threshold: 1000,
+  },
+  {
+    name: 'Master',
+    description: 'Reached 2,500 XP',
+    icon: '🏆',
+    threshold: 2500,
+  },
+  {
+    name: 'Legend',
+    description: 'Reached 5,000 XP',
+    icon: '🌟',
+    threshold: 5000,
+  },
 ];
 
 async function checkAndAwardBadges(userId) {
   try {
-    // Ensure all XP badge definitions exist (upsert by name using a safe SELECT-then-INSERT)
+    // Ensure all XP badge definitions exist (upsert by title using a safe SELECT-then-INSERT)
+    // Note: the badge's emoji (b.icon) is baked into the notification text below since
+    // the `badges` table has no icon column — title/description are all it stores.
     for (const b of XP_BADGES) {
       await pool.query(
-        `INSERT INTO badges (name, description, icon)
-         SELECT $1, $2, $3
-         WHERE NOT EXISTS (SELECT 1 FROM badges WHERE name = $1)`,
-        [b.name, b.description, b.icon],
+        `INSERT INTO badges (title, description)
+         SELECT $1::text, $2::text
+         WHERE NOT EXISTS (SELECT 1 FROM badges WHERE title = $1::text)`,
+        [b.name, b.description],
       );
     }
 
@@ -74,7 +92,7 @@ async function checkAndAwardBadges(userId) {
       if (totalXP >= b.threshold) {
         const badgeInsert = await pool.query(
           `INSERT INTO user_badges (user_id, badge_id)
-           SELECT $1, id FROM badges WHERE name = $2
+           SELECT $1, id FROM badges WHERE title = $2
            ON CONFLICT (user_id, badge_id) DO NOTHING
            RETURNING user_id`,
           [userId, b.name],
@@ -197,11 +215,17 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
     ) AS exercise_done
   `;
 
-  const [lessonDone, quizDone, exerciseDone] = await Promise.all([
-    has_lesson ? pool.query(lessonDoneQuery, [userId, subtopicId]) : null,
-    has_quiz ? pool.query(quizDoneQuery, [userId, subtopicId]) : null,
-    has_exercise ? pool.query(exerciseDoneQuery, [userId, subtopicId]) : null,
-  ]);
+  let lessonDone = null;
+  if (has_lesson)
+    lessonDone = await pool.query(lessonDoneQuery, [userId, subtopicId]);
+
+  let quizDone = null;
+  if (has_quiz)
+    quizDone = await pool.query(quizDoneQuery, [userId, subtopicId]);
+
+  let exerciseDone = null;
+  if (has_exercise)
+    exerciseDone = await pool.query(exerciseDoneQuery, [userId, subtopicId]);
 
   const isLessonDone = has_lesson ? lessonDone.rows[0].lesson_done : true;
   const isQuizDone = has_quiz ? quizDone.rows[0].quiz_done : true;
@@ -240,7 +264,9 @@ exports.getMyProgress = async (req, res) => {
       [userId, subjectId],
     );
     if (enrollment.rows.length === 0) {
-      return res.status(403).json({ success: false, message: 'Not enrolled in this subject' });
+      return res
+        .status(403)
+        .json({ success: false, message: 'Not enrolled in this subject' });
     }
 
     const query = `
@@ -434,11 +460,14 @@ exports.getMyProgress = async (req, res) => {
       total_points: 0,
     };
 
-    const enrollmentRow = await pool.query(
-      `SELECT last_accessed_subtopic_slug FROM user_subjects WHERE user_id = $1 AND subject_id = $2`,
-      [userId, subjectId],
-    ).catch(() => ({ rows: [] }));
-    const lastAccessedSlug = enrollmentRow.rows[0]?.last_accessed_subtopic_slug ?? null;
+    const enrollmentRow = await pool
+      .query(
+        `SELECT last_accessed_subtopic_slug FROM user_subjects WHERE user_id = $1 AND subject_id = $2`,
+        [userId, subjectId],
+      )
+      .catch(() => ({ rows: [] }));
+    const lastAccessedSlug =
+      enrollmentRow.rows[0]?.last_accessed_subtopic_slug ?? null;
 
     res.json({
       success: true,
@@ -467,6 +496,25 @@ exports.startSubtopic = async (req, res) => {
     const userId = req.user.id;
     const { subtopicId } = req.params;
 
+    if (!subtopicId || !UUID_RE.test(subtopicId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid subtopicId',
+      });
+    }
+
+    const subtopicExists = await pool.query(
+      'SELECT id FROM subtopics WHERE id = $1 LIMIT 1',
+      [subtopicId],
+    );
+
+    if (subtopicExists.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Subtopic not found',
+      });
+    }
+
     const lockCheck = await pool.query(
       `SELECT usp.is_unlocked, st.slug, st.unit_id,
               u.topic_id, t.subject_id
@@ -488,12 +536,14 @@ exports.startSubtopic = async (req, res) => {
 
     // Track last accessed subtopic for "Continue Learning"
     if (lockCheck.rows[0]?.subject_id && lockCheck.rows[0]?.slug) {
-      await pool.query(
-        `UPDATE user_subjects
+      await pool
+        .query(
+          `UPDATE user_subjects
          SET last_accessed_subtopic_slug = $1, last_accessed_at = NOW()
          WHERE user_id = $2 AND subject_id = $3`,
-        [lockCheck.rows[0].slug, userId, lockCheck.rows[0].subject_id],
-      ).catch(() => {}); // non-critical — column may not exist yet
+          [lockCheck.rows[0].slug, userId, lockCheck.rows[0].subject_id],
+        )
+        .catch(() => {}); // non-critical — column may not exist yet
     }
 
     res.json({
@@ -516,6 +566,25 @@ exports.completeLesson = async (req, res) => {
     const userId = req.user.id;
     const { lessonId } = req.params;
 
+    if (!lessonId || !UUID_RE.test(lessonId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid lessonId',
+      });
+    }
+
+    const lessonExists = await pool.query(
+      'SELECT id FROM lesson_content WHERE id = $1 LIMIT 1',
+      [lessonId],
+    );
+
+    if (lessonExists.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found',
+      });
+    }
+
     const query = `
       INSERT INTO user_lesson_progress (user_id, lesson_content_id, is_completed)
       VALUES ($1, $2, true)
@@ -532,7 +601,7 @@ exports.completeLesson = async (req, res) => {
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
         [userId, 'lesson_completion', 10],
       );
-      await updateStreak(userId);
+      markActionToday(userId);
       await checkAndAwardBadges(userId);
     }
 
@@ -574,24 +643,28 @@ exports.submitQuizAttempt = async (req, res) => {
     const { answers } = req.body; // { [question_id]: string }
 
     if (!answers || typeof answers !== 'object') {
-      return res.status(400).json({ success: false, message: 'answers object is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'answers object is required' });
     }
 
     // Fetch quiz + all questions + correct options in one query
     const quizQuery = await pool.query(
       `SELECT q.passing_score, q.max_score,
-              qq.id AS question_id, qq.question_type, qq.points,
+              qq.id AS question_id, qq.question_type, qq.points, qq.explanation,
               qo.id AS option_id, qo.option_text, qo.is_correct
        FROM quizzes q
-       LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
-       LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id
-       WHERE q.id = $1
+       LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id AND qq.is_deleted = false
+       LEFT JOIN quiz_question_options qo ON qo.question_id = qq.id AND qo.is_deleted = false
+       WHERE q.id = $1 and q.is_deleted = false
        ORDER BY qq.order_index, qo.order_index`,
       [quizId],
     );
 
     if (quizQuery.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Quiz not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Quiz not found' });
     }
 
     const { passing_score, max_score } = quizQuery.rows[0];
@@ -605,6 +678,7 @@ exports.submitQuizAttempt = async (req, res) => {
           id: row.question_id,
           type: row.question_type,
           points: row.points,
+          explanation: row.explanation,
           options: [],
         });
       }
@@ -631,7 +705,9 @@ exports.submitQuizAttempt = async (req, res) => {
 
       if (question.type === 'multiple_choice') {
         correctOption = question.options.find((o) => o.is_correct);
-        const selectedOption = question.options.find((o) => o.id === userAnswer);
+        const selectedOption = question.options.find(
+          (o) => o.id === userAnswer,
+        );
         selectedOptionId = selectedOption?.id ?? null;
         if (correctOption && userAnswer === correctOption.id) {
           score += question.points;
@@ -639,7 +715,9 @@ exports.submitQuizAttempt = async (req, res) => {
         }
       } else if (question.type === 'true_false') {
         correctOption = question.options.find((o) => o.is_correct);
-        const selectedOption = question.options.find((o) => o.option_text === userAnswer);
+        const selectedOption = question.options.find(
+          (o) => o.option_text === userAnswer,
+        );
         selectedOptionId = selectedOption?.id ?? null;
         if (correctOption && userAnswer === correctOption.option_text) {
           score += question.points;
@@ -648,20 +726,29 @@ exports.submitQuizAttempt = async (req, res) => {
       }
       // short_answer: skipped (manual review, no auto-score)
 
+      // correct_option_id/text are withheld until the reveal threshold below —
+      // otherwise a failing attempt would hand the student the answer key.
+      question.correctOptionId = correctOption?.id ?? null;
+      question.correctOptionText = correctOption?.option_text ?? null;
+
       question_results[questionId] = {
         is_correct: userIsCorrect,
         selected_option_id: selectedOptionId,
-        correct_option_id: correctOption?.id ?? null,
-        correct_option_text: correctOption?.option_text ?? null,
+        correct_option_id: null,
+        correct_option_text: null,
       };
     }
 
     // Derive passing threshold from actual question points to handle cases where
     // the stored max_score is out of sync with real question points.
-    const passingRatio = max_score > 0 ? passing_score / max_score : 0.7;
-    const effectivePassingScore = actual_max_score > 0
-      ? Math.ceil(actual_max_score * passingRatio)
-      : passing_score;
+    // Clamp to 1 so a stale/misconfigured passing_score > max_score can never
+    // produce a threshold higher than the actual achievable score.
+    const passingRatio =
+      max_score > 0 ? Math.min(1, passing_score / max_score) : 0.7;
+    const effectivePassingScore =
+      actual_max_score > 0
+        ? Math.ceil(actual_max_score * passingRatio)
+        : passing_score;
     const isPassed = score >= effectivePassingScore;
 
     const result = await pool.query(
@@ -671,13 +758,39 @@ exports.submitQuizAttempt = async (req, res) => {
       [quizId, userId, score, isPassed],
     );
 
+    // Only reveal the correct answer + explanation once the student has
+    // attempted the quiz MIN_ATTEMPTS_FOR_REVEAL times — otherwise a failing
+    // attempt would hand them the answer key outright. Until then, students
+    // only learn whether their own selection was right or wrong.
+    const MIN_ATTEMPTS_FOR_REVEAL = 3;
+    const attemptCountResult = await pool.query(
+      'SELECT COUNT(*) AS count FROM quiz_attempts WHERE quiz_id = $1 AND user_id = $2',
+      [quizId, userId],
+    );
+    const attemptCount = parseInt(attemptCountResult.rows[0].count, 10);
+    const canRevealAnswer = attemptCount >= MIN_ATTEMPTS_FOR_REVEAL;
+    if (canRevealAnswer) {
+      for (const [questionId, question] of questionsMap) {
+        if (question_results[questionId]) {
+          question_results[questionId].explanation = question.explanation;
+          question_results[questionId].correct_option_id =
+            question.correctOptionId;
+          question_results[questionId].correct_option_text =
+            question.correctOptionText;
+        }
+      }
+    }
+
     // Save per-question results for analytics
     const attemptId = result.rows[0].id;
     const answerRows = Object.entries(question_results);
     if (answerRows.length > 0) {
       // Each row: (quiz_attempt_id, question_id, selected_option_id, is_correct, points_earned)
       const vals = answerRows
-        .map((_, i) => `($1, $${i * 4 + 2}::uuid, $${i * 4 + 3}::uuid, $${i * 4 + 4}, $${i * 4 + 5})`)
+        .map(
+          (_, i) =>
+            `($1, $${i * 4 + 2}::uuid, $${i * 4 + 3}::uuid, $${i * 4 + 4}, $${i * 4 + 5})`,
+        )
         .join(', ');
       const params = [
         attemptId,
@@ -698,16 +811,32 @@ exports.submitQuizAttempt = async (req, res) => {
       );
     }
 
-    // Award XP only when quiz is passed
-    const pointsAwarded = isPassed ? 15 : 0;
+    // Delta System for Quizzes: Proportional XP up to 15 points
+    const prevMaxRes = await pool.query(
+      `SELECT MAX(score) as max_score 
+       FROM quiz_attempts 
+       WHERE user_id = $1 AND quiz_id = $2 AND id != $3 AND is_passed = true`,
+      [userId, quizId, attemptId]
+    );
+    const prevMaxScore = prevMaxRes.rows[0].max_score || 0;
+
+    const maxPossiblePoints = 15;
+    const prevPoints = actual_max_score > 0 ? Math.round((prevMaxScore / actual_max_score) * maxPossiblePoints) : 0;
+    const newPoints = actual_max_score > 0 ? Math.round((score / actual_max_score) * maxPossiblePoints) : 0;
+    
+    let pointsAwarded = 0;
     if (isPassed) {
+      pointsAwarded = Math.max(0, newPoints - prevPoints);
+    }
+
+    if (pointsAwarded > 0) {
       await pool.query(
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
         [userId, 'quiz_completion', pointsAwarded],
       );
-      await updateStreak(userId);
-      await checkAndAwardBadges(userId);
     }
+    markActionToday(userId);
+    await checkAndAwardBadges(userId);
 
     // Trigger completion check for ALL subtopics in the unit (not just the first)
     const unitResult = await pool.query(
@@ -756,7 +885,9 @@ exports.submitExercise = async (req, res) => {
     );
 
     if (exerciseQuery.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Exercise not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
     }
 
     const exercise = exerciseQuery.rows[0];
@@ -769,39 +900,84 @@ exports.submitExercise = async (req, res) => {
       // Multi-task exercise: run tests for each task and aggregate
       let totalPassed = 0;
       let totalTests = 0;
+      let anyWorkspaceFound = false;
       const taskResults = [];
 
       for (const task of exercise.tasks) {
         if (!task.test_cases || task.test_cases.length === 0) continue;
-        const taskWorkspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}-task-${task.id}`);
+        const taskWorkspaceDir = path.join(
+          WORKSPACE_ROOT,
+          String(userId),
+          `exercise-${exerciseId}-task-${task.id}`,
+        );
         if (!fs.existsSync(taskWorkspaceDir)) continue;
+        anyWorkspaceFound = true;
         try {
-          const result = await runTestCases(taskWorkspaceDir, exercise.language, task.test_cases);
+          const result = await runTestCases(
+            taskWorkspaceDir,
+            exercise.language,
+            task.test_cases,
+          );
           totalPassed += result.passed;
           totalTests += result.total;
-          taskResults.push({ taskId: task.id, taskTitle: task.title, ...result });
+          taskResults.push({
+            taskId: task.id,
+            taskTitle: task.title,
+            ...result,
+          });
         } catch (err) {
           // count all tests in this task as failed
           totalTests += task.test_cases.length;
-          taskResults.push({ taskId: task.id, taskTitle: task.title, passed: 0, failed: task.test_cases.length, total: task.test_cases.length, error: err.message });
+          taskResults.push({
+            taskId: task.id,
+            taskTitle: task.title,
+            passed: 0,
+            failed: task.test_cases.length,
+            total: task.test_cases.length,
+            error: err.message,
+          });
         }
       }
 
-      score = totalTests > 0
-        ? Math.round((totalPassed / totalTests) * exercise.max_score)
-        : exercise.max_score;
+      if (!anyWorkspaceFound) {
+        return res.status(400).json({
+          success: false,
+          message: 'Workspace not initialised. Open the exercise first.',
+        });
+      }
+
+      score =
+        totalTests > 0
+          ? Math.round((totalPassed / totalTests) * exercise.max_score)
+          : 0;
       testResults = { totalPassed, totalTests, taskResults };
     } else if (exercise.test_cases && exercise.test_cases.length > 0) {
       // Legacy: single workspace test cases
-      const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), `exercise-${exerciseId}`);
+      const workspaceDir = path.join(
+        WORKSPACE_ROOT,
+        String(userId),
+        `exercise-${exerciseId}`,
+      );
       if (!fs.existsSync(workspaceDir)) {
-        return res.status(400).json({ success: false, message: 'Workspace not initialised. Open the exercise first.' });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: 'Workspace not initialised. Open the exercise first.',
+          });
       }
       try {
-        testResults = await runTestCases(workspaceDir, exercise.language, exercise.test_cases);
-        score = testResults.total > 0
-          ? Math.round((testResults.passed / testResults.total) * exercise.max_score)
-          : 0;
+        testResults = await runTestCases(
+          workspaceDir,
+          exercise.language,
+          exercise.test_cases,
+        );
+        score =
+          testResults.total > 0
+            ? Math.round(
+                (testResults.passed / testResults.total) * exercise.max_score,
+              )
+            : 0;
       } catch (err) {
         return serverError(res, err);
       }
@@ -819,12 +995,26 @@ exports.submitExercise = async (req, res) => {
       [exerciseId, userId, score, isPassed],
     );
 
-    const pointsAwarded = Math.round((score / exercise.max_score) * 100);
-    await pool.query(
-      'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
-      [userId, 'exercise_completion', pointsAwarded],
+    // Delta System: Find previous highest score for this exercise
+    const prevMaxRes = await pool.query(
+      `SELECT MAX(score) as max_score 
+       FROM exercise_submissions 
+       WHERE user_id = $1 AND exercise_id = $2 AND id != $3`,
+      [userId, exerciseId, submissionResult.rows[0].id]
     );
-    await updateStreak(userId);
+    const prevMaxScore = prevMaxRes.rows[0].max_score || 0;
+    
+    const prevPoints = Math.round((prevMaxScore / exercise.max_score) * 100);
+    const newPoints = Math.round((score / exercise.max_score) * 100);
+    const pointsAwarded = Math.max(0, newPoints - prevPoints);
+
+    if (pointsAwarded > 0) {
+      await pool.query(
+        'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
+        [userId, 'exercise_completion', pointsAwarded],
+      );
+    }
+    markActionToday(userId);
     await checkAndAwardBadges(userId);
 
     if (exercise.subtopic_id) {
@@ -857,16 +1047,37 @@ const runnerService = require('../services/runnerService');
 const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
 const EXERCISE_RUNNER = {
-  javascript: { image: 'workspace-node',   cmd: ['node',    'index.js'] },
-  python:     { image: 'workspace-python', cmd: ['python3', 'main.py']  },
-  java:       { image: 'workspace-java',   cmd: ['sh', '-c', 'cd /workspace && javac Main.java 2>&1 && java -cp /workspace Main'] },
-  sql:        { image: 'workspace-sql',    cmd: ['sh', '-c', 'sqlite3 -column -header :memory: < /workspace/solution.sql'] },
+  javascript: { image: 'workspace-node', cmd: ['node', 'index.js'] },
+  python: { image: 'workspace-python', cmd: ['python3', 'main.py'] },
+  java: {
+    image: 'workspace-java',
+    cmd: [
+      'sh',
+      '-c',
+      'cd /workspace && javac Main.java 2>&1 && java -cp /workspace Main',
+    ],
+  },
+  sql: {
+    image: 'workspace-sql',
+    cmd: [
+      'sh',
+      '-c',
+      'sqlite3 -column -header :memory: < /workspace/solution.sql',
+    ],
+  },
 };
 
 const TEST_RUNNER_CMD = {
-  javascript: { image: 'workspace-node',   cmd: ['node',    '__tests__.js']  },
-  python:     { image: 'workspace-python', cmd: ['python3', '__tests__.py']  },
-  java:       { image: 'workspace-java',   cmd: ['sh', '-c', 'cd /workspace && javac Main.java __Tests__.java 2>&1 && java -cp /workspace __Tests__'] },
+  javascript: { image: 'workspace-node', cmd: ['node', '__tests__.js'] },
+  python: { image: 'workspace-python', cmd: ['python3', '__tests__.py'] },
+  java: {
+    image: 'workspace-java',
+    cmd: [
+      'sh',
+      '-c',
+      'cd /workspace && javac Main.java __Tests__.java 2>&1 && java -cp /workspace __Tests__',
+    ],
+  },
   // sql: not supported — no test runner for SQL exercises
 };
 
@@ -927,23 +1138,44 @@ async function runTestCases(workspaceDir, language, testCases) {
   let header, footer, testFile;
 
   if (language === 'python') {
-    const studentCode = fs.readFileSync(path.join(workspaceDir, 'main.py'), 'utf-8');
-    const escapedCode = studentCode.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"');
-    header   = `studentCodeString = """${escapedCode}"""\n` + studentCode + `\n` + PY_TEST_HEADER;
-    footer   = PY_TEST_FOOTER;
+    const studentCode = fs.readFileSync(
+      path.join(workspaceDir, 'main.py'),
+      'utf-8',
+    );
+    const escapedCode = studentCode
+      .replace(/\\/g, '\\\\')
+      .replace(/"""/g, '\\"\\"\\"');
+    header =
+      `studentCodeString = """${escapedCode}"""\n` +
+      studentCode +
+      `\n` +
+      PY_TEST_HEADER;
+    footer = PY_TEST_FOOTER;
     testFile = path.join(workspaceDir, '__tests__.py');
   } else if (language === 'java') {
-    header   = JAVA_TEST_HEADER;
-    footer   = JAVA_TEST_FOOTER;
+    header = JAVA_TEST_HEADER;
+    footer = JAVA_TEST_FOOTER;
     testFile = path.join(workspaceDir, '__Tests__.java');
   } else if (language === 'sql') {
-    throw new Error('Automated test cases are not supported for SQL exercises.');
+    throw new Error(
+      'Automated test cases are not supported for SQL exercises.',
+    );
   } else {
     // javascript (default)
-    const studentCode = fs.readFileSync(path.join(workspaceDir, 'index.js'), 'utf-8');
-    const escapedCode = studentCode.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
-    header   = `const studentCodeString = \`${escapedCode}\`;\n` + studentCode + `\n` + JS_TEST_HEADER;
-    footer   = JS_TEST_FOOTER;
+    const studentCode = fs.readFileSync(
+      path.join(workspaceDir, 'index.js'),
+      'utf-8',
+    );
+    const escapedCode = studentCode
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$/g, '\\$');
+    header =
+      `const studentCodeString = \`${escapedCode}\`;\n` +
+      studentCode +
+      `\n` +
+      JS_TEST_HEADER;
+    footer = JS_TEST_FOOTER;
     testFile = path.join(workspaceDir, '__tests__.js');
   }
 
@@ -951,7 +1183,8 @@ async function runTestCases(workspaceDir, language, testCases) {
   fs.writeFileSync(testFile, header + testCode + footer, 'utf-8');
 
   const result = await runnerService.executeTests(workspaceDir, language);
-  if (!result) throw new Error('Test execution is not supported for this language.');
+  if (!result)
+    throw new Error('Test execution is not supported for this language.');
 
   const { output } = result;
   const lines = output.trim().split('\n');
@@ -965,10 +1198,16 @@ async function runTestCases(workspaceDir, language, testCases) {
 }
 
 const DEFAULT_INITIAL_FILES = {
-  javascript: [{ name: 'index.js',    content: '// Write your solution here\n' }],
-  python:     [{ name: 'main.py',     content: '# Write your solution here\n'  }],
-  java:       [{ name: 'Main.java',   content: 'public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n' }],
-  sql:        [{ name: 'solution.sql', content: '-- Write your SQL here\n' }],
+  javascript: [{ name: 'index.js', content: '// Write your solution here\n' }],
+  python: [{ name: 'main.py', content: '# Write your solution here\n' }],
+  java: [
+    {
+      name: 'Main.java',
+      content:
+        'public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n',
+    },
+  ],
+  sql: [{ name: 'solution.sql', content: '-- Write your SQL here\n' }],
 };
 
 /**
@@ -988,7 +1227,9 @@ exports.initExerciseWorkspace = async (req, res) => {
     );
 
     if (exerciseResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Exercise not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
     }
 
     const { language, initial_files, tasks } = exerciseResult.rows[0];
@@ -996,14 +1237,19 @@ exports.initExerciseWorkspace = async (req, res) => {
     // Determine which files to seed: task-specific or exercise-level
     let filesToSeedFromDb = null;
     if (taskId && Array.isArray(tasks) && tasks.length > 0) {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task)
+        return res
+          .status(404)
+          .json({ success: false, message: 'Task not found' });
       filesToSeedFromDb = task.initial_files;
     } else {
       filesToSeedFromDb = initial_files;
     }
 
-    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
     const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
 
     fs.mkdirSync(workspaceDir, { recursive: true });
@@ -1011,9 +1257,10 @@ exports.initExerciseWorkspace = async (req, res) => {
     const existing = fs.readdirSync(workspaceDir);
     if (existing.length === 0) {
       const filesToSeed =
-        (Array.isArray(filesToSeedFromDb) && filesToSeedFromDb.length > 0)
+        Array.isArray(filesToSeedFromDb) && filesToSeedFromDb.length > 0
           ? filesToSeedFromDb
-          : (DEFAULT_INITIAL_FILES[language] ?? DEFAULT_INITIAL_FILES.javascript);
+          : (DEFAULT_INITIAL_FILES[language] ??
+            DEFAULT_INITIAL_FILES.javascript);
 
       for (const file of filesToSeed) {
         const filePath = path.join(workspaceDir, file.name);
@@ -1023,9 +1270,10 @@ exports.initExerciseWorkspace = async (req, res) => {
     }
 
     // Return current files from disk so returning students see their saved work
-    const files = fs.readdirSync(workspaceDir)
-      .filter(f => fs.statSync(path.join(workspaceDir, f)).isFile())
-      .map(name => ({
+    const files = fs
+      .readdirSync(workspaceDir)
+      .filter((f) => fs.statSync(path.join(workspaceDir, f)).isFile())
+      .map((name) => ({
         name,
         content: fs.readFileSync(path.join(workspaceDir, name), 'utf-8'),
       }));
@@ -1053,19 +1301,28 @@ exports.runExercise = async (req, res) => {
     );
 
     if (exerciseResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Exercise not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
     }
 
     const { language } = exerciseResult.rows[0];
     const runner = EXERCISE_RUNNER[language] ?? EXERCISE_RUNNER.javascript;
-    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
     const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
 
     if (!fs.existsSync(workspaceDir)) {
-      return res.status(400).json({ success: false, message: 'Workspace not initialised' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'Workspace not initialised' });
     }
 
-    const { output, exitCode } = await runnerService.execute(workspaceDir, language);
+    const { output, exitCode } = await runnerService.execute(
+      workspaceDir,
+      language,
+    );
     res.json({ success: true, data: { output, exitCode } });
   } catch (error) {
     console.error('Error running exercise:', error);
@@ -1088,7 +1345,9 @@ exports.runExerciseTests = async (req, res) => {
       [exerciseId],
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Exercise not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
     }
 
     const { language, test_cases, tasks } = result.rows[0];
@@ -1096,22 +1355,36 @@ exports.runExerciseTests = async (req, res) => {
     // Resolve which test cases to run
     let testCasesToRun = test_cases;
     if (taskId && Array.isArray(tasks) && tasks.length > 0) {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task)
+        return res
+          .status(404)
+          .json({ success: false, message: 'Task not found' });
       testCasesToRun = task.test_cases;
     }
 
     if (!testCasesToRun || testCasesToRun.length === 0) {
-      return res.json({ success: true, data: { message: 'No test cases defined for this task' } });
+      return res.json({
+        success: true,
+        data: { message: 'No test cases defined for this task' },
+      });
     }
 
-    const projectId = taskId ? `exercise-${exerciseId}-task-${taskId}` : `exercise-${exerciseId}`;
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
     const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
     if (!fs.existsSync(workspaceDir)) {
-      return res.status(400).json({ success: false, message: 'Workspace not initialised' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'Workspace not initialised' });
     }
 
-    const testResult = await runTestCases(workspaceDir, language, testCasesToRun);
+    const testResult = await runTestCases(
+      workspaceDir,
+      language,
+      testCasesToRun,
+    );
     res.json({ success: true, data: testResult });
   } catch (error) {
     console.error('Error running exercise tests:', error);
@@ -1130,7 +1403,9 @@ exports.runExerciseTests = async (req, res) => {
 exports.getOverallLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     const result = await pool.query(
       `WITH ranked AS (
@@ -1139,7 +1414,8 @@ exports.getOverallLeaderboard = async (req, res) => {
           u.full_name,
           c.name AS college_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN colleges c ON sp.college_id = c.id
@@ -1147,8 +1423,8 @@ exports.getOverallLeaderboard = async (req, res) => {
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id, u.full_name, c.name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset],
     );
 
     const userRank = await pool.query(
@@ -1165,9 +1441,18 @@ exports.getOverallLeaderboard = async (req, res) => {
       [userId],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
@@ -1182,7 +1467,9 @@ exports.getOverallLeaderboard = async (req, res) => {
 exports.getWeeklyLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     // ISO Monday of current week
     const now = new Date();
@@ -1200,16 +1487,17 @@ exports.getWeeklyLeaderboard = async (req, res) => {
           u.full_name,
           c.name AS college_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN colleges c ON sp.college_id = c.id
-        LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $2
+        LEFT JOIN points_log pl ON pl.user_id = u.id AND pl.created_at >= $3
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
         GROUP BY u.id, u.full_name, c.name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit, weekStartStr],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset, weekStartStr],
     );
 
     const userRank = await pool.query(
@@ -1226,10 +1514,19 @@ exports.getWeeklyLeaderboard = async (req, res) => {
       [userId, weekStartStr],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
       week_start: weekStartStr,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching weekly leaderboard:', error);
@@ -1244,11 +1541,21 @@ exports.getWeeklyLeaderboard = async (req, res) => {
 exports.getCollegeLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50 } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
-    const userQuery = await pool.query('SELECT college_id FROM student_profiles WHERE user_id = $1', [userId]);
+    const userQuery = await pool.query(
+      'SELECT college_id FROM student_profiles WHERE user_id = $1',
+      [userId],
+    );
     if (!userQuery.rows[0]?.college_id) {
-      return res.status(400).json({ success: false, message: 'User is not associated with any college' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: 'User is not associated with any college',
+        });
     }
 
     const collegeId = userQuery.rows[0].college_id;
@@ -1259,15 +1566,16 @@ exports.getCollegeLeaderboard = async (req, res) => {
           u.id AS user_id,
           u.full_name,
           COALESCE(SUM(pl.points), 0)::integer AS total_points,
-          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank
+          RANK() OVER (ORDER BY COALESCE(SUM(pl.points), 0) DESC)::integer AS rank,
+          COUNT(*) OVER ()::integer AS total_count
         FROM users u
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN points_log pl ON pl.user_id = u.id
-        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = $2
+        WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = $3
         GROUP BY u.id, u.full_name
       )
-      SELECT * FROM ranked ORDER BY rank LIMIT $1`,
-      [limit, collegeId],
+      SELECT * FROM ranked ORDER BY rank LIMIT $1 OFFSET $2`,
+      [pageSize, offset, collegeId],
     );
 
     const userRank = await pool.query(
@@ -1285,10 +1593,19 @@ exports.getCollegeLeaderboard = async (req, res) => {
       [userId, collegeId],
     );
 
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const leaderboard = result.rows.map(({ total_count, ...row }) => row);
+
     res.json({
       success: true,
       college_id: collegeId,
-      data: { leaderboard: result.rows, my_rank: userRank.rows[0] || null },
+      data: { leaderboard, my_rank: userRank.rows[0] || null },
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching college leaderboard:', error);
@@ -1332,7 +1649,9 @@ exports.createStudentProject = async (req, res) => {
     const { name, profile } = req.body;
 
     if (!name || !profile) {
-      return res.status(400).json({ success: false, message: 'name and profile are required' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'name and profile are required' });
     }
 
     const result = await pool.query(
@@ -1342,6 +1661,7 @@ exports.createStudentProject = async (req, res) => {
       [userId, name.trim(), profile],
     );
 
+    logAction({ req, action: 'CREATE', entityType: 'student_project', entityId: result.rows[0].id, details: { name, profile } });
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error creating student project:', error);
@@ -1364,10 +1684,18 @@ exports.deleteStudentProject = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Project not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Project not found' });
     }
 
-    logAction({ req, action: 'DELETE', entityType: 'student_project', entityId: id, details: { name: result.rows[0].name } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'student_project',
+      entityId: id,
+      details: { name: result.rows[0].name },
+    });
     res.json({ success: true, message: 'Project deleted' });
   } catch (error) {
     console.error('Error deleting student project:', error);
@@ -1410,7 +1738,9 @@ exports.getAssignmentById = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Assignment not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
     }
 
     res.json({ success: true, data: result.rows[0] });
@@ -1431,7 +1761,9 @@ exports.submitAssignment = async (req, res) => {
     const { submission_link } = req.body;
 
     if (!submission_link || !submission_link.trim()) {
-      return res.status(400).json({ success: false, message: 'submission_link is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'submission_link is required' });
     }
 
     // Verify the student is enrolled in the subject this assignment belongs to
@@ -1446,7 +1778,9 @@ exports.submitAssignment = async (req, res) => {
     );
 
     if (enrolled.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Assignment not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Assignment not found' });
     }
 
     const result = await pool.query(
@@ -1458,6 +1792,7 @@ exports.submitAssignment = async (req, res) => {
       [id, userId, submission_link.trim()],
     );
 
+    logAction({ req, action: 'CREATE', entityType: 'assignment_submission', entityId: id, details: { submission_link: submission_link.trim() } });
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting assignment:', error);
@@ -1526,7 +1861,9 @@ exports.getCapstone = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Capstone project not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Capstone project not found' });
     }
 
     res.json({ success: true, data: result.rows[0] });
@@ -1547,7 +1884,9 @@ exports.submitCapstone = async (req, res) => {
     const { submission_link } = req.body;
 
     if (!submission_link || !submission_link.trim()) {
-      return res.status(400).json({ success: false, message: 'submission_link is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: 'submission_link is required' });
     }
 
     // Verify enrollment
@@ -1561,7 +1900,9 @@ exports.submitCapstone = async (req, res) => {
     );
 
     if (enrolled.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Project not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Project not found' });
     }
 
     const result = await pool.query(
@@ -1584,10 +1925,11 @@ exports.submitCapstone = async (req, res) => {
         'INSERT INTO points_log (user_id, source, points) VALUES ($1, $2, $3)',
         [userId, source, 20],
       );
-      await updateStreak(userId);
+      markActionToday(userId);
       await checkAndAwardBadges(userId);
     }
 
+    logAction({ req, action: 'CREATE', entityType: 'project_submission', entityId: projectId, details: { submission_link: submission_link.trim() } });
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting capstone:', error);
@@ -1614,7 +1956,10 @@ exports.enrollInSubject = async (req, res) => {
       await client.query('ROLLBACK');
       return res
         .status(404)
-        .json({ success: false, message: 'Subject not found or not available' });
+        .json({
+          success: false,
+          message: 'Subject not found or not available',
+        });
     }
 
     // Insert enrollment (idempotent)
@@ -1625,8 +1970,8 @@ exports.enrollInSubject = async (req, res) => {
       [userId, subjectId],
     );
 
-    // Seed subtopic progress: unit 1 always unlocked; other units inherit
-    // admin-applied lock decisions only (not peer progression state).
+    // Seed subtopic progress: unlocked by default (peer-progression locking
+    // not enforced yet); only locked if an admin explicitly locked it.
     await client.query(
       `WITH new_student_profile AS (
         SELECT college_id, year FROM student_profiles WHERE user_id = $1
@@ -1653,9 +1998,8 @@ exports.enrollInSubject = async (req, res) => {
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT $1, ss.subtopic_id,
         CASE
-          WHEN ss.unit_rn = 1       THEN true   -- first unit: always open
-          WHEN al.is_locked = false THEN true    -- admin explicitly unlocked
-          ELSE false                             -- default locked; progression unlocks
+          WHEN al.is_locked = true THEN false   -- admin explicitly locked
+          ELSE true                             -- unlocked by default; locking mechanism TBD
         END
       FROM subject_subtopics ss
       LEFT JOIN admin_locks al ON al.subtopic_id = ss.subtopic_id
@@ -1836,7 +2180,10 @@ exports.getStudentScorecard = async (req, res) => {
     console.error('Error fetching scorecard:', error);
     res
       .status(500)
-      .json({ success: false, message: 'Failed to fetch scorecard', error: error.message });
+      .json({
+        success: false,
+        message: 'Failed to fetch scorecard',
+      });
   }
 };
 
@@ -1865,39 +2212,101 @@ exports.getStudentModuleAnalytics = async (req, res) => {
              GROUP BY qa.quiz_id
            ) bq
          ), 0)::int AS quiz_score,
+         -- Real max achievable points (sum of question points) for quizzes
+         -- ATTEMPTED so far, not the quizzes.max_score column (a fixed
+         -- constant, can be out of sync with actual question points — see
+         -- submitQuizAttempt's actual_max_score) and not all quizzes in the
+         -- topic (quiz_score/quiz_max should reflect accuracy on what's been
+         -- attempted; quizzes_attempted/quizzes_total below covers completion).
          COALESCE((
-           SELECT SUM(q.max_score)
+           SELECT SUM(qq.points)
+           FROM quiz_questions qq
+           JOIN quizzes q ON q.id = qq.quiz_id
+           JOIN units un ON un.id = q.unit_id
+           WHERE un.topic_id = t.id AND qq.is_deleted = false
+             AND EXISTS (
+               SELECT 1 FROM quiz_attempts qa
+               WHERE qa.quiz_id = q.id AND qa.user_id = $1
+             )
+         ), 0)::int AS quiz_max,
+         -- Assignment status is now derived in JS from asg_submitted/asg_total
+         -- (below) instead of a binary EXISTS check, so partial completion
+         -- across multiple assignments in a topic isn't hidden behind a
+         -- single Submitted/Pending flag.
+         -- Project status is now derived in JS from proj_submitted/proj_approved/
+         -- proj_total (below), same reasoning as assignment_status: a binary
+         -- EXISTS check would hide partial completion across multiple projects
+         -- in one topic.
+         -- NEW PROGRESS COUNTS
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM user_lesson_progress ulp
+           JOIN lesson_content lc ON lc.id = ulp.lesson_content_id
+           JOIN subtopics st ON st.id = lc.subtopic_id
+           JOIN units un ON un.id = st.unit_id
+           WHERE ulp.is_completed = true AND ulp.user_id = $1 AND un.topic_id = t.id
+         ), 0) AS lessons_completed,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM lesson_content lc
+           JOIN subtopics st ON st.id = lc.subtopic_id
+           JOIN units un ON un.id = st.unit_id
+           WHERE un.topic_id = t.id
+         ), 0) AS lessons_total,
+         COALESCE((
+           SELECT COUNT(DISTINCT q.id)::int
+           FROM quiz_attempts qa
+           JOIN quizzes q ON q.id = qa.quiz_id
+           JOIN units un ON un.id = q.unit_id
+           WHERE qa.user_id = $1 AND qa.is_passed = true AND un.topic_id = t.id
+         ), 0) AS quizzes_passed,
+         -- Distinct quizzes attempted at all (pass or fail) — used to show
+         -- completion ("2 of 5 quizzes attempted") separately from accuracy
+         -- (quiz_score/quiz_max), so an un-attempted quiz doesn't silently
+         -- drag down the accuracy percentage as if it were scored 0.
+         COALESCE((
+           SELECT COUNT(DISTINCT q.id)::int
+           FROM quiz_attempts qa
+           JOIN quizzes q ON q.id = qa.quiz_id
+           JOIN units un ON un.id = q.unit_id
+           WHERE qa.user_id = $1 AND un.topic_id = t.id
+         ), 0) AS quizzes_attempted,
+         COALESCE((
+           SELECT COUNT(*)::int
            FROM quizzes q
            JOIN units un ON un.id = q.unit_id
            WHERE un.topic_id = t.id
-         ), 0)::int AS quiz_max,
-         -- Assignment status: Submitted if any submission exists for this topic
-         CASE
-           WHEN EXISTS (
-             SELECT 1 FROM assignment_submissions asub
-             JOIN assignments a ON a.id = asub.assignment_id
-             JOIN units un ON un.id = a.unit_id
-             WHERE asub.user_id = $1 AND un.topic_id = t.id
-           ) THEN 'Submitted'
-           ELSE 'Pending'
-         END AS assignment_status,
-         -- Project status
-         CASE
-           WHEN EXISTS (
-             SELECT 1 FROM project_submissions ps
-             JOIN projects p ON p.id = ps.project_id
-             WHERE ps.user_id = $1 AND p.topic_id = t.id AND ps.is_approved = true
-           ) THEN 'Approved'
-           WHEN EXISTS (
-             SELECT 1 FROM project_submissions ps
-             JOIN projects p ON p.id = ps.project_id
-             WHERE ps.user_id = $1 AND p.topic_id = t.id
-           ) THEN 'Submitted'
-           WHEN EXISTS (
-             SELECT 1 FROM projects p WHERE p.topic_id = t.id
-           ) THEN 'Not Started'
-           ELSE NULL
-         END AS project_status
+         ), 0) AS quizzes_total,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM assignment_submissions sub
+           JOIN assignments a ON a.id = sub.assignment_id
+           JOIN units un ON un.id = a.unit_id
+           WHERE sub.user_id = $1 AND un.topic_id = t.id
+         ), 0) AS asg_submitted,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM assignments a
+           JOIN units un ON un.id = a.unit_id
+           WHERE un.topic_id = t.id
+         ), 0) AS asg_total,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM project_submissions sub
+           JOIN projects p ON p.id = sub.project_id
+           WHERE sub.user_id = $1 AND p.topic_id = t.id
+         ), 0) AS proj_submitted,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM project_submissions sub
+           JOIN projects p ON p.id = sub.project_id
+           WHERE sub.user_id = $1 AND p.topic_id = t.id AND sub.is_approved = true
+         ), 0) AS proj_approved,
+         COALESCE((
+           SELECT COUNT(*)::int
+           FROM projects p
+           WHERE p.topic_id = t.id
+         ), 0) AS proj_total
        FROM topics t
        JOIN subjects s ON s.id = t.subject_id
        JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
@@ -1907,24 +2316,95 @@ exports.getStudentModuleAnalytics = async (req, res) => {
 
     // Group by subject
     const subjectMap = new Map();
+    let totalProgressSum = 0;
+    let totalTopics = 0;
+
     for (const row of result.rows) {
       if (!subjectMap.has(row.subject_id)) {
-        subjectMap.set(row.subject_id, { subject_id: row.subject_id, subject_name: row.subject_name, topics: [] });
+        subjectMap.set(row.subject_id, {
+          subject_id: row.subject_id,
+          subject_name: row.subject_name,
+          topics: [],
+        });
       }
+
+      // Calculate progress for this topic
+      const calcPct = (completed, total) =>
+        total > 0 ? Math.round((completed / total) * 100) : null;
+      const lessonPct = calcPct(row.lessons_completed, row.lessons_total);
+      const quizPct = calcPct(row.quizzes_passed, row.quizzes_total);
+      const asgPct = calcPct(row.asg_submitted, row.asg_total);
+      const projPct = calcPct(row.proj_submitted, row.proj_total);
+
+      const pcts = [lessonPct, quizPct, asgPct, projPct].filter(
+        (p) => p !== null,
+      );
+      const progress =
+        pcts.length > 0
+          ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
+          : 0;
+
+      totalProgressSum += progress;
+      totalTopics++;
+
+      // Derived from counts (not a binary EXISTS check) so partial
+      // completion across multiple assignments in a topic is visible
+      // instead of collapsing to a single Submitted/Pending flag.
+      let assignmentStatus = null;
+      if (row.asg_total > 0) {
+        assignmentStatus =
+          row.asg_submitted === 0
+            ? 'Pending'
+            : row.asg_submitted < row.asg_total
+              ? 'Partial'
+              : 'Submitted';
+      }
+
+      // Same reasoning as assignmentStatus above — distinguishes "no
+      // projects in this topic" from partial/full submission and approval.
+      let projectStatus = null;
+      if (row.proj_total > 0) {
+        projectStatus =
+          row.proj_submitted === 0
+            ? 'Not Started'
+            : row.proj_approved === row.proj_total
+              ? 'Approved'
+              : row.proj_submitted < row.proj_total
+                ? 'Partial'
+                : 'Submitted';
+      }
+
       subjectMap.get(row.subject_id).topics.push({
         topic_id: row.topic_id,
         topic_title: row.topic_title,
         quiz_score: row.quiz_score,
         quiz_max: row.quiz_max,
-        assignment_status: row.assignment_status,
-        project_status: row.project_status,
+        quizzes_attempted: row.quizzes_attempted,
+        quizzes_total: row.quizzes_total,
+        assignment_status: assignmentStatus,
+        assignments_submitted: row.asg_submitted,
+        assignments_total: row.asg_total,
+        project_status: projectStatus,
+        projects_submitted: row.proj_submitted,
+        projects_approved: row.proj_approved,
+        projects_total: row.proj_total,
+        progress,
       });
     }
 
-    res.json({ success: true, data: Array.from(subjectMap.values()) });
+    const overall_progress =
+      totalTopics > 0 ? Math.round(totalProgressSum / totalTopics) : 0;
+
+    res.json({
+      success: true,
+      overall_progress,
+      data: Array.from(subjectMap.values()),
+    });
   } catch (err) {
     console.error('getStudentModuleAnalytics error:', err);
-    res.status(500).json({ success: false, message: 'Failed to fetch module analytics' });
+    res
+      .status(500)
+      .json({ success: false, message: 'Failed to fetch module analytics' });
   }
 };
 
@@ -1935,47 +2415,54 @@ exports.getStudentModuleAnalytics = async (req, res) => {
 exports.getStudentAnalytics = async (req, res) => {
   const userId = req.user.id;
   try {
-    const [metricsRes, recentQuizzesRes, pendingRes] = await Promise.all([
-      pool.query(
-        `SELECT
-           (SELECT COUNT(*)::int FROM quiz_attempts WHERE user_id = $1)         AS quizzes_attempted,
-           COALESCE((
-             SELECT ROUND(AVG(qa.score::numeric / NULLIF(q.max_score,0) * 100))::int
-             FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id
-             WHERE qa.user_id = $1 AND q.max_score > 0
-           ), 0)                                                                 AS avg_quiz_score,
-           (SELECT COUNT(*)::int FROM assignment_submissions WHERE user_id = $1) AS assignments_submitted,
-           (SELECT COUNT(*)::int FROM project_submissions WHERE user_id = $1 AND is_approved = true)
-                                                                                 AS projects_completed`,
-        [userId],
-      ),
-      pool.query(
-        `SELECT qa.id, un.title AS name,
-                ROUND(qa.score::numeric / NULLIF(q.max_score,0) * 100)::int AS score,
-                CASE WHEN qa.is_passed THEN 'Passed' ELSE 'Failed' END AS status,
-                qa.created_at
-         FROM quiz_attempts qa
-         JOIN quizzes q ON q.id = qa.quiz_id
-         JOIN units un ON un.id = q.unit_id
-         WHERE qa.user_id = $1
-         ORDER BY qa.created_at DESC
-         LIMIT 5`,
-        [userId],
-      ),
-      pool.query(
-        `SELECT COUNT(*)::int AS assignments_pending
-         FROM assignments a
-         JOIN units u ON u.id = a.unit_id
-         JOIN topics t ON t.id = u.topic_id
-         JOIN subjects s ON s.id = t.subject_id
-         JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
-         WHERE NOT EXISTS (
-           SELECT 1 FROM assignment_submissions sub
-           WHERE sub.assignment_id = a.id AND sub.user_id = $1
-         )`,
-        [userId],
-      ),
-    ]);
+    // Fetch data sequentially to prevent Neon connection pool exhaustion/timeouts
+    const metricsRes = await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM quiz_attempts WHERE user_id = $1)         AS quizzes_attempted,
+         COALESCE((
+           SELECT ROUND(AVG(LEAST(100, qa.score::numeric / NULLIF(q.max_score,0) * 100)))::int
+           FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id
+           WHERE qa.user_id = $1 AND q.max_score > 0
+         ), 0)                                                                 AS avg_quiz_score,
+         (SELECT COUNT(*)::int FROM assignment_submissions WHERE user_id = $1) AS assignments_submitted,
+         (SELECT COUNT(*)::int FROM project_submissions WHERE user_id = $1 AND is_approved = true)
+                                                                               AS projects_completed,
+         (SELECT current_streak FROM user_streaks WHERE user_id = $1)          AS current_streak,
+         (SELECT last_activity FROM user_streaks WHERE user_id = $1)           AS last_activity,
+         (SELECT (CURRENT_DATE - last_activity::date) FROM user_streaks WHERE user_id = $1) AS days_since_active`,
+      [userId],
+    );
+
+    const recentQuizzesRes = await pool.query(
+      `SELECT q.id AS id, un.title AS name,
+              MAX(qa.score)::int AS score,
+              CASE WHEN bool_or(qa.is_passed) THEN 'Passed' ELSE 'Failed' END AS status,
+              MAX(qa.created_at) AS created_at
+       FROM quiz_attempts qa
+       JOIN quizzes q ON q.id = qa.quiz_id
+       JOIN units un ON un.id = q.unit_id
+       WHERE qa.user_id = $1
+       GROUP BY q.id, un.title
+       ORDER BY created_at DESC
+       LIMIT 5`,
+      [userId],
+    );
+
+    const pendingRes = await pool.query(
+      `SELECT COUNT(*)::int AS assignments_pending
+       FROM assignments a
+       JOIN units u ON u.id = a.unit_id
+       JOIN topics t ON t.id = u.topic_id
+       JOIN subjects s ON s.id = t.subject_id
+       JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+       WHERE NOT EXISTS (
+         SELECT 1 FROM assignment_submissions sub
+         WHERE sub.assignment_id = a.id AND sub.user_id = $1
+       )`,
+      [userId],
+    );
+
+    const totalXp = await getTotalXP(userId);
 
     const m = metricsRes.rows[0];
     res.json({
@@ -1987,13 +2474,19 @@ exports.getStudentAnalytics = async (req, res) => {
           assignments_submitted: m.assignments_submitted,
           assignments_pending: pendingRes.rows[0].assignments_pending,
           projects_completed: m.projects_completed,
+          current_streak: m.current_streak || 0,
+          last_activity: m.last_activity || null,
+          days_since_active: m.days_since_active || 0,
+          total_xp: totalXp,
         },
         recent_quizzes: recentQuizzesRes.rows,
       },
     });
   } catch (err) {
     console.error('getStudentAnalytics error:', err);
-    res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
+    res
+      .status(500)
+      .json({ success: false, message: 'Failed to fetch analytics' });
   }
 };
 

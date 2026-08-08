@@ -8,6 +8,7 @@ import { useAppDispatch } from '@/app/hooks';
 import { loadUser } from '@/features/auth/authThunks';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
+import Logo from '@/components/common/Logo';
 
 interface College {
   id: string;
@@ -65,9 +66,14 @@ export default function FacilitatorOnboarding() {
         const name = customName.trim();
         const city = customCity.trim();
         const words = name.split(/\s+/);
-        const shortCode = words.length > 1 
-          ? words.map(w => w[0]).join('').toUpperCase().substring(0, 5)
-          : name.substring(0, 5).toUpperCase();
+        const shortCode =
+          words.length > 1
+            ? words
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase()
+                .substring(0, 5)
+            : name.substring(0, 5).toUpperCase();
 
         const collegeRes = await apiClient.post('/colleges', {
           name,
@@ -93,21 +99,39 @@ export default function FacilitatorOnboarding() {
   };
 
   return (
-    <div className='min-h-screen bg-background flex flex-col items-center justify-center p-6'>
-      <div className='w-full max-w-lg space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700'>
+    <div
+      className='min-h-screen w-full relative bg-cover bg-center overflow-hidden flex flex-col items-center justify-center p-6'
+      style={{
+        backgroundImage: 'url("/bg-students.jpg")',
+        fontFamily: "'Inter', sans-serif",
+      }}
+    >
+      {/* Blue tinted overlay */}
+      <div className='absolute inset-0 bg-[#344499]/70 backdrop-blur-[2px]' />
+
+      <div className='flex flex-col items-center mb-6 relative z-10'>
+        <Logo className='h-14 w-14 mb-2' />
+        <span className='text-white font-bold text-lg tracking-wider'>
+          CodeGuru
+        </span>
+      </div>
+
+      <div className='relative z-10 w-full max-w-lg space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700'>
         <div className='flex items-center gap-3 mb-8'>
           <div className='h-12 w-12 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg'>
             <GraduationCap className='h-7 w-7' />
           </div>
           <div>
-            <h1 className='text-2xl font-bold'>Facilitator Onboarding</h1>
-            <p className='text-sm text-muted-foreground'>
+            <h1 className='text-2xl font-bold text-white'>
+              Facilitator Onboarding
+            </h1>
+            <p className='text-sm text-slate-200'>
               Step 1: Assign your colleges
             </p>
           </div>
         </div>
 
-        <div className='bg-card border rounded-2xl p-6 shadow-sm space-y-6'>
+        <div className='bg-white border rounded-2xl p-6 shadow-sm space-y-6'>
           <div className='space-y-1.5'>
             <h2 className='text-lg font-semibold flex items-center gap-2'>
               <Landmark className='h-5 w-5 text-primary' />
@@ -165,7 +189,9 @@ export default function FacilitatorOnboarding() {
             ) : (
               <div className='p-4 border border-dashed rounded-lg bg-muted/20 space-y-3 animate-in zoom-in-95 duration-200'>
                 <div className='flex items-center justify-between'>
-                  <p className='text-xs font-bold uppercase tracking-wider text-muted-foreground'>Add Custom College</p>
+                  <p className='text-xs font-bold uppercase tracking-wider text-muted-foreground'>
+                    Add Custom College
+                  </p>
                   <button
                     type='button'
                     onClick={() => setShowCustomCollege(false)}
@@ -176,7 +202,9 @@ export default function FacilitatorOnboarding() {
                 </div>
                 <div className='grid grid-cols-2 gap-3'>
                   <div className='space-y-1'>
-                    <label className='text-[10px] font-bold text-muted-foreground'>College Name</label>
+                    <label className='text-[10px] font-bold text-muted-foreground'>
+                      College Name
+                    </label>
                     <input
                       type='text'
                       placeholder='e.g. Stanford University'
@@ -186,7 +214,9 @@ export default function FacilitatorOnboarding() {
                     />
                   </div>
                   <div className='space-y-1'>
-                    <label className='text-[10px] font-bold text-muted-foreground'>City</label>
+                    <label className='text-[10px] font-bold text-muted-foreground'>
+                      City
+                    </label>
                     <input
                       type='text'
                       placeholder='e.g. Palo Alto'
@@ -203,7 +233,11 @@ export default function FacilitatorOnboarding() {
           <Button
             className='w-full py-6 text-lg rounded-xl shadow-xl hover:shadow-primary/25 transition-all group'
             onClick={handleSubmit}
-            disabled={loading || isSubmitting || (selectedIds.length === 0 && !showCustomCollege)}
+            disabled={
+              loading ||
+              isSubmitting ||
+              (selectedIds.length === 0 && !showCustomCollege)
+            }
           >
             {isSubmitting ? (
               'Processing...'
@@ -216,7 +250,7 @@ export default function FacilitatorOnboarding() {
           </Button>
         </div>
 
-        <p className='text-center text-xs text-muted-foreground'>
+        <p className='text-center text-xs text-slate-200'>
           Once assigned, an administrator will verify your profile within 24-48
           hours.
         </p>

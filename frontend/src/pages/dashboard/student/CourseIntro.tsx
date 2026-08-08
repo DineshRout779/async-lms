@@ -7,6 +7,8 @@ import {
   Trophy,
   ChevronRight,
   Loader2,
+  PartyPopper,
+  RotateCcw,
 } from 'lucide-react';
 import apiClient from '@/services/api';
 import { Button } from '@/components/ui/button';
@@ -89,7 +91,8 @@ const CourseIntro = () => {
 
         setCourse({
           name: data.name || 'Course Overview',
-          description: data.description || "Welcome to this course. Let's get started!",
+          description:
+            data.description || "Welcome to this course. Let's get started!",
           total_topics: data.data.length,
           total_subtopics: totalSubtopics,
           first_lesson_slug: firstLesson,
@@ -103,9 +106,12 @@ const CourseIntro = () => {
             .then((res) => {
               const d = res.data?.data;
               if (d) {
-                const pct = d.total_subtopics > 0
-                  ? Math.round((d.completed_subtopics / d.total_subtopics) * 100)
-                  : 0;
+                const pct =
+                  d.total_subtopics > 0
+                    ? Math.round(
+                        (d.completed_subtopics / d.total_subtopics) * 100,
+                      )
+                    : 0;
                 setProgressPercent(pct);
                 setLastAccessedSlug(d.last_accessed_subtopic_slug ?? null);
               }
@@ -140,20 +146,49 @@ const CourseIntro = () => {
     return (
       <div className='max-w-2xl mx-auto p-8 text-center space-y-4'>
         <BookOpen className='w-12 h-12 text-slate-300 mx-auto' />
-        <h2 className='text-2xl font-bold text-slate-700'>{course?.name ?? 'Course'}</h2>
-        <p className='text-slate-500'>This course has no content yet. Check back soon!</p>
+        <h2 className='text-2xl font-bold text-slate-700'>
+          {course?.name ?? 'Course'}
+        </h2>
+        <p className='text-slate-500'>
+          This course has no content yet. Check back soon!
+        </p>
       </div>
     );
   }
 
   const isInProgress = progressPercent > 0;
+  const isCompleted = progressPercent >= 100;
 
   return (
     <div className='max-w-5xl mx-auto p-8 space-y-10 animate-in fade-in duration-700'>
+      {/* Course Completed banner */}
+      {isCompleted && (
+        <div className='flex items-center gap-4 rounded-3xl bg-emerald-50 border border-emerald-200 p-6 shadow-sm'>
+          <div className='p-3 bg-emerald-100 rounded-2xl shrink-0'>
+            <PartyPopper className='w-7 h-7 text-emerald-600' />
+          </div>
+          <div>
+            <p className='font-bold text-emerald-800 text-lg'>
+              Course Completed!
+            </p>
+            <p className='text-sm text-emerald-700'>
+              You've finished every lesson, quiz, and assignment in this course.
+              Great work!
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <div className='relative overflow-hidden rounded-3xl bg-[#1e2653] p-10 text-white shadow-2xl'>
         <div className='relative z-10 space-y-6 max-w-2xl'>
-          <h1 className='text-4xl md:text-5xl font-black tracking-tight leading-tight'>
+          {isCompleted && (
+            <span className='inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-300'>
+              <Trophy className='w-3.5 h-3.5' />
+              Completed
+            </span>
+          )}
+          <h1 className='text-4xl capitalize md:text-5xl font-black tracking-tight leading-tight'>
             {course?.name}
           </h1>
           <p className='text-blue-100 text-lg leading-relaxed opacity-90'>
@@ -166,8 +201,16 @@ const CourseIntro = () => {
               disabled={!course?.first_lesson_slug}
               className='bg-blue-600 hover:bg-blue-700 text-white font-bold h-14 px-8 rounded-xl shadow-lg shadow-blue-900/20 gap-2'
             >
-              <Play className='w-5 h-5 fill-current' />
-              {isInProgress ? 'Continue Learning' : 'Start Learning'}
+              {isCompleted ? (
+                <RotateCcw className='w-5 h-5' />
+              ) : (
+                <Play className='w-5 h-5 fill-current' />
+              )}
+              {isCompleted
+                ? 'Review Course'
+                : isInProgress
+                  ? 'Continue Learning'
+                  : 'Start Learning'}
             </Button>
           </div>
         </div>
@@ -179,7 +222,7 @@ const CourseIntro = () => {
         <StatCard
           icon={<BookOpen className='text-blue-600' />}
           label='Curriculum'
-          value={`${course?.total_topics} Topics`}
+          value={`${course?.total_topics} Topic(s)`}
         />
         <StatCard
           icon={<Clock className='text-orange-600' />}
@@ -189,7 +232,7 @@ const CourseIntro = () => {
         <StatCard
           icon={<Trophy className='text-emerald-600' />}
           label='Certificate'
-          value='On Completion'
+          value={isCompleted ? 'Earned' : 'On Completion'}
         />
       </div>
 
@@ -200,17 +243,34 @@ const CourseIntro = () => {
             <span className='text-slate-500 uppercase tracking-wider'>
               Your Progress
             </span>
-            <span className='text-blue-600'>{progressPercent}%</span>
+            <span
+              className={isCompleted ? 'text-emerald-600' : 'text-blue-600'}
+            >
+              {progressPercent}%
+            </span>
           </div>
-          <Progress value={progressPercent} className='h-3 bg-slate-100' />
+          <Progress
+            value={progressPercent}
+            className={`h-3 bg-slate-100 ${isCompleted ? '[&>div]:bg-emerald-500' : ''}`}
+          />
         </div>
         <div className='flex items-center gap-4'>
           <div className='text-right hidden sm:block'>
             <p className='text-xs font-bold text-slate-400 uppercase tracking-widest'>
-              {isInProgress ? 'Last Activity' : 'Status'}
+              {isCompleted
+                ? 'Status'
+                : isInProgress
+                  ? 'Last Activity'
+                  : 'Status'}
             </p>
-            <p className='text-sm font-semibold text-slate-700'>
-              {isInProgress ? 'In progress' : 'Not started yet'}
+            <p
+              className={`text-sm font-semibold ${isCompleted ? 'text-emerald-600' : 'text-slate-700'}`}
+            >
+              {isCompleted
+                ? 'Completed'
+                : isInProgress
+                  ? 'In progress'
+                  : 'Not started yet'}
             </p>
           </div>
           <Button
@@ -219,7 +279,12 @@ const CourseIntro = () => {
             onClick={continueLearning}
             disabled={!course?.first_lesson_slug}
           >
-            {isInProgress ? 'Continue' : 'View Syllabus'} <ChevronRight className='w-4 h-4 ml-1' />
+            {isCompleted
+              ? 'Review'
+              : isInProgress
+                ? 'Continue'
+                : 'View Syllabus'}{' '}
+            <ChevronRight className='w-4 h-4 ml-1' />
           </Button>
         </div>
       </div>

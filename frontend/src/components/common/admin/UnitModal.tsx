@@ -62,6 +62,7 @@ const UnitModal: React.FC<UnitModalProps> = ({
             </label>
             <input
               type='text'
+              autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder='e.g., Arrays in Detail'

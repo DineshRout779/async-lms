@@ -1,8 +1,18 @@
-import { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Trophy, TrendingUp, Users, Award, Medal, Crown } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Trophy,
+  Users,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Flame,
+} from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
+import { useAppSelector } from '@/app/hooks';
+import { selectUser } from '@/features/auth/authSelectors';
 import {
   useOverallLeaderboard,
   useWeeklyLeaderboard,
@@ -23,235 +33,415 @@ interface MyRank {
   total_points: number;
 }
 
-const getRankIcon = (rank: number) => {
-  if (rank === 1) return <Crown className='h-5 w-5 text-yellow-500' />;
-  if (rank === 2) return <Medal className='h-5 w-5 text-slate-400' />;
-  if (rank === 3) return <Medal className='h-5 w-5 text-amber-600' />;
-  return <span className='text-sm font-bold text-slate-500'>#{rank}</span>;
+const rankMessage = (rank: number) => {
+  if (rank === 1) return "You're #1";
+  if (rank <= 3) return 'So close to the top!';
+  return 'Keep climbing!';
 };
+
+const RankPanel = ({
+  myRank,
+  onJumpToMe,
+}: {
+  myRank?: MyRank | null;
+  onJumpToMe?: () => void;
+}) => {
+  if (!myRank) return <div />;
+  return (
+    <button
+      onClick={onJumpToMe}
+      className='flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-shadow text-left'
+    >
+      <div className='flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white font-bold text-xs shrink-0'>
+        #{myRank.rank}
+      </div>
+      <div>
+        <p className='text-sm font-bold text-slate-900 leading-tight flex items-center gap-1.5'>
+          Your Rank
+          <span className='inline-flex items-center gap-0.5 rounded-full bg-indigo-600 text-white text-[11px] font-bold px-2 py-0.5'>
+            {rankMessage(myRank.rank)}
+            <ChevronRight className='h-3 w-3' />
+          </span>
+        </p>
+        <p className='text-xs text-slate-500 mt-0.5'>
+          <span className='font-bold text-slate-900'>{myRank.total_points}</span> total points
+        </p>
+      </div>
+    </button>
+  );
+};
+
+interface Pagination {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
 
 const getInitials = (name: string) =>
   name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
+type TabKey = 'overall' | 'weekly' | 'college';
+
+const tabMeta: Record<TabKey, { label: string; icon: typeof Trophy; hint: string }> = {
+  overall: { label: 'Overall', icon: Trophy, hint: 'All-time points' },
+  weekly: { label: 'This Week', icon: Flame, hint: 'Points since Monday' },
+  college: { label: 'My College', icon: Users, hint: 'Ranked within your college' },
+};
+
+const podiumStyle = [
+  {
+    border: 'border-2 border-yellow-400',
+    numberBg: 'bg-yellow-400',
+    ring: 'ring-4 ring-yellow-200',
+    pillBg: 'bg-yellow-50',
+    pillText: 'text-yellow-700',
+    order: 'md:order-2',
+    height: 'md:pt-0 md:pb-6',
+    scale: 'md:scale-105',
+  },
+  {
+    border: 'border border-slate-100',
+    numberBg: 'bg-slate-400',
+    ring: 'ring-4 ring-slate-200',
+    pillBg: 'bg-slate-100',
+    pillText: 'text-slate-600',
+    order: 'md:order-1',
+    height: 'md:pt-6',
+    scale: '',
+  },
+  {
+    border: 'border border-slate-100',
+    numberBg: 'bg-amber-600',
+    ring: 'ring-4 ring-amber-100',
+    pillBg: 'bg-amber-50',
+    pillText: 'text-amber-700',
+    order: 'md:order-3',
+    height: 'md:pt-6',
+    scale: '',
+  },
+];
+
 const LeaderboardTable = ({
   data = [],
-  myRank,
   isLoading,
+  pagination,
+  onPageChange,
+  currentUserId,
+  scrollSignal,
 }: {
   data?: LeaderboardEntry[];
-  myRank?: MyRank | null;
   isLoading: boolean;
+  pagination?: Pagination;
+  onPageChange: (page: number) => void;
+  currentUserId?: string | number;
+  scrollSignal?: number;
 }) => {
-  if (isLoading) {
+  const rowRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  useEffect(() => {
+    if (!scrollSignal || !currentUserId) return;
+    const row = rowRefs.current[String(currentUserId)];
+    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [scrollSignal, currentUserId, data]);
+
+  if (isLoading && !data.length) {
     return (
-      <div className='flex items-center justify-center py-20'>
-        <div className='text-center'>
-          <div className='mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600' />
-          <p className='text-slate-500'>Loading leaderboard...</p>
-        </div>
+      <div className='flex flex-col items-center justify-center gap-3 py-24'>
+        <Loader2 className='h-8 w-8 animate-spin text-indigo-600' />
+        <p className='text-slate-400 text-sm'>Loading leaderboard...</p>
       </div>
     );
   }
 
   if (!data.length) {
     return (
-      <div className='flex items-center justify-center py-20'>
-        <div className='text-center'>
-          <Trophy className='mx-auto mb-4 h-16 w-16 text-slate-300' />
-          <p className='text-slate-500'>No data available yet</p>
-        </div>
-      </div>
+      <Card className='border-none shadow-sm'>
+        <CardContent className='flex flex-col items-center justify-center gap-3 py-20 text-center'>
+          <Trophy className='h-10 w-10 text-slate-300' />
+          <p className='text-slate-500 font-medium'>No data available yet</p>
+        </CardContent>
+      </Card>
     );
   }
 
+  const isFirstPage = !pagination || pagination.page === 1;
+  const top3 = isFirstPage ? data.slice(0, 3) : [];
+  const rest = isFirstPage ? data.slice(3) : data;
+
   return (
-    <div className='space-y-4'>
-      {myRank && (
-        <Card className='border-2 border-indigo-500 bg-linear-to-r from-indigo-50 to-purple-50 p-4'>
-          <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-4'>
-              <div className='flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white'>
-                {getRankIcon(myRank.rank)}
+    <div className='space-y-6'>
+      {top3.length > 0 && (
+        <div className='grid gap-5 md:grid-cols-3 items-end pt-4'>
+          {top3.map((entry, index) => {
+            const style = podiumStyle[index];
+            const isMe = currentUserId !== undefined && String(entry.user_id) === String(currentUserId);
+            return (
+              <div
+                key={entry.user_id}
+                ref={(el) => {
+                  rowRefs.current[String(entry.user_id)] = el;
+                }}
+                className={cn('relative', style.order, style.height, style.scale)}
+              >
+                <span
+                  className={cn(
+                    'absolute -top-3.5 left-1/2 -translate-x-1/2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-white text-xs font-extrabold',
+                    style.numberBg,
+                  )}
+                >
+                  {entry.rank}
+                </span>
+
+                <Card
+                  className={cn(
+                    'relative overflow-hidden shadow-sm transition-all duration-300 hover:-translate-y-1',
+                    style.border,
+                  )}
+                >
+                  <CardContent className='relative pt-8 pb-6 flex flex-col items-center text-center'>
+                    <Avatar className={`h-16 w-16 mb-4 ${style.ring}`}>
+                      <AvatarFallback className='bg-indigo-50 text-indigo-600 font-bold text-lg'>
+                        {getInitials(entry.full_name)}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    <h3 className='mb-0.5 font-bold text-slate-900 truncate max-w-full flex items-center gap-1.5'>
+                      {entry.full_name}
+                      {isMe && (
+                        <span className='text-[9px] font-extrabold uppercase tracking-widest bg-indigo-600 text-white px-1.5 py-0.5 rounded-full'>
+                          You
+                        </span>
+                      )}
+                    </h3>
+                    {entry.college_name && (
+                      <p className='mb-3 text-xs text-muted-foreground truncate max-w-full'>
+                        {entry.college_name}
+                      </p>
+                    )}
+
+                    <div
+                      className={cn(
+                        'flex items-baseline gap-1 rounded-full px-4 py-1.5',
+                        style.pillBg,
+                      )}
+                    >
+                      <p className={cn('text-2xl font-extrabold', style.pillText)}>
+                        {entry.total_points}
+                      </p>
+                      <span className={cn('text-[10px] uppercase font-bold tracking-widest', style.pillText, 'opacity-60')}>
+                        pts
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-              <div>
-                <p className='text-sm font-medium text-slate-700'>Your Rank</p>
-                <p className='text-2xl font-bold text-indigo-600'>#{myRank.rank}</p>
-              </div>
-            </div>
-            <div className='text-right'>
-              <p className='text-sm font-medium text-slate-700'>Total Points</p>
-              <p className='text-2xl font-bold text-slate-900'>{myRank.total_points}</p>
-            </div>
-          </div>
-        </Card>
+            );
+          })}
+        </div>
       )}
 
-      <div className='grid gap-4 md:grid-cols-3'>
-        {data.slice(0, 3).map((entry, index) => (
-          <Card
-            key={entry.user_id}
-            className={`p-6 text-center ${
-              index === 0
-                ? 'border-2 border-yellow-400 bg-linear-to-b from-yellow-50 to-white'
-                : index === 1
-                ? 'border-2 border-slate-400 bg-linear-to-b from-slate-50 to-white'
-                : 'border-2 border-amber-400 bg-linear-to-b from-amber-50 to-white'
-            }`}
-          >
-            <div className='mb-4 flex justify-center'>{getRankIcon(entry.rank)}</div>
-            <Avatar className='mx-auto mb-3 h-16 w-16'>
-              <AvatarFallback className='bg-indigo-100 text-indigo-700'>
-                {getInitials(entry.full_name)}
-              </AvatarFallback>
-            </Avatar>
-            <h3 className='mb-1 font-bold text-slate-900'>{entry.full_name}</h3>
-            {entry.college_name && (
-              <p className='mb-2 text-xs text-slate-500'>{entry.college_name}</p>
-            )}
-            <p className='text-2xl font-bold text-indigo-600'>
-              {entry.total_points}
-              <span className='ml-1 text-sm text-slate-500'>pts</span>
-            </p>
-          </Card>
-        ))}
-      </div>
-
-      {data.length > 3 && (
-        <Card className='overflow-hidden'>
+      {rest.length > 0 && (
+        <Card className='border-none shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
-            <table className='w-full'>
-              <thead className='bg-slate-50'>
-                <tr>
-                  <th className='px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600'>Rank</th>
-                  <th className='px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600'>Student</th>
-                  {data[0]?.college_name && (
-                    <th className='px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600'>College</th>
+            <table className='w-full text-sm'>
+              <thead>
+                <tr className='border-b border-slate-100'>
+                  <th className='px-6 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400'>
+                    Rank
+                  </th>
+                  <th className='px-6 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400'>
+                    Student
+                  </th>
+                  {rest[0]?.college_name && (
+                    <th className='px-6 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400'>
+                      College
+                    </th>
                   )}
-                  <th className='px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-600'>Points</th>
+                  <th className='px-6 py-3 text-right text-[10px] font-bold uppercase tracking-widest text-slate-400'>
+                    Points
+                  </th>
                 </tr>
               </thead>
-              <tbody className='divide-y divide-slate-200 bg-white'>
-                {data.slice(3).map((entry) => (
-                  <tr key={entry.user_id} className='transition-colors hover:bg-slate-50'>
-                    <td className='whitespace-nowrap px-6 py-4'>
-                      <span className='text-sm font-medium text-slate-700'>#{entry.rank}</span>
+              <tbody className='divide-y divide-slate-50'>
+                {rest.map((entry) => {
+                  const isMe = currentUserId !== undefined && String(entry.user_id) === String(currentUserId);
+                  return (
+                  <tr
+                    key={entry.user_id}
+                    ref={(el) => {
+                      rowRefs.current[String(entry.user_id)] = el;
+                    }}
+                    className={cn(
+                      'transition-colors group scroll-mt-24',
+                      isMe ? 'bg-indigo-50/70 hover:bg-indigo-50' : 'hover:bg-indigo-50/40',
+                    )}
+                  >
+                    <td className='whitespace-nowrap px-6 py-4 font-bold text-slate-400 group-hover:text-indigo-600 transition-colors'>
+                      #{entry.rank}
                     </td>
                     <td className='whitespace-nowrap px-6 py-4'>
                       <div className='flex items-center gap-3'>
-                        <Avatar className='h-10 w-10'>
-                          <AvatarFallback className='bg-indigo-100 text-indigo-700'>
+                        <Avatar className={cn('h-9 w-9 ring-2 ring-white shadow-sm', isMe && 'ring-2 ring-indigo-400')}>
+                          <AvatarFallback className='bg-indigo-50 text-indigo-600 text-xs font-bold'>
                             {getInitials(entry.full_name)}
                           </AvatarFallback>
                         </Avatar>
-                        <p className='font-medium text-slate-900'>{entry.full_name}</p>
+                        <p className='font-bold text-slate-900'>{entry.full_name}</p>
+                        {isMe && (
+                          <span className='text-[9px] font-extrabold uppercase tracking-widest bg-indigo-600 text-white px-1.5 py-0.5 rounded-full'>
+                            You
+                          </span>
+                        )}
                       </div>
                     </td>
                     {entry.college_name && (
-                      <td className='whitespace-nowrap px-6 py-4 text-sm text-slate-600'>
+                      <td className='whitespace-nowrap px-6 py-4 text-muted-foreground'>
                         {entry.college_name}
                       </td>
                     )}
                     <td className='whitespace-nowrap px-6 py-4 text-right'>
-                      <span className='font-semibold text-indigo-600'>{entry.total_points}</span>
+                      <span className='inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 font-bold text-indigo-600'>
+                        {entry.total_points}
+                      </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </Card>
+      )}
+
+      {pagination && pagination.totalPages > 1 && (
+        <div className='flex items-center justify-between px-1'>
+          <p className='text-xs text-muted-foreground'>
+            Page {pagination.page} of {pagination.totalPages} &middot;{' '}
+            {pagination.totalCount} students
+          </p>
+          <div className='flex items-center gap-2'>
+            <Button
+              variant='outline'
+              size='sm'
+              disabled={pagination.page <= 1 || isLoading}
+              onClick={() => onPageChange(pagination.page - 1)}
+              className='rounded-xl'
+            >
+              <ChevronLeft className='h-4 w-4 mr-1' />
+              Prev
+            </Button>
+            <Button
+              variant='outline'
+              size='sm'
+              disabled={pagination.page >= pagination.totalPages || isLoading}
+              onClick={() => onPageChange(pagination.page + 1)}
+              className='rounded-xl'
+            >
+              Next
+              <ChevronRight className='h-4 w-4 ml-1' />
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
 };
 
 const Leaderboard = () => {
-  const [activeTab, setActiveTab] = useState<'overall' | 'weekly' | 'college'>('overall');
+  const [activeTab, setActiveTab] = useState<TabKey>('overall');
+  const [overallPage, setOverallPage] = useState(1);
+  const [weeklyPage, setWeeklyPage] = useState(1);
+  const [collegePage, setCollegePage] = useState(1);
 
-  const { data: overall, isLoading: loadingOverall } = useOverallLeaderboard();
-  const { data: weekly, isLoading: loadingWeekly } = useWeeklyLeaderboard();
-  const { data: college, isLoading: loadingCollege } = useCollegeLeaderboard();
+  const { data: overall, isLoading: loadingOverall } = useOverallLeaderboard(overallPage);
+  const { data: weekly, isLoading: loadingWeekly } = useWeeklyLeaderboard(weeklyPage);
+  const { data: college, isLoading: loadingCollege } = useCollegeLeaderboard(collegePage);
+
+  const byTab: Record<
+    TabKey,
+    { data: typeof overall; isLoading: boolean; page: number; setPage: (p: number) => void }
+  > = {
+    overall: { data: overall, isLoading: loadingOverall, page: overallPage, setPage: setOverallPage },
+    weekly: { data: weekly, isLoading: loadingWeekly, page: weeklyPage, setPage: setWeeklyPage },
+    college: { data: college, isLoading: loadingCollege, page: collegePage, setPage: setCollegePage },
+  };
+
+  const current = byTab[activeTab];
+  const user = useAppSelector(selectUser);
+
+  const tabRank: Record<TabKey, number | undefined> = {
+    overall: overall?.my_rank?.rank,
+    weekly: weekly?.my_rank?.rank,
+    college: college?.my_rank?.rank,
+  };
+
+  const [jumpToken, setJumpToken] = useState(0);
+
+  const handleJumpToMe = () => {
+    const rank = current.data?.my_rank?.rank;
+    if (!rank) return;
+    const pageSize = current.data?.pagination?.pageSize ?? 20;
+    const targetPage = Math.max(1, Math.ceil(rank / pageSize));
+    if (current.page !== targetPage) current.setPage(targetPage);
+    setJumpToken((t) => t + 1);
+  };
 
   return (
-    <div className='min-h-screen bg-slate-50 p-6'>
-      <div className='mx-auto max-w-7xl'>
-        <div className='mb-8'>
-          <div className='flex items-center gap-3 mb-2'>
-            <Trophy className='h-8 w-8 text-indigo-600' />
-            <h1 className='text-3xl font-bold text-slate-900'>Leaderboard</h1>
-          </div>
-          <p className='text-slate-600'>Compete with fellow students and climb to the top!</p>
-        </div>
-
-        <div className='mb-8 grid gap-4 md:grid-cols-3'>
-          <Card className='p-6'>
-            <div className='flex items-center gap-4'>
-              <div className='rounded-full bg-indigo-100 p-3'>
-                <TrendingUp className='h-6 w-6 text-indigo-600' />
-              </div>
-              <div>
-                <p className='text-sm text-slate-600'>Overall Rank</p>
-                <p className='text-2xl font-bold text-slate-900'>
-                  {overall?.my_rank ? `#${overall.my_rank.rank}` : '-'}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className='p-6'>
-            <div className='flex items-center gap-4'>
-              <div className='rounded-full bg-green-100 p-3'>
-                <Award className='h-6 w-6 text-green-600' />
-              </div>
-              <div>
-                <p className='text-sm text-slate-600'>This Week</p>
-                <p className='text-2xl font-bold text-slate-900'>
-                  {weekly?.my_rank ? `#${weekly.my_rank.rank}` : '-'}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className='p-6'>
-            <div className='flex items-center gap-4'>
-              <div className='rounded-full bg-purple-100 p-3'>
-                <Users className='h-6 w-6 text-purple-600' />
-              </div>
-              <div>
-                <p className='text-sm text-slate-600'>College Rank</p>
-                <p className='text-2xl font-bold text-slate-900'>
-                  {college?.my_rank ? `#${college.my_rank.rank}` : '-'}
-                </p>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
-          <TabsList className='mb-6 grid w-full grid-cols-3'>
-            <TabsTrigger value='overall'>
-              <Trophy className='mr-2 h-4 w-4' />Overall
-            </TabsTrigger>
-            <TabsTrigger value='weekly'>
-              <TrendingUp className='mr-2 h-4 w-4' />This Week
-            </TabsTrigger>
-            <TabsTrigger value='college'>
-              <Users className='mr-2 h-4 w-4' />My College
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value='overall'>
-            <LeaderboardTable data={overall?.leaderboard} myRank={overall?.my_rank} isLoading={loadingOverall} />
-          </TabsContent>
-          <TabsContent value='weekly'>
-            <LeaderboardTable data={weekly?.leaderboard} myRank={weekly?.my_rank} isLoading={loadingWeekly} />
-          </TabsContent>
-          <TabsContent value='college'>
-            <LeaderboardTable data={college?.leaderboard} myRank={college?.my_rank} isLoading={loadingCollege} />
-          </TabsContent>
-        </Tabs>
+    <main className='flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-6xl mx-auto'>
+      <div>
+        <h1 className='text-3xl font-bold tracking-tight text-slate-900'>Leaderboard</h1>
+        <p className='text-muted-foreground mt-1'>
+          See how you stack up against fellow students
+        </p>
       </div>
-    </div>
+
+      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-3'>
+        <div className='inline-flex items-center gap-1 rounded-2xl bg-slate-100 p-1.5'>
+          {(Object.keys(tabMeta) as TabKey[]).map((key) => {
+            const Icon = tabMeta[key].icon;
+            const isActive = activeTab === key;
+            const rank = tabRank[key];
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all',
+                  isActive
+                    ? 'bg-[#1e293b] text-white shadow-md'
+                    : 'text-slate-500 hover:text-slate-800',
+                )}
+              >
+                <Icon className={cn('h-4 w-4', isActive ? 'text-yellow-400' : 'text-slate-400')} />
+                {tabMeta[key].label}
+                {rank !== undefined && (
+                  <span
+                    className={cn(
+                      'text-[11px] font-extrabold px-1.5 py-0.5 rounded-full',
+                      isActive ? 'bg-white/15 text-white' : 'bg-white text-slate-500',
+                    )}
+                  >
+                    #{rank}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <RankPanel myRank={current.data?.my_rank} onJumpToMe={handleJumpToMe} />
+      </div>
+
+      <LeaderboardTable
+        data={current.data?.leaderboard}
+        isLoading={current.isLoading}
+        pagination={current.data?.pagination}
+        onPageChange={current.setPage}
+        currentUserId={user?.id}
+        scrollSignal={jumpToken}
+      />
+    </main>
   );
 };
 

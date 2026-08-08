@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const {
   getAllSubjects,
+  getSubjectsDropdown,
   getCourseStructure,
   getSubtopicContent,
   createSubject,
@@ -26,8 +27,8 @@ router.get('/published', verifyToken, getAllPublishedSubjects);
 // Fetch all subjects
 router.get('/', verifyToken, isAdmin, getAllSubjects);
 
-// GET subjects (for dropdown) 
-router.get('/dropdown', verifyToken, getAllSubjects);
+// GET subjects (for dropdown) — drafts hidden from students
+router.get('/dropdown', verifyToken, getSubjectsDropdown);
 // Create a new subject
 router.post('/', verifyToken, isAdmin, createSubject);
 

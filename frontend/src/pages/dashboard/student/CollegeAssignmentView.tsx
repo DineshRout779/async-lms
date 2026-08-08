@@ -25,7 +25,7 @@ export default function CollegeAssignmentView() {
   const [assignment, setAssignment] = useState<CollegeAssignment | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
+
   const [solution, setSolution] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'link'>('upload');
@@ -33,12 +33,13 @@ export default function CollegeAssignmentView() {
   const fetchAssignment = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get<{ success: boolean; data: CollegeAssignment }>(
-        `/college-assignments/${id}`
-      );
+      const res = await apiClient.get<{
+        success: boolean;
+        data: CollegeAssignment;
+      }>(`/college-assignments/${id}`);
       const data = res.data.data;
       setAssignment(data);
-      
+
       if (data.submission_link) {
         setSolution(data.submission_link);
         setActiveTab('link');
@@ -83,7 +84,7 @@ export default function CollegeAssignmentView() {
     try {
       setSubmitting(true);
       const formData = new FormData();
-      
+
       if (activeTab === 'link') {
         formData.append('submission_link', solution.trim());
       } else if (selectedFile) {
@@ -105,7 +106,7 @@ export default function CollegeAssignmentView() {
   if (loading) {
     return (
       <div className='flex h-[60vh] items-center justify-center'>
-        <Loader2 className='h-10 w-10 animate-spin text-indigo-600' />
+        <Loader2 className='h-10 w-10 animate-spin text-[#333D7C]' />
       </div>
     );
   }
@@ -121,11 +122,13 @@ export default function CollegeAssignmentView() {
     );
   }
 
-  const isSubmitted = Boolean(assignment.submission_link || assignment.submission_file_url);
+  const isSubmitted = Boolean(
+    assignment.submission_link || assignment.submission_file_url,
+  );
 
   return (
-    <div className='min-h-screen bg-[#F8FAFC] p-6 md:p-12 animate-in fade-in duration-500'>
-      <div className='max-w-6xl mx-auto space-y-8'>
+    <div className='p-8 max-w-6xl mx-auto space-y-8'>
+      <div>
         {/* Back Link */}
         <button
           onClick={() => navigate(-1)}
@@ -136,28 +139,37 @@ export default function CollegeAssignmentView() {
         </button>
 
         {/* Hero Card */}
-        <Card className='border-none rounded-[2rem] p-8 md:p-10 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-hidden relative'>
+        <Card className='border border-slate-100 mb-8 rounded-[2rem] p-8 md:p-10 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-hidden relative'>
           <div className='space-y-4'>
-            <div className='flex flex-wrap items-center gap-3'>
-              <span className='px-4 py-1 bg-[#E0F2FE] text-[#0369A1] text-[10px] font-black tracking-widest uppercase rounded-full'>
-                {assignment.course || 'GENERAL'}
+            <div className='flex  flex-wrap items-center gap-3'>
+              <span className='px-3 py-0.5 bg-[#333D7C]/10 text-[#333D7C] text-[10px] font-bold uppercase rounded-full'>
+                {assignment.course || 'General'}
               </span>
               <span
-                className={`px-4 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border ${
+                className={`px-3 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                   isSubmitted
-                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                    : 'bg-[#FFEDD5] text-[#9A3412] border-[#FED7AA]'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-orange-50 text-orange-600'
                 }`}
               >
-                {isSubmitted ? 'COMPLETED' : 'PENDING'}
+                {isSubmitted ? 'Completed' : 'Pending'}
               </span>
             </div>
-            <h1 className='text-4xl font-black text-[#1E293B] tracking-tight capitalize'>
+            <h1 className='text-3xl font-bold text-[#1e293b] tracking-tight capitalize'>
               {assignment.title}
             </h1>
-            <div className='flex items-center gap-2 text-slate-400 font-bold text-sm'>
-              <Calendar className='w-4 h-4 text-[#6366F1]' />
-              <span>Due: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No Deadline'}</span>
+            <div className='flex items-center gap-2 text-slate-400 font-medium text-sm'>
+              <Calendar className='w-4 h-4 text-[#333D7C]' />
+              <span>
+                Due:{' '}
+                {assignment.due_date
+                  ? new Date(assignment.due_date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })
+                  : 'No Deadline'}
+              </span>
             </div>
           </div>
           {assignment.instruction_file_url && (
@@ -177,67 +189,100 @@ export default function CollegeAssignmentView() {
         <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
           {/* Left: Assignment Brief */}
           <div className='lg:col-span-7 space-y-6'>
-            <Card className='border-none rounded-[2rem] p-10 shadow-sm h-full'>
+            <Card className='border border-slate-100 rounded-[2rem] p-10 shadow-sm h-full'>
               <div className='space-y-10'>
                 <div className='space-y-8'>
                   <div className='space-y-4'>
-                    <h2 className='text-xl font-black text-[#1E293B]'>Assignment Brief</h2>
+                    <h2 className='text-xl font-bold text-[#1e293b]'>
+                      Assignment Brief
+                    </h2>
                     {assignment.description ? (
-                      <div 
-                        className='prose prose-sm max-w-none text-[#64748B] font-medium leading-7'
-                        dangerouslySetInnerHTML={{ __html: assignment.description }}
+                      <div
+                        className='prose prose-sm max-w-none text-slate-500 leading-7'
+                        dangerouslySetInnerHTML={{
+                          __html: assignment.description,
+                        }}
                       />
                     ) : (
-                      <p className='text-[#64748B] italic'>No description provided.</p>
+                      <p className='text-slate-500 italic'>
+                        No description provided.
+                      </p>
                     )}
                   </div>
-                  
+
                   {assignment.assignment_description && (
                     <div className='space-y-4 pt-6 border-t border-slate-100'>
-                      <h2 className='text-xl font-black text-[#1E293B]'>Instructions</h2>
-                      <div 
-                        className='prose prose-sm max-w-none text-[#64748B] font-medium leading-7'
-                        dangerouslySetInnerHTML={{ __html: assignment.assignment_description }}
+                      <h2 className='text-xl font-bold text-[#1e293b]'>
+                        Instructions
+                      </h2>
+                      <div
+                        className='prose prose-sm max-w-none text-slate-500 leading-7'
+                        dangerouslySetInnerHTML={{
+                          __html: assignment.assignment_description,
+                        }}
                       />
                     </div>
                   )}
 
-                  {assignment.test_cases && assignment.test_cases.length > 0 && (
-                    <div className='space-y-4 pt-6 border-t border-slate-100'>
-                      <h2 className='text-xl font-black text-[#1E293B]'>Test Cases</h2>
-                      <div className='rounded-xl border border-slate-200 overflow-hidden'>
-                        <table className='w-full text-sm text-left'>
-                          <thead className='bg-slate-50 text-slate-600 font-bold'>
-                            <tr>
-                              <th className='px-4 py-3 border-b'>Input</th>
-                              <th className='px-4 py-3 border-b'>Expected Output</th>
-                              <th className='px-4 py-3 border-b w-24 text-center'>Points</th>
-                            </tr>
-                          </thead>
-                          <tbody className='divide-y divide-slate-100 bg-white'>
-                            {assignment.test_cases.map((tc, idx) => (
-                              <tr key={idx} className='hover:bg-slate-50 transition-colors'>
-                                <td className='px-4 py-3 font-mono text-slate-700'>{tc.input}</td>
-                                <td className='px-4 py-3 font-mono text-slate-700'>{tc.output}</td>
-                                <td className='px-4 py-3 text-center font-bold text-blue-600'>{tc.score}</td>
+                  {assignment.test_cases &&
+                    assignment.test_cases.length > 0 && (
+                      <div className='space-y-4 pt-6 border-t border-slate-100'>
+                        <h2 className='text-xl font-bold text-[#1e293b]'>
+                          Test Cases
+                        </h2>
+                        <div className='rounded-xl border border-slate-200 overflow-hidden'>
+                          <table className='w-full text-sm text-left'>
+                            <thead className='bg-slate-50 text-slate-600 font-semibold'>
+                              <tr>
+                                <th className='px-4 py-3 border-b'>Input</th>
+                                <th className='px-4 py-3 border-b'>
+                                  Expected Output
+                                </th>
+                                <th className='px-4 py-3 border-b w-24 text-center'>
+                                  Points
+                                </th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className='divide-y divide-slate-100 bg-white'>
+                              {assignment.test_cases.map((tc, idx) => (
+                                <tr
+                                  key={idx}
+                                  className='hover:bg-slate-50 transition-colors'
+                                >
+                                  <td className='px-4 py-3 font-mono text-slate-700'>
+                                    {tc.input}
+                                  </td>
+                                  <td className='px-4 py-3 font-mono text-slate-700'>
+                                    {tc.output}
+                                  </td>
+                                  <td className='px-4 py-3 text-center font-semibold text-[#333D7C]'>
+                                    {tc.score}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {assignment.rubric && assignment.rubric.length > 0 && (
                     <div className='space-y-4 pt-6 border-t border-slate-100'>
-                      <h2 className='text-xl font-black text-[#1E293B]'>Evaluation Rubric</h2>
+                      <h2 className='text-xl font-bold text-[#1e293b]'>
+                        Evaluation Rubric
+                      </h2>
                       <div className='grid gap-3'>
                         {assignment.rubric.map((item, idx) => (
-                          <div key={idx} className='flex items-start justify-between p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-200 transition-colors'>
+                          <div
+                            key={idx}
+                            className='flex items-start justify-between p-4 rounded-xl border border-slate-200 bg-white hover:border-[#333D7C]/30 transition-colors'
+                          >
                             <div>
-                              <h3 className='font-bold text-slate-800'>{item.name}</h3>
+                              <h3 className='font-semibold text-slate-800'>
+                                {item.name}
+                              </h3>
                             </div>
-                            <div className='shrink-0 ml-4 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg font-bold text-sm'>
+                            <div className='shrink-0 ml-4 px-3 py-1 bg-[#333D7C]/10 text-[#333D7C] rounded-lg font-semibold text-sm'>
                               {item.score} pts
                             </div>
                           </div>
@@ -253,15 +298,20 @@ export default function CollegeAssignmentView() {
                       href={assignment.instruction_file_url}
                       target='_blank'
                       rel='noopener noreferrer'
-                      className='flex items-center gap-3 text-[#6366F1] font-black text-sm hover:underline hover:gap-4 transition-all'
+                      className='flex items-center gap-3 text-[#333D7C] font-semibold text-sm hover:underline hover:gap-4 transition-all'
                     >
                       <FileText className='w-5 h-5' />
-                      Download Requirements {assignment.instruction_file_name?.toLowerCase().includes('pdf') ? 'PDF' : 'Document'}
+                      Download Requirements{' '}
+                      {assignment.instruction_file_name
+                        ?.toLowerCase()
+                        .includes('pdf')
+                        ? 'PDF'
+                        : 'Document'}
                     </a>
                   ) : (
-                    <button 
+                    <button
                       disabled
-                      className='flex items-center gap-3 text-slate-300 font-black text-sm cursor-not-allowed'
+                      className='flex items-center gap-3 text-slate-300 font-semibold text-sm cursor-not-allowed'
                     >
                       <FileText className='w-5 h-5' />
                       No Requirements Document Attached
@@ -274,27 +324,29 @@ export default function CollegeAssignmentView() {
 
           {/* Right: Submit Assignment */}
           <div className='lg:col-span-5 space-y-6'>
-            <Card className='border-none rounded-[2rem] p-10 shadow-sm space-y-8'>
-              <h2 className='text-xl font-black text-[#1E293B]'>Submit Assignment</h2>
+            <Card className='border border-slate-100 rounded-[2rem] p-10 shadow-sm space-y-8'>
+              <h2 className='text-xl font-bold text-[#1e293b]'>
+                Submit Assignment
+              </h2>
 
               {/* Tabs Switcher */}
-              <div className='bg-[#F1F5F9] p-1.5 rounded-2xl flex'>
+              <div className='bg-slate-100 p-1.5 rounded-2xl flex'>
                 <button
                   onClick={() => setActiveTab('upload')}
-                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${
+                  className={`flex-1 py-3 text-sm font-semibold rounded-xl transition-all ${
                     activeTab === 'upload'
-                      ? 'bg-[#1E293B] text-white shadow-lg'
-                      : 'text-[#64748B] hover:text-[#1E293B]'
+                      ? 'bg-[#333D7C] text-white shadow-sm'
+                      : 'text-slate-500 hover:text-[#1e293b]'
                   }`}
                 >
                   File Upload
                 </button>
                 <button
                   onClick={() => setActiveTab('link')}
-                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${
+                  className={`flex-1 py-3 text-sm font-semibold rounded-xl transition-all ${
                     activeTab === 'link'
-                      ? 'bg-[#1E293B] text-white shadow-lg'
-                      : 'text-[#64748B] hover:text-[#1E293B]'
+                      ? 'bg-[#333D7C] text-white shadow-sm'
+                      : 'text-slate-500 hover:text-[#1e293b]'
                   }`}
                 >
                   Link / URL
@@ -302,46 +354,56 @@ export default function CollegeAssignmentView() {
               </div>
 
               {activeTab === 'upload' ? (
-                <div 
+                <div
                   onClick={() => fileInputRef.current?.click()}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={onDrop}
                   className={`border-2 border-dashed rounded-[2rem] p-12 text-center space-y-4 transition-all group cursor-pointer ${
-                    selectedFile ? 'border-emerald-400 bg-emerald-50/50' : 'border-[#CBD5E1] hover:border-[#6366F1] hover:bg-slate-50/50'
+                    selectedFile
+                      ? 'border-emerald-400 bg-emerald-50/50'
+                      : 'border-slate-200 hover:border-[#333D7C] hover:bg-slate-50/50'
                   }`}
                 >
-                  <input 
-                    type="file" 
-                    className="hidden" 
-                    ref={fileInputRef} 
+                  <input
+                    type='file'
+                    className='hidden'
+                    ref={fileInputRef}
                     onChange={handleFileChange}
                   />
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto transition-transform group-hover:scale-110 ${
-                    selectedFile ? 'bg-emerald-100' : 'bg-[#EEF2FF]'
-                  }`}>
-                    <Upload className={`w-6 h-6 ${selectedFile ? 'text-emerald-600' : 'text-[#6366F1]'}`} />
+                  <div
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto transition-transform group-hover:scale-110 ${
+                      selectedFile ? 'bg-emerald-100' : 'bg-[#333D7C]/10'
+                    }`}
+                  >
+                    <Upload
+                      className={`w-6 h-6 ${selectedFile ? 'text-emerald-600' : 'text-[#333D7C]'}`}
+                    />
                   </div>
                   <div className='space-y-1'>
-                    <p className='text-sm font-bold text-[#1E293B]'>
-                      {selectedFile ? selectedFile.name : 'Click to upload or drag and drop'}
+                    <p className='text-sm font-semibold text-[#1e293b]'>
+                      {selectedFile
+                        ? selectedFile.name
+                        : 'Click to upload or drag and drop'}
                     </p>
-                    <p className='text-xs text-[#94A3B8] font-medium'>
-                      {selectedFile ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB` : 'PDF, ZIP, or RAR (Max 10MB)'}
+                    <p className='text-xs text-slate-400'>
+                      {selectedFile
+                        ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`
+                        : 'PDF, ZIP, or RAR (Max 10MB)'}
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className='space-y-4'>
                   <div className='relative'>
-                    <Link2 className='absolute left-4 top-4 w-5 h-5 text-[#6366F1]' />
+                    <Link2 className='absolute left-4 top-4 w-5 h-5 text-[#333D7C]' />
                     <textarea
                       value={solution}
                       onChange={(e) => setSolution(e.target.value)}
                       placeholder='https://github.com/your-project'
-                      className='w-full rounded-2xl border-2 border-[#F1F5F9] px-12 py-4 text-sm font-medium focus:border-[#6366F1] outline-none transition-all placeholder:text-[#CBD5E1] min-h-[140px] resize-none'
+                      className='w-full rounded-2xl border-2 border-slate-100 px-12 py-4 text-sm focus:border-[#333D7C] outline-none transition-all placeholder:text-slate-300 min-h-35 resize-none'
                     />
                   </div>
-                  <p className='text-xs text-[#94A3B8] italic px-2'>
+                  <p className='text-xs text-slate-400 italic px-2'>
                     Provide your codebase or live demo link.
                   </p>
                 </div>
@@ -349,8 +411,12 @@ export default function CollegeAssignmentView() {
 
               <Button
                 onClick={handleSubmit}
-                disabled={submitting || (activeTab === 'upload' && !selectedFile) || (activeTab === 'link' && !solution.trim())}
-                className='w-full h-14 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-xl shadow-slate-100 disabled:opacity-50 disabled:shadow-none bg-[#7489C6] hover:bg-[#5E73AF] text-white'
+                disabled={
+                  submitting ||
+                  (activeTab === 'upload' && !selectedFile) ||
+                  (activeTab === 'link' && !solution.trim())
+                }
+                className='w-full h-14 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 bg-[#333D7C] hover:bg-[#2a3268] text-white'
               >
                 {submitting ? (
                   <Loader2 className='w-5 h-5 animate-spin' />
@@ -361,11 +427,11 @@ export default function CollegeAssignmentView() {
                   </>
                 )}
               </Button>
-              
+
               {isSubmitted && (
-                <div className="flex items-center justify-center gap-2 text-emerald-600 font-bold text-xs uppercase tracking-widest pt-2">
-                   <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                   Submission Received
+                <div className='flex items-center justify-center gap-2 text-emerald-600 font-bold text-xs uppercase tracking-widest pt-2'>
+                  <div className='w-1.5 h-1.5 bg-emerald-500 rounded-full' />
+                  Submission Received
                 </div>
               )}
             </Card>

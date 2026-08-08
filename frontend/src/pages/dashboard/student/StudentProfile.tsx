@@ -3,6 +3,12 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
   Loader2,
   Flame,
   Star,
@@ -310,84 +316,99 @@ export default function StudentProfile() {
             ))}
           </div>
 
-          <div className='space-y-6'>
+          <Accordion
+            type='multiple'
+            defaultValue={scorecard[0] ? [scorecard[0].subject_id] : []}
+            className='space-y-3'
+          >
             {scorecard.map((subject) => (
-              <div key={subject.subject_id}>
-                <p className='text-xs font-bold uppercase tracking-widest text-slate-400 mb-2'>
-                  {subject.subject_name}
-                </p>
-                <div className='space-y-2'>
-                  {subject.topics.map((topic) => (
-                    <Card key={topic.topic_id} className='p-4'>
-                      <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
-                        <p className='font-semibold text-slate-800 text-sm min-w-32'>
-                          {topic.topic_title}
-                        </p>
+              <AccordionItem
+                key={subject.subject_id}
+                value={subject.subject_id}
+                className='border border-slate-100 rounded-2xl px-4 border-b'
+              >
+                <AccordionTrigger className='py-3 hover:no-underline'>
+                  <span className='text-xs font-bold uppercase tracking-widest text-slate-400'>
+                    {subject.subject_name}
+                    <span className='ml-2 text-slate-300 normal-case font-medium'>
+                      {subject.topics.length} topic{subject.topics.length !== 1 ? 's' : ''}
+                    </span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className='space-y-2'>
+                    {subject.topics.map((topic) => (
+                      <Card key={topic.topic_id} className='p-4'>
+                        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+                          <p className='font-semibold text-slate-800 text-sm min-w-32'>
+                            {topic.topic_title}
+                          </p>
 
-                        <div className='flex flex-wrap gap-3 flex-1'>
-                          <ScoreCell
-                            label='Ex'
-                            score={topic.exercise_score}
-                            max={20}
-                            barColor='#60a5fa'
-                          />
-                          <ScoreCell
-                            label='Quiz'
-                            score={topic.quiz_score}
-                            max={10}
-                            barColor='#a78bfa'
-                          />
-                          <ScoreCell
-                            label='Asn'
-                            score={topic.assignment_score}
-                            max={30}
-                            barColor='#fbbf24'
-                          />
-                          <ScoreCell
-                            label='Proj'
-                            score={topic.project_score}
-                            max={40}
-                            barColor='#34d399'
-                          />
+                          <div className='flex flex-wrap gap-3 flex-1'>
+                            <ScoreCell
+                              label='Ex'
+                              score={topic.exercise_score}
+                              max={20}
+                              barColor='#60a5fa'
+                            />
+                            <ScoreCell
+                              label='Quiz'
+                              score={topic.quiz_score}
+                              max={10}
+                              barColor='#a78bfa'
+                            />
+                            <ScoreCell
+                              label='Asn'
+                              score={topic.assignment_score}
+                              max={30}
+                              barColor='#fbbf24'
+                            />
+                            <ScoreCell
+                              label='Proj'
+                              score={topic.project_score}
+                              max={40}
+                              barColor='#34d399'
+                            />
+                          </div>
+
+                          <div className='shrink-0 text-right'>
+                            <span
+                              className={`text-lg font-bold ${
+                                topic.total_score >= 70
+                                  ? 'text-emerald-600'
+                                  : topic.total_score >= 50
+                                    ? 'text-amber-600'
+                                    : 'text-red-500'
+                              }`}
+                            >
+                              {topic.total_score}
+                            </span>
+                            <span className='text-xs text-slate-400'>/100</span>
+                          </div>
                         </div>
 
-                        <div className='shrink-0 text-right'>
-                          <span
-                            className={`text-lg font-bold ${
+                        {/* Total bar */}
+                        <div className='mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden'>
+                          <div
+                            className={`h-full rounded-full transition-all ${
                               topic.total_score >= 70
-                                ? 'text-emerald-600'
+                                ? 'bg-emerald-400'
                                 : topic.total_score >= 50
-                                  ? 'text-amber-600'
-                                  : 'text-red-500'
+                                  ? 'bg-amber-400'
+                                  : 'bg-red-400'
                             }`}
-                          >
-                            {topic.total_score}
-                          </span>
-                          <span className='text-xs text-slate-400'>/100</span>
+                            style={{
+                              width: `${Math.min(topic.total_score, 100)}%`,
+                            }}
+                          />
                         </div>
-                      </div>
-
-                      {/* Total bar */}
-                      <div className='mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden'>
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            topic.total_score >= 70
-                              ? 'bg-emerald-400'
-                              : topic.total_score >= 50
-                                ? 'bg-amber-400'
-                                : 'bg-red-400'
-                          }`}
-                          style={{
-                            width: `${Math.min(topic.total_score, 100)}%`,
-                          }}
-                        />
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
+                      </Card>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
             ))}
-          </div>
+          </Accordion>
         </section>
       )}
 

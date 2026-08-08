@@ -1,5 +1,6 @@
 const pool = require('../config/pg');
 const bcrypt = require('bcrypt');
+const { logAction } = require('../utils/auditLogger');
 
 // @desc    Get subjects for a specific student
 exports.getUserSubjects = async (req, res) => {
@@ -62,19 +63,17 @@ exports.getUserProfile = async (req, res) => {
          sp.degree, sp.year, sp.current_academic_year,
          COALESCE(c.id, fc_c.id) AS college_id,
          COALESCE(c.name, fc_c.name) AS college_name,
-         COALESCE(SUM(pl.points), 0)::integer AS total_points,
+         COALESCE((SELECT SUM(points) FROM public.points_log WHERE user_id = u.id), 0)::integer AS total_points,
          COALESCE(us.current_streak, 0) AS current_streak,
          COALESCE(us.longest_streak, 0) AS longest_streak,
-         COUNT(DISTINCT ub.badge_id)::integer AS badge_count
+         (SELECT COUNT(*) FROM public.user_badges WHERE user_id = u.id)::integer AS badge_count
        FROM public.users u
        LEFT JOIN public.roles r ON r.id = u.role_id
        LEFT JOIN public.student_profiles sp ON sp.user_id = u.id
        LEFT JOIN public.colleges c ON c.id = sp.college_id
        LEFT JOIN public.facilitator_colleges fc ON fc.facilitator_id = u.id
        LEFT JOIN public.colleges fc_c ON fc_c.id = fc.college_id
-       LEFT JOIN public.points_log pl ON pl.user_id = u.id
        LEFT JOIN public.user_streaks us ON us.user_id = u.id
-       LEFT JOIN public.user_badges ub ON ub.user_id = u.id
        WHERE u.id = $1
        GROUP BY u.id, u.full_name, u.email, r.role_key, u.created_at,
          sp.degree, sp.year, sp.current_academic_year, c.id, c.name, fc_c.id, fc_c.name,
@@ -100,11 +99,11 @@ exports.getUserBadges = async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
-      `SELECT b.id, b.name, b.description, b.icon, ub.awarded_at
+      `SELECT b.id, b.title AS name, b.description, ub.earned_at AS awarded_at
        FROM public.user_badges ub
        JOIN public.badges b ON b.id = ub.badge_id
        WHERE ub.user_id = $1
-       ORDER BY ub.awarded_at DESC`,
+       ORDER BY ub.earned_at DESC`,
       [userId],
     );
     res.json({ success: true, data: result.rows });
@@ -118,15 +117,32 @@ exports.getUserBadges = async (req, res) => {
 exports.getUserActivity = async (req, res) => {
   try {
     const userId = req.user.id;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20));
+    const offset = (page - 1) * pageSize;
+
     const result = await pool.query(
-      `SELECT source, points, created_at
+      `SELECT source, points, created_at, COUNT(*) OVER ()::integer as total_count
        FROM public.points_log
        WHERE user_id = $1
        ORDER BY created_at DESC
-       LIMIT 20`,
-      [userId],
+       LIMIT $2 OFFSET $3`,
+      [userId, pageSize, offset],
     );
-    res.json({ success: true, data: result.rows });
+
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const data = result.rows.map(({ total_count, ...row }) => row);
+
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
+    });
   } catch (err) {
     console.error('getUserActivity error:', err.message);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -181,6 +197,7 @@ exports.changePassword = async (req, res) => {
       [newHash, userId],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: userId, details: { field: 'password' } });
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('changePassword error:', err.message);
@@ -242,6 +259,7 @@ exports.getAllUsers = async (req, res) => {
         WHERE fc.facilitator_id = u.id
       ) as facilitator_meta ON r.role_key = 'FACILITATOR'
       ORDER BY u.created_at DESC
+      LIMIT 1000
     `;
     const result = await pool.query(query);
     res.json(result.rows);
@@ -317,10 +335,10 @@ exports.updateUser = async (req, res) => {
         const profileUpdateQuery = `
           INSERT INTO public.student_profiles (user_id, degree, year, college_id)
           VALUES ($1, $2, $3, $4)
-          ON CONFLICT (user_id) DO UPDATE 
-          SET degree = EXCLUDED.degree, 
-              year = EXCLUDED.year, 
-              college_id = EXCLUDED.college_id
+          ON CONFLICT (user_id) DO UPDATE
+          SET degree = COALESCE(EXCLUDED.degree, public.student_profiles.degree),
+              year = COALESCE(EXCLUDED.year, public.student_profiles.year),
+              college_id = COALESCE(EXCLUDED.college_id, public.student_profiles.college_id)
         `;
         await client.query(profileUpdateQuery, [
           id,
@@ -331,6 +349,7 @@ exports.updateUser = async (req, res) => {
       }
 
       await client.query('COMMIT');
+      logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { full_name, degree, year, college_id } });
       res.json(user);
     } catch (error) {
       await client.query('ROLLBACK');
@@ -371,6 +390,7 @@ exports.changeUserRole = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { new_role: role } });
     res.json({
       message: 'Role updated successfully',
       user: { ...result.rows[0], role: (role || '').toLowerCase() },
