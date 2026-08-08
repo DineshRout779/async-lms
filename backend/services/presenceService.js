@@ -49,18 +49,6 @@ async function triggerStreakUpdate(userId) {
   }
 }
 
-function checkAndTriggerStreak(userId, data) {
-  if (data.streakUpdatedToday) return;
-  if (!data.hasActionToday) return;
-  
-  const now = Date.now();
-  const duration = now - data.firstSeenToday;
-  if (duration >= (5 * 60 * 1000)) { // 5 minutes threshold
-    data.streakUpdatedToday = true;
-    triggerStreakUpdate(userId);
-  }
-}
-
 /**
  * Marks a user as active/online at the current timestamp.
  */
@@ -74,12 +62,13 @@ function markUserActive(userId) {
     presenceCache.set(userId, data);
   } else {
     data.lastSeenToday = now;
-    checkAndTriggerStreak(userId, data);
   }
 }
 
 /**
  * Call this when a user submits a quiz/assignment/project or reads a lesson.
+ * Updates the streak immediately — the underlying SQL is idempotent per
+ * calendar day, so repeated calls on the same day are safe no-ops.
  */
 function markActionToday(userId) {
   if (!userId) return;
@@ -87,12 +76,14 @@ function markActionToday(userId) {
   let data = presenceCache.get(userId);
 
   if (!data || !isSameDay(data.lastSeenToday, now)) {
-    data = { firstSeenToday: now, lastSeenToday: now, hasActionToday: true, streakUpdatedToday: false };
+    data = { firstSeenToday: now, lastSeenToday: now, hasActionToday: true, streakUpdatedToday: true };
     presenceCache.set(userId, data);
   } else {
     data.hasActionToday = true;
-    checkAndTriggerStreak(userId, data);
+    data.streakUpdatedToday = true;
   }
+
+  triggerStreakUpdate(userId);
 }
 
 /**
