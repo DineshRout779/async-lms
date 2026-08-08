@@ -62,19 +62,17 @@ exports.getUserProfile = async (req, res) => {
          sp.degree, sp.year, sp.current_academic_year,
          COALESCE(c.id, fc_c.id) AS college_id,
          COALESCE(c.name, fc_c.name) AS college_name,
-         COALESCE(SUM(pl.points), 0)::integer AS total_points,
+         COALESCE((SELECT SUM(points) FROM public.points_log WHERE user_id = u.id), 0)::integer AS total_points,
          COALESCE(us.current_streak, 0) AS current_streak,
          COALESCE(us.longest_streak, 0) AS longest_streak,
-         COUNT(DISTINCT ub.badge_id)::integer AS badge_count
+         (SELECT COUNT(*) FROM public.user_badges WHERE user_id = u.id)::integer AS badge_count
        FROM public.users u
        LEFT JOIN public.roles r ON r.id = u.role_id
        LEFT JOIN public.student_profiles sp ON sp.user_id = u.id
        LEFT JOIN public.colleges c ON c.id = sp.college_id
        LEFT JOIN public.facilitator_colleges fc ON fc.facilitator_id = u.id
        LEFT JOIN public.colleges fc_c ON fc_c.id = fc.college_id
-       LEFT JOIN public.points_log pl ON pl.user_id = u.id
        LEFT JOIN public.user_streaks us ON us.user_id = u.id
-       LEFT JOIN public.user_badges ub ON ub.user_id = u.id
        WHERE u.id = $1
        GROUP BY u.id, u.full_name, u.email, r.role_key, u.created_at,
          sp.degree, sp.year, sp.current_academic_year, c.id, c.name, fc_c.id, fc_c.name,
@@ -335,10 +333,10 @@ exports.updateUser = async (req, res) => {
         const profileUpdateQuery = `
           INSERT INTO public.student_profiles (user_id, degree, year, college_id)
           VALUES ($1, $2, $3, $4)
-          ON CONFLICT (user_id) DO UPDATE 
-          SET degree = EXCLUDED.degree, 
-              year = EXCLUDED.year, 
-              college_id = EXCLUDED.college_id
+          ON CONFLICT (user_id) DO UPDATE
+          SET degree = COALESCE(EXCLUDED.degree, public.student_profiles.degree),
+              year = COALESCE(EXCLUDED.year, public.student_profiles.year),
+              college_id = COALESCE(EXCLUDED.college_id, public.student_profiles.college_id)
         `;
         await client.query(profileUpdateQuery, [
           id,

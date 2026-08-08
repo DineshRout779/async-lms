@@ -15,6 +15,9 @@ const { getTotalXP } = require('../services/xpService');
  */
 const { markActionToday } = require('../services/presenceService');
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ============================================
 // HELPERS
 // ============================================
@@ -493,6 +496,25 @@ exports.startSubtopic = async (req, res) => {
     const userId = req.user.id;
     const { subtopicId } = req.params;
 
+    if (!subtopicId || !UUID_RE.test(subtopicId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid subtopicId',
+      });
+    }
+
+    const subtopicExists = await pool.query(
+      'SELECT id FROM subtopics WHERE id = $1 LIMIT 1',
+      [subtopicId],
+    );
+
+    if (subtopicExists.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Subtopic not found',
+      });
+    }
+
     const lockCheck = await pool.query(
       `SELECT usp.is_unlocked, st.slug, st.unit_id,
               u.topic_id, t.subject_id
@@ -543,6 +565,25 @@ exports.completeLesson = async (req, res) => {
   try {
     const userId = req.user.id;
     const { lessonId } = req.params;
+
+    if (!lessonId || !UUID_RE.test(lessonId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid lessonId',
+      });
+    }
+
+    const lessonExists = await pool.query(
+      'SELECT id FROM lesson_content WHERE id = $1 LIMIT 1',
+      [lessonId],
+    );
+
+    if (lessonExists.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found',
+      });
+    }
 
     const query = `
       INSERT INTO user_lesson_progress (user_id, lesson_content_id, is_completed)
@@ -859,6 +900,7 @@ exports.submitExercise = async (req, res) => {
       // Multi-task exercise: run tests for each task and aggregate
       let totalPassed = 0;
       let totalTests = 0;
+      let anyWorkspaceFound = false;
       const taskResults = [];
 
       for (const task of exercise.tasks) {
@@ -869,6 +911,7 @@ exports.submitExercise = async (req, res) => {
           `exercise-${exerciseId}-task-${task.id}`,
         );
         if (!fs.existsSync(taskWorkspaceDir)) continue;
+        anyWorkspaceFound = true;
         try {
           const result = await runTestCases(
             taskWorkspaceDir,
@@ -896,10 +939,17 @@ exports.submitExercise = async (req, res) => {
         }
       }
 
+      if (!anyWorkspaceFound) {
+        return res.status(400).json({
+          success: false,
+          message: 'Workspace not initialised. Open the exercise first.',
+        });
+      }
+
       score =
         totalTests > 0
           ? Math.round((totalPassed / totalTests) * exercise.max_score)
-          : exercise.max_score;
+          : 0;
       testResults = { totalPassed, totalTests, taskResults };
     } else if (exercise.test_cases && exercise.test_cases.length > 0) {
       // Legacy: single workspace test cases

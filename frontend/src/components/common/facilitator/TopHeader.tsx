@@ -52,7 +52,7 @@ const TopHeader = ({ onFilterChange }: Props) => {
   }, [selectedCollege, selectedDomain, selectedBatch, onFilterChange]);
 
   return (
-    <div className='flex items-center gap-3 mb-4 bg-white h-14 px-6 border-b border-slate-200'>
+    <div className='flex items-center gap-3 my-4'>
       <select
         value={selectedCollege}
         onChange={(e) => setSelectedCollege(e.target.value)}

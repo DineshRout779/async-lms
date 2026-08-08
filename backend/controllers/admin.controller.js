@@ -1315,7 +1315,14 @@ exports.deleteLessonContent = async (req, res) => {
 exports.publishLessonContent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { is_published } = req.body;
+    const { is_published } = req.body || {};
+
+    if (typeof is_published !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'is_published (boolean) is required',
+      });
+    }
 
     const query = `
       UPDATE lesson_content
@@ -2548,7 +2555,7 @@ exports.getStudentProgress = async (req, res) => {
               )
               FROM quiz_attempts qa
               INNER JOIN quizzes q ON qa.quiz_id = q.id AND q.is_deleted = false
-              WHERE qa.user_id = $1 AND q.subtopic_id = st.id
+              WHERE qa.user_id = $1 AND q.unit_id = st.unit_id
             ),
             'exercise_submissions', (
               SELECT json_agg(
@@ -2567,7 +2574,8 @@ exports.getStudentProgress = async (req, res) => {
           ORDER BY st.order_index
         ) as subtopics
       FROM topics t
-      INNER JOIN subtopics st ON t.id = st.topic_id AND st.is_deleted = false
+      INNER JOIN units u ON u.topic_id = t.id AND u.is_deleted = false
+      INNER JOIN subtopics st ON st.unit_id = u.id AND st.is_deleted = false
       LEFT JOIN user_topic_progress utp ON utp.topic_id = t.id AND utp.user_id = $1
       LEFT JOIN user_subtopic_progress usp ON usp.subtopic_id = st.id AND usp.user_id = $1
       WHERE t.subject_id = $2 AND t.is_deleted = false
@@ -3196,7 +3204,7 @@ exports.getCollegeLeaderboard = async (req, res) => {
  */
 exports.updateLeaderboards = async (req, res) => {
   try {
-    const { type, id } = req.body; // type: 'weekly', 'topic', 'college', 'all'
+    const { type, id } = req.body || {}; // type: 'weekly', 'topic', 'college', 'all'
 
     if (type === 'weekly' || type === 'all') {
       await pool.query('SELECT update_weekly_leaderboard()');

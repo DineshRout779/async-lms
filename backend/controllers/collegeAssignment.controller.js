@@ -415,7 +415,7 @@ exports.deleteAssignment = async (req, res) => {
 // POST /api/v1/college-assignments/:id/submit
 exports.submitCollegeAssignment = async (req, res) => {
   const { id } = req.params;
-  const { submission_link } = req.body;
+  const { submission_link } = req.body || {};
   const student_id = req.user.id;
 
   try {
@@ -428,6 +428,13 @@ exports.submitCollegeAssignment = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: 'Assignment not found' });
+    }
+
+    if (!req.file && !submission_link) {
+      return res.status(400).json({
+        success: false,
+        message: 'A submission_link or a file is required',
+      });
     }
 
     let file_url = null;
@@ -507,7 +514,7 @@ exports.getCollegeAssignmentById = async (req, res) => {
 // POST /api/v1/college-assignments/:id/submit
 exports.submitCollegeAssignment = async (req, res) => {
   const { id } = req.params;
-  const { submission_link } = req.body;
+  const { submission_link } = req.body || {};
   const student_id = req.user.id;
 
   try {
@@ -520,6 +527,13 @@ exports.submitCollegeAssignment = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: 'Assignment not found' });
+    }
+
+    if (!req.file && !submission_link) {
+      return res.status(400).json({
+        success: false,
+        message: 'A submission_link or a file is required',
+      });
     }
 
     let file_url = null;
@@ -685,6 +699,8 @@ exports.getAssignmentSubmissions = async (req, res) => {
 exports.getFilteredAssignments = async (req, res) => {
   try {
     const { collegeId, domain, search, batch } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 10));
     const isFacilitator = req.user.role !== 'admin';
     const facilitatorCollegeIds = req.user.college_ids || [];
 
@@ -741,8 +757,8 @@ exports.getFilteredAssignments = async (req, res) => {
         FROM public.college_assignments ca
         JOIN public.colleges c ON c.id = ca.college_id
         LEFT JOIN LATERAL (
-          SELECT id, status FROM public.evaluations e2
-          WHERE e2.college_assignment_id = ca.id
+          SELECT * FROM public.evaluations
+          WHERE college_assignment_id = ca.id
           ORDER BY created_at DESC
           LIMIT 1
         ) e ON true
@@ -774,8 +790,8 @@ exports.getFilteredAssignments = async (req, res) => {
         JOIN public.topics t ON u.topic_id = t.id
         JOIN public.subjects s ON t.subject_id = s.id
         LEFT JOIN LATERAL (
-          SELECT id, status FROM public.evaluations e2
-          WHERE e2.assignment_id = a.id
+          SELECT * FROM public.evaluations
+          WHERE assignment_id = a.id
           ORDER BY created_at DESC
           LIMIT 1
         ) e ON true
@@ -816,8 +832,20 @@ exports.getFilteredAssignments = async (req, res) => {
 
     query += ` ORDER BY created_at DESC NULLS LAST, title ASC`;
 
+    values.push(pageSize);
+    const limitIndex = index++;
+    values.push((page - 1) * pageSize);
+    const offsetIndex = index++;
+    query = `SELECT *, COUNT(*) OVER()::int AS total_count FROM (${query}) paged LIMIT $${limitIndex} OFFSET $${offsetIndex}`;
+
     const { rows } = await pool.query(query, values);
-    res.json({ success: true, data: rows });
+    const total = rows[0]?.total_count ?? 0;
+    const data = rows.map(({ total_count, ...rest }) => rest);
+    res.json({
+      success: true,
+      data,
+      pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+    });
   } catch (error) {
     console.error('getFilteredAssignments Error:', error);
     serverError(res, error);
