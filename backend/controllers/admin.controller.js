@@ -1340,6 +1340,7 @@ exports.publishLessonContent = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'PUBLISH', entityType: 'lesson_content', entityId: id, details: { is_published } });
     res.json({
       success: true,
       message: `Lesson content ${
@@ -2404,6 +2405,7 @@ exports.uploadLessonMarkdown = async (req, res) => {
 
     const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 
+    logAction({ req, action: 'CREATE', entityType: 'lesson_markdown_upload', entityId: null, details: { url } });
     res.json({
       success: true,
       url,
@@ -2465,6 +2467,7 @@ exports.uploadFile = async (req, res) => {
 
     const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 
+    logAction({ req, action: 'CREATE', entityType: 'file_upload', entityId: null, details: { url } });
     res.json({
       success: true,
       url,
@@ -2960,6 +2963,7 @@ exports.setLockControlTopic = async (req, res) => {
       console.warn('cohort_admin_locks upsert skipped:', intentErr.message);
     }
 
+    logAction({ req, action: isUnlocked ? 'UNLOCK' : 'LOCK', entityType: 'topic', entityId: topicId, details: { collegeId, batch } });
     res.json({
       success: true,
       message: `Topic ${action}ed successfully`,
@@ -3031,6 +3035,7 @@ exports.setLockControlSubtopic = async (req, res) => {
       console.warn('cohort_admin_locks upsert skipped:', intentErr.message);
     }
 
+    logAction({ req, action: isUnlocked ? 'UNLOCK' : 'LOCK', entityType: 'subtopic', entityId: subtopicId, details: { collegeId, batch } });
     res.json({
       success: true,
       message: `Subtopic ${action}ed successfully`,
@@ -3232,6 +3237,7 @@ exports.updateLeaderboards = async (req, res) => {
       }
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'leaderboard', entityId: null, details: { type, id } });
     res.json({
       success: true,
       message: 'Leaderboards updated successfully',
@@ -3279,6 +3285,7 @@ exports.verifyUser = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { is_verified } });
     res.json({
       success: true,
       message: `User ${is_verified ? 'verified' : 'unverified'} successfully`,

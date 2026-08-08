@@ -1,5 +1,6 @@
 const pool = require('../config/pg');
 const bcrypt = require('bcrypt');
+const { logAction } = require('../utils/auditLogger');
 
 // @desc    Get subjects for a specific student
 exports.getUserSubjects = async (req, res) => {
@@ -196,6 +197,7 @@ exports.changePassword = async (req, res) => {
       [newHash, userId],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: userId, details: { field: 'password' } });
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('changePassword error:', err.message);
@@ -347,6 +349,7 @@ exports.updateUser = async (req, res) => {
       }
 
       await client.query('COMMIT');
+      logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { full_name, degree, year, college_id } });
       res.json(user);
     } catch (error) {
       await client.query('ROLLBACK');
@@ -387,6 +390,7 @@ exports.changeUserRole = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { new_role: role } });
     res.json({
       message: 'Role updated successfully',
       user: { ...result.rows[0], role: (role || '').toLowerCase() },

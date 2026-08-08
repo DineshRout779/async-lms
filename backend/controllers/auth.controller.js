@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/pg');
 const { OAuth2Client } = require('google-auth-library');
+const { logAction } = require('../utils/auditLogger');
 
 const oauth2Client = new OAuth2Client(
   process.env.GOOGLE_AUTH_CLIENT_ID,
@@ -78,6 +79,7 @@ exports.signup = async (req, res) => {
       { expiresIn: '7d' },
     );
 
+    logAction({ req, action: 'CREATE', entityType: 'user', entityId: newUser.id, details: { email, role: newUser.role } });
     res.json({ token, user: newUser });
   } catch (err) {
     console.error(`[${logID}] SIGNUP ERROR:`, err);
@@ -248,6 +250,7 @@ exports.googleCallback = async (req, res) => {
       await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [
         user.id,
       ]);
+      logAction({ req, action: 'CREATE', entityType: 'user', entityId: user.id, details: { email, role: user.role } });
     }
 
     const tokenPayload = {

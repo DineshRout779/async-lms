@@ -35,6 +35,7 @@ exports.selectCollege = async (req, res) => {
       [userId],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'student_profile', entityId: userId, details: { college_id } });
     res.json({ message: 'College added successfully', next_step: 'batch' });
   } catch (err) {
     console.error(err);
@@ -69,6 +70,7 @@ exports.updateBatchDetails = async (req, res) => {
       [userId],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'student_profile', entityId: userId, details: { degree, current_academic_year, expected_graduation_year } });
     res.json({ message: 'Batch details added', next_step: 'subject' });
   } catch (err) {
     console.error(err);
@@ -154,6 +156,8 @@ exports.selectSubjects = async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    logAction({ req, action: 'CREATE', entityType: 'user_subjects', entityId: userId, details: { subjectIds } });
 
     // Notify all facilitators assigned to this student's college (best-effort, after commit)
     try {

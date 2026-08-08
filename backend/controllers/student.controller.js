@@ -1661,6 +1661,7 @@ exports.createStudentProject = async (req, res) => {
       [userId, name.trim(), profile],
     );
 
+    logAction({ req, action: 'CREATE', entityType: 'student_project', entityId: result.rows[0].id, details: { name, profile } });
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error creating student project:', error);
@@ -1791,6 +1792,7 @@ exports.submitAssignment = async (req, res) => {
       [id, userId, submission_link.trim()],
     );
 
+    logAction({ req, action: 'CREATE', entityType: 'assignment_submission', entityId: id, details: { submission_link: submission_link.trim() } });
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting assignment:', error);
@@ -1927,6 +1929,7 @@ exports.submitCapstone = async (req, res) => {
       await checkAndAwardBadges(userId);
     }
 
+    logAction({ req, action: 'CREATE', entityType: 'project_submission', entityId: projectId, details: { submission_link: submission_link.trim() } });
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting capstone:', error);

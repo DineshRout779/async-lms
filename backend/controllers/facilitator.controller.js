@@ -1,5 +1,6 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
+const { logAction } = require('../utils/auditLogger');
 
 /**
  * Get Facilitator Scoped Stats
@@ -502,6 +503,7 @@ exports.verifyStudent = async (req, res) => {
       [is_verified, id],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { is_verified } });
     res.json({
       success: true,
       message: `Student ${is_verified ? 'verified' : 'unverified'} successfully`,
@@ -570,6 +572,7 @@ exports.editStudent = async (req, res) => {
       values,
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'student_profile', entityId: id, details: { degree, current_academic_year, expected_graduation_year } });
     res.json({ success: true, message: 'Student profile updated' });
   } catch (err) {
     console.error('editStudent error:', err);

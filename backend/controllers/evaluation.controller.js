@@ -29,19 +29,14 @@ async function postToEvaluatorWithRetry(url, payload, config) {
   }
 }
 exports.runEvaluation = async (req, res) => {
-  const { assignmentId, evaluatorType: reqEvaluatorType, scope = "pending" } = req.body;
+  const { assignmentId, evaluatorType: reqEvaluatorType, scope = 'pending' } = req.body;
 
   if (!assignmentId) {
-    return res.status(400).json({ success: false, message: "Assignment ID is required" });
+    return res.status(400).json({ success: false, message: 'Assignment ID is required' });
   }
 
-    if (!assignmentId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Assignment ID required',
-      });
-    }
-
+  const client = await pool.connect();
+  try {
     await client.query('BEGIN');
 
     // 1. Try fetching from curriculum assignments first
@@ -71,33 +66,37 @@ exports.runEvaluation = async (req, res) => {
       throw new Error('Assignment not found');
     }
 
-    // 3. Get submissions from the correct table
-    if (isCollegeAssignment) {
-      let queryStr = `
-        SELECT 
+    // 3. Get submissions from the correct table.
+    // scope: 'pending' (default) evaluates only submissions with no completed
+    // result yet; 'all' re-evaluates every submission regardless of history.
+    const scopeFilter =
+      scope === 'pending'
+        ? ` AND s.id NOT IN (
+              SELECT r.submission_id FROM evaluation_results r
+              JOIN evaluations e ON r.evaluation_id = e.id
+              WHERE (e.assignment_id = $1 OR e.college_assignment_id = $1) AND r.status = 'completed'
+            )`
+        : '';
+
+    const queryStr = isCollegeAssignment
+      ? `SELECT
           s.id as submission_id,
           s.submission_link,
           s.student_id as user_id,
           u.full_name as student_name
          FROM college_assignment_submissions s
          JOIN users u ON s.student_id = u.id
-         WHERE s.assignment_id = $1`,
-        [assignmentId],
-      );
-    } else {
-      let queryStr = `
-        SELECT 
+         WHERE s.assignment_id = $1${scopeFilter}`
+      : `SELECT
           s.id as submission_id,
           s.submission_link,
           s.user_id,
           u.full_name as student_name
          FROM assignment_submissions s
          JOIN users u ON s.user_id = u.id
-         WHERE s.assignment_id = $1`,
-        [assignmentId],
-      );
-    }
+         WHERE s.assignment_id = $1${scopeFilter}`;
 
+    const submissionsRes = await client.query(queryStr, [assignmentId]);
     const submissions = submissionsRes.rows;
 
     if (!submissions.length) {
@@ -107,8 +106,7 @@ exports.runEvaluation = async (req, res) => {
     // Default to 'AI' if no specific evaluator is set — used for both the
     // stored record and the actual dispatch so they can never disagree.
     // Frontend can now override this using req.body.evaluatorType
-    const evaluatorType =
-      req.body.evaluatorType || assignment.evaluator_type || 'AI';
+    const evaluatorType = reqEvaluatorType || assignment.evaluator_type || 'AI';
 
     //  Create evaluation
     // college assignments use a separate FK column to avoid violating assignments FK

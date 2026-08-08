@@ -2,7 +2,11 @@ const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
 const { notifyCollege } = require('../services/notificationService');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { withS3Prefix } = require('../utils/s3');
 const path = require('path');
@@ -45,8 +49,10 @@ async function presignS3Url(url) {
 async function presignRow(row) {
   if (!row) return row;
   const copy = { ...row };
-  if (copy.instruction_file_url) copy.instruction_file_url = await presignS3Url(copy.instruction_file_url);
-  if (copy.submission_file_url) copy.submission_file_url = await presignS3Url(copy.submission_file_url);
+  if (copy.instruction_file_url)
+    copy.instruction_file_url = await presignS3Url(copy.instruction_file_url);
+  if (copy.submission_file_url)
+    copy.submission_file_url = await presignS3Url(copy.submission_file_url);
   return copy;
 }
 
@@ -112,6 +118,14 @@ exports.uploadInstructionDoc = async (req, res) => {
       localSubPath: '',
     });
 
+    logActi;
+    on({
+      req,
+      action: 'CREATE',
+      entityType: 'assignment_instruction_doc',
+      entityId: null,
+      details: { url, name },
+    });
     res.json({ success: true, url, filename: name });
   } catch (error) {
     console.error('uploadInstructionDoc error:', error);
@@ -226,16 +240,32 @@ exports.manageAssignments = async (req, res) => {
 // POST /api/v1/college-assignments
 // Body: { college_id, college_ids, title, description?, due_date? }
 exports.createAssignment = async (req, res) => {
-  const { college_id, college_ids, title, description, due_date, course, test_cases, rubric, evaluator_type, assignment_description } = req.body;
+  const {
+    college_id,
+    college_ids,
+    title,
+    description,
+    due_date,
+    course,
+    test_cases,
+    rubric,
+    evaluator_type,
+    assignment_description,
+  } = req.body;
 
   const targetCollegeIds = Array.isArray(college_ids)
     ? college_ids
-    : (college_id ? [college_id] : []);
+    : college_id
+      ? [college_id]
+      : [];
 
   if (targetCollegeIds.length === 0 || !title) {
     return res
       .status(400)
-      .json({ success: false, message: 'college_id/college_ids and title are required' });
+      .json({
+        success: false,
+        message: 'college_id/college_ids and title are required',
+      });
   }
 
   // Facilitators may only create assignments for their own colleges
@@ -278,7 +308,13 @@ exports.createAssignment = async (req, res) => {
       );
       const assignment = rows[0];
       createdAssignments.push(assignment);
-      logAction({ req, action: 'CREATE', entityType: 'college_assignment', entityId: assignment.id, details: { title, college_id: cid } });
+      logAction({
+        req,
+        action: 'CREATE',
+        entityType: 'college_assignment',
+        entityId: assignment.id,
+        details: { title, college_id: cid },
+      });
 
       // Notify all students in the college about the new assignment
       notifyCollege({
@@ -293,7 +329,13 @@ exports.createAssignment = async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.status(201).json({ success: true, data: createdAssignments[0], all_data: createdAssignments });
+    res
+      .status(201)
+      .json({
+        success: true,
+        data: createdAssignments[0],
+        all_data: createdAssignments,
+      });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('createAssignment ERROR:', error);
@@ -307,7 +349,16 @@ exports.createAssignment = async (req, res) => {
 // Body: { title?, description?, due_date? }
 exports.updateAssignment = async (req, res) => {
   const { id } = req.params;
-  const { title, description, due_date, course, test_cases, rubric, evaluator_type, assignment_description } = req.body;
+  const {
+    title,
+    description,
+    due_date,
+    course,
+    test_cases,
+    rubric,
+    evaluator_type,
+    assignment_description,
+  } = req.body;
 
   try {
     // Fetch existing to check ownership scope for facilitators
@@ -360,7 +411,13 @@ exports.updateAssignment = async (req, res) => {
         id,
       ],
     );
-    logAction({ req, action: 'UPDATE', entityType: 'college_assignment', entityId: id, details: { title } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'college_assignment',
+      entityId: id,
+      details: { title },
+    });
     res.json({ success: true, data: rows[0] });
   } catch (error) {
     console.error('updateAssignment:', error);
@@ -402,76 +459,15 @@ exports.deleteAssignment = async (req, res) => {
         .status(404)
         .json({ success: false, message: 'Assignment not found' });
     }
-    logAction({ req, action: 'DELETE', entityType: 'college_assignment', entityId: id });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'college_assignment',
+      entityId: id,
+    });
     res.json({ success: true, message: 'Assignment deleted' });
   } catch (error) {
     console.error('deleteAssignment:', error);
-    serverError(res, error);
-  }
-};
-
-// ─── Submission ─────────────────────────────────────────────────────────────
-
-// POST /api/v1/college-assignments/:id/submit
-exports.submitCollegeAssignment = async (req, res) => {
-  const { id } = req.params;
-  const { submission_link } = req.body || {};
-  const student_id = req.user.id;
-
-  try {
-    // 1. Verify existence
-    const assignment = await pool.query(
-      'SELECT id FROM college_assignments WHERE id = $1 AND is_deleted = false',
-      [id],
-    );
-    if (!assignment.rowCount) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Assignment not found' });
-    }
-
-    if (!req.file && !submission_link) {
-      return res.status(400).json({
-        success: false,
-        message: 'A submission_link or a file is required',
-      });
-    }
-
-    let file_url = null;
-    let file_name = null;
-
-    // 2. Handle file upload if present
-    if (req.file) {
-      const { url, name } = await storeFile(req.file, {
-        s3KeyPrefix: 'college-submissions',
-        localSubPath: 'submissions',
-      });
-      file_url = url;
-      file_name = name;
-    }
-
-    // 3. Upsert submission
-    const { rows } = await pool.query(
-      `INSERT INTO college_assignment_submissions
-       (assignment_id, student_id, submission_link, submission_file_url, submission_file_name, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (assignment_id, student_id)
-       DO UPDATE SET
-         submission_link = COALESCE(EXCLUDED.submission_link, college_assignment_submissions.submission_link),
-         submission_file_url = COALESCE(EXCLUDED.submission_file_url, college_assignment_submissions.submission_file_url),
-         submission_file_name = COALESCE(EXCLUDED.submission_file_name, college_assignment_submissions.submission_file_name),
-         updated_at = NOW()
-       RETURNING *`,
-      [id, student_id, submission_link || null, file_url, file_name],
-    );
-
-    res.json({
-      success: true,
-      data: rows[0],
-      message: 'Assignment submitted successfully',
-    });
-  } catch (error) {
-    console.error('submitCollegeAssignment ERROR:', error);
     serverError(res, error);
   }
 };
@@ -564,6 +560,13 @@ exports.submitCollegeAssignment = async (req, res) => {
       [id, student_id, submission_link || null, file_url, file_name],
     );
 
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'college_assignment_submission',
+      entityId: id,
+      details: { submission_link },
+    });
     res.json({
       success: true,
       data: rows[0],
@@ -627,9 +630,7 @@ exports.getAssignmentSubmissions = async (req, res) => {
     let rows;
 
     if (isUnitAssignment) {
-      const collegeFilter = isFacilitator
-        ? 'AND sp.college_id = ANY($2)'
-        : '';
+      const collegeFilter = isFacilitator ? 'AND sp.college_id = ANY($2)' : '';
       const values = isFacilitator
         ? [assignmentId, facilitatorCollegeIds]
         : [assignmentId];
@@ -660,10 +661,14 @@ exports.getAssignmentSubmissions = async (req, res) => {
           [assignmentId],
         );
         if (!ownerCheck.rowCount) {
-          return res.status(404).json({ success: false, message: 'Assignment not found' });
+          return res
+            .status(404)
+            .json({ success: false, message: 'Assignment not found' });
         }
         if (!facilitatorCollegeIds.includes(ownerCheck.rows[0].college_id)) {
-          return res.status(403).json({ success: false, message: 'Access denied' });
+          return res
+            .status(403)
+            .json({ success: false, message: 'Access denied' });
         }
       }
 
@@ -688,7 +693,11 @@ exports.getAssignmentSubmissions = async (req, res) => {
       rows = result.rows;
     }
 
-    res.json({ success: true, data: rows, type: isUnitAssignment ? 'unit' : 'college' });
+    res.json({
+      success: true,
+      data: rows,
+      type: isUnitAssignment ? 'unit' : 'college',
+    });
   } catch (error) {
     console.error('getAssignmentSubmissions error:', error);
     serverError(res, error);
@@ -700,7 +709,10 @@ exports.getFilteredAssignments = async (req, res) => {
   try {
     const { collegeId, domain, search, batch } = req.query;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 10));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.pageSize, 10) || 10),
+    );
     const isFacilitator = req.user.role !== 'admin';
     const facilitatorCollegeIds = req.user.college_ids || [];
 
@@ -844,7 +856,12 @@ exports.getFilteredAssignments = async (req, res) => {
     res.json({
       success: true,
       data,
-      pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
     });
   } catch (error) {
     console.error('getFilteredAssignments Error:', error);
