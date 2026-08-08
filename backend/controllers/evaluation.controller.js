@@ -13,18 +13,15 @@ const EVALUATOR_APIS = {
   FULLSTACK: "Fullstack Evaluator"
 };
 exports.runEvaluation = async (req, res) => {
+  const { assignmentId, evaluatorType: reqEvaluatorType, scope = "pending" } = req.body;
+
+  if (!assignmentId) {
+    return res.status(400).json({ success: false, message: "Assignment ID is required" });
+  }
+
   const client = await pool.connect();
 
   try {
-    const { assignmentId } = req.body;
-
-    if (!assignmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "Assignment ID required",
-      });
-    }
-
     await client.query("BEGIN");
 
     // 1. Try fetching from curriculum assignments first
@@ -55,43 +52,74 @@ exports.runEvaluation = async (req, res) => {
     }
 
     // 3. Get submissions from the correct table
-    let submissionsRes;
     if (isCollegeAssignment) {
-      submissionsRes = await client.query(
-        `SELECT 
+      let queryStr = `
+        SELECT 
           s.id as submission_id,
           s.submission_link,
           s.student_id as user_id,
           u.full_name as student_name
          FROM college_assignment_submissions s
          JOIN users u ON s.student_id = u.id
-         WHERE s.assignment_id = $1`,
-        [assignmentId]
-      );
+         WHERE s.assignment_id = $1`;
+         
+      if (scope === 'pending') {
+         queryStr += ` AND s.id NOT IN (
+           SELECT er.submission_id FROM evaluation_results er
+           JOIN evaluations ev ON ev.id = er.evaluation_id
+           WHERE ev.college_assignment_id = $1 AND er.status IN ('completed', 'evaluated')
+         )`;
+      }
+      
+      submissionsRes = await client.query(queryStr, [assignmentId]);
     } else {
-      submissionsRes = await client.query(
-        `SELECT 
+      let queryStr = `
+        SELECT 
           s.id as submission_id,
           s.submission_link,
           s.user_id,
           u.full_name as student_name
          FROM assignment_submissions s
          JOIN users u ON s.user_id = u.id
-         WHERE s.assignment_id = $1`,
-        [assignmentId]
-      );
+         WHERE s.assignment_id = $1`;
+         
+      if (scope === 'pending') {
+         queryStr += ` AND s.id NOT IN (
+           SELECT er.submission_id FROM evaluation_results er
+           JOIN evaluations ev ON ev.id = er.evaluation_id
+           WHERE ev.assignment_id = $1 AND er.status IN ('completed', 'evaluated')
+         )`;
+      }
+      
+      submissionsRes = await client.query(queryStr, [assignmentId]);
     }
 
     const submissions = submissionsRes.rows;
 
     if (!submissions.length) {
+      if (scope === 'pending') {
+        // Try to get the latest evaluation for this assignment to view results
+        const { rows: latestRows } = await client.query(
+          `SELECT id FROM evaluations
+           WHERE assignment_id = $1 OR college_assignment_id = $1
+           ORDER BY created_at DESC LIMIT 1`,
+          [assignmentId]
+        );
+        const latestId = latestRows.length ? latestRows[0].id : null;
+        
+        return res.json({ 
+          success: true, 
+          message: "All submissions are already evaluated.",
+          evaluationId: latestId
+        });
+      }
       throw new Error("No submissions found to evaluate");
     }
 
     // Default to 'AI' if no specific evaluator is set — used for both the
     // stored record and the actual dispatch so they can never disagree.
     // Frontend can now override this using req.body.evaluatorType
-    const evaluatorType = req.body.evaluatorType || assignment.evaluator_type || "AI";
+    const evaluatorType = reqEvaluatorType || assignment.evaluator_type || "AI";
 
     //  Create evaluation
     // college assignments use a separate FK column to avoid violating assignments FK
@@ -181,6 +209,7 @@ exports.runEvaluation = async (req, res) => {
           expectedUrl: assignment.expected_url || "https://example.com"
         };
         
+        console.log("EVALUATOR URL IS:", evaluatorUrl);
         const response = await axios.post(evaluatorUrl, payload, {
           headers: { 'x-api-key': evaluatorApiKey },
           timeout: 15000
@@ -223,6 +252,7 @@ exports.runEvaluation = async (req, res) => {
             rubric: formattedRubric
           };
           
+          console.log("EVALUATOR URL IS:", evaluatorUrl);
           const response = await axios.post(evaluatorUrl, payload, {
             headers: { 'x-api-key': evaluatorApiKey },
             timeout: 15000

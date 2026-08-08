@@ -740,7 +740,12 @@ exports.getFilteredAssignments = async (req, res) => {
           e.id as evaluation_id
         FROM public.college_assignments ca
         JOIN public.colleges c ON c.id = ca.college_id
-        LEFT JOIN public.evaluations e ON e.assignment_id = ca.id
+        LEFT JOIN LATERAL (
+          SELECT id, status FROM public.evaluations e2
+          WHERE e2.college_assignment_id = ca.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) e ON true
         WHERE ca.is_deleted = false
 
         UNION ALL
@@ -768,7 +773,12 @@ exports.getFilteredAssignments = async (req, res) => {
         JOIN public.units u ON a.unit_id = u.id
         JOIN public.topics t ON u.topic_id = t.id
         JOIN public.subjects s ON t.subject_id = s.id
-        LEFT JOIN public.evaluations e ON e.assignment_id = a.id
+        LEFT JOIN LATERAL (
+          SELECT id, status FROM public.evaluations e2
+          WHERE e2.assignment_id = a.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) e ON true
       )
       SELECT * FROM all_assignments
       WHERE 1=1

@@ -208,6 +208,10 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
               <option value=''>None (Manual Grading)</option>
               <option value='JS'>JS Evaluator</option>
               <option value='VISUAL'>Visual Evaluator</option>
+              <option value='PYTHON'>Python Evaluator</option>
+              <option value='REACT'>React Evaluator</option>
+              <option value='FULLSTACK'>Full Stack Evaluator</option>
+              <option value='AI'>Backend API Evaluator</option>
             </select>
           </div>
 
