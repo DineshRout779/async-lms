@@ -96,7 +96,7 @@ const authLimiter = rateLimit({
   max: 50,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' },
+  message: { message: 'Too many requests, please try again later.' },
 });
 
 const server = http.createServer(app);
