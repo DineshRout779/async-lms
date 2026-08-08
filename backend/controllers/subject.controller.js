@@ -717,12 +717,16 @@ exports.createSubject = async (req, res) => {
 exports.updateSubject = async (req, res) => {
   const { id } = req.params;
   const { name, slug: manualSlug, description, is_published } = req.body;
-  const slug = manualSlug || slugify(name);
+  const slug = manualSlug || (name ? slugify(name) : undefined);
   try {
     const query = `
-      UPDATE public.subjects 
-      SET name = $1, slug = $2, description = $3, is_published = $4, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5 
+      UPDATE public.subjects
+      SET name = COALESCE($1, name),
+          slug = COALESCE($2, slug),
+          description = COALESCE($3, description),
+          is_published = COALESCE($4, is_published),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5
       RETURNING *`;
     const values = [name, slug, description, is_published, id];
     const result = await pool.query(query, values);
