@@ -14,6 +14,7 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<"idle" | "running" | "completed">("idle");
   const [evaluatorType, setEvaluatorType] = useState<string>("");
+  const [evaluationScope, setEvaluationScope] = useState<"pending" | "all">("pending");
   const [evaluationId, setEvaluationId] = useState("");
   const navigate = useNavigate();
 
@@ -23,6 +24,7 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
       setStatus("idle");
       setProgress(0);
       setEvaluatorType("");
+      setEvaluationScope("pending");
       setEvaluationId("");
     }
   }, [open]);
@@ -34,7 +36,8 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
 
       const res = await apiClient.post("/evaluations/run", {
         assignmentId,
-        evaluatorType: evaluatorType || undefined
+        evaluatorType: evaluatorType || undefined,
+        scope: evaluationScope
       });
 
       const data = res.data;
@@ -43,10 +46,18 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
         throw new Error(data.message);
       }
 
-      setProgress(70);
-
       // ✅ store evaluationId
-      setEvaluationId(data.evaluationId);
+      if (data.evaluationId) {
+        setEvaluationId(data.evaluationId);
+      }
+      
+      if (data.message && data.message.includes("already evaluated")) {
+        // No new submissions to evaluate
+        alert("No pending submissions found. To re-evaluate already graded submissions, select 'Re-evaluate All Submissions'.");
+        setStatus("idle");
+        setProgress(0);
+        return;
+      }
 
       // 🔄 Start polling Central Evaluators
       const checkStatus = async () => {
@@ -128,6 +139,40 @@ const EvaluationModal = ({ open, onClose, assignmentName, assignmentId, onComple
                 <option value="FULLSTACK">Fullstack Evaluator</option>
                 <option value="PYTHON">Python Evaluator</option>
               </select>
+            </div>
+
+            <div className="text-left mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Evaluation Scope</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="evaluationScope"
+                    value="pending"
+                    checked={evaluationScope === "pending"}
+                    onChange={() => setEvaluationScope("pending")}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Evaluate Pending Submissions Only
+                    <span className="block text-xs text-gray-500 font-normal mt-0.5">Skips students who were already evaluated successfully.</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer mt-3">
+                  <input
+                    type="radio"
+                    name="evaluationScope"
+                    value="all"
+                    checked={evaluationScope === "all"}
+                    onChange={() => setEvaluationScope("all")}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Re-evaluate All Submissions
+                    <span className="block text-xs text-gray-500 font-normal mt-0.5">Overwrites all previous scores for every student.</span>
+                  </span>
+                </label>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3">

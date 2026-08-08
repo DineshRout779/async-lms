@@ -620,6 +620,9 @@ const LearningFlow: React.FC = () => {
   const handleCreateAssignment = async (data: {
     title: string;
     instructions: string;
+    max_score: number;
+    evaluator_type?: string | null;
+    test_cases?: string | null;
   }) => {
     if (!selectedUnitForAssignment) return;
 
@@ -628,6 +631,9 @@ const LearningFlow: React.FC = () => {
         unit_id: selectedUnitForAssignment.id,
         title: data.title,
         instructions: data.instructions,
+        max_score: data.max_score,
+        evaluator_type: data.evaluator_type,
+        test_cases: data.test_cases,
       });
 
       if (response.data.success) {
@@ -718,6 +724,9 @@ const LearningFlow: React.FC = () => {
   const handleUpdateAssignment = async (data: {
     title: string;
     instructions: string;
+    max_score: number;
+    evaluator_type?: string | null;
+    test_cases?: string | null;
   }) => {
     if (!editingAssignment) return;
 
@@ -2098,6 +2107,9 @@ const LearningFlow: React.FC = () => {
             ? {
                 title: editingAssignment.title,
                 instructions: editingAssignment.instructions || '',
+                max_score: editingAssignment.max_score,
+                evaluator_type: (editingAssignment as any).evaluator_type,
+                test_cases: (editingAssignment as any).test_cases,
               }
             : undefined
         }

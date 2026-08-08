@@ -29,10 +29,11 @@ async function postToEvaluatorWithRetry(url, payload, config) {
   }
 }
 exports.runEvaluation = async (req, res) => {
-  const client = await pool.connect();
+  const { assignmentId, evaluatorType: reqEvaluatorType, scope = "pending" } = req.body;
 
-  try {
-    const { assignmentId } = req.body;
+  if (!assignmentId) {
+    return res.status(400).json({ success: false, message: "Assignment ID is required" });
+  }
 
     if (!assignmentId) {
       return res.status(400).json({
@@ -71,10 +72,9 @@ exports.runEvaluation = async (req, res) => {
     }
 
     // 3. Get submissions from the correct table
-    let submissionsRes;
     if (isCollegeAssignment) {
-      submissionsRes = await client.query(
-        `SELECT 
+      let queryStr = `
+        SELECT 
           s.id as submission_id,
           s.submission_link,
           s.student_id as user_id,
@@ -85,8 +85,8 @@ exports.runEvaluation = async (req, res) => {
         [assignmentId],
       );
     } else {
-      submissionsRes = await client.query(
-        `SELECT 
+      let queryStr = `
+        SELECT 
           s.id as submission_id,
           s.submission_link,
           s.user_id,
@@ -176,18 +176,22 @@ exports.runEvaluation = async (req, res) => {
 
       // Create payloads based on evaluator type capabilities
       // visual and javascript accept arrays. backend and react accept singles.
-      if (
-        evaluatorType === 'JS' ||
-        evaluatorType === 'VISUAL' ||
-        evaluatorType === 'javascript' ||
-        evaluatorType === 'visual'
-      ) {
-        const payloadType =
-          evaluatorType === 'JS'
-            ? 'javascript'
-            : evaluatorType === 'VISUAL'
-              ? 'visual'
-              : evaluatorType;
+      if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual') {
+        const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : evaluatorType);
+        
+        let jsConfig = { testCases: assignment.test_cases };
+        
+        // If test_cases is a JSON object containing advanced JS configs, extract them
+        if (payloadType === 'javascript' && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
+           jsConfig = {
+             testCases: assignment.test_cases.testCases || [],
+             evaluationMode: assignment.test_cases.evaluationMode || 'function',
+             entryFunction: assignment.test_cases.entryFunction,
+             functions: assignment.test_cases.functions,
+             expectedLogs: assignment.test_cases.expectedLogs
+           };
+        }
+
         const payload = {
           type: payloadType,
           submissions: validSubmissions.map((s) => ({
@@ -256,7 +260,8 @@ exports.runEvaluation = async (req, res) => {
             repoUrl: s.submission_link,
             rubric: formattedRubric,
           };
-
+          
+          console.log("EVALUATOR URL IS:", evaluatorUrl);
           const response = await axios.post(evaluatorUrl, payload, {
             headers: { 'x-api-key': evaluatorApiKey },
             timeout: 45000, // generous: Render free-tier evaluator service can take ~15-20s to cold-start when idle
@@ -566,5 +571,76 @@ exports.getAvailableEvaluators = (req, res) => {
     res.json({ success: true, data: evaluators });
   } catch (error) {
     serverError(res, error);
+  }
+};
+
+const OpenAI = require('openai');
+const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
+
+exports.generateTestCases = async (req, res) => {
+  try {
+    const { title, instructions, evaluatorType } = req.body;
+
+    if (!instructions) {
+      return res.status(400).json({ success: false, message: "Instructions are required to generate test cases." });
+    }
+
+    const systemPrompt = `You are an expert technical curriculum designer. Your task is to generate strict JSON test case configurations for an automated code grading system.
+    
+Based on the Assignment Title and Instructions provided by the user, you must output ONLY a raw JSON object that will be used by our JavaScript automated evaluator. DO NOT output any markdown blocks like \`\`\`json, just output the raw JSON string starting with { and ending with }.
+
+If the assignment asks students to write global variables and use console.log (e.g. basic variables assignment), use "script" mode.
+CRITICAL RULES FOR SCRIPT MODE:
+1. A script executes exactly ONCE from top to bottom. It cannot test multiple conflicting variable values in a single run (like Test Case 1 vs Test Case 2 for the same variable).
+2. If the instructions list multiple different scenarios for the SAME variables, ONLY generate \`expectedLogs\` for the VERY FIRST scenario. Ignore the other scenarios, as the student's script can only have one hardcoded state at a time.
+3. Our evaluator uses an AI Judge to evaluate script outputs, so it's okay to just provide the core expected values (e.g. ["Rohit Sharma", "20"]). The AI Judge will handle students who add conversational text like "My name is Rohit Sharma".
+
+Example output for script mode:
+{
+  "evaluationMode": "script",
+  "expectedLogs": ["Expected log 1", "Expected log 2"]
+}
+
+If the assignment asks students to write a specific function with inputs and expected return values, use "function" mode.
+Example output for function mode:
+{
+  "evaluationMode": "function",
+  "entryFunction": "functionName",
+  "testCases": [
+    { "input": [arg1, arg2], "expected": expectedResult }
+  ]
+}
+
+If you are unsure or it doesn't fit neatly into function mode, fallback to script mode.
+Do not include any explanation.`;
+
+    const userPrompt = `Assignment Title: ${title || 'Untitled'}\n\nInstructions:\n${instructions}`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.1,
+    });
+
+    let rawJson = completion.choices[0].message.content.trim();
+    // In case the model outputs markdown anyway, clean it
+    if (rawJson.startsWith('```json')) rawJson = rawJson.substring(7);
+    if (rawJson.startsWith('```')) rawJson = rawJson.substring(3);
+    if (rawJson.endsWith('```')) rawJson = rawJson.substring(0, rawJson.length - 3);
+    rawJson = rawJson.trim();
+
+    // Verify it parses correctly
+    const parsedJson = JSON.parse(rawJson);
+
+    return res.json({
+      success: true,
+      testCases: JSON.stringify(parsedJson, null, 2)
+    });
+  } catch (error) {
+    console.error("AI Generation Error:", error);
+    return serverError(res, error);
   }
 };
