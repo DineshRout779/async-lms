@@ -437,8 +437,13 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
             <StatCard label="Total Students" value={data.total} />
             <StatCard label="Submitted" value={data.submitted} />
             <StatCard label="Not Submitted" value={data.not_submitted} />
-            <StatCard label="Submission Rate" value={assignmentCompound ? `${data.rate}%` : '—'} />
+            <StatCard label="Submission Rate" value={`${data.rate}%`} />
           </div>
+          {!assignmentCompound && (
+            <p className="text-xs text-slate-500 -mt-2">
+              No specific assignment selected — showing students who submitted at least one assignment (course or college).
+            </p>
+          )}
 
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-3 border-b border-slate-100">
@@ -451,7 +456,7 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
                     <tr>
                       <th className="text-left px-5 py-3">Student</th>
                       <th className="text-left px-5 py-3">Email</th>
-                      {assignmentCompound && <th className="text-left px-5 py-3">Status</th>}
+                      <th className="text-left px-5 py-3">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -459,7 +464,7 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
                       <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
                         <td className="px-5 py-3 text-slate-500">{s.email}</td>
-                        {assignmentCompound && <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>}
+                        <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>
                       </tr>
                     ))}
                   </tbody>
