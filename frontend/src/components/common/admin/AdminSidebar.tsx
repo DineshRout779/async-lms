@@ -50,12 +50,13 @@ export default function AdminSidebar({
 }) {
   const currentUser = useAppSelector(selectUser);
 
-  const initials = currentUser?.full_name
-    ?.split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || 'A';
+  const initials =
+    currentUser?.full_name
+      ?.split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'A';
 
   return (
     <aside
@@ -84,7 +85,8 @@ export default function AdminSidebar({
             end={item.path === '/dashboard/admin'}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-3 py-3 rounded-lg transition-all group',
+                'flex w-full items-center gap-3 px-3 py-3 rounded-lg transition-all group',
+                !isOpen && 'justify-center px-0',
                 isActive
                   ? 'bg-[#333d7c] text-white shadow-sm'
                   : 'hover:bg-[#2a3469] hover:text-white',
