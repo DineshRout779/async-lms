@@ -206,10 +206,10 @@ exports.googleCallback = async (req, res) => {
     });
 
     const payload = ticket.getPayload();
-    const { sub: googleId, email, name } = payload;
+    const { sub: googleId, email, name, email_verified } = payload;
 
-    if (!email) {
-      return res.redirect(`${frontendUrl}/login?error=no_email`);
+    if (!email || !email_verified) {
+      return res.redirect(`${frontendUrl}/login?error=email_not_verified`);
     }
 
     // Upsert user
@@ -236,21 +236,18 @@ exports.googleCallback = async (req, res) => {
         ]);
       }
     } else {
-      const studentRoleRes = await pool.query(
-        "SELECT id FROM roles WHERE role_key = 'STUDENT'",
+      // New Google sign-in with no existing account: don't guess a role.
+      // Send the user to a role-selection screen with a short-lived signed
+      // token carrying their verified Google identity; the account is only
+      // created once they pick student/facilitator in completeGoogleSignup.
+      const roleSelectToken = jwt.sign(
+        { purpose: 'google_role_select', googleId, email, name },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' },
       );
-      const insertRes = await pool.query(
-        `INSERT INTO users (full_name, email, google_id, role_id, onboarding_step, is_verified)
-         VALUES ($1, $2, $3, $4, 'college', false)
-         RETURNING id, full_name, email, onboarding_step, is_verified`,
-        [name, email, googleId, studentRoleRes.rows[0].id],
+      return res.redirect(
+        `${frontendUrl}/auth/select-role?token=${roleSelectToken}`,
       );
-      user = insertRes.rows[0];
-      user.role = 'student';
-      await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [
-        user.id,
-      ]);
-      logAction({ req, action: 'CREATE', entityType: 'user', entityId: user.id, details: { email, role: user.role } });
     }
 
     const tokenPayload = {
@@ -275,6 +272,71 @@ exports.googleCallback = async (req, res) => {
   } catch (err) {
     console.error('GOOGLE CALLBACK ERROR:', err);
     res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
+  }
+};
+
+/**
+ * GOOGLE OAUTH STEP 3 — new user picked a role on /auth/select-role; create the account
+ */
+exports.completeGoogleSignup = async (req, res) => {
+  const { token, role } = req.body;
+
+  if (!token || !['student', 'facilitator'].includes(role)) {
+    return res.status(400).json({ message: 'Invalid request' });
+  }
+
+  let selection;
+  try {
+    selection = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return res.status(400).json({ message: 'This sign-in link has expired. Please try again.' });
+  }
+  if (selection.purpose !== 'google_role_select') {
+    return res.status(400).json({ message: 'Invalid request' });
+  }
+  const { googleId, email, name } = selection;
+
+  try {
+    // Someone may have signed up (password or another Google attempt) with this
+    // email while the role-selection screen was open — don't create a duplicate.
+    const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (exists.rowCount) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+
+    const roleRes = await pool.query(
+      'SELECT id FROM roles WHERE role_key = $1',
+      [role.toUpperCase()],
+    );
+    if (!roleRes.rowCount) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    const insertRes = await pool.query(
+      `INSERT INTO users (full_name, email, google_id, role_id, onboarding_step, is_verified)
+       VALUES ($1, $2, $3, $4, 'college', false)
+       RETURNING id, full_name, email, onboarding_step, is_verified`,
+      [name, email, googleId, roleRes.rows[0].id],
+    );
+    const user = { ...insertRes.rows[0], role };
+
+    if (role === 'student') {
+      await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [user.id]);
+    }
+    logAction({ req, action: 'CREATE', entityType: 'user', entityId: user.id, details: { email, role } });
+
+    const tokenPayload = {
+      id: user.id,
+      role: user.role,
+      college_id: undefined,
+      college_ids: role === 'facilitator' ? [] : undefined,
+    };
+    const jwtToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({ token: jwtToken, user });
+  } catch (err) {
+    console.error('COMPLETE GOOGLE SIGNUP ERROR:', err);
+    res.status(500).json({ message: 'Something went wrong' });
   }
 };
 

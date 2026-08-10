@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { AuthState } from './authTypes';
-import { loginUser, signupUser, loadUser } from './authThunks';
+import { loginUser, signupUser, loadUser, completeGoogleSignup } from './authThunks';
 
 const token = localStorage.getItem('token');
 
@@ -64,6 +64,23 @@ const authSlice = createSlice({
         localStorage.setItem('token', action.payload.token);
       })
       .addCase(signupUser.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload ?? null;
+      })
+
+      // COMPLETE GOOGLE SIGNUP
+      .addCase(completeGoogleSignup.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(completeGoogleSignup.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.isAuthenticated = true;
+        state.error = null;
+        localStorage.setItem('token', action.payload.token);
+      })
+      .addCase(completeGoogleSignup.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload ?? null;
       })
