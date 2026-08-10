@@ -198,7 +198,7 @@ exports.runEvaluation = async (req, res) => {
             studentName: s.student_name,
             studentId: s.user_id || s.student_id,
           })),
-          testCases: assignment.test_cases,
+          ...jsConfig,
           rubricText: assignment.rubric
             ? JSON.stringify(assignment.rubric)
             : 'Standard evaluation',
@@ -577,7 +577,7 @@ const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
 
 exports.generateTestCases = async (req, res) => {
   try {
-    const { title, instructions, evaluatorType } = req.body;
+    const { title, instructions, evaluatorType, rubric } = req.body;
 
     if (!instructions) {
       return res.status(400).json({ success: false, message: "Instructions are required to generate test cases." });
@@ -585,7 +585,9 @@ exports.generateTestCases = async (req, res) => {
 
     const systemPrompt = `You are an expert technical curriculum designer. Your task is to generate strict JSON test case configurations for an automated code grading system.
     
-Based on the Assignment Title and Instructions provided by the user, you must output ONLY a raw JSON object that will be used by our JavaScript automated evaluator. DO NOT output any markdown blocks like \`\`\`json, just output the raw JSON string starting with { and ending with }.
+Based on the Assignment Title, Instructions, and Evaluation Rubric provided by the user, you must output ONLY a raw JSON object that will be used by our JavaScript automated evaluator. DO NOT output any markdown blocks like \`\`\`json, just output the raw JSON string starting with { and ending with }.
+
+CRITICAL RULE: Your generated test cases must closely align with the provided Evaluation Rubric criteria. Ensure that the tests verify exactly what the rubric expects the student to build.
 
 If the assignment asks students to write global variables and use console.log (e.g. basic variables assignment), use "script" mode.
 CRITICAL RULES FOR SCRIPT MODE:
@@ -612,7 +614,13 @@ Example output for function mode:
 If you are unsure or it doesn't fit neatly into function mode, fallback to script mode.
 Do not include any explanation.`;
 
-    const userPrompt = `Assignment Title: ${title || 'Untitled'}\n\nInstructions:\n${instructions}`;
+    const userPrompt = `Assignment Title: ${title || 'Untitled'}
+
+Instructions:
+${instructions}
+
+Evaluation Rubric:
+${rubric ? JSON.stringify(rubric, null, 2) : 'No rubric provided'}`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
