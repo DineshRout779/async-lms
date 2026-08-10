@@ -28,6 +28,17 @@ const FeedbackCell = ({ feedback }: { feedback: string }) => {
     return <span>{feedback}</span>;
   }
 
+  // Handle arrays (e.g. syntax or validation errors from the evaluator)
+  if (Array.isArray(parsed)) {
+    return (
+      <ul className="list-disc list-inside text-red-600 text-xs mt-1">
+        {parsed.map((err, i) => (
+          <li key={i}>{err.feedback || err.error || JSON.stringify(err)}</li>
+        ))}
+      </ul>
+    );
+  }
+
   const summary: string | undefined = parsed.summary || parsed.feedback;
   const lists: { label: string; items: string[] }[] = [
     { label: 'Strengths', items: parsed.strengths || [] },
