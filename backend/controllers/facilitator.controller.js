@@ -920,15 +920,17 @@ exports.getAssignmentAnalytics = async (req, res) => {
     }
 
     const studentsRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email
+      `SELECT DISTINCT u.id, u.full_name, u.email
        FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE sp.college_id = ANY($1::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') ${batchClause}
+       ${subjectJoin}
+       WHERE sp.college_id = ANY($1::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') ${batchClause} ${subjectClause}
        ORDER BY u.full_name`,
       params,
     );
     const students = studentsRes.rows;
 
+    const studentIds = students.map((s) => s.id);
     let submittedIds = new Set();
     if (assignment_id) {
       if (assignment_type === 'course') {
@@ -944,16 +946,44 @@ exports.getAssignmentAnalytics = async (req, res) => {
         );
         submittedIds = new Set(subRes.rows.map((r) => r.student_id));
       }
+    } else {
+      // No specific assignment selected: fall back to "submitted at least one assignment"
+      // (course or college), matching the definition used by the Student Dashboard tab's
+      // "Assignments Submitted" aggregate — keeps the two views consistent.
+      const courseParams = [studentIds];
+      let courseSubjectClause = '';
+      if (subject_id) {
+        courseParams.push(subject_id);
+        courseSubjectClause = `AND t.subject_id = $${courseParams.length}::uuid`;
+      }
+      const courseSubRes = await pool.query(
+        `SELECT DISTINCT asub.user_id as student_id
+         FROM assignment_submissions asub
+         JOIN assignments a ON a.id = asub.assignment_id
+         JOIN units un ON un.id = a.unit_id
+         JOIN topics t ON t.id = un.topic_id
+         WHERE asub.user_id = ANY($1::uuid[]) ${courseSubjectClause}`,
+        courseParams,
+      );
+      const collegeSubRes = await pool.query(
+        `SELECT DISTINCT cas.student_id
+         FROM college_assignment_submissions cas
+         JOIN college_assignments ca ON ca.id = cas.assignment_id AND ca.is_deleted = false
+         WHERE cas.student_id = ANY($1::uuid[]) AND ca.college_id = ANY($2::uuid[])`,
+        [studentIds, colleges],
+      );
+      courseSubRes.rows.forEach((r) => submittedIds.add(r.student_id));
+      collegeSubRes.rows.forEach((r) => submittedIds.add(r.student_id));
     }
 
     const studentList = students.map((s) => ({
       id: s.id,
       name: s.full_name,
       email: s.email,
-      status: assignment_id ? (submittedIds.has(s.id) ? 'Submitted' : 'Pending') : null,
+      status: submittedIds.has(s.id) ? 'Submitted' : 'Pending',
     }));
 
-    const submitted = assignment_id ? studentList.filter((s) => s.status === 'Submitted').length : 0;
+    const submitted = studentList.filter((s) => s.status === 'Submitted').length;
     const total = students.length;
 
     res.json({
@@ -1167,12 +1197,18 @@ exports.getBatchDashboard = async (req, res) => {
       }),
     );
 
-    // Overall assignment completion
+    // Overall assignment completion (course + college assignments, at least one submitted)
     const asgRes = await pool.query(
-      `SELECT COUNT(DISTINCT cas.student_id) as submitted
-       FROM college_assignment_submissions cas
-       JOIN college_assignments ca ON ca.id = cas.assignment_id
-       WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])`,
+      `SELECT COUNT(DISTINCT student_id) as submitted FROM (
+         SELECT cas.student_id
+         FROM college_assignment_submissions cas
+         JOIN college_assignments ca ON ca.id = cas.assignment_id AND ca.is_deleted = false
+         WHERE ca.college_id = ANY($1::uuid[]) AND cas.student_id = ANY($2::uuid[])
+         UNION
+         SELECT asub.user_id as student_id
+         FROM assignment_submissions asub
+         WHERE asub.user_id = ANY($2::uuid[])
+       ) combined`,
       [colleges, enrolledIds],
     );
     const asgSubmitted = parseInt(asgRes.rows[0]?.submitted || 0);
@@ -1380,6 +1416,23 @@ exports.getStudentAnalytics = async (req, res) => {
     const asgRes = await pool.query(asgQuery, asgParams);
     const asgSubmittedMap = new Map(asgRes.rows.map(r => [r.student_id, r.submitted_count]));
 
+    // College assignments (ad-hoc, not tied to a subject/topic) — included so the
+    // "submitted at least one assignment" definition matches the Assignment Tracker tab.
+    const collegeAsgTotalRes = await pool.query(
+      `SELECT COUNT(*)::int as total FROM college_assignments WHERE college_id = ANY($1::uuid[]) AND is_deleted = false`,
+      [colleges],
+    );
+    const collegeAsgTotal = collegeAsgTotalRes.rows[0]?.total || 0;
+    const collegeAsgRes = await pool.query(
+      `SELECT cas.student_id, COUNT(DISTINCT cas.assignment_id)::int as submitted_count
+       FROM college_assignment_submissions cas
+       JOIN college_assignments ca ON ca.id = cas.assignment_id AND ca.is_deleted = false
+       WHERE cas.student_id = ANY($1::uuid[]) AND ca.college_id = ANY($2::uuid[])
+       GROUP BY cas.student_id`,
+      [enrolledIds, colleges],
+    );
+    const collegeAsgSubmittedMap = new Map(collegeAsgRes.rows.map((r) => [r.student_id, r.submitted_count]));
+
     // Expected Total Projects Count per student
     let expectedProjMap = new Map();
     let pParams = [enrolledIds];
@@ -1438,8 +1491,8 @@ exports.getStudentAnalytics = async (req, res) => {
         email: s.email,
         quiz_submitted_count: quizSubmittedMap.get(s.id) || 0,
         quiz_total_count: expectedQuizMap.get(s.id) || 0,
-        assignment_submitted_count: asgSubmittedMap.get(s.id) || 0,
-        assignment_total_count: expectedMap.get(s.id) || 0,
+        assignment_submitted_count: (asgSubmittedMap.get(s.id) || 0) + (collegeAsgSubmittedMap.get(s.id) || 0),
+        assignment_total_count: (expectedMap.get(s.id) || 0) + collegeAsgTotal,
         project_submitted_count: projSubmittedMap.get(s.id) || 0,
         project_total_count: expectedProjMap.get(s.id) || 0,
       };
