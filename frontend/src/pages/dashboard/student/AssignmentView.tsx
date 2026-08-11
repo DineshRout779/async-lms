@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate } from 'react-router';
 import {
   Loader2,
   XCircle,
   ClipboardList,
   CheckCircle2,
   Link2,
+  ArrowRight,
+  PartyPopper,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,6 +18,48 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
+import { fireConfetti } from '@/lib/confetti';
+
+/* =======================
+   Course-wide "next item" navigation
+   (mirrors the flattening logic in Lesson.tsx, scoped to this page since
+   AssignmentView is a separate route/component from the lesson view)
+======================= */
+
+type FlatItem =
+  | { type: 'subtopic'; id: string; slug: string; title: string }
+  | { type: 'quiz'; id: string; title: string }
+  | { type: 'assignment'; id: string; title: string }
+  | { type: 'capstone'; id: string; title: string };
+
+function flattenCourseStructure(topics: any[]): FlatItem[] {
+  const flat: FlatItem[] = [];
+  topics.forEach((topic) => {
+    (topic.units || []).forEach((unit: any) => {
+      (unit.subtopics || []).forEach((sub: any) =>
+        flat.push({ type: 'subtopic', id: sub.id, slug: sub.slug, title: sub.title }),
+      );
+      (unit.quizzes || []).forEach((quiz: any) =>
+        flat.push({ type: 'quiz', id: quiz.id, title: `Unit Quiz: ${unit.title}` }),
+      );
+      (unit.assignments || []).forEach((a: any) =>
+        flat.push({ type: 'assignment', id: a.id, title: a.title }),
+      );
+    });
+    if (topic.capstone) {
+      flat.push({ type: 'capstone', id: topic.capstone.id, title: topic.capstone.title });
+    }
+  });
+  return flat;
+}
+
+function buildItemUrl(slug: string, item: FlatItem): string {
+  const base = `/dashboard/student/courses/${slug}`;
+  if (item.type === 'subtopic') return `${base}/lesson/${item.slug}`;
+  if (item.type === 'quiz') return `${base}/quiz/${item.id}`;
+  if (item.type === 'capstone') return `${base}/capstone/${item.id}`;
+  return `${base}/assignment/${item.id}`;
+}
 
 interface AssignmentDetail {
   id: string;
@@ -29,13 +73,49 @@ interface AssignmentDetail {
 }
 
 export default function AssignmentView() {
-  const { assignmentId } = useParams();
+  const { assignmentId, slug } = useParams();
+  const navigate = useNavigate();
   const [assignment, setAssignment] = useState<AssignmentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [courseStructure, setCourseStructure] = useState<any[]>([]);
 
   const [link, setLink] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!slug) return;
+    apiClient
+      .get(`/subjects/${slug}`)
+      .then((res) => setCourseStructure(res.data?.data || []))
+      .catch(() => {
+        // Non-critical — only drives the "Next" button; page still works without it.
+      });
+  }, [slug]);
+
+  const nextItem = useMemo(() => {
+    if (!courseStructure.length || !assignmentId) return undefined;
+    const flat = flattenCourseStructure(courseStructure);
+    const currentIndex = flat.findIndex(
+      (item) => item.type === 'assignment' && item.id === assignmentId,
+    );
+    if (currentIndex === -1) return undefined;
+    // undefined = not found yet, null = found and is the last item in the course
+    return flat[currentIndex + 1] ?? null;
+  }, [courseStructure, assignmentId]);
+
+  const goToNext = () => {
+    if (!slug) return;
+    if (nextItem) {
+      navigate(buildItemUrl(slug, nextItem));
+    } else {
+      // Last item in the whole course — celebrate and land on the overview,
+      // which shows the "Course Completed" state.
+      fireConfetti();
+      toast.success('🎉 Course completed! Great work!');
+      setTimeout(() => navigate(`/dashboard/student/courses/${slug}`), 800);
+    }
+  };
 
   useEffect(() => {
     if (!assignmentId) return;
@@ -83,17 +163,19 @@ export default function AssignmentView() {
       });
       setAssignment((prev) => (prev ? { ...prev, ...res.data.data } : prev));
       toast.success('Assignment submitted successfully!');
+      window.dispatchEvent(new Event('course-progress-updated'));
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit assignment'));
     } finally {
       setSubmitting(false);
+      setLink('');
     }
   };
 
   if (loading) {
     return (
       <div className='flex h-[60vh] items-center justify-center'>
-        <Loader2 className='h-10 w-10 animate-spin text-indigo-600' />
+        <Loader2 className='h-10 w-10 animate-spin text-[#333D7C]' />
       </div>
     );
   }
@@ -115,29 +197,31 @@ export default function AssignmentView() {
   const isSubmitted = Boolean(assignment.submission_link);
 
   return (
-    <div className='mx-auto max-w-4xl space-y-8 p-6 md:p-10'>
+    <div className='p-8 max-w-4xl mx-auto space-y-8'>
       {/* Header */}
       <header className='space-y-3'>
         <div className='flex items-start gap-3'>
-          <ClipboardList className='h-7 w-7 text-indigo-600 shrink-0 mt-1' />
-          <h1 className='text-3xl font-extrabold tracking-tight text-slate-900'>
+          <div className='w-11 h-11 rounded-2xl bg-[#333D7C]/10 text-[#333D7C] flex items-center justify-center shrink-0'>
+            <ClipboardList className='h-5 w-5' />
+          </div>
+          <h1 className='text-3xl font-bold text-[#1e293b] leading-tight mt-1'>
             {assignment.title}
           </h1>
         </div>
         <div className='flex flex-wrap gap-2'>
-          <Badge className='bg-indigo-50 text-indigo-700 border border-indigo-200'>
+          <Badge className='bg-[#333D7C]/10 text-[#333D7C] border-none'>
             Assignment
           </Badge>
-          <Badge className='bg-slate-100 text-slate-600 border border-slate-200'>
+          <Badge className='bg-slate-100 text-slate-600 border-none'>
             Max: {assignment.max_score} pts
           </Badge>
           {assignment.unit_title && (
-            <Badge className='bg-slate-100 text-slate-500 border border-slate-200'>
+            <Badge className='bg-slate-100 text-slate-500 border-none'>
               {assignment.unit_title}
             </Badge>
           )}
           {isSubmitted && (
-            <Badge className='bg-emerald-50 text-emerald-700 border border-emerald-200'>
+            <Badge className='bg-emerald-50 text-emerald-700 border-none'>
               <CheckCircle2 className='h-3 w-3 mr-1' />
               Submitted
             </Badge>
@@ -146,20 +230,22 @@ export default function AssignmentView() {
       </header>
 
       {/* Instructions */}
-      <Card className='overflow-hidden rounded-3xl border border-slate-200 shadow-sm'>
-        <div className='bg-slate-50 px-6 py-4'>
+      <Card className='overflow-hidden rounded-[2rem] border border-slate-100 shadow-sm p-0'>
+        <div className='px-8 pt-6'>
           <p className='text-xs font-semibold uppercase tracking-widest text-slate-400'>
             Instructions
           </p>
-          <p className='text-sm text-slate-600 mt-0.5'>
+          <p className='text-sm text-slate-500 mt-0.5'>
             Read carefully before submitting
           </p>
         </div>
-        <div className='bg-white px-6 py-8'>
+        <div className='px-8 py-6'>
           {assignment.instructions ? (
             <div className='prose prose-slate max-w-none lg:prose-lg'>
               {/^<[a-z][\s\S]*>/i.test(assignment.instructions.trimStart()) ? (
-                <div dangerouslySetInnerHTML={{ __html: assignment.instructions }} />
+                <div
+                  dangerouslySetInnerHTML={{ __html: assignment.instructions }}
+                />
               ) : (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {assignment.instructions}
@@ -173,20 +259,20 @@ export default function AssignmentView() {
       </Card>
 
       {/* Submission */}
-      <Card className='overflow-hidden rounded-3xl border border-slate-200 shadow-sm'>
-        <div className='bg-slate-50 px-6 py-4'>
+      <Card className='overflow-hidden rounded-[2rem] border border-slate-100 shadow-sm p-0'>
+        <div className='px-8 pt-6'>
           <p className='text-xs font-semibold uppercase tracking-widest text-slate-400'>
             Your Submission
           </p>
-          <p className='text-sm text-slate-600 mt-0.5'>
+          <p className='text-sm text-slate-500 mt-0.5'>
             {isSubmitted
               ? 'Already submitted — you can update your link below'
               : 'Paste the link to your solution (GitHub, Google Drive, etc.)'}
           </p>
         </div>
-        <div className='bg-white px-6 py-8 space-y-4'>
+        <div className='px-8 py-6 space-y-4'>
           {isSubmitted && (
-            <div className='flex items-center gap-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-sm'>
+            <div className='flex items-center gap-2 p-3 bg-emerald-50 rounded-xl text-sm'>
               <CheckCircle2 className='h-4 w-4 text-emerald-600 shrink-0' />
               <span className='text-emerald-700 font-medium'>
                 Submitted on{' '}
@@ -218,14 +304,34 @@ export default function AssignmentView() {
               onClick={handleSubmit}
               loading={submitting}
               disabled={isSubmitted}
-              className='bg-indigo-600 hover:bg-indigo-700 shrink-0'
+              className='bg-[#333D7C] hover:bg-[#2a3268] shrink-0'
             >
-              {/* {isSubmitted ? 'Update' : 'Submit'} */}
               Submit
             </Button>
           </div>
         </div>
       </Card>
+
+      {isSubmitted && nextItem !== undefined && (
+        <div className='flex justify-end'>
+          <Button
+            onClick={goToNext}
+            className='bg-emerald-600 hover:bg-emerald-700 gap-2'
+          >
+            {nextItem ? (
+              <>
+                Next: {nextItem.title}
+                <ArrowRight className='h-4 w-4' />
+              </>
+            ) : (
+              <>
+                Finish Course
+                <PartyPopper className='h-4 w-4' />
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

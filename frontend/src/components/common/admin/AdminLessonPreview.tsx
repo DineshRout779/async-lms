@@ -1,4 +1,4 @@
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,11 +15,15 @@ const AdminLessonPreviewModal = ({
   onClose,
   content,
   videoUrl,
+  loading = false,
+  error = null,
 }: {
   isOpen: boolean;
   onClose: () => void;
   content: string;
   videoUrl?: string;
+  loading?: boolean;
+  error?: string | null;
 }) => {
   const [iframeLoading, setIframeLoading] = useState(true);
 
@@ -72,12 +76,29 @@ const AdminLessonPreviewModal = ({
                 className='w-full rounded-lg bg-slate-900'
               />
             )
-          ) : (
+          ) : loading ? (
+            <div className='flex flex-col items-center justify-center gap-3 py-16 text-slate-400'>
+              <Loader2 className='h-8 w-8 animate-spin' />
+              <p className='text-sm'>Loading lesson content...</p>
+            </div>
+          ) : error ? (
+            <div className='flex flex-col items-center justify-center gap-3 py-16 text-center'>
+              <AlertTriangle className='h-8 w-8 text-amber-500' />
+              <p className='text-sm font-medium text-slate-700'>
+                Couldn&apos;t load lesson content
+              </p>
+              <p className='text-xs text-slate-400 max-w-sm'>{error}</p>
+            </div>
+          ) : content ? (
             <div className='prose prose-slate max-w-none lg:prose-base'>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
               </ReactMarkdown>
             </div>
+          ) : (
+            <p className='py-16 text-center text-sm italic text-slate-400'>
+              No content to preview.
+            </p>
           )}
         </div>
       </div>

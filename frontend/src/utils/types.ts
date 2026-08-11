@@ -38,6 +38,12 @@ export interface QuizQuestion {
   explanation?: string;
 }
 
+export interface QuizLastAttempt {
+  score: number;
+  is_passed: boolean;
+  attempted_at: string;
+}
+
 export interface Quiz {
   id: string;
   title?: string;
@@ -45,6 +51,7 @@ export interface Quiz {
   passing_score: number;
   max_score: number;
   questions: QuizQuestion[];
+  last_attempt?: QuizLastAttempt | null;
 }
 
 export interface TestCase {
@@ -186,6 +193,7 @@ export interface QuizAttemptResult {
     is_correct: boolean;
     correct_option_id: string | null;
     correct_option_text: string | null;
+    explanation?: string | null;
   }>;
   effective_passing_score?: number;
   actual_max_score?: number;

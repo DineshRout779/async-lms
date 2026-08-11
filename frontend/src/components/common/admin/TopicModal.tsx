@@ -55,6 +55,7 @@ const TopicModal: React.FC<TopicModalProps> = ({
             </label>
             <input
               type='text'
+              autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder='e.g., Introduction to Arrays'

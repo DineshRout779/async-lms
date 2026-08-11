@@ -35,7 +35,6 @@ exports.createCollege = async (req, res) => {
     res.status(400).json({
       success: false,
       message: 'Error creating college',
-      error: error.message,
     });
   }
 };
@@ -46,8 +45,13 @@ exports.updateCollege = async (req, res) => {
   const { name, short_code, city, state, is_verified } = req.body;
   try {
     const query = `
-      UPDATE colleges 
-      SET name = $1, short_code = $2, city = $3, state = $4, is_verified = $5, updated_at = CURRENT_TIMESTAMP
+      UPDATE colleges
+      SET name = COALESCE($1, name),
+          short_code = COALESCE($2, short_code),
+          city = COALESCE($3, city),
+          state = COALESCE($4, state),
+          is_verified = COALESCE($5, is_verified),
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = $6
       RETURNING *`;
     const values = [name, short_code, city, state, is_verified, id];
@@ -57,10 +61,10 @@ exports.updateCollege = async (req, res) => {
     logAction({ req, action: 'UPDATE', entityType: 'college', entityId: id, details: { name } });
     res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {
+    console.error('updateCollege:', error);
     res.status(400).json({
       success: false,
       message: 'Error updating college',
-      error: error.message,
     });
   }
 };

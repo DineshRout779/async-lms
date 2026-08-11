@@ -9,6 +9,8 @@ import {
   Upload,
   CheckCircle2,
   AlertCircle,
+  Copy,
+  Check,
 } from 'lucide-react';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
@@ -152,6 +154,12 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
     const newOptions = [...options];
     newOptions[index] = { ...newOptions[index], [field]: value };
     setOptions(newOptions);
+  };
+
+  // Multiple choice is graded as single-correct-answer server-side, so only
+  // one option may be marked correct at a time.
+  const setCorrectOption = (index: number) => {
+    setOptions(options.map((o, i) => ({ ...o, is_correct: i === index })));
   };
 
   const resetForm = () => {
@@ -313,6 +321,7 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
               Question Text *
             </label>
             <textarea
+              autoFocus
               value={questionText}
               onChange={(e) => setQuestionText(e.target.value)}
               placeholder='Enter your question...'
@@ -359,17 +368,12 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
                 {options.map((option, index) => (
                   <div key={index} className='flex gap-2 items-start'>
                     <input
-                      type='checkbox'
+                      type='radio'
+                      name='correct-option'
                       checked={option.is_correct}
-                      onChange={(e) =>
-                        handleOptionChange(
-                          index,
-                          'is_correct',
-                          e.target.checked,
-                        )
-                      }
+                      onChange={() => setCorrectOption(index)}
                       className='mt-3'
-                      title='Mark as correct answer'
+                      title='Mark as the correct answer'
                     />
                     <input
                       type='text'
@@ -392,7 +396,7 @@ export const QuizQuestionModal: React.FC<QuizQuestionModalProps> = ({
                 ))}
               </div>
               <p className='mt-2 text-xs text-slate-500'>
-                ✓ Check the box next to the correct answer(s)
+                ✓ Select the radio button next to the single correct answer
               </p>
             </div>
           )}
@@ -533,6 +537,17 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
   const [parseError, setParseError] = useState('');
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyTemplate = async () => {
+    try {
+      await navigator.clipboard.writeText(BULK_TEMPLATE);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy template');
+    }
+  };
 
   const handleParse = () => {
     setParseError('');
@@ -657,8 +672,28 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
         <div className='flex-1 overflow-y-auto p-6 space-y-4'>
           {/* Template hint */}
           <details className='text-xs text-slate-500 border border-slate-100 rounded-lg'>
-            <summary className='px-3 py-2 cursor-pointer font-medium text-slate-600 hover:bg-slate-50 rounded-lg'>
+            <summary className='flex items-center justify-between px-3 py-2 cursor-pointer font-medium text-slate-600 hover:bg-slate-50 rounded-lg'>
               View JSON format / template
+              <button
+                type='button'
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleCopyTemplate();
+                }}
+                className='flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 transition-colors'
+              >
+                {copied ? (
+                  <>
+                    <Check className='h-3 w-3 text-emerald-500' />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className='h-3 w-3' />
+                    Copy
+                  </>
+                )}
+              </button>
             </summary>
             <pre className='p-3 text-[11px] text-slate-600 bg-slate-50 overflow-x-auto rounded-b-lg'>
               {BULK_TEMPLATE}
@@ -666,6 +701,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
           </details>
 
           <textarea
+            autoFocus
             value={raw}
             onChange={(e) => {
               setRaw(e.target.value);
@@ -784,12 +820,23 @@ export const QuizQuestionsList: React.FC<QuizQuestionsListProps> = ({
     }
   };
 
+  const assignedPoints = questions.reduce((sum, q) => sum + (q.points || 0), 0);
+
   return (
     <div className='space-y-4'>
       <div className='flex items-center justify-between'>
-        <h4 className='text-sm font-semibold text-slate-700'>
-          Quiz Questions for: {subtopicTitle}
-        </h4>
+        <div>
+          <h4 className='text-sm font-semibold text-slate-700'>
+            Quiz Questions for: {subtopicTitle}
+          </h4>
+          {questions.length > 0 && (
+            <p className='mt-0.5 text-xs font-medium text-slate-400'>
+              {assignedPoints} total point{assignedPoints !== 1 ? 's' : ''}{' '}
+              across {questions.length} question
+              {questions.length !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
         <div className='flex gap-2'>
           <Button
             onClick={() => setBulkModalOpen(true)}

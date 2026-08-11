@@ -2,7 +2,22 @@ import { Button } from '@/components/ui/button';
 import type { QuizModalProps } from '@/utils/types';
 import { Save, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+
+const DEFAULT_PASSING_SCORE = 70;
+
+// Whole numbers only, 1-100 — mirrors the backend's validation
+// (admin.controller.js createQuiz/updateQuiz).
+const validatePassingScore = (raw: string): string | null => {
+  if (raw.trim() === '') return 'Passing threshold is required';
+  if (!/^\d+$/.test(raw.trim())) {
+    return 'Enter a whole number, no decimals or symbols';
+  }
+  const value = Number(raw);
+  if (value < 1 || value > 100) {
+    return 'Passing threshold must be between 1 and 100';
+  }
+  return null;
+};
 
 const QuizModal: React.FC<QuizModalProps> = ({
   isOpen,
@@ -12,32 +27,30 @@ const QuizModal: React.FC<QuizModalProps> = ({
   unitTitle,
   loading = false,
 }) => {
-  const [passingScore, setPassingScore] = useState(
-    editData?.passing_score ?? 70,
+  const [passingScoreInput, setPassingScoreInput] = useState(
+    String(editData?.passing_score ?? DEFAULT_PASSING_SCORE),
   );
-  const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
+  const [touched, setTouched] = useState(false);
+
+  const error = validatePassingScore(passingScoreInput);
 
   const handleSave = () => {
-    if (passingScore <= 0 || maxScore <= 0) {
-      toast.error('Scores must be greater than 0');
-      return;
-    }
-    if (passingScore > maxScore) {
-      toast.error('Passing score cannot exceed max score');
-      return;
-    }
+    setTouched(true);
+    if (error) return;
     onSave({
-      passing_score: passingScore,
-      max_score: maxScore,
+      passing_score: Number(passingScoreInput),
+      max_score: 100,
     });
-    setPassingScore(70);
-    setMaxScore(100);
+    setPassingScoreInput(String(DEFAULT_PASSING_SCORE));
+    setTouched(false);
   };
 
   useEffect(() => {
     if (isOpen) {
-      setPassingScore(editData?.passing_score ?? 70);
-      setMaxScore(editData?.max_score ?? 100);
+      setPassingScoreInput(
+        String(editData?.passing_score ?? DEFAULT_PASSING_SCORE),
+      );
+      setTouched(false);
     }
   }, [isOpen, editData]);
 
@@ -64,41 +77,47 @@ const QuizModal: React.FC<QuizModalProps> = ({
         <div className='space-y-4'>
           <div>
             <label className='mb-2 block text-sm font-medium text-slate-700'>
-              Maximum Score
+              Passing Threshold (%)
             </label>
-            <input
-              type='number'
-              value={maxScore}
-              onChange={(e) => setMaxScore(parseInt(e.target.value) || 0)}
-              placeholder='100'
-              min='1'
-              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
-            />
-          </div>
-
-          <div>
-            <label className='mb-2 block text-sm font-medium text-slate-700'>
-              Passing Score
-            </label>
-            <input
-              type='number'
-              value={passingScore}
-              onChange={(e) => setPassingScore(parseInt(e.target.value) || 0)}
-              placeholder='70'
-              min='1'
-              max={maxScore}
-              className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
-            />
-            <p className='mt-1 text-xs text-slate-500'>
-              Students must score at least {passingScore} out of {maxScore} to
-              pass
-            </p>
+            <div className='relative'>
+              <input
+                type='number'
+                autoFocus
+                value={passingScoreInput}
+                onChange={(e) => setPassingScoreInput(e.target.value)}
+                onBlur={() => setTouched(true)}
+                placeholder='70'
+                min='1'
+                max='100'
+                step='1'
+                aria-invalid={touched && !!error}
+                className={`w-full rounded-lg border px-3 py-2 pr-8 outline-none focus:ring-2 ${
+                  touched && error
+                    ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+                    : 'border-slate-300 focus:border-indigo-500 focus:ring-indigo-200'
+                }`}
+              />
+              <span className='pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400'>
+                %
+              </span>
+            </div>
+            {touched && error ? (
+              <p className='mt-1 text-xs font-medium text-red-500'>{error}</p>
+            ) : (
+              <p className='mt-1 text-xs text-slate-500'>
+                Students must score at least {passingScoreInput || 0}% of a
+                quiz's total points to pass. Points are set per-question when
+                adding questions — there's no separate max score to keep in
+                sync.
+              </p>
+            )}
           </div>
         </div>
 
         <div className='mt-6 flex gap-3'>
           <Button
             onClick={onClose}
+            disabled={loading}
             className='flex-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           >
             Cancel
@@ -106,7 +125,8 @@ const QuizModal: React.FC<QuizModalProps> = ({
           <Button
             onClick={handleSave}
             loading={loading}
-            className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700'
+            disabled={!!error && touched}
+            className='flex-1 bg-indigo-600 text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50'
           >
             {!loading && <Save className='mr-2 h-4 w-4' />}
             {editData ? 'Update' : 'Create'} Quiz

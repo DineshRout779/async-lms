@@ -1,17 +1,10 @@
 import AdminHeader from '@/components/common/admin/AdminHeader';
 import CurriculumDeveloperSidebar from '@/components/common/curriculum-developer/CurriculumDeveloperSidebar';
 import { useSidebarState } from '@/hooks/useSidebarState';
-import { Outlet, Navigate } from 'react-router';
-import { useAppSelector } from '@/app/hooks';
-import { selectUser } from '@/features/auth/authSelectors';
+import { Outlet } from 'react-router';
 
 const CurriculumDeveloperDashboardLayout = () => {
   const [isSidebarOpen, toggleSidebar] = useSidebarState('sidebar:curriculum-developer');
-  const user = useAppSelector(selectUser);
-
-  if (user?.role !== 'curriculum_developer') {
-    return <Navigate to='/' replace />;
-  }
 
   return (
     <div className='flex h-screen bg-slate-100 overflow-hidden'>

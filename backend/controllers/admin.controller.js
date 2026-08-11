@@ -43,7 +43,7 @@ exports.getAdminStats = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: 'Error fetching dashboard data', error: error.message });
+      .json({ message: 'Error fetching dashboard data' });
   }
 };
 
@@ -172,7 +172,7 @@ exports.getAdminAnalytics = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: 'Error fetching analytics', error: error.message });
+      .json({ message: 'Error fetching analytics' });
   }
 };
 
@@ -197,6 +197,7 @@ exports.getAllStudents = async (req, res) => {
       LEFT JOIN public.colleges c ON sp.college_id = c.id
       WHERE r.role_key = 'STUDENT'
       ORDER BY u.created_at DESC
+      LIMIT 1000
     `;
 
     const result = await pool.query(query);
@@ -223,8 +224,9 @@ exports.getProjectSubmissions = async (req, res) => {
       JOIN public.projects p ON ps.project_id = p.id    
       JOIN public.topics t ON p.topic_id = t.id         
       JOIN public.subjects s ON t.subject_id = s.id     
-      WHERE ps.is_approved IS NOT TRUE                 
-      ORDER BY ps.submitted_at DESC;
+      WHERE ps.is_approved IS NOT TRUE
+      ORDER BY ps.submitted_at DESC
+      LIMIT 1000;
     `;
 
     const result = await pool.query(query);
@@ -501,7 +503,6 @@ exports.createTopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create topic',
-      error: error.message,
     });
   }
 };
@@ -568,7 +569,6 @@ exports.updateTopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update topic',
-      error: error.message,
     });
   }
 };
@@ -672,7 +672,6 @@ exports.deleteTopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete topic',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -741,7 +740,6 @@ exports.createUnit = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create unit',
-      error: error.message,
     });
   }
 };
@@ -820,7 +818,6 @@ exports.updateUnit = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update unit',
-      error: error.message,
     });
   }
 };
@@ -899,7 +896,6 @@ exports.deleteUnit = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete unit',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -967,7 +963,6 @@ exports.createSubtopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create subtopic',
-      error: error.message,
     });
   }
 };
@@ -1046,7 +1041,6 @@ exports.updateSubtopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update subtopic',
-      error: error.message,
     });
   }
 };
@@ -1096,7 +1090,6 @@ exports.deleteSubtopic = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete subtopic',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -1155,11 +1148,23 @@ exports.createLessonContent = async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, 1)
       ON CONFLICT (subtopic_id, version)
       DO UPDATE SET
-        markdown_path = EXCLUDED.markdown_path,
-        video_url = EXCLUDED.video_url,
-        estimated_read_time = EXCLUDED.estimated_read_time,
-        is_published = EXCLUDED.is_published,
-        content_type = EXCLUDED.content_type,
+        markdown_path = CASE
+          WHEN EXCLUDED.content_type = 'markdown' AND EXCLUDED.markdown_path <> ''
+            THEN EXCLUDED.markdown_path
+          ELSE lesson_content.markdown_path
+        END,
+        video_url = CASE
+          WHEN EXCLUDED.video_url IS NOT NULL AND EXCLUDED.video_url <> ''
+            THEN EXCLUDED.video_url
+          ELSE lesson_content.video_url
+        END,
+        estimated_read_time = COALESCE(EXCLUDED.estimated_read_time, lesson_content.estimated_read_time),
+        is_published = COALESCE(EXCLUDED.is_published, lesson_content.is_published),
+        content_type = CASE
+          WHEN lesson_content.markdown_path <> '' THEN 'markdown'
+          WHEN EXCLUDED.content_type = 'markdown' THEN 'markdown'
+          ELSE EXCLUDED.content_type
+        END,
         is_deleted = false,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *;
@@ -1188,7 +1193,6 @@ exports.createLessonContent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create lesson content',
-      error: error.message,
     });
   }
 };
@@ -1273,7 +1277,6 @@ exports.updateLessonContent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update lesson content',
-      error: error.message,
     });
   }
 };
@@ -1304,7 +1307,6 @@ exports.deleteLessonContent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete lesson content',
-      error: error.message,
     });
   }
 };
@@ -1313,7 +1315,14 @@ exports.deleteLessonContent = async (req, res) => {
 exports.publishLessonContent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { is_published } = req.body;
+    const { is_published } = req.body || {};
+
+    if (typeof is_published !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'is_published (boolean) is required',
+      });
+    }
 
     const query = `
       UPDATE lesson_content
@@ -1331,6 +1340,7 @@ exports.publishLessonContent = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'PUBLISH', entityType: 'lesson_content', entityId: id, details: { is_published } });
     res.json({
       success: true,
       message: `Lesson content ${
@@ -1343,7 +1353,6 @@ exports.publishLessonContent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to publish lesson content',
-      error: error.message,
     });
   }
 };
@@ -1352,14 +1361,26 @@ exports.publishLessonContent = async (req, res) => {
 // QUIZ MANAGEMENT
 // ============================================
 
+// max_score is always 100 — passing_score/max_score exist purely to derive a
+// pass-threshold percentage (applied against the real point total of a quiz's
+// questions at grading time), not a literal points target. See submitQuizAttempt.
+const QUIZ_MAX_SCORE = 100;
+
 exports.createQuiz = async (req, res) => {
   try {
-    const { unit_id, passing_score, max_score } = req.body;
+    const { unit_id, passing_score } = req.body;
 
-    if (!unit_id || !passing_score || !max_score) {
+    if (!unit_id || !passing_score) {
       return res.status(400).json({
         success: false,
-        message: 'Unit ID, passing score, and max score are required',
+        message: 'Unit ID and passing threshold are required',
+      });
+    }
+
+    if (passing_score < 1 || passing_score > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passing threshold must be between 1 and 100',
       });
     }
 
@@ -1369,7 +1390,11 @@ exports.createQuiz = async (req, res) => {
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [unit_id, passing_score, max_score]);
+    const result = await pool.query(query, [
+      unit_id,
+      passing_score,
+      QUIZ_MAX_SCORE,
+    ]);
 
     logAction({ req, action: 'CREATE', entityType: 'quiz', entityId: result.rows[0].id, details: { unit_id: result.rows[0].unit_id } });
 
@@ -1383,7 +1408,6 @@ exports.createQuiz = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create quiz',
-      error: error.message,
     });
   }
 };
@@ -1391,19 +1415,21 @@ exports.createQuiz = async (req, res) => {
 exports.updateQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    const { passing_score, max_score } = req.body;
+    const { passing_score } = req.body;
 
     const updates = [];
     const values = [];
     let paramCount = 1;
 
     if (passing_score !== undefined) {
+      if (passing_score < 1 || passing_score > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Passing threshold must be between 1 and 100',
+        });
+      }
       updates.push(`passing_score = $${paramCount++}`);
       values.push(passing_score);
-    }
-    if (max_score !== undefined) {
-      updates.push(`max_score = $${paramCount++}`);
-      values.push(max_score);
     }
 
     if (updates.length === 0) {
@@ -1439,7 +1465,6 @@ exports.updateQuiz = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update quiz',
-      error: error.message,
     });
   }
 };
@@ -1489,7 +1514,6 @@ exports.deleteQuiz = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete quiz',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -1554,7 +1578,6 @@ exports.createExercise = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create exercise',
-      error: error.message,
     });
   }
 };
@@ -1630,7 +1653,6 @@ exports.updateExercise = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update exercise',
-      error: error.message,
     });
   }
 };
@@ -1660,7 +1682,6 @@ exports.deleteExercise = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete exercise',
-      error: error.message,
     });
   }
 };
@@ -1683,28 +1704,42 @@ exports.getAssignment = async (req, res) => {
   }
 };
 
+// max_score is always 100 — not client-configurable, mirrors QUIZ_MAX_SCORE above.
+const ASSIGNMENT_MAX_SCORE = 100;
+
 exports.createAssignment = async (req, res) => {
   try {
-    const { unit_id, title, instructions, max_score } = req.body;
+    const { unit_id, title, instructions, max_score, evaluator_type, test_cases } = req.body;
 
-    if (!unit_id || !title || !max_score) {
+    if (!unit_id || !title) {
       return res.status(400).json({
         success: false,
-        message: 'Unit ID, title, and max score are required',
+        message: 'Unit ID and title are required',
       });
     }
 
     const query = `
-      INSERT INTO assignments (unit_id, title, instructions, max_score)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO assignments (unit_id, title, instructions, max_score, evaluator_type, test_cases)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
+
+    let testCasesObj = test_cases;
+    if (typeof test_cases === 'string') {
+        try {
+            testCasesObj = JSON.parse(test_cases);
+        } catch (e) {
+            // keep as string or handle error
+        }
+    }
 
     const result = await pool.query(query, [
       unit_id,
       title,
       instructions,
-      max_score,
+      max_score || ASSIGNMENT_MAX_SCORE,
+      evaluator_type || null,
+      testCasesObj || null
     ]);
 
     logAction({ req, action: 'CREATE', entityType: 'assignment', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
@@ -1719,7 +1754,6 @@ exports.createAssignment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create assignment',
-      error: error.message,
     });
   }
 };
@@ -1727,7 +1761,7 @@ exports.createAssignment = async (req, res) => {
 exports.updateAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score } = req.body;
+    const { title, instructions, max_score, test_cases, evaluator_type } = req.body;
 
     const updates = [];
     const values = [];
@@ -1744,6 +1778,18 @@ exports.updateAssignment = async (req, res) => {
     if (max_score !== undefined) {
       updates.push(`max_score = $${paramCount++}`);
       values.push(max_score);
+    }
+    if (evaluator_type !== undefined) {
+      updates.push(`evaluator_type = $${paramCount++}`);
+      values.push(evaluator_type);
+    }
+    if (test_cases !== undefined) {
+      let testCasesObj = test_cases;
+      if (typeof test_cases === 'string') {
+        try { testCasesObj = JSON.parse(test_cases); } catch (e) {}
+      }
+      updates.push(`test_cases = $${paramCount++}`);
+      values.push(testCasesObj);
     }
 
     if (updates.length === 0) {
@@ -1779,7 +1825,6 @@ exports.updateAssignment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update assignment',
-      error: error.message,
     });
   }
 };
@@ -1809,7 +1854,6 @@ exports.deleteAssignment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete assignment',
-      error: error.message,
     });
   }
 };
@@ -1849,7 +1893,6 @@ exports.createProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create project',
-      error: error.message,
     });
   }
 };
@@ -1905,7 +1948,6 @@ exports.updateProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update project',
-      error: error.message,
     });
   }
 };
@@ -1935,7 +1977,6 @@ exports.deleteProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete project',
-      error: error.message,
     });
   }
 };
@@ -1998,7 +2039,6 @@ exports.createQuizQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create quiz question',
-      error: error.message,
     });
   }
 };
@@ -2075,7 +2115,6 @@ exports.updateQuizQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update quiz question',
-      error: error.message,
     });
   }
 };
@@ -2124,7 +2163,6 @@ exports.deleteQuizQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete quiz question',
-      error: error.message,
     });
   } finally {
     client.release();
@@ -2167,7 +2205,6 @@ exports.getQuizQuestions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch quiz questions',
-      error: error.message,
     });
   }
 };
@@ -2221,7 +2258,6 @@ exports.createQuizQuestionOption = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create quiz option',
-      error: error.message,
     });
   }
 };
@@ -2289,7 +2325,6 @@ exports.updateQuizQuestionOption = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update quiz option',
-      error: error.message,
     });
   }
 };
@@ -2324,7 +2359,6 @@ exports.deleteQuizQuestionOption = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete quiz option',
-      error: error.message,
     });
   }
 };
@@ -2371,6 +2405,7 @@ exports.uploadLessonMarkdown = async (req, res) => {
 
     const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 
+    logAction({ req, action: 'CREATE', entityType: 'lesson_markdown_upload', entityId: null, details: { url } });
     res.json({
       success: true,
       url,
@@ -2380,7 +2415,6 @@ exports.uploadLessonMarkdown = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to upload markdown',
-      error: error.message,
     });
   }
 };
@@ -2433,6 +2467,7 @@ exports.uploadFile = async (req, res) => {
 
     const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 
+    logAction({ req, action: 'CREATE', entityType: 'file_upload', entityId: null, details: { url } });
     res.json({
       success: true,
       url,
@@ -2442,7 +2477,6 @@ exports.uploadFile = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to upload file',
-      error: error.message,
     });
   }
 };
@@ -2473,7 +2507,6 @@ exports.getQuizQuestionOptions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch quiz options',
-      error: error.message,
     });
   }
 };
@@ -2525,7 +2558,7 @@ exports.getStudentProgress = async (req, res) => {
               )
               FROM quiz_attempts qa
               INNER JOIN quizzes q ON qa.quiz_id = q.id AND q.is_deleted = false
-              WHERE qa.user_id = $1 AND q.subtopic_id = st.id
+              WHERE qa.user_id = $1 AND q.unit_id = st.unit_id
             ),
             'exercise_submissions', (
               SELECT json_agg(
@@ -2544,7 +2577,8 @@ exports.getStudentProgress = async (req, res) => {
           ORDER BY st.order_index
         ) as subtopics
       FROM topics t
-      INNER JOIN subtopics st ON t.id = st.topic_id AND st.is_deleted = false
+      INNER JOIN units u ON u.topic_id = t.id AND u.is_deleted = false
+      INNER JOIN subtopics st ON st.unit_id = u.id AND st.is_deleted = false
       LEFT JOIN user_topic_progress utp ON utp.topic_id = t.id AND utp.user_id = $1
       LEFT JOIN user_subtopic_progress usp ON usp.subtopic_id = st.id AND usp.user_id = $1
       WHERE t.subject_id = $2 AND t.is_deleted = false
@@ -2584,7 +2618,6 @@ exports.getStudentProgress = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch student progress',
-      error: error.message,
     });
   }
 };
@@ -2596,9 +2629,12 @@ exports.getStudentProgress = async (req, res) => {
 exports.getAllStudentsProgressSummary = async (req, res) => {
   try {
     const { subjectId } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(200, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
 
     let query = `
-      SELECT 
+      SELECT
         u.id as user_id,
         u.full_name,
         u.email,
@@ -2606,7 +2642,8 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
         COUNT(DISTINCT usp.subtopic_id) FILTER (WHERE usp.is_completed = true) as completed_subtopics,
         COUNT(DISTINCT usp.subtopic_id) as total_assigned_subtopics,
         COALESCE(SUM(pl.points), 0) as total_points,
-        MAX(us.current_streak) as current_streak
+        MAX(us.current_streak) as current_streak,
+        COUNT(*) OVER ()::integer as total_count
       FROM users u
       LEFT JOIN student_profiles sp ON u.id = sp.user_id
       LEFT JOIN colleges c ON sp.college_id = c.id
@@ -2629,21 +2666,30 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
 
     query += `
       GROUP BY u.id, u.full_name, u.email, c.name
-      ORDER BY total_points DESC;
+      ORDER BY total_points DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2};
     `;
+    params.push(pageSize, offset);
 
     const result = await pool.query(query, params);
+    const totalCount = result.rows[0]?.total_count ?? 0;
+    const data = result.rows.map(({ total_count, ...row }) => row);
 
     res.json({
       success: true,
-      data: result.rows,
+      data,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      },
     });
   } catch (error) {
     console.error('Error fetching students progress summary:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch students progress summary',
-      error: error.message,
     });
   }
 };
@@ -2686,7 +2732,6 @@ exports.getLockControlBatches = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch batches',
-      error: error.message,
     });
   }
 };
@@ -2846,7 +2891,6 @@ exports.getLockControlOverview = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch lock control overview',
-      error: error.message,
     });
   }
 };
@@ -2919,6 +2963,7 @@ exports.setLockControlTopic = async (req, res) => {
       console.warn('cohort_admin_locks upsert skipped:', intentErr.message);
     }
 
+    logAction({ req, action: isUnlocked ? 'UNLOCK' : 'LOCK', entityType: 'topic', entityId: topicId, details: { collegeId, batch } });
     res.json({
       success: true,
       message: `Topic ${action}ed successfully`,
@@ -2990,6 +3035,7 @@ exports.setLockControlSubtopic = async (req, res) => {
       console.warn('cohort_admin_locks upsert skipped:', intentErr.message);
     }
 
+    logAction({ req, action: isUnlocked ? 'UNLOCK' : 'LOCK', entityType: 'subtopic', entityId: subtopicId, details: { collegeId, batch } });
     res.json({
       success: true,
       message: `Subtopic ${action}ed successfully`,
@@ -3031,7 +3077,6 @@ exports.getOverallLeaderboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch overall leaderboard',
-      error: error.message,
     });
   }
 };
@@ -3073,7 +3118,6 @@ exports.getWeeklyLeaderboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch weekly leaderboard',
-      error: error.message,
     });
   }
 };
@@ -3116,7 +3160,6 @@ exports.getTopicLeaderboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch topic leaderboard',
-      error: error.message,
     });
   }
 };
@@ -3156,7 +3199,6 @@ exports.getCollegeLeaderboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch college leaderboard',
-      error: error.message,
     });
   }
 };
@@ -3167,7 +3209,7 @@ exports.getCollegeLeaderboard = async (req, res) => {
  */
 exports.updateLeaderboards = async (req, res) => {
   try {
-    const { type, id } = req.body; // type: 'weekly', 'topic', 'college', 'all'
+    const { type, id } = req.body || {}; // type: 'weekly', 'topic', 'college', 'all'
 
     if (type === 'weekly' || type === 'all') {
       await pool.query('SELECT update_weekly_leaderboard()');
@@ -3195,6 +3237,7 @@ exports.updateLeaderboards = async (req, res) => {
       }
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'leaderboard', entityId: null, details: { type, id } });
     res.json({
       success: true,
       message: 'Leaderboards updated successfully',
@@ -3204,7 +3247,6 @@ exports.updateLeaderboards = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update leaderboards',
-      error: error.message,
     });
   }
 };
@@ -3243,6 +3285,7 @@ exports.verifyUser = async (req, res) => {
       });
     }
 
+    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { is_verified } });
     res.json({
       success: true,
       message: `User ${is_verified ? 'verified' : 'unverified'} successfully`,
@@ -3253,7 +3296,6 @@ exports.verifyUser = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update verification status',
-      error: error.message,
     });
   }
 };

@@ -68,6 +68,7 @@ const CapstoneModal: React.FC<CapstoneModalProps> = ({
             </label>
             <input
               type='text'
+              autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder='e.g., Build a Full-Stack Todo App'

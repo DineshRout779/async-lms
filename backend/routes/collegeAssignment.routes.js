@@ -1,8 +1,26 @@
 const router = require('express').Router();
 const multer = require('multer');
+const path = require('path');
+
+const ALLOWED_SUBMISSION_EXTENSIONS = new Set([
+  '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+  '.zip', '.rar', '.7z',
+  '.txt', '.md',
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp',
+]);
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_SUBMISSION_EXTENSIONS.has(ext)) {
+      const err = new Error(`File type "${ext}" is not allowed`);
+      err.code = 'UNSUPPORTED_FILE_TYPE';
+      return cb(err);
+    }
+    cb(null, true);
+  },
 });
 const verifyToken = require('../middlewares/verfiyToken');
 const isStudent = require('../middlewares/isStudent');

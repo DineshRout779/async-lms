@@ -201,6 +201,11 @@ const MyCourses = () => {
                     >
                       {course.level || 'General'}
                     </Badge>
+                    {isEnrolled && progress >= 100 && (
+                      <Badge className='bg-emerald-50 text-emerald-700 border-none px-3 py-0.5 text-[10px] font-bold uppercase'>
+                        Completed
+                      </Badge>
+                    )}
                     {isEnrolled && progress > 0 && progress < 100 && (
                       <Badge className='bg-[#333D7C]/10 text-[#333D7C] border-none px-3 py-0.5 text-[10px] font-bold uppercase'>
                         In Progress
@@ -209,7 +214,7 @@ const MyCourses = () => {
                   </div>
 
                   <div>
-                    <h3 className='text-2xl font-bold text-[#1e293b] leading-tight'>
+                    <h3 className='text-2xl capitalize font-bold text-[#1e293b] leading-tight'>
                       {course.name}
                     </h3>
                     <p className='text-slate-400 text-sm mt-2'>
@@ -222,11 +227,13 @@ const MyCourses = () => {
                     <div className='space-y-3 pt-1'>
                       <div className='flex justify-between text-sm font-bold text-[#1e293b]'>
                         <span>Progress</span>
-                        <span>{progress}%</span>
+                        <span className={progress >= 100 ? 'text-emerald-600' : ''}>
+                          {progress}%
+                        </span>
                       </div>
                       <Progress
                         value={progress}
-                        className='h-2 bg-slate-100 rounded-full'
+                        className={`h-2 bg-slate-100 rounded-full ${progress >= 100 ? '[&>div]:bg-emerald-500' : ''}`}
                       />
                     </div>
                   ) : (

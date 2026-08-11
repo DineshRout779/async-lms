@@ -35,6 +35,7 @@ exports.selectCollege = async (req, res) => {
       [userId],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'student_profile', entityId: userId, details: { college_id } });
     res.json({ message: 'College added successfully', next_step: 'batch' });
   } catch (err) {
     console.error(err);
@@ -69,6 +70,7 @@ exports.updateBatchDetails = async (req, res) => {
       [userId],
     );
 
+    logAction({ req, action: 'UPDATE', entityType: 'student_profile', entityId: userId, details: { degree, current_academic_year, expected_graduation_year } });
     res.json({ message: 'Batch details added', next_step: 'subject' });
   } catch (err) {
     console.error(err);
@@ -87,6 +89,16 @@ exports.selectSubjects = async (req, res) => {
       .json({ message: 'Please select at least one subject' });
   }
 
+  const existingRes = await pool.query(
+    'SELECT id FROM subjects WHERE id = ANY($1::uuid[])',
+    [subjectIds],
+  );
+  if (existingRes.rows.length !== subjectIds.length) {
+    return res
+      .status(400)
+      .json({ message: 'One or more selected subjects do not exist' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -99,9 +111,8 @@ exports.selectSubjects = async (req, res) => {
     await client.query(insertQuery, [userId, subjectIds]);
 
     // Seed progress for all subtopics:
-    //  - Unit 1 subtopics are always unlocked
-    //  - Other subtopics inherit admin-applied lock decisions from cohort_admin_locks
-    //    (not peer progression state, which would lock content that peers haven't reached yet)
+    //  - Unlocked by default (peer-progression locking is not enforced yet)
+    //  - Only locked if an admin explicitly locked it via cohort_admin_locks
     //  - ON CONFLICT: never re-lock a row that is already unlocked
     const seedProgressQuery = `
       WITH new_student_profile AS (
@@ -129,9 +140,8 @@ exports.selectSubjects = async (req, res) => {
       INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked)
       SELECT $1, ss.subtopic_id,
         CASE
-          WHEN ss.unit_rn = 1       THEN true   -- first unit: always open
-          WHEN al.is_locked = false THEN true    -- admin explicitly unlocked
-          ELSE false                             -- default locked; progression unlocks
+          WHEN al.is_locked = true THEN false   -- admin explicitly locked
+          ELSE true                             -- unlocked by default; locking mechanism TBD
         END
       FROM subject_subtopics ss
       LEFT JOIN admin_locks al ON al.subtopic_id = ss.subtopic_id
@@ -146,6 +156,8 @@ exports.selectSubjects = async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    logAction({ req, action: 'CREATE', entityType: 'user_subjects', entityId: userId, details: { subjectIds } });
 
     // Notify all facilitators assigned to this student's college (best-effort, after commit)
     try {
@@ -189,7 +201,7 @@ exports.selectSubjects = async (req, res) => {
     console.error('Transaction Error:', err);
     res
       .status(500)
-      .json({ message: 'Failed to save subjects', error: err.message });
+      .json({ message: 'Failed to save subjects' });
   } finally {
     client.release();
   }
@@ -238,7 +250,7 @@ exports.selectFacilitatorColleges = async (req, res) => {
     console.error('Facilitator Onboarding Error:', err);
     res
       .status(500)
-      .json({ message: 'Failed to save colleges', error: err.message });
+      .json({ message: 'Failed to save colleges' });
   } finally {
     client.release();
   }

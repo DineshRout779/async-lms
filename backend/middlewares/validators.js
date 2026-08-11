@@ -6,7 +6,7 @@ const handleValidationErrors = (req, res, next) => {
   if (!errors.isEmpty()) {
     console.log(
       `WARNING || login || Validation errors found => `,
-      errors.array()
+      errors.array(),
     );
 
     return res.status(400).json({
@@ -39,11 +39,17 @@ exports.validateSignup = validate([
   body('password')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
+  body('role')
+    .optional()
+    .isString()
+    .trim()
+    .toLowerCase()
+    .isIn(['student', 'facilitator'])
+    .withMessage('Invalid role'),
 ]);
-
 
 // editor
 exports.validateEditorStartup = validate([
   body('projectId').trim().notEmpty().withMessage('projectId is required'),
   // body('profile').trim().notEmpty().withMessage('profile is required'),
-])
+]);
