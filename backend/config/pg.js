@@ -46,6 +46,9 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE projects ADD COLUMN IF NOT EXISTS instructions text`,
     );
+    await client.query(
+      `ALTER TABLE assignments ADD COLUMN IF NOT EXISTS rubric JSONB`,
+    );
     await client.query(`
       CREATE TABLE IF NOT EXISTS college_assignments (
         id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),

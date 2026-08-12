@@ -14,6 +14,7 @@ interface AssignmentModalProps {
     max_score: number;
     evaluator_type?: string | null;
     test_cases?: string | null;
+    rubric?: string | null;
   }) => void;
   editData?: {
     title: string;
@@ -21,6 +22,7 @@ interface AssignmentModalProps {
     max_score: number;
     evaluator_type?: string | null;
     test_cases?: any;
+    rubric?: any;
   };
   unitTitle: string;
   loading?: boolean;
@@ -41,8 +43,12 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
   const [testCases, setTestCases] = useState<string>(
     editData?.test_cases ? (typeof editData.test_cases === 'string' ? editData.test_cases : JSON.stringify(editData.test_cases, null, 2)) : ''
   );
+  const [rubric, setRubric] = useState<string>(
+    editData?.rubric ? (typeof editData.rubric === 'string' ? editData.rubric : JSON.stringify(editData.rubric, null, 2)) : ''
+  );
   const [editorType, setEditorType] = useState<'rich' | 'markdown'>('rich');
   const [generating, setGenerating] = useState(false);
+  const [generatingRubric, setGeneratingRubric] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -51,6 +57,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
       setMaxScore(editData?.max_score ?? 100);
       setEvaluatorType(editData?.evaluator_type || '');
       setTestCases(editData?.test_cases ? (typeof editData.test_cases === 'string' ? editData.test_cases : JSON.stringify(editData.test_cases, null, 2)) : '');
+      setRubric(editData?.rubric ? (typeof editData.rubric === 'string' ? editData.rubric : JSON.stringify(editData.rubric, null, 2)) : '');
     }
   }, [isOpen, editData]);
 
@@ -79,6 +86,31 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
     }
   };
 
+  const handleGenerateRubric = async () => {
+    if (!title.trim() || !instructions.trim()) {
+      toast.error('Title and Instructions are required to generate a rubric.');
+      return;
+    }
+    setGeneratingRubric(true);
+    try {
+      // @ts-ignore
+      const { default: apiClient } = await import('@/services/api');
+      const res = await apiClient.post('/evaluations/generate-rubric', {
+        title,
+        instructions,
+        evaluatorType
+      });
+      if (res.data.success && res.data.rubric) {
+        setRubric(res.data.rubric);
+        toast.success('Rubric generated successfully!');
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to generate rubric');
+    } finally {
+      setGeneratingRubric(false);
+    }
+  };
+
   const handleSave = () => {
     if (!title.trim()) {
       toast.error('Assignment title is required');
@@ -96,18 +128,28 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
         return;
       }
     }
+    if (rubric.trim()) {
+      try {
+        JSON.parse(rubric);
+      } catch (e) {
+        toast.error('Rubric must be valid JSON');
+        return;
+      }
+    }
     onSave({
       title: title.trim(),
       instructions: instructions.trim(),
       max_score: maxScore,
       evaluator_type: evaluatorType || null,
-      test_cases: testCases.trim() || null
+      test_cases: testCases.trim() || null,
+      rubric: rubric.trim() || null
     });
     setTitle('');
     setInstructions('');
     setMaxScore(100);
     setEvaluatorType('');
     setTestCases('');
+    setRubric('');
   };
 
   if (!isOpen) return null;
@@ -238,6 +280,33 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
               value={testCases}
               onChange={(e) => setTestCases(e.target.value)}
               placeholder='{\n  "evaluationMode": "script",\n  "expectedLogs": []\n}'
+              className='w-full min-h-[140px] rounded-lg border border-slate-300 p-3 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+            />
+          </div>
+
+          <div>
+            <div className='mb-2 flex items-center justify-between'>
+              <label className='text-sm font-medium text-slate-700'>Rubric (JSON)</label>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={handleGenerateRubric}
+                disabled={generatingRubric || !evaluatorType}
+                className='h-7 text-xs bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-700'
+              >
+                {generatingRubric ? (
+                  <Loader2 className='mr-1.5 h-3.5 w-3.5 animate-spin' />
+                ) : (
+                  <Wand2 className='mr-1.5 h-3.5 w-3.5' />
+                )}
+                ✨ Auto-Generate Rubric
+              </Button>
+            </div>
+            <textarea
+              value={rubric}
+              onChange={(e) => setRubric(e.target.value)}
+              placeholder='[\n  { "name": "Critera 1", "weight": 20, "description": "..." }\n]'
               className='w-full min-h-[140px] rounded-lg border border-slate-300 p-3 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
             />
           </div>
