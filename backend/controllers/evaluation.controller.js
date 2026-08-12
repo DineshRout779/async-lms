@@ -811,7 +811,8 @@ CRITICAL RULES:
 1. The output MUST be a JSON array of objects.
 2. Each object must have exactly three keys: "name" (string), "description" (string), and "weight" (number).
 3. The sum of all "weight" values MUST equal exactly 100.
-4. Do not include any explanation.`;
+4. Each "name" must be UNIQUE. Do not use the same name twice.
+5. Do not include any explanation.`;
 
     if (evaluatorType === 'react') {
       systemPrompt += `\n5. For React assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
@@ -830,15 +831,24 @@ You may choose 3-5 from this list based on the instructions, but YOU MUST NOT IN
 - "Controller Logic" (Use for business logic, data formatting)
 - "Code Structure" (Use for clean code, separation of concerns, MVC)
 You may choose 3-5 from this list based on the instructions, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
+    } else if (evaluatorType?.toLowerCase() === 'fullstack') {
+      systemPrompt += `\n5. For Fullstack assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
+- "Frontend UI & Components" (Use for React rendering, responsive design, structure)
+- "Frontend State & Data Fetching" (Use for React state, hooks, fetch/axios)
+- "Backend API & Routing" (Use for Express routes, HTTP methods, CORS)
+- "Backend Logic & Database" (Use for business logic, validation, database models)
+- "Fullstack Integration" (Use for end-to-end data flow between client and server)
+- "Code Quality & Structure" (Use for clean code, file structure, package.json across both environments)
+You must select 4-6 criteria from this list that cover both Frontend and Backend, based on the instructions. YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
     }
 
     systemPrompt += `
 
 Example output:
 [
-  { "name": "${evaluatorType === 'react' ? 'State Updates' : (evaluatorType === 'backend' ? 'API Endpoints' : 'Feature A')}", "description": "Implements endpoints correctly.", "weight": 40 },
-  { "name": "${evaluatorType === 'react' ? 'Components Render Correctly' : (evaluatorType === 'backend' ? 'Database Operations' : 'Feature B')}", "description": "Implements database logic correctly.", "weight": 40 },
-  { "name": "Code Structure", "description": "Clean and readable code.", "weight": 20 }
+  { "name": "${evaluatorType === 'react' ? 'State Updates' : (evaluatorType === 'backend' ? 'API Endpoints' : (evaluatorType?.toLowerCase() === 'fullstack' ? 'Fullstack Integration' : 'Feature A'))}", "description": "Implements endpoints correctly.", "weight": 40 },
+  { "name": "${evaluatorType === 'react' ? 'Components Render Correctly' : (evaluatorType === 'backend' ? 'Database Operations' : (evaluatorType?.toLowerCase() === 'fullstack' ? 'Backend API & Routing' : 'Feature B'))}", "description": "Implements logic correctly.", "weight": 40 },
+  { "name": "Code Quality & Structure", "description": "Clean and readable code.", "weight": 20 }
 ]`;
 
     const userPrompt = `Assignment Title: ${title || 'Untitled'}
@@ -1034,11 +1044,20 @@ exports.reEvaluateSubmission = async (req, res) => {
         const typeMap = { REACT: 'react', PYTHON: 'python', FULLSTACK: 'fullstack', AI: 'backend' };
         const payloadType = typeMap[evaluatorType] || typeMap[evaluatorType.toUpperCase()] || 'backend';
 
+        let rubricObj = assignment.rubric;
+        if (typeof assignment.rubric === 'string') {
+          try {
+            rubricObj = JSON.parse(assignment.rubric);
+          } catch (e) {
+            console.error('Failed to parse rubric:', e);
+          }
+        }
+
         let formattedRubric;
-        if (assignment.rubric && Array.isArray(assignment.rubric)) {
-          formattedRubric = { criteria: assignment.rubric };
-        } else if (assignment.rubric && assignment.rubric.criteria && Array.isArray(assignment.rubric.criteria)) {
-          formattedRubric = assignment.rubric;
+        if (rubricObj && Array.isArray(rubricObj)) {
+          formattedRubric = { criteria: rubricObj };
+        } else if (rubricObj && rubricObj.criteria && Array.isArray(rubricObj.criteria)) {
+          formattedRubric = rubricObj;
         } else {
           formattedRubric = { criteria: [{ name: 'Standard Grading', weight: 100 }] };
         }
@@ -1085,7 +1104,11 @@ exports.reEvaluateSubmission = async (req, res) => {
     return res.json({ success: true, message: "Re-evaluation started" });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.log('Re-evaluate Error:', error);
+    console.log('Re-evaluate Error:', error.message);
+    if (error.response) {
+      console.log('Evaluator API Response Data:', error.response.data);
+      return res.status(500).json({ success: false, message: error.response.data.error || error.response.data.message || error.message });
+    }
     return res.status(500).json({ success: false, message: error.message });
   } finally {
     client.release();

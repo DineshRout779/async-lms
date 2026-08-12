@@ -159,6 +159,7 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
               <option value='VISUAL'>Visual</option>
               <option value='backend'>Backend (Node)</option>
               <option value='python'>Python</option>
+              <option value='fullstack'>Fullstack</option>
             </select>
             <button 
               className="text-sm px-4 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
