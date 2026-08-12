@@ -174,13 +174,13 @@ exports.runEvaluation = async (req, res) => {
 
       // Create payloads based on evaluator type capabilities
       // visual and javascript accept arrays. backend and react accept singles.
-      if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual') {
-        const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : evaluatorType);
+      if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual' || evaluatorType === 'PYTHON' || evaluatorType === 'python') {
+        const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : (evaluatorType === 'PYTHON' ? 'python' : evaluatorType));
         
         let jsConfig = { testCases: assignment.test_cases };
         
         // If test_cases is a JSON object containing advanced JS configs, extract them
-        if (payloadType === 'javascript' && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
+        if ((payloadType === 'javascript' || payloadType === 'python') && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
            jsConfig = {
              testCases: assignment.test_cases.testCases || [],
              evaluationMode: assignment.test_cases.evaluationMode || 'function',
@@ -373,6 +373,7 @@ exports.syncEvaluationStatus = async (req, res) => {
         if (!job.status_url) continue;
 
         const url = `${process.env.CENTRAL_EVALUATOR_URL}${job.status_url}`;
+        require('fs').appendFileSync('sync_debug.txt', `Fetching ${url} for job ${job.id}\n`);
         const response = await axios.get(url, {
           headers: { 'x-api-key': process.env.CENTRAL_EVALUATOR_API_KEY },
         });
@@ -381,6 +382,7 @@ exports.syncEvaluationStatus = async (req, res) => {
         const jobState = jobData.status || jobData.state; // Handles different bullmq status formats
 
         if (jobState === 'completed' || jobState === 'failed') {
+          require('fs').appendFileSync('sync_debug.txt', `Job ${job.id} state: ${jobState}, resData: ${JSON.stringify(jobData.result)}\n`);
           // Extract marks and feedback (Central evaluator format can vary slightly)
           let marks = 0;
           let feedback = '';
@@ -416,6 +418,7 @@ exports.syncEvaluationStatus = async (req, res) => {
           }
 
           // Update result row
+          require('fs').appendFileSync('sync_debug.txt', `Updating DB for ${job.id} with status ${jobState}, marks ${marks}\n`);
           await pool.query(
             `UPDATE evaluation_results 
              SET status = 'completed', marks = $1, feedback = $2
@@ -819,14 +822,22 @@ CRITICAL RULES:
 - "API Integration" (Use for fetch/axios/data fetching)
 - "Code Structure" (Use for clean code, standard practices)
 You may choose 3-5 from this list based on the instructions, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
+    } else if (evaluatorType === 'backend' || evaluatorType === 'AI') {
+      systemPrompt += `\n5. For Backend assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
+- "API Endpoints" (Use for routing, endpoints, HTTP methods)
+- "Database Operations" (Use for Models, Schemas, Queries, CRUD)
+- "Middleware & Auth" (Use for error handling, JWT, authentication)
+- "Controller Logic" (Use for business logic, data formatting)
+- "Code Structure" (Use for clean code, separation of concerns, MVC)
+You may choose 3-5 from this list based on the instructions, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
     }
 
     systemPrompt += `
 
 Example output:
 [
-  { "name": "${evaluatorType === 'react' ? 'State Updates' : 'Feature A'}", "description": "Implements Feature A correctly.", "weight": 40 },
-  { "name": "${evaluatorType === 'react' ? 'Components Render Correctly' : 'Feature B'}", "description": "Implements Feature B correctly.", "weight": 40 },
+  { "name": "${evaluatorType === 'react' ? 'State Updates' : (evaluatorType === 'backend' ? 'API Endpoints' : 'Feature A')}", "description": "Implements endpoints correctly.", "weight": 40 },
+  { "name": "${evaluatorType === 'react' ? 'Components Render Correctly' : (evaluatorType === 'backend' ? 'Database Operations' : 'Feature B')}", "description": "Implements database logic correctly.", "weight": 40 },
   { "name": "Code Structure", "description": "Clean and readable code.", "weight": 20 }
 ]`;
 
@@ -979,11 +990,11 @@ exports.reEvaluateSubmission = async (req, res) => {
 
     let jobIdsAndLinks = [];
 
-    if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual') {
-        const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : evaluatorType);
+    if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual' || evaluatorType === 'PYTHON' || evaluatorType === 'python') {
+        const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : (evaluatorType === 'PYTHON' ? 'python' : evaluatorType));
         
         let jsConfig = { testCases: assignment.test_cases };
-        if (payloadType === 'javascript' && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
+        if ((payloadType === 'javascript' || payloadType === 'python') && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
            jsConfig = {
              testCases: assignment.test_cases.testCases || [],
              evaluationMode: assignment.test_cases.evaluationMode || 'function',
