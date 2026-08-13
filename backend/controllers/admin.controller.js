@@ -1709,7 +1709,7 @@ const ASSIGNMENT_MAX_SCORE = 100;
 
 exports.createAssignment = async (req, res) => {
   try {
-    const { unit_id, title, instructions, max_score, evaluator_type, test_cases } = req.body;
+    const { unit_id, title, instructions, max_score, evaluator_type, test_cases, rubric } = req.body;
 
     if (!unit_id || !title) {
       return res.status(400).json({
@@ -1719,8 +1719,8 @@ exports.createAssignment = async (req, res) => {
     }
 
     const query = `
-      INSERT INTO assignments (unit_id, title, instructions, max_score, evaluator_type, test_cases)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO assignments (unit_id, title, instructions, max_score, evaluator_type, test_cases, rubric)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
 
@@ -1733,13 +1733,21 @@ exports.createAssignment = async (req, res) => {
         }
     }
 
+    let rubricObj = rubric;
+    if (typeof rubric === 'string') {
+        try {
+            rubricObj = JSON.parse(rubric);
+        } catch (e) {}
+    }
+
     const result = await pool.query(query, [
       unit_id,
       title,
       instructions,
       max_score || ASSIGNMENT_MAX_SCORE,
       evaluator_type || null,
-      testCasesObj || null
+      testCasesObj ? JSON.stringify(testCasesObj) : null,
+      rubricObj ? JSON.stringify(rubricObj) : null
     ]);
 
     logAction({ req, action: 'CREATE', entityType: 'assignment', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
@@ -1761,7 +1769,7 @@ exports.createAssignment = async (req, res) => {
 exports.updateAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score, test_cases, evaluator_type } = req.body;
+    const { title, instructions, max_score, test_cases, evaluator_type, rubric } = req.body;
 
     const updates = [];
     const values = [];
@@ -1789,7 +1797,15 @@ exports.updateAssignment = async (req, res) => {
         try { testCasesObj = JSON.parse(test_cases); } catch (e) {}
       }
       updates.push(`test_cases = $${paramCount++}`);
-      values.push(testCasesObj);
+      values.push(testCasesObj ? JSON.stringify(testCasesObj) : null);
+    }
+    if (rubric !== undefined) {
+      let rubricObj = rubric;
+      if (typeof rubric === 'string') {
+        try { rubricObj = JSON.parse(rubric); } catch (e) {}
+      }
+      updates.push(`rubric = $${paramCount++}`);
+      values.push(rubricObj ? JSON.stringify(rubricObj) : null);
     }
 
     if (updates.length === 0) {

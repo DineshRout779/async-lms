@@ -9,8 +9,10 @@ import apiClient from '@/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type Evaluation = {
+  id: string;
   assignment_id: string;
   assignment_name?: string;
+  evaluator_type?: string;
 };
 const ResultsPage = () => {
   const navigate = useNavigate();
@@ -27,21 +29,21 @@ const ResultsPage = () => {
 
   const assignmentName =
     evaluation?.assignment_name || evaluation?.assignment_id;
+  const fetchResults = async () => {
+    try {
+      setLoading(true);
+      const { data } = await apiClient.get(`/evaluations/assignment/${id}/results`);
+
+      setEvaluation(data.evaluation);
+      setResults(data.results);
+    } catch (err) {
+      console.error('Failed to fetch results', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchResults = async () => {
-      try {
-        setLoading(true);
-        const { data } = await apiClient.get(`/evaluations/${id}`);
-
-        setEvaluation(data.evaluation);
-        setResults(data.results);
-      } catch (err) {
-        console.error('Failed to fetch results', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (id) fetchResults();
   }, [id]);
 
@@ -132,7 +134,12 @@ const ResultsPage = () => {
             <BatchTable results={filteredResults} />
 
             {/* Student Table */}
-            <StudentTable results={filteredResults} />
+            <StudentTable 
+              results={filteredResults} 
+              evaluation={evaluation} 
+              assignmentId={id}
+              onRefresh={fetchResults} 
+            />
           </>
         )}
       </div>

@@ -623,6 +623,7 @@ const LearningFlow: React.FC = () => {
     max_score: number;
     evaluator_type?: string | null;
     test_cases?: string | null;
+    rubric?: string | null;
   }) => {
     if (!selectedUnitForAssignment) return;
 
@@ -727,6 +728,7 @@ const LearningFlow: React.FC = () => {
     max_score: number;
     evaluator_type?: string | null;
     test_cases?: string | null;
+    rubric?: string | null;
   }) => {
     if (!editingAssignment) return;
 
@@ -2110,6 +2112,7 @@ const LearningFlow: React.FC = () => {
                 max_score: editingAssignment.max_score,
                 evaluator_type: (editingAssignment as any).evaluator_type,
                 test_cases: (editingAssignment as any).test_cases,
+                rubric: (editingAssignment as any).rubric,
               }
             : undefined
         }

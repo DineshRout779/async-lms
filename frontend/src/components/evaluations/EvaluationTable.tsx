@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
 import StatusBadge from './StatusBadge';
-import ActionButton from './ActionButton';
-import EvaluationModal from './EvaluationModal';
+import { Eye, FileText } from 'lucide-react';
 import SubmissionsModal from './SubmissionsModal';
 import apiClient from '@/services/api';
 import { getErrorMessage } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Eye } from 'lucide-react';
 import { Link } from 'react-router';
 
 type Props = {
@@ -15,8 +13,6 @@ type Props = {
   selectedCollege: string;
   selectedDomain: string;
   selectedBatch: string;
-  refresh: boolean;
-  onEvaluationComplete: () => void;
 };
 
 type Assignment = {
@@ -38,14 +34,9 @@ const EvaluationTable = ({
   selectedCollege,
   selectedDomain,
   selectedBatch,
-  refresh,
-  onEvaluationComplete,
 }: Props) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState('');
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState('');
   const [submissionsOpen, setSubmissionsOpen] = useState(false);
   const [submissionsAssignment, setSubmissionsAssignment] = useState({
     id: '',
@@ -91,7 +82,7 @@ const EvaluationTable = ({
 
   useEffect(() => {
     fetchAssignments();
-  }, [search, selectedCollege, selectedDomain, selectedBatch, refresh, page]);
+  }, [search, selectedCollege, selectedDomain, selectedBatch, page]);
 
   if (loading) {
     return (
@@ -175,14 +166,6 @@ const EvaluationTable = ({
                 <td className='px-4 py-3'>
                   <div className='flex flex-col gap-1'>
                     <StatusBadge status={item.status} />
-                    {item.status === 'evaluated' && item.evaluation_id && (
-                      <Link
-                        to={`/dashboard/facilitator/results/${item.evaluation_id}`}
-                        className='text-[10px] text-blue-600 hover:underline font-medium'
-                      >
-                        View Results
-                      </Link>
-                    )}
                   </div>
                 </td>
                 <td className='px-4 py-3 text-right'>
@@ -200,14 +183,13 @@ const EvaluationTable = ({
                     >
                       <Eye size={12} /> Submissions
                     </button>
-                    <ActionButton
-                      status={item.status}
-                      onClick={() => {
-                        setSelectedAssignment(item.title);
-                        setSelectedAssignmentId(item.id);
-                        setOpen(true);
-                      }}
-                    />
+                    <Link
+                      to={`/dashboard/facilitator/results/${item.id}`}
+                      className='inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium ml-2'
+                      title='View Evaluation Results'
+                    >
+                      <FileText size={14} /> View Results
+                    </Link>
                   </div>
                 </td>
               </tr>
@@ -244,16 +226,6 @@ const EvaluationTable = ({
         </div>
       )}
 
-      <EvaluationModal
-        open={open}
-        onClose={() => setOpen(false)}
-        assignmentName={selectedAssignment}
-        assignmentId={selectedAssignmentId}
-        onComplete={() => {
-          setOpen(false);
-          onEvaluationComplete();
-        }}
-      />
 
       <SubmissionsModal
         key={submissionsAssignment.id}

@@ -9,7 +9,6 @@ const FacilitatorEvaluations = () => {
     batch: '',
   });
   const [search, setSearch] = useState('');
-  const [refresh, setRefresh] = useState(false);
 
   const handleFilterChange = useCallback(
     (f: { college: string; domain: string; batch: string }) => {
@@ -52,8 +51,6 @@ const FacilitatorEvaluations = () => {
           selectedCollege={filters.college}
           selectedDomain={filters.domain}
           selectedBatch={filters.batch}
-          refresh={refresh}
-          onEvaluationComplete={() => setRefresh((r) => !r)}
         />
       </div>
     </div>
