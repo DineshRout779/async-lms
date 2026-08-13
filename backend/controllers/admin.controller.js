@@ -1838,7 +1838,6 @@ exports.updateAssignment = async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating assignment:', error);
-    try { require('fs').appendFileSync('error.log', error.stack + '\n'); } catch (e) {}
     res.status(500).json({
       success: false,
       message: 'Failed to update assignment',

@@ -373,7 +373,6 @@ exports.syncEvaluationStatus = async (req, res) => {
         if (!job.status_url) continue;
 
         const url = `${process.env.CENTRAL_EVALUATOR_URL}${job.status_url}`;
-        require('fs').appendFileSync('sync_debug.txt', `Fetching ${url} for job ${job.id}\n`);
         const response = await axios.get(url, {
           headers: { 'x-api-key': process.env.CENTRAL_EVALUATOR_API_KEY },
         });
@@ -382,7 +381,7 @@ exports.syncEvaluationStatus = async (req, res) => {
         const jobState = jobData.status || jobData.state; // Handles different bullmq status formats
 
         if (jobState === 'completed' || jobState === 'failed') {
-          require('fs').appendFileSync('sync_debug.txt', `Job ${job.id} state: ${jobState}, resData: ${JSON.stringify(jobData.result)}\n`);
+          console.log(`Job ${job.id} state: ${jobState}, resData: ${JSON.stringify(jobData.result)}`);
           // Extract marks and feedback (Central evaluator format can vary slightly)
           let marks = 0;
           let feedback = '';
@@ -418,7 +417,7 @@ exports.syncEvaluationStatus = async (req, res) => {
           }
 
           // Update result row
-          require('fs').appendFileSync('sync_debug.txt', `Updating DB for ${job.id} with status ${jobState}, marks ${marks}\n`);
+          console.log(`Updating DB for ${job.id} with status ${jobState}, marks ${marks}`);
           await pool.query(
             `UPDATE evaluation_results 
              SET status = 'completed', marks = $1, feedback = $2
