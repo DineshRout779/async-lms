@@ -5,9 +5,14 @@ import { useState, useEffect } from 'react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 import toast from 'react-hot-toast';
 
-const LANGUAGE_DEFAULTS: Record<string, { name: string; content: string }> = {
-  javascript: { name: 'index.js', content: '// Write your solution here\n' },
-  python: { name: 'main.py', content: '# Write your solution here\n' },
+const ENVIRONMENT_TEMPLATES: Record<string, { name: string; content: string }[]> = {
+  python: [{ name: 'main.py', content: '# Write your Python solution here\n' }],
+  javascript: [{ name: 'index.js', content: '// Write your JavaScript solution here\n' }],
+  dom: [
+    { name: 'index.html', content: '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Hello DOM</h1>\n  <script src="script.js"></script>\n</body>\n</html>' },
+    { name: 'style.css', content: 'body {\n  font-family: sans-serif;\n}\n' },
+    { name: 'script.js', content: '// Write your DOM logic here\n' }
+  ]
 };
 
 function makeTask(language: string): ExerciseTask {
@@ -15,7 +20,7 @@ function makeTask(language: string): ExerciseTask {
     id: crypto.randomUUID(),
     title: 'Task 1',
     instructions: '',
-    initial_files: [{ ...LANGUAGE_DEFAULTS[language] }],
+    initial_files: [...(ENVIRONMENT_TEMPLATES[language] || ENVIRONMENT_TEMPLATES['dom'])],
     test_cases: [],
   };
 }
@@ -79,7 +84,7 @@ const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChang
     try {
       const res = await aiCurriculumApi.generateTaskTests({
         instructions: taskInstructions,
-        language: task.initial_files[0]?.name.endsWith('.py') ? 'python' : 'javascript',
+        language: task.initial_files[0]?.name.endsWith('.py') ? 'python' : 'dom',
       });
       
       const newTests = (res.data.data || []).map((tc: any) => ({
@@ -267,7 +272,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
   const [maxScore, setMaxScore] = useState(100);
-  const [language, setLanguage] = useState('javascript');
+  const [language, setLanguage] = useState('dom');
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
 
   useEffect(() => {
@@ -276,7 +281,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     setTitle(editData?.title ?? '');
     setInstructions(editData?.instructions ?? '');
     setMaxScore(editData?.max_score ?? 100);
-    const lang = editData?.language ?? 'javascript';
+    const lang = editData?.language ?? 'dom';
     setLanguage(lang);
 
     // If editData has tasks, use them.
@@ -299,12 +304,14 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
-    // Update the first task's default file only if it still matches the old default
+    // If the task uses exactly the old template files, update it to the new template files.
+    // Otherwise, keep user modifications.
     setTasks(prev => prev.map((task, i) => {
       if (i !== 0) return task;
-      const isDefault = task.initial_files.length === 1 &&
-        Object.values(LANGUAGE_DEFAULTS).some(d => d.name === task.initial_files[0].name);
-      return isDefault ? { ...task, initial_files: [{ ...LANGUAGE_DEFAULTS[lang] }] } : task;
+      const oldTemplateFiles = ENVIRONMENT_TEMPLATES[language] || ENVIRONMENT_TEMPLATES['dom'];
+      const isDefault = task.initial_files.length === oldTemplateFiles.length &&
+        task.initial_files.every((file, idx) => file.name === oldTemplateFiles[idx].name);
+      return isDefault ? { ...task, initial_files: [...(ENVIRONMENT_TEMPLATES[lang] || ENVIRONMENT_TEMPLATES['dom'])] } : task;
     }));
   };
 
@@ -315,7 +322,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
         id: crypto.randomUUID(),
         title: `Task ${prev.length + 1}`,
         instructions: '',
-        initial_files: [{ ...LANGUAGE_DEFAULTS[language] }],
+        initial_files: [...(ENVIRONMENT_TEMPLATES[language] || ENVIRONMENT_TEMPLATES['dom'])],
         test_cases: [],
       },
     ]);
@@ -373,8 +380,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     setTitle('');
     setInstructions('');
     setMaxScore(100);
-    setLanguage('javascript');
-    setTasks([makeTask('javascript')]);
+    setLanguage('dom');
+    setTasks([makeTask('dom')]);
   };
 
   if (!isOpen) return null;
@@ -437,14 +444,15 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
               />
             </div>
             <div>
-              <label className='mb-2 block text-sm font-medium text-slate-700'>Language</label>
+              <label className='mb-2 block text-sm font-medium text-slate-700'>Environment</label>
               <select
                 value={language}
                 onChange={e => handleLanguageChange(e.target.value)}
                 className='w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
               >
-                <option value='javascript'>JavaScript (Node.js)</option>
+                <option value='dom'>HTML/CSS/JS (DOM)</option>
                 <option value='python'>Python</option>
+                <option value='javascript'>JavaScript</option>
               </select>
             </div>
           </div>

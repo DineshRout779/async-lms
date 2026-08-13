@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { CheckCircle2, XCircle, Award, TrendingUp } from 'lucide-react';
-import ExerciseEditor from '@/components/common/ExerciseEditor';
+import EmbeddedIDE from '@/components/common/EmbeddedIDE';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
@@ -304,10 +304,10 @@ const Lesson = () => {
      Exercise Submission
   ======================= */
 
-  const handleSubmitExercise = async (exerciseId: string) => {
+  const handleSubmitExercise = async (exerciseId: string, files?: any[]) => {
     if (submittingExercise[exerciseId]) return; // prevent double-submit
     try {
-      const result = await dispatch(submitExercise({ exerciseId })).unwrap();
+      const result = await dispatch(submitExercise({ exerciseId, files })).unwrap();
       const score = result?.score ?? null;
       toast.success(
         score !== null
@@ -850,7 +850,7 @@ const Lesson = () => {
           </div>
 
           {exercises.length === 1 ? (
-            <ExerciseEditor
+            <EmbeddedIDE
               exercise={exercises[0]}
               submitting={!!submittingExercise[exercises[0].id]}
               onSubmit={handleSubmitExercise}
@@ -870,7 +870,7 @@ const Lesson = () => {
               </TabsList>
               {exercises.map((ex) => (
                 <TabsContent key={ex.id} value={ex.id}>
-                  <ExerciseEditor
+                  <EmbeddedIDE
                     exercise={ex}
                     submitting={!!submittingExercise[ex.id]}
                     onSubmit={handleSubmitExercise}

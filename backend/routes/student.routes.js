@@ -15,7 +15,7 @@ const {
   createStudentProject,
   deleteStudentProject,
   initExerciseWorkspace,
-  runExercise,
+
   runExerciseTests,
   getStudentAssignments,
   getAssignmentById,
@@ -59,7 +59,7 @@ router.post(
   isStudent,
   initExerciseWorkspace,
 );
-router.post('/exercise/:exerciseId/run', verifyToken, isStudent, runExercise);
+
 router.post(
   '/exercise/:exerciseId/run-tests',
   verifyToken,

@@ -155,11 +155,26 @@ async function initPools() {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-function execute(workspaceDir, language) {
+function execute(workspaceDir, language, activeFile) {
   const pool = pools[language] ?? pools.javascript;
   if (!pool) return Promise.resolve({ output: 'Code execution is unavailable (runner not initialised).', exitCode: -1 });
   const profile = LANGUAGE_PROFILES[language] ?? LANGUAGE_PROFILES.javascript;
-  return pool.run(workspaceDir, profile.cmd, 15000);
+  
+  let cmd = [...profile.cmd];
+  if (activeFile) {
+      if (language === 'javascript' && activeFile.endsWith('.js')) {
+          cmd = ['node', activeFile];
+      } else if (language === 'python' && activeFile.endsWith('.py')) {
+          cmd = ['python3', activeFile];
+      } else if (language === 'java' && activeFile.endsWith('.java')) {
+          const className = activeFile.replace('.java', '').replace(/\//g, '.');
+          cmd = ['sh', '-c', `cd /workspace && javac ${activeFile} 2>&1 && java -cp /workspace ${className}`];
+      } else if (language === 'sql' && activeFile.endsWith('.sql')) {
+          cmd = ['sh', '-c', `sqlite3 -column -header :memory: < /workspace/${activeFile}`];
+      }
+  }
+
+  return pool.run(workspaceDir, cmd, 15000);
 }
 
 function executeTests(workspaceDir, language) {
