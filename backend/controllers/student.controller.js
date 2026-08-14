@@ -1385,6 +1385,50 @@ exports.initExerciseWorkspace = async (req, res) => {
 };
 
 /**
+ * Save exercise workspace.
+ * Writes student's modified code files to their local workspace.
+ * POST /api/students/exercise/:exerciseId/workspace/save
+ */
+exports.saveExerciseWorkspace = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { exerciseId } = req.params;
+    const { files, taskId } = req.body;
+
+    if (!files || !Array.isArray(files)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Files array is required' });
+    }
+
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
+    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
+
+    fs.mkdirSync(workspaceDir, { recursive: true });
+
+    for (const file of files) {
+      if (file.name && typeof file.content === 'string') {
+        // Skip saving instruction file to disk since it's read-only
+        if (file.name === 'Instructions.md') continue;
+        
+        const filePath = path.join(workspaceDir, file.name);
+        if (filePath.startsWith(workspaceDir)) {
+          fs.mkdirSync(path.dirname(filePath), { recursive: true });
+          fs.writeFileSync(filePath, file.content, 'utf-8');
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Workspace saved successfully' });
+  } catch (error) {
+    console.error('Error saving exercise workspace:', error);
+    serverError(res, error);
+  }
+};
+
+/**
 
 /**
  * Run test cases against the student's workspace (without submitting).

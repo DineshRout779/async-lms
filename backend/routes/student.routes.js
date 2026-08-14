@@ -15,6 +15,7 @@ const {
   createStudentProject,
   deleteStudentProject,
   initExerciseWorkspace,
+  saveExerciseWorkspace,
 
   runExerciseTests,
   getStudentAssignments,
@@ -58,6 +59,13 @@ router.post(
   verifyToken,
   isStudent,
   initExerciseWorkspace,
+);
+
+router.post(
+  '/exercise/:exerciseId/workspace/save',
+  verifyToken,
+  isStudent,
+  saveExerciseWorkspace,
 );
 
 router.post(

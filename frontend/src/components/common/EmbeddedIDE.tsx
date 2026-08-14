@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
-import { Play, Send, BookOpen, Files, Search, Code2, Trash2, Maximize, Minimize } from 'lucide-react';
+import { Play, Send, BookOpen, Files, Search, Code2, Trash2, Maximize, Minimize, CheckCircle2, Save } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import FileTreeExplorer from '@/components/common/FileTree';
 import type { FileNode } from '@/components/common/FileTree';
 import type { Exercise } from '@/utils/types';
+import apiClient from '@/services/api';
+import toast from 'react-hot-toast';
 
 // Mock types
 type Tab = { path: string; content: string; language: string };
@@ -31,11 +34,44 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Initialize from exercise tasks/initial_files
+  const [saving, setSaving] = useState(false);
+
+  // Initialize from backend workspace if available, otherwise fallback to exercise initial_files
   useEffect(() => {
-    if (exercise.tasks && exercise.tasks.length > 0) {
-      // Load initial files of first task for now
-      const initialFiles = exercise.tasks[0].initial_files || [];
+    let active = true;
+    
+    const initWorkspace = async () => {
+      let filesToLoad = [];
+      try {
+        const res = await apiClient.post(`/students/exercise/${exercise.id}/workspace/init`, {
+          taskId: exercise.tasks?.[0]?.id
+        });
+        if (res.data?.success && res.data.data?.files && res.data.data.files.length > 0) {
+          // Map backend response 'name' to the expected tab shape
+          filesToLoad = res.data.data.files.map((f: any) => ({ name: f.name, content: f.content }));
+        }
+      } catch (err) {
+        console.error('Failed to init workspace from backend, falling back to initial_files', err);
+      }
+      
+      if (!active) return;
+
+      if (filesToLoad.length === 0) {
+        filesToLoad = exercise.tasks?.[0]?.initial_files || [];
+      }
+      
+      // Ensure Instructions.md is present
+      const hasInstructions = filesToLoad.some((f: any) => f.name === 'Instructions.md');
+      const initialFiles = hasInstructions 
+        ? filesToLoad 
+        : [
+            { 
+              name: 'Instructions.md', 
+              content: exercise.instructions || exercise.tasks?.[0]?.instructions || '# Instructions\n\nNo instructions provided.' 
+            },
+            ...filesToLoad
+          ];
+
       const buildTree = (files: {name: string}[]): FileNode[] => {
         const root: FileNode[] = [];
         files.forEach(f => {
@@ -59,15 +95,43 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
       };
       setTree(buildTree(initialFiles));
       
-      const newTabs = initialFiles.map(f => ({
+      const newTabs = initialFiles.map((f: any) => ({
         path: f.name,
         content: f.content,
-        language: f.name.endsWith('.py') ? 'python' : f.name.endsWith('.js') ? 'javascript' : f.name.endsWith('.html') ? 'html' : f.name.endsWith('.css') ? 'css' : 'plaintext'
+        language: f.name === 'Instructions.md' ? 'markdown' : f.name.endsWith('.py') ? 'python' : f.name.endsWith('.js') ? 'javascript' : f.name.endsWith('.html') ? 'html' : f.name.endsWith('.css') ? 'css' : 'plaintext'
       }));
       setTabs(newTabs);
       if (newTabs.length > 0) setActiveTab(newTabs[0].path);
-    }
+    };
+
+    initWorkspace();
+
+    return () => {
+      active = false;
+    };
   }, [exercise]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Map tabs (path/content) to files shape expected by backend (name/content)
+      const filesPayload = tabs.map(t => ({
+        name: t.path,
+        content: t.content
+      }));
+
+      await apiClient.post(`/students/exercise/${exercise.id}/workspace/save`, {
+        files: filesPayload,
+        taskId: exercise.tasks?.[0]?.id
+      });
+      toast.success('Progress saved successfully!');
+    } catch (err) {
+      console.error('Failed to save progress', err);
+      toast.error('Failed to save progress. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const activeTabContent = tabs.find(t => t.path === activeTab)?.content ?? '';
   const activeTabLanguage = tabs.find(t => t.path === activeTab)?.language ?? 'plaintext';
@@ -279,6 +343,166 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     }
   };
 
+  const handleRunTests = async () => {
+    const testCases = exercise.tasks?.[0]?.test_cases || [];
+    if (testCases.length === 0) {
+      alert("No test cases are defined for this exercise.");
+      return;
+    }
+
+    setIsRunning(true);
+    setTerminalOutput('Running tests...\n----------------\n');
+    setShowPreview(false);
+
+    if (activeTab?.endsWith('.py') || exercise.language === 'python') {
+      try {
+        setTerminalOutput('Loading Python environment for testing...\n');
+        if (!(window as any).loadPyodide) {
+           await new Promise((resolve, reject) => {
+             const script = document.createElement('script');
+             script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+             script.onload = resolve;
+             script.onerror = reject;
+             document.head.appendChild(script);
+           });
+        }
+        
+        const pyodide = await (window as any).loadPyodide({
+          indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
+        });
+        
+        const combinedTestCode = testCases.map(tc => tc.test_code).join('\n\n');
+        
+        const pyHeader = `
+import json,sys,builtins,asyncio
+_p,_f,_r=0,0,[]
+__logs=[]
+_original_print = builtins.print
+def _custom_print(*args, **kwargs):
+    sep = kwargs.get('sep', ' ')
+    if len(args) == 1:
+        __logs.append(args[0])
+    else:
+        __logs.append(sep.join(str(a) for a in args))
+    _original_print(*args, **kwargs)
+builtins.print = _custom_print
+
+__testQueue = []
+def __test(d,fn):
+  __testQueue.append((d,fn))
+class _E:
+  def __init__(self,a):self._a=a
+  def to_be(self,e):
+    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"
+  def to_equal(self,e):
+    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"
+  def to_be_truthy(self):
+    assert self._a,"Expected truthy"
+  def to_be_falsy(self):
+    assert not self._a,"Expected falsy"
+def __expect(a): return _E(a)
+`;
+
+        const pythonCode = tabs.find(t => t.path === 'main.py' || t.path.endsWith('.py'))?.content || '';
+        const pyFooter = `
+async def __run_tests():
+  global _p, _f
+  for d, fn in __testQueue:
+    try:
+      if asyncio.iscoroutinefunction(fn):
+        await fn()
+      else:
+        fn()
+      _r.append({"description":d,"passed":True});_p+=1
+    except Exception as e:
+      _r.append({"description":d,"passed":False,"error":str(e)});_f+=1
+await __run_tests()
+json.dumps(_r)
+`;
+        const fullScript = `${pyHeader}\n${pythonCode}\n${combinedTestCode}\n${pyFooter}`;
+
+        const resultJson = await pyodide.runPythonAsync(fullScript);
+        const results = JSON.parse(resultJson);
+        
+        let out = 'Test Results:\n';
+        let passedCount = 0;
+        results.forEach((r: any) => {
+          if (r.passed) {
+            out += `✅ ${r.description}\n`;
+            passedCount++;
+          } else {
+            out += `❌ ${r.description} - ${r.error}\n`;
+          }
+        });
+        out += `\nPassed ${passedCount} / ${results.length} tests.`;
+        setTerminalOutput(out);
+      } catch (err: any) {
+        setTerminalOutput('[Error executing tests]: ' + err.message);
+      } finally {
+        setIsRunning(false);
+      }
+      return;
+    }
+
+    if (activeTab?.endsWith('.js') || exercise.language === 'javascript') {
+      try {
+        const combinedTestCode = testCases.map(tc => tc.test_code).join('\n\n');
+        
+        const jsHeader = `
+const __r=[],__p=0,__f=0;
+const __logs=[];
+const _originalLog = console.log;
+console.log = (...args) => {
+  __logs.push(args.length === 1 ? args[0] : args.join(' '));
+  _originalLog(...args);
+};
+const __testQueue = [];
+const __test = (d, fn) => {
+  __testQueue.push(async () => {
+    try {
+      await fn();
+      __r.push({description:d, passed:true});
+    } catch(e) {
+      __r.push({description:d, passed:false, error:e.message});
+    }
+  });
+};
+class _E{constructor(a){this._a=a;}
+toBe(e){if(this._a!==e)throw new Error('Expected '+e+', got '+this._a);}
+toEqual(e){if(JSON.stringify(this._a)!==JSON.stringify(e))throw new Error('Expected '+JSON.stringify(e)+', got '+JSON.stringify(this._a));}
+toBeTruthy(){if(!this._a)throw new Error('Expected truthy');}
+toBeFalsy(){if(this._a)throw new Error('Expected falsy');}}
+const __expect=(a)=>new _E(a);
+`;
+        
+        const jsCode = tabs.find(t => t.path === 'index.js' || t.path.endsWith('.js'))?.content || '';
+        const fullScript = `${jsHeader}\n${jsCode}\n${combinedTestCode}\nfor (const t of __testQueue) await t();\nreturn __r;`;
+
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        const fn = new AsyncFunction(fullScript);
+        const results = await fn();
+        
+        let out = 'Test Results:\n';
+        let passedCount = 0;
+        results.forEach((r: any) => {
+          if (r.passed) {
+            out += `✅ ${r.description}\n`;
+            passedCount++;
+          } else {
+            out += `❌ ${r.description} - ${r.error}\n`;
+          }
+        });
+        out += `\nPassed ${passedCount} / ${results.length} tests.`;
+        setTerminalOutput(out);
+      } catch (err: any) {
+        setTerminalOutput('[Error executing tests]: ' + err.message);
+      } finally {
+        setIsRunning(false);
+      }
+      return;
+    }
+  };
+
   return (
     <div className={`flex w-full bg-[#1e1e1e] text-slate-300 shadow-2xl overflow-hidden transition-all duration-200 ${
       isFullscreen 
@@ -289,8 +513,13 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
       {/* Activity Bar */}
       <div className='w-12 flex flex-col items-center py-4 bg-[#252526] border-r border-slate-800 shrink-0 gap-4'>
         <button 
-          onClick={() => setActiveSidebar('instructions')}
-          className={`p-2 rounded-lg transition-colors ${activeSidebar === 'instructions' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+          onClick={() => {
+            if (!tabs.find(t => t.path === 'Instructions.md')) {
+              setTabs(prev => [{ path: 'Instructions.md', content: exercise.instructions || exercise.tasks?.[0]?.instructions || '', language: 'markdown' }, ...prev]);
+            }
+            setActiveTab('Instructions.md');
+          }}
+          className={`p-2 rounded-lg transition-colors ${activeTab === 'Instructions.md' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
           title="Instructions"
         >
           <BookOpen className='w-6 h-6' />
@@ -314,12 +543,6 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
       <PanelGroup direction='horizontal' className='flex-1 w-full overflow-hidden'>
         {/* Sidebar Panel */}
         <Panel defaultSize={20} minSize={15} maxSize={40} className='bg-[#252526] border-r border-slate-800 flex flex-col h-full overflow-hidden'>
-          {activeSidebar === 'instructions' && (
-            <div className='p-4 h-full overflow-y-auto prose prose-invert prose-sm [&::-webkit-scrollbar]:hidden'>
-              <h2 className='text-lg font-semibold text-white mb-4'>Instructions</h2>
-              <div dangerouslySetInnerHTML={{ __html: exercise.instructions || 'No instructions provided.' }} />
-            </div>
-          )}
           {activeSidebar === 'explorer' && (
             <div className='h-full flex flex-col'>
               <div className='px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500'>
@@ -384,6 +607,26 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
                   <Play className={`w-4 h-4 mr-1 ${exercise.language === 'dom' ? 'text-emerald-400' : ''}`} /> {isRunning ? 'Running...' : 'Run'}
                 </Button>
               )}
+              {exercise.tasks?.[0]?.test_cases && exercise.tasks[0].test_cases.length > 0 && exercise.language !== 'dom' && (
+                <Button 
+                  size='sm' 
+                  variant='secondary'
+                  className='h-8 bg-amber-600 hover:bg-amber-500 text-white border-none'
+                  onClick={handleRunTests}
+                  disabled={isRunning}
+                >
+                  <CheckCircle2 className='w-4 h-4 mr-1' /> {isRunning ? 'Testing...' : 'Run Tests'}
+                </Button>
+              )}
+              <Button 
+                size='sm' 
+                variant='outline'
+                className='h-8 bg-[#2d2d2d] hover:bg-[#333] text-slate-300 border-slate-600'
+                onClick={handleSave}
+                disabled={saving}
+              >
+                <Save className='w-4 h-4 mr-1 text-blue-400' /> {saving ? 'Saving...' : 'Save'}
+              </Button>
               <Button 
                 size='sm' 
                 className='h-8 bg-indigo-600 hover:bg-indigo-500 text-white border-none'
@@ -412,24 +655,49 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
                   </button>
                 ))}
               </div>
-              <div className='flex-1 relative'>
+              <div className='flex-1 relative bg-[#1e1e1e]'>
                 {activeTab ? (
-                  <Editor
-                    language={activeTabLanguage}
-                    theme='vs-dark'
-                    value={activeTabContent}
-                    onChange={handleEditorChange}
-                    options={{
-                      minimap: { enabled: false },
-                      fontSize: 14,
-                      wordWrap: 'on',
-                      automaticLayout: true,
-                      scrollbar: {
-                        vertical: 'hidden',
-                        horizontal: 'hidden'
-                      }
-                    }}
-                  />
+                  activeTab === 'Instructions.md' ? (
+                    <div className='absolute inset-0 p-8 overflow-y-auto [&::-webkit-scrollbar]:hidden'>
+                      <div className='
+                        prose prose-invert prose-slate max-w-3xl mx-auto
+                        prose-headings:text-white prose-headings:font-bold
+                        prose-h1:text-2xl prose-h1:border-b prose-h1:border-slate-700 prose-h1:pb-3
+                        prose-h2:text-xl prose-h2:text-indigo-300
+                        prose-h3:text-base prose-h3:text-slate-200
+                        prose-p:text-slate-300 prose-p:leading-relaxed
+                        prose-code:bg-slate-800 prose-code:text-emerald-400 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
+                        prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-700 prose-pre:rounded-lg
+                        prose-strong:text-white
+                        prose-li:text-slate-300
+                        prose-hr:border-slate-700
+                      '>
+                        <ReactMarkdown>
+                          {exercise.instructions || exercise.tasks?.[0]?.instructions || '*No instructions provided.*'}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  ) : (
+                    <Editor
+                      height='100%'
+                      language={activeTabLanguage}
+                      theme='vs-dark'
+                      value={activeTabContent}
+                      onChange={handleEditorChange}
+                      path={activeTab || undefined}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 14,
+                        lineNumbersMinChars: 3,
+                        wordWrap: 'on',
+                        scrollBeyondLastLine: false,
+                        padding: { top: 16 },
+                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        renderLineHighlight: 'all',
+                        bracketPairColorization: { enabled: true },
+                      }}
+                    />
+                  )
                 ) : (
                   <div className='flex items-center justify-center h-full text-slate-600'>
                     Select a file to edit
