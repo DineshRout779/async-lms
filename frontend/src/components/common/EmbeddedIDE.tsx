@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import Editor from '@monaco-editor/react';
+import Editor, { loader } from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
-import { Play, Send, BookOpen, Files, Search, Code2, Trash2, Maximize, Minimize, CheckCircle2, Save } from 'lucide-react';
+import { Play, Send, BookOpen, Files, Search, Code2, Trash2, Maximize, Minimize, CheckCircle2, Save, ExternalLink } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import FileTreeExplorer from '@/components/common/FileTree';
 import type { FileNode } from '@/components/common/FileTree';
@@ -47,6 +47,104 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
   const [showPreview, setShowPreview] = useState(false);
 
   const [saving, setSaving] = useState(false);
+
+  // Synchronise live preview with external browser tab via BroadcastChannel
+  useEffect(() => {
+    const channelName = `preview-${exercise.id}`;
+    const channel = new BroadcastChannel(channelName);
+    
+    channel.onmessage = (event) => {
+      if (event.data?.type === 'REQUEST_INITIAL') {
+        const html = tabs.find(t => t.path === 'index.html')?.content || '';
+        const css = tabs.find(t => t.path === 'style.css')?.content || '';
+        const js = tabs.find(t => t.path === 'script.js')?.content || '';
+
+        let combined = html;
+        if (combined.includes('</head>')) {
+          combined = combined.replace('</head>', `<style>${css}</style></head>`);
+        } else {
+          combined = `<style>${css}</style>` + combined;
+        }
+
+        if (combined.includes('</body>')) {
+          combined = combined.replace('</body>', `<script>${js}</script></body>`);
+        } else {
+          combined = combined + `<script>${js}</script>`;
+        }
+        
+        channel.postMessage({ type: 'UPDATE_CONTENT', html: combined });
+      }
+    };
+
+    return () => {
+      channel.close();
+    };
+  }, [tabs, exercise.id]);
+
+  // Register HTML snippet completion provider with Monaco loader
+  useEffect(() => {
+    let disposable: any = null;
+    loader.init().then((monaco) => {
+      const htmlTags = [
+        { label: 'div', insertText: '<div>$1</div>', doc: 'Division container element' },
+        { label: 'span', insertText: '<span>$1</span>', doc: 'Inline span container element' },
+        { label: 'p', insertText: '<p>$1</p>', doc: 'Paragraph element' },
+        { label: 'button', insertText: '<button>$1</button>', doc: 'Clickable button element' },
+        { label: 'a', insertText: '<a href="${1:#}">$2</a>', doc: 'Anchor hyperlink element' },
+        { label: 'img', insertText: '<img src="$1" alt="$2" />', doc: 'Image element' },
+        { label: 'input', insertText: '<input type="${1:text}" name="$2" placeholder="$3" />', doc: 'Input field element' },
+        { label: 'h1', insertText: '<h1>$1</h1>', doc: 'Heading Level 1 element' },
+        { label: 'h2', insertText: '<h2>$1</h2>', doc: 'Heading Level 2 element' },
+        { label: 'h3', insertText: '<h3>$1</h3>', doc: 'Heading Level 3 element' },
+        { label: 'h4', insertText: '<h4>$1</h4>', doc: 'Heading Level 4 element' },
+        { label: 'h5', insertText: '<h5>$1</h5>', doc: 'Heading Level 5 element' },
+        { label: 'h6', insertText: '<h6>$1</h6>', doc: 'Heading Level 6 element' },
+        { label: 'ul', insertText: '<ul>\n\t<li>$1</li>\n</ul>', doc: 'Unordered list element' },
+        { label: 'ol', insertText: '<ol>\n\t<li>$1</li>\n</ol>', doc: 'Ordered list element' },
+        { label: 'li', insertText: '<li>$1</li>', doc: 'List item element' },
+        { label: 'section', insertText: '<section>\n\t$1\n</section>', doc: 'Content section element' },
+        { label: 'nav', insertText: '<nav>\n\t$1\n</nav>', doc: 'Navigation bar container' },
+        { label: 'header', insertText: '<header>\n\t$1\n</header>', doc: 'Document or section header' },
+        { label: 'footer', insertText: '<footer>\n\t$1\n</footer>', doc: 'Document or section footer' },
+        { label: 'style', insertText: '<style>\n\t$1\n</style>', doc: 'Internal CSS style block' },
+        { label: 'script', insertText: '<script>\n\t$1\n</script>', doc: 'Internal JS script block' },
+        { label: 'label', insertText: '<label for="$1">$2</label>', doc: 'Form input label element' },
+        { label: 'form', insertText: '<form action="$1" method="${2:post}">\n\t$3\n</form>', doc: 'Form element' },
+        { label: 'textarea', insertText: '<textarea name="$1" rows="${2:4}" cols="${3:50}">$4</textarea>', doc: 'Multiline text area input' },
+        { label: 'select', insertText: '<select name="$1">\n\t<option value="$2">$3</option>\n</select>', doc: 'Drop-down select list element' },
+        { label: 'table', insertText: '<table>\n\t<thead>\n\t\t<tr>\n\t\t\t<th>$1</th>\n\t\t</tr>\n\t</thead>\n\t<tbody>\n\t\t<tr>\n\t\t\t<td>$2</td>\n\t\t</tr>\n\t</tbody>\n</table>', doc: 'Tabular data table' },
+      ];
+
+      disposable = monaco.languages.registerCompletionItemProvider('html', {
+        provideCompletionItems: (model: any, position: any) => {
+          const word = model.getWordUntilPosition(position);
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: word.startColumn,
+            endColumn: word.endColumn,
+          };
+
+          const suggestions = htmlTags.map(tag => ({
+            label: tag.label,
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            documentation: tag.doc,
+            insertText: tag.insertText,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            range: range
+          }));
+
+          return { suggestions };
+        }
+      });
+    });
+
+    return () => {
+      if (disposable) {
+        disposable.dispose();
+      }
+    };
+  }, []);
 
   // Initialize from backend workspace if available, otherwise fallback to exercise initial_files
   useEffect(() => {
@@ -258,6 +356,50 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     const blob = new Blob([combined], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     setPreviewUrl(url);
+
+    // Broadcast the changes to the external tab if it is open
+    const channel = new BroadcastChannel(`preview-${exercise.id}`);
+    channel.postMessage({ type: 'UPDATE_CONTENT', html: combined });
+    channel.close();
+  };
+
+  const handleOpenNewTab = () => {
+    const channelName = `preview-${exercise.id}`;
+    const wrapperHtml = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>CodeGuru Live Preview</title>
+    <style>
+      html, body, iframe { margin: 0; padding: 0; width: 100%; height: 100%; border: none; overflow: hidden; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <iframe id="preview-frame"></iframe>
+    <script>
+      const channel = new BroadcastChannel('${channelName}');
+      const frame = document.getElementById('preview-frame');
+      
+      const updateFrame = (html) => {
+        const blob = new Blob([html], { type: 'text/html' });
+        frame.src = URL.createObjectURL(blob);
+      };
+
+      channel.onmessage = (event) => {
+        if (event.data && event.data.type === 'UPDATE_CONTENT') {
+          updateFrame(event.data.html);
+        }
+      };
+      
+      // Request current content from parent page
+      channel.postMessage({ type: 'REQUEST_INITIAL' });
+    </script>
+  </body>
+</html>
+    `;
+    const blob = new Blob([wrapperHtml], { type: 'text/html' });
+    const wrapperUrl = URL.createObjectURL(blob);
+    window.open(wrapperUrl, '_blank');
   };
 
   const handleRun = async () => {
@@ -818,6 +960,8 @@ return __r;
                         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                         renderLineHighlight: 'all',
                         bracketPairColorization: { enabled: true },
+                        autoClosingBrackets: 'always',
+                        autoClosingQuotes: 'always',
                       }}
                     />
                   )
@@ -850,9 +994,25 @@ return __r;
                     </button>
                   )}
                 </div>
-                <button className='text-slate-500 hover:text-red-400' onClick={() => setTerminalOutput('')}>
-                  <Trash2 className='w-3.5 h-3.5' />
-                </button>
+                <div className='flex items-center gap-3'>
+                  {showPreview && previewUrl && (
+                    <button 
+                      className='text-slate-500 hover:text-indigo-400 flex items-center gap-1 text-xs transition-colors'
+                      onClick={handleOpenNewTab}
+                      title="Open in new tab"
+                    >
+                      <ExternalLink className='w-3.5 h-3.5' />
+                      <span>Open in new tab</span>
+                    </button>
+                  )}
+                  <button 
+                    className='text-slate-500 hover:text-red-400 transition-colors' 
+                    onClick={() => setTerminalOutput('')}
+                    title="Clear console"
+                  >
+                    <Trash2 className='w-3.5 h-3.5' />
+                  </button>
+                </div>
               </div>
               <div className='flex-1 overflow-y-auto font-mono text-sm bg-[#1e1e1e] [&::-webkit-scrollbar]:hidden'>
                 {showPreview && previewUrl ? (
