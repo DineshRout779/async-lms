@@ -780,48 +780,13 @@ Before returning JSON, confirm:
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages: [{ role: 'user', content: prompt }],
-    temperature: 0.4,
+    temperature: 0.1,
     max_tokens: 2000,
     response_format: { type: 'json_object' },
   });
 
   const parsed = JSON.parse(response.choices[0].message.content);
-  const rawTests = parsed.test_cases || [];
-
-  // ─── Post-Processing Validator ─────────────────────────────────────────────
-  // Detect tests that contain code inside the test block (variable declarations,
-  // console.log, print). If found, auto-fix by stripping the offending lines.
-  const FORBIDDEN_PATTERNS = [
-    /\b(let|const|var)\s+\w+/,     // variable declarations
-    /\bconsole\.log\s*\(/,          // console.log calls
-    /\bprint\s*\(/,                 // Python print calls
-  ];
-
-  const validatedTests = rawTests.map(tc => {
-    const code = tc.test_code || '';
-    const hasForbidden = FORBIDDEN_PATTERNS.some(pattern => pattern.test(code));
-    if (!hasForbidden) return tc; // already clean, pass through
-
-    // Strip forbidden lines — keep only __expect lines and async awaits
-    const lines = code.split('\n');
-    const cleanLines = lines.filter(line => {
-      const trimmed = line.trim();
-      // Keep empty lines, __expect assertions, __test wrappers, await statements
-      if (trimmed === '') return true;
-      if (trimmed.startsWith('__expect')) return true;
-      if (trimmed.startsWith('__test')) return true;
-      if (trimmed.startsWith('await ')) return true;
-      if (trimmed.startsWith('});') || trimmed === '})') return true;
-      if (trimmed.startsWith('//')) return true; // comments are fine
-      // DROP everything else (let/const/var declarations, console.log, print)
-      return false;
-    });
-
-    console.warn(`[AI Test Validator] Stripped forbidden code from test: "${tc.description}"`);
-    return { ...tc, test_code: cleanLines.join('\n') };
-  });
-
-  return validatedTests;
+  return parsed.test_cases || [];
 }
 
 /**

@@ -924,7 +924,9 @@ exports.submitExercise = async (req, res) => {
           for (const file of files) {
             if (file.path && typeof file.content === 'string') {
               const filePath = path.join(taskWorkspaceDir, file.path);
-              if (filePath.startsWith(taskWorkspaceDir)) {
+              const relative = path.relative(taskWorkspaceDir, filePath);
+              const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+              if (isSafe) {
                 fs.mkdirSync(path.dirname(filePath), { recursive: true });
                 fs.writeFileSync(filePath, file.content);
               }
@@ -997,7 +999,9 @@ exports.submitExercise = async (req, res) => {
         for (const file of files) {
           if (file.path && typeof file.content === 'string') {
             const filePath = path.join(workspaceDir, file.path);
-            if (filePath.startsWith(workspaceDir)) {
+            const relative = path.relative(workspaceDir, filePath);
+            const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+            if (isSafe) {
               fs.mkdirSync(path.dirname(filePath), { recursive: true });
               fs.writeFileSync(filePath, file.content);
             }
@@ -1142,6 +1146,7 @@ exports.submitExercise = async (req, res) => {
 
 const fs = require('fs');
 const path = require('path');
+const runnerService = require('../services/runnerService');
 
 const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
@@ -1414,7 +1419,9 @@ exports.saveExerciseWorkspace = async (req, res) => {
         if (file.name === 'Instructions.md') continue;
         
         const filePath = path.join(workspaceDir, file.name);
-        if (filePath.startsWith(workspaceDir)) {
+        const relative = path.relative(workspaceDir, filePath);
+        const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+        if (isSafe) {
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, file.content, 'utf-8');
         }
@@ -1488,6 +1495,50 @@ exports.runExerciseTests = async (req, res) => {
     res.json({ success: true, data: testResult });
   } catch (error) {
     console.error('Error running exercise tests:', error);
+    serverError(res, error);
+  }
+};
+
+/**
+ * Run exercise code.
+ * POST /api/students/exercise/:exerciseId/run
+ */
+exports.runExercise = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { exerciseId } = req.params;
+    const { taskId, activeFile } = req.body;
+
+    const result = await pool.query(
+      'SELECT language FROM exercises WHERE id = $1',
+      [exerciseId],
+    );
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
+    }
+
+    const { language } = result.rows[0];
+
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
+    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
+    if (!fs.existsSync(workspaceDir)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Workspace not initialised' });
+    }
+
+    const runResult = await runnerService.execute(
+      workspaceDir,
+      language,
+      activeFile,
+    );
+    res.json({ success: true, data: runResult });
+  } catch (error) {
+    console.error('Error running exercise:', error);
     serverError(res, error);
   }
 };

@@ -10,6 +10,18 @@ import type { Exercise } from '@/utils/types';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
 
+// Module level cache for Pyodide instance
+let cachedPyodide: any = null;
+
+const getLanguageFromPath = (p: string) => {
+  const ext = p.split('.').pop() || '';
+  if (ext === 'py') return 'python';
+  if (ext === 'js') return 'javascript';
+  if (ext === 'html') return 'html';
+  if (ext === 'css') return 'css';
+  return 'plaintext';
+};
+
 // Mock types
 type Tab = { path: string; content: string; language: string };
 
@@ -211,7 +223,7 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     });
     
     setTabs(prev => prev.map(t => {
-      if (t.path === oldPath) return { ...t, path: newPath, language: newPath.split('.').pop() || 'plaintext' };
+      if (t.path === oldPath) return { ...t, path: newPath, language: getLanguageFromPath(newPath) };
       if (t.path.startsWith(oldPath + '/')) {
          return { ...t, path: t.path.replace(oldPath, newPath) };
       }
@@ -230,9 +242,18 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     const css = tabs.find(t => t.path === 'style.css')?.content || '';
     const js = tabs.find(t => t.path === 'script.js')?.content || '';
 
-    const combined = html
-      .replace('</head>', `<style>${css}</style></head>`)
-      .replace('</body>', `<script>${js}</script></body>`);
+    let combined = html;
+    if (combined.includes('</head>')) {
+      combined = combined.replace('</head>', `<style>${css}</style></head>`);
+    } else {
+      combined = `<style>${css}</style>` + combined;
+    }
+
+    if (combined.includes('</body>')) {
+      combined = combined.replace('</body>', `<script>${js}</script></body>`);
+    } else {
+      combined = combined + `<script>${js}</script>`;
+    }
 
     const blob = new Blob([combined], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
@@ -262,24 +283,59 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     setIsRunning(true);
     setTerminalOutput('Executing...\n');
     setShowPreview(false);
+
+    // 4. Backend fallback for Java and SQL
+    if (exercise.language === 'java' || exercise.language === 'sql') {
+      try {
+        setTerminalOutput('Executing on backend runner...\n----------------\n');
+        // Save current progress first so runner sees the latest file modifications
+        const filesPayload = tabs.map(t => ({
+          name: t.path,
+          content: t.content
+        }));
+        await apiClient.post(`/students/exercise/${exercise.id}/workspace/save`, {
+          files: filesPayload,
+          taskId: exercise.tasks?.[0]?.id
+        });
+
+        const res = await apiClient.post(`/students/exercise/${exercise.id}/run`, {
+          taskId: exercise.tasks?.[0]?.id,
+          activeFile: activeTab
+        });
+
+        if (res.data?.success && res.data.data) {
+          const { output } = res.data.data;
+          setTerminalOutput(output || '(no output)');
+        }
+      } catch (err: any) {
+        setTerminalOutput('Error executing on backend: ' + (err.response?.data?.message || err.message));
+      } finally {
+        setIsRunning(false);
+      }
+      return;
+    }
     
-    // 4. Python execution
+    // 5. Python execution (cached Pyodide)
     if (activeTab?.endsWith('.py') || exercise.language === 'python') {
       try {
-        setTerminalOutput('Loading Python environment...\n');
-        if (!(window as any).loadPyodide) {
-           await new Promise((resolve, reject) => {
-             const script = document.createElement('script');
-             script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-             script.onload = resolve;
-             script.onerror = reject;
-             document.head.appendChild(script);
-           });
+        let pyodide = cachedPyodide;
+        if (!pyodide) {
+          setTerminalOutput('Loading Python environment...\n');
+          if (!(window as any).loadPyodide) {
+             await new Promise((resolve, reject) => {
+               const script = document.createElement('script');
+               script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+               script.onload = resolve;
+               script.onerror = reject;
+               document.head.appendChild(script);
+             });
+          }
+          
+          pyodide = await (window as any).loadPyodide({
+            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
+          });
+          cachedPyodide = pyodide;
         }
-        
-        const pyodide = await (window as any).loadPyodide({
-          indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
-        });
         
         // Setup stdout/stderr redirection
         pyodide.setStdout({ batched: (text: string) => setTerminalOutput(prev => prev + text + '\n') });
@@ -300,7 +356,7 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
       return;
     }
 
-    // 5. JavaScript execution
+    // 6. JavaScript execution (isolated iframe to support async logs & prevent global pollution)
     if (activeTab?.endsWith('.js') || exercise.language === 'javascript') {
       try {
         setTerminalOutput('Running...\n----------------\n');
@@ -309,34 +365,40 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
             jsCode = tabs.find(t => t.path === 'index.js' || t.path.endsWith('.js'))?.content || '';
         }
 
-        let output = '';
-        const originalLog = console.log;
-        const originalError = console.error;
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
 
-        console.log = (...args) => {
-          output += args.map(a => String(a)).join(' ') + '\n';
-          originalLog(...args);
-        };
-        console.error = (...args) => {
-          output += '[Error]: ' + args.map(a => String(a)).join(' ') + '\n';
-          originalError(...args);
-        };
+        if (iframe.contentWindow) {
+          (iframe.contentWindow as any).console.log = (...args: any[]) => {
+            setTerminalOutput(prev => prev + args.map(a => String(a)).join(' ') + '\n');
+          };
+          (iframe.contentWindow as any).console.error = (...args: any[]) => {
+            setTerminalOutput(prev => prev + '[Error]: ' + args.map(a => String(a)).join(' ') + '\n');
+          };
 
-        try {
-          // Use new Function to create a clean scope
-          const fn = new Function(jsCode);
-          fn();
-        } catch (e: any) {
-          output += '[Error]: ' + e.message + '\n';
-        } finally {
-          console.log = originalLog;
-          console.error = originalError;
+          try {
+            const script = iframe.contentDocument?.createElement('script');
+            if (script) {
+              script.textContent = jsCode;
+              iframe.contentDocument?.body.appendChild(script);
+            }
+          } catch (e: any) {
+            setTerminalOutput(prev => prev + '[Error]: ' + e.message + '\n');
+          }
         }
 
-        setTerminalOutput(prev => prev + output + '\n[Execution completed successfully]');
+        // Keep the iframe alive for 2 seconds to allow async operations (like setTimeout) to complete
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch {}
+          setTerminalOutput(prev => prev + '\n[Execution completed]');
+          setIsRunning(false);
+        }, 2000);
+
       } catch (err: any) {
         setTerminalOutput(prev => prev + '\n[Error]: ' + err.message);
-      } finally {
         setIsRunning(false);
       }
       return;
@@ -354,22 +416,66 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     setTerminalOutput('Running tests...\n----------------\n');
     setShowPreview(false);
 
+    // 1. Backend fallback for Java (SQL tests not supported)
+    if (exercise.language === 'java') {
+      try {
+        setTerminalOutput('Running tests on backend runner...\n----------------\n');
+        // Save first so backend runs latest code
+        const filesPayload = tabs.map(t => ({
+          name: t.path,
+          content: t.content
+        }));
+        await apiClient.post(`/students/exercise/${exercise.id}/workspace/save`, {
+          files: filesPayload,
+          taskId: exercise.tasks?.[0]?.id
+        });
+
+        const res = await apiClient.post(`/students/exercise/${exercise.id}/run-tests`, {
+          taskId: exercise.tasks?.[0]?.id
+        });
+
+        if (res.data?.success && res.data.data) {
+          const { results, passed, failed } = res.data.data;
+          let out = 'Test Results:\n';
+          results.forEach((r: any) => {
+            if (r.passed) {
+              out += `✅ ${r.description}\n`;
+            } else {
+              out += `❌ ${r.description} - ${r.error}\n`;
+            }
+          });
+          out += `\nPassed ${passed} / ${passed + failed} tests.`;
+          setTerminalOutput(out);
+        }
+      } catch (err: any) {
+        setTerminalOutput('Error executing tests on backend: ' + (err.response?.data?.message || err.message));
+      } finally {
+        setIsRunning(false);
+      }
+      return;
+    }
+
+    // 2. Python execution (cached Pyodide)
     if (activeTab?.endsWith('.py') || exercise.language === 'python') {
       try {
-        setTerminalOutput('Loading Python environment for testing...\n');
-        if (!(window as any).loadPyodide) {
-           await new Promise((resolve, reject) => {
-             const script = document.createElement('script');
-             script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-             script.onload = resolve;
-             script.onerror = reject;
-             document.head.appendChild(script);
-           });
+        let pyodide = cachedPyodide;
+        if (!pyodide) {
+          setTerminalOutput('Loading Python environment for testing...\n');
+          if (!(window as any).loadPyodide) {
+             await new Promise((resolve, reject) => {
+               const script = document.createElement('script');
+               script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+               script.onload = resolve;
+               script.onerror = reject;
+               document.head.appendChild(script);
+             });
+          }
+          
+          pyodide = await (window as any).loadPyodide({
+            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
+          });
+          cachedPyodide = pyodide;
         }
-        
-        const pyodide = await (window as any).loadPyodide({
-          indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
-        });
         
         const combinedTestCode = testCases.map(tc => tc.test_code).join('\n\n');
         
@@ -444,6 +550,7 @@ json.dumps(_r)
       return;
     }
 
+    // 3. JavaScript execution (cleanup original Log & Error functions in try-finally)
     if (activeTab?.endsWith('.js') || exercise.language === 'javascript') {
       try {
         const combinedTestCode = testCases.map(tc => tc.test_code).join('\n\n');
@@ -452,9 +559,14 @@ json.dumps(_r)
 const __r=[],__p=0,__f=0;
 const __logs=[];
 const _originalLog = console.log;
+const _originalError = console.error;
 console.log = (...args) => {
   __logs.push(args.length === 1 ? args[0] : args.join(' '));
   _originalLog(...args);
+};
+console.error = (...args) => {
+  __logs.push('[Error]: ' + (args.length === 1 ? args[0] : args.join(' ')));
+  _originalError(...args);
 };
 const __testQueue = [];
 const __test = (d, fn) => {
@@ -476,8 +588,19 @@ const __expect=(a)=>new _E(a);
 `;
         
         const jsCode = tabs.find(t => t.path === 'index.js' || t.path.endsWith('.js'))?.content || '';
-        const fullScript = `${jsHeader}\n${jsCode}\n${combinedTestCode}\nfor (const t of __testQueue) await t();\nreturn __r;`;
-
+        const fullScript = `
+${jsHeader}
+try {
+  ${jsCode}
+  ${combinedTestCode}
+  for (const t of __testQueue) await t();
+} finally {
+  console.log = _originalLog;
+  console.error = _originalError;
+}
+return __r;
+`;
+        
         const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
         const fn = new AsyncFunction(fullScript);
         const results = await fn();
