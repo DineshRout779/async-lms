@@ -369,7 +369,9 @@ const Lesson = () => {
   const hasMarkdown = Boolean(lesson.markdown_content);
 
   return (
-    <div className='mx-auto max-w-4xl space-y-10 p-6 md:p-10'>
+    <div className={`mx-auto space-y-10 p-6 md:p-10 transition-all duration-300 ${
+      exercises && exercises.length > 0 ? 'w-full max-w-7xl' : 'max-w-4xl'
+    }`}>
       {/* Header */}
       <header className='space-y-4'>
         <div className='flex flex-wrap items-center gap-3'>
