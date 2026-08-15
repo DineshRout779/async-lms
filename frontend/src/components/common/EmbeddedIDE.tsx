@@ -284,8 +284,8 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     if (value === undefined || !activeTab) return;
     setTabs(prev => prev.map(t => t.path === activeTab ? { ...t, content: value } : t));
     
-    // Auto-update preview if open
-    if (showPreview && exercise.language === 'dom') {
+    // Auto-update preview for DOM exercises
+    if (exercise.language === 'dom') {
       updatePreview();
     }
   };
