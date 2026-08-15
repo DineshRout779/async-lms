@@ -1,4 +1,5 @@
 const serverError = require('../utils/serverError');
+const axios = require('axios');
 const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
@@ -1062,11 +1063,21 @@ exports.submitExercise = async (req, res) => {
         payload.rubric = exercise.rubric || { criteria: [{ name: "Completeness", weight: 100 }] };
       }
 
-      const axios = require('axios');
       const CENTRAL_URL = process.env.CENTRAL_EVALUATOR_URL || 'http://localhost:3004';
-      const evalResponse = await axios.post(`${CENTRAL_URL}/evaluate`, payload, {
-         headers: { 'x-api-key': process.env.CENTRAL_EVALUATOR_API_KEY || 'test-key-123' }
-      });
+      
+      let evalResponse = null;
+      let postRetries = 3;
+      for (let attempt = 1; attempt <= postRetries; attempt++) {
+        try {
+          evalResponse = await axios.post(`${CENTRAL_URL}/evaluate`, payload, {
+             headers: { 'x-api-key': process.env.CENTRAL_EVALUATOR_API_KEY || 'test-key-123' }
+          });
+          break;
+        } catch (error) {
+          if (attempt === postRetries) throw error;
+          await new Promise(res => setTimeout(res, 1500));
+        }
+      }
       
       const jobId = evalResponse.data.jobId || (evalResponse.data.jobs && evalResponse.data.jobs[0].jobId);
       if (!jobId) throw new Error("Failed to get job ID from central evaluator");
@@ -1083,7 +1094,11 @@ exports.submitExercise = async (req, res) => {
              throw new Error("Evaluation failed: " + statusResponse.data.failedReason);
           }
         } catch(e) {
-          if (e.response && e.response.status === 404) continue;
+          const status = e.response ? e.response.status : null;
+          // Continue polling on 404 (not yet ready), or transient gateway/proxy errors (502/503/504)
+          if (status === 404 || status === 502 || status === 503 || status === 504 || !e.response) {
+            continue;
+          }
           throw e;
         }
       }
