@@ -28,7 +28,7 @@ type Tab = { path: string; content: string; language: string };
 interface EmbeddedIDEProps {
   exercise: Exercise;
   submitting: boolean;
-  onSubmit: (exerciseId: string, files?: any[]) => void;
+  onSubmit: (exerciseId: string, files?: any[]) => any;
 }
 
 export default function EmbeddedIDE({ exercise, submitting, onSubmit }: EmbeddedIDEProps) {
@@ -44,7 +44,11 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
   const [isRunning, setIsRunning] = useState(false);
   const [terminalOutput, setTerminalOutput] = useState<string>('Ready.');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
+  const [bottomTab, setBottomTab] = useState<'terminal' | 'feedback' | 'preview'>('terminal');
+  const [feedbackOutput, setFeedbackOutput] = useState<string>('No submissions yet. Click "Submit" to grade your work.');
+  
+  const showPreview = bottomTab === 'preview';
+  const setShowPreview = (val: boolean) => setBottomTab(val ? 'preview' : 'terminal');
 
   const [saving, setSaving] = useState(false);
 
@@ -159,6 +163,30 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
         if (res.data?.success && res.data.data?.files && res.data.data.files.length > 0) {
           // Map backend response 'name' to the expected tab shape
           filesToLoad = res.data.data.files.map((f: any) => ({ name: f.name, content: f.content }));
+        }
+        if (res.data?.success && res.data.data?.submission) {
+          const sub = res.data.data.submission;
+          const testRes = sub.testResults;
+          if (testRes) {
+            let outputText = `=== SUBMISSION EVALUATION ===\n`;
+            outputText += `Status: ${sub.isPassed ? 'PASSED ✅' : 'FAILED ❌'}\n`;
+            outputText += `Score: ${sub.score} / ${exercise.max_score} pts\n`;
+            
+            if (testRes.feedback) {
+              outputText += `\n--- Detailed Feedback ---\n${testRes.feedback}\n`;
+            }
+            
+            const breakdown = testRes.rubric_breakdown;
+            if (Array.isArray(breakdown)) {
+              outputText += `\n--- Rubric Breakdown ---\n`;
+              breakdown.forEach((item: any) => {
+                outputText += `- ${item.criteria || item.name}: ${item.score || 0}/${item.max_score || 100} pts\n`;
+                if (item.feedback) outputText += `  Feedback: ${item.feedback}\n`;
+              });
+            }
+            setFeedbackOutput(outputText);
+            setBottomTab('feedback');
+          }
         }
       } catch (err) {
         console.error('Failed to init workspace from backend, falling back to initial_files', err);
@@ -764,8 +792,42 @@ return __r;
       } finally {
         setIsRunning(false);
       }
-      return;
     }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const result = await onSubmit(exercise.id, tabs);
+      
+      const testRes = result?.testResults || result?.data?.test_results;
+      const submissionScore = result?.score !== undefined ? result.score : result?.data?.submission?.score;
+      const submissionPassed = result?.isPassed !== undefined ? result.isPassed : result?.data?.submission?.is_passed;
+      const pointsAwarded = result?.data?.points_awarded || 0;
+
+      if (testRes) {
+        let outputText = `=== SUBMISSION EVALUATION ===\n`;
+        outputText += `Status: ${submissionPassed ? 'PASSED ✅' : 'FAILED ❌'}\n`;
+        outputText += `Score: ${submissionScore} / ${exercise.max_score} pts\n`;
+        if (pointsAwarded > 0) {
+          outputText += `XP Earned: +${pointsAwarded} XP ⚡\n`;
+        }
+        
+        if (testRes.feedback) {
+          outputText += `\n--- Detailed Feedback ---\n${testRes.feedback}\n`;
+        }
+        
+        const breakdown = testRes.rubric_breakdown;
+        if (Array.isArray(breakdown)) {
+          outputText += `\n--- Rubric Breakdown ---\n`;
+          breakdown.forEach((item: any) => {
+            outputText += `- ${item.criteria || item.name}: ${item.score || 0}/${item.max_score || 100} pts\n`;
+            if (item.feedback) outputText += `  Feedback: ${item.feedback}\n`;
+          });
+        }
+        setFeedbackOutput(outputText);
+        setBottomTab('feedback'); // Switch to feedback tab on successful submit
+      }
+    } catch (err) {}
   };
 
   return (
@@ -896,7 +958,7 @@ return __r;
                 size='sm' 
                 className='h-8 bg-indigo-600 hover:bg-indigo-500 text-white border-none'
                 disabled={submitting}
-                onClick={() => onSubmit(exercise.id, tabs)}
+                onClick={handleSubmit}
               >
                 <Send className='w-4 h-4 mr-1' /> {submitting ? 'Submitting...' : 'Submit'}
               </Button>
@@ -980,15 +1042,21 @@ return __r;
               <div className='flex items-center justify-between px-4 py-1 bg-[#252526] border-b border-slate-800'>
                 <div className='flex gap-4'>
                   <button 
-                    className={`text-xs font-semibold uppercase tracking-wider ${!showPreview ? 'text-slate-300' : 'text-slate-500'}`}
-                    onClick={() => setShowPreview(false)}
+                    className={`text-xs font-semibold uppercase tracking-wider ${bottomTab === 'terminal' ? 'text-slate-300 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
+                    onClick={() => setBottomTab('terminal')}
                   >
                     Terminal
                   </button>
+                  <button 
+                    className={`text-xs font-semibold uppercase tracking-wider ${bottomTab === 'feedback' ? 'text-slate-300 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
+                    onClick={() => setBottomTab('feedback')}
+                  >
+                    Feedback
+                  </button>
                   {exercise.language === 'dom' && (
                     <button 
-                      className={`text-xs font-semibold uppercase tracking-wider ${showPreview ? 'text-slate-300' : 'text-slate-500'}`}
-                      onClick={() => setShowPreview(true)}
+                      className={`text-xs font-semibold uppercase tracking-wider ${bottomTab === 'preview' ? 'text-slate-300 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
+                      onClick={() => setBottomTab('preview')}
                     >
                       Live Preview
                     </button>
@@ -1005,18 +1073,24 @@ return __r;
                       <span>Open in new tab</span>
                     </button>
                   )}
-                  <button 
-                    className='text-slate-500 hover:text-red-400 transition-colors' 
-                    onClick={() => setTerminalOutput('')}
-                    title="Clear console"
-                  >
-                    <Trash2 className='w-3.5 h-3.5' />
-                  </button>
+                  {bottomTab === 'terminal' && (
+                    <button 
+                      className='text-slate-500 hover:text-red-400 transition-colors' 
+                      onClick={() => setTerminalOutput('')}
+                      title="Clear console"
+                    >
+                      <Trash2 className='w-3.5 h-3.5' />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className='flex-1 overflow-y-auto font-mono text-sm bg-[#1e1e1e] [&::-webkit-scrollbar]:hidden'>
-                {showPreview && previewUrl ? (
+                {bottomTab === 'preview' && previewUrl ? (
                   <iframe src={previewUrl} className='w-full h-full border-none bg-white' sandbox="allow-scripts" title="Preview" />
+                ) : bottomTab === 'feedback' ? (
+                  <div className='p-4 text-slate-300 whitespace-pre-wrap font-mono leading-relaxed bg-[#1e1e1e]'>
+                    {feedbackOutput}
+                  </div>
                 ) : (
                   <div className='p-2 text-slate-300 whitespace-pre-wrap'>
                     {terminalOutput}

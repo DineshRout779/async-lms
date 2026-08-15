@@ -1,9 +1,10 @@
 import { Button } from '@/components/ui/button';
 import type { ExerciseModalProps, ExerciseTask, TestCase } from '@/utils/types';
-import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
+import { Save, X, Plus, Trash2, ChevronDown, ChevronUp, Sparkles, Loader2, Wand2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
 import toast from 'react-hot-toast';
+import apiClient from '@/services/api';
 
 const ENVIRONMENT_TEMPLATES: Record<string, { name: string; content: string }[]> = {
   python: [{ name: 'main.py', content: '# Write your Python solution here\n' }],
@@ -33,9 +34,10 @@ interface TaskEditorProps {
   canRemove: boolean;
   onChange: (updated: ExerciseTask) => void;
   onRemove: () => void;
+  language: string;
 }
 
-const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChange, onRemove }) => {
+const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChange, onRemove, language }) => {
   const [expanded, setExpanded] = useState(index === 0);
 
   const updateFile = (fileIdx: number, field: 'name' | 'content', value: string) => {
@@ -187,72 +189,74 @@ const TaskEditor: React.FC<TaskEditorProps> = ({ task, index, canRemove, onChang
           </div>
 
           {/* Test cases */}
-          <div>
-            <div className='flex items-center justify-between mb-1.5'>
-              <label className='text-xs font-medium text-slate-600'>
-                Test Cases
-                <span className='ml-1 text-slate-400 font-normal'>auto-grade this task</span>
-              </label>
-              <div className='flex items-center gap-2'>
-                <Button 
-                  onClick={generateTests} 
-                  disabled={generating}
-                  size='sm' 
-                  variant='outline' 
-                  className='text-xs h-6 px-2 border-indigo-300 text-indigo-600 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors duration-150'
-                >
-                  {generating ? (
-                    <Loader2 className='w-3 h-3 mr-1 animate-spin' />
-                  ) : (
-                    <Sparkles className='w-3 h-3 mr-1' />
-                  )}
-                  Generate AI Tests
-                </Button>
-                <Button onClick={addTestCase} size='sm' variant='outline' className='text-xs h-6 px-2'>
-                  <Plus className='w-3 h-3 mr-1' /> Add Test
-                </Button>
+          {language !== 'dom' && (
+            <div>
+              <div className='flex items-center justify-between mb-1.5'>
+                <label className='text-xs font-medium text-slate-600'>
+                  Test Cases
+                  <span className='ml-1 text-slate-400 font-normal'>auto-grade this task</span>
+                </label>
+                <div className='flex items-center gap-2'>
+                  <Button 
+                    onClick={generateTests} 
+                    disabled={generating}
+                    size='sm' 
+                    variant='outline' 
+                    className='text-xs h-6 px-2 border-indigo-300 text-indigo-600 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors duration-150'
+                  >
+                    {generating ? (
+                      <Loader2 className='w-3 h-3 mr-1 animate-spin' />
+                    ) : (
+                      <Sparkles className='w-3 h-3 mr-1' />
+                    )}
+                    Generate AI Tests
+                  </Button>
+                  <Button onClick={addTestCase} size='sm' variant='outline' className='text-xs h-6 px-2'>
+                    <Plus className='w-3 h-3 mr-1' /> Add Test
+                  </Button>
+                </div>
               </div>
-            </div>
-            {(task.test_cases ?? []).length === 0 ? (
-              <p className='text-xs text-slate-400 italic'>No test cases — task will not be auto-graded.</p>
-            ) : (
-              <div className='space-y-2'>
-                {(task.test_cases ?? []).map((tc, tcIdx) => (
-                  <div key={tc.id} className='rounded-lg border border-slate-200 overflow-hidden'>
-                    <div className='flex items-center gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-200'>
-                      <span className='text-xs text-slate-400 font-mono shrink-0'>#{tcIdx + 1}</span>
-                      <input
-                        type='text'
-                        value={tc.description}
-                        onChange={e => updateTestCase(tc.id, 'description', e.target.value)}
-                        placeholder='e.g., returns correct output'
-                        className='flex-1 text-xs bg-transparent outline-none text-slate-700'
-                      />
-                      <label className='flex items-center gap-1 text-xs text-slate-500 shrink-0 cursor-pointer'>
+              {(task.test_cases ?? []).length === 0 ? (
+                <p className='text-xs text-slate-400 italic'>No test cases — task will not be auto-graded.</p>
+              ) : (
+                <div className='space-y-2'>
+                  {(task.test_cases ?? []).map((tc, tcIdx) => (
+                    <div key={tc.id} className='rounded-lg border border-slate-200 overflow-hidden'>
+                      <div className='flex items-center gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-200'>
+                        <span className='text-xs text-slate-400 font-mono shrink-0'>#{tcIdx + 1}</span>
                         <input
-                          type='checkbox'
-                          checked={tc.is_hidden}
-                          onChange={e => updateTestCase(tc.id, 'is_hidden', e.target.checked)}
-                          className='rounded'
+                          type='text'
+                          value={tc.description}
+                          onChange={e => updateTestCase(tc.id, 'description', e.target.value)}
+                          placeholder='e.g., returns correct output'
+                          className='flex-1 text-xs bg-transparent outline-none text-slate-700'
                         />
-                        Hidden
-                      </label>
-                      <button type='button' onClick={() => removeTestCase(tc.id)} className='text-slate-400 hover:text-red-500 shrink-0'>
-                        <Trash2 className='w-3 h-3' />
-                      </button>
+                        <label className='flex items-center gap-1 text-xs text-slate-500 shrink-0 cursor-pointer'>
+                          <input
+                            type='checkbox'
+                            checked={tc.is_hidden}
+                            onChange={e => updateTestCase(tc.id, 'is_hidden', e.target.checked)}
+                            className='rounded'
+                          />
+                          Hidden
+                        </label>
+                        <button type='button' onClick={() => removeTestCase(tc.id)} className='text-slate-400 hover:text-red-500 shrink-0'>
+                          <Trash2 className='w-3 h-3' />
+                        </button>
+                      </div>
+                      <textarea
+                        value={tc.test_code}
+                        onChange={e => updateTestCase(tc.id, 'test_code', e.target.value)}
+                        placeholder={`__test('${tc.description || 'description'}', () => {\n  __expect(fn()).toBe(expected);\n});`}
+                        rows={4}
+                        className='w-full px-3 py-2 font-mono text-xs text-slate-700 bg-white outline-none resize-y'
+                      />
                     </div>
-                    <textarea
-                      value={tc.test_code}
-                      onChange={e => updateTestCase(tc.id, 'test_code', e.target.value)}
-                      placeholder={`__test('${tc.description || 'description'}', () => {\n  __expect(fn()).toBe(expected);\n});`}
-                      rows={4}
-                      className='w-full px-3 py-2 font-mono text-xs text-slate-700 bg-white outline-none resize-y'
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -274,6 +278,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [maxScore, setMaxScore] = useState(100);
   const [language, setLanguage] = useState('dom');
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
+  const [rubric, setRubric] = useState<string>('');
+  const [generatingRubric, setGeneratingRubric] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -300,6 +306,14 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     } else {
       setTasks([makeTask(lang)]);
     }
+
+    setRubric(
+      editData?.rubric 
+        ? (typeof editData.rubric === 'string' 
+            ? editData.rubric 
+            : JSON.stringify(editData.rubric, null, 2)) 
+        : ''
+    );
   }, [isOpen, editData]);
 
   const handleLanguageChange = (lang: string) => {
@@ -336,6 +350,29 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
   };
 
+  const handleGenerateRubric = async () => {
+    if (!title.trim() || !instructions.trim()) {
+      toast.error('Title and Instructions are required to generate a rubric.');
+      return;
+    }
+    setGeneratingRubric(true);
+    try {
+      const res = await apiClient.post('/evaluations/generate-rubric', {
+        title,
+        instructions,
+        evaluatorType: language === 'dom' ? 'VISUAL' : language === 'python' ? 'PYTHON' : 'JS'
+      });
+      if (res.data.success && res.data.rubric) {
+        setRubric(res.data.rubric);
+        toast.success('Rubric generated successfully!');
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to generate rubric');
+    } finally {
+      setGeneratingRubric(false);
+    }
+  };
+
   const handleSave = () => {
     if (!title.trim()) {
       toast.error('Exercise title is required');
@@ -358,8 +395,17 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
         toast.error(`Task "${task.title}": all files must have a name`);
         return;
       }
-      if ((task.test_cases ?? []).some(tc => !tc.description.trim() || !tc.test_code.trim())) {
+      if (language !== 'dom' && (task.test_cases ?? []).some(tc => !tc.description.trim() || !tc.test_code.trim())) {
         toast.error(`Task "${task.title}": all test cases must have a description and test code`);
+        return;
+      }
+    }
+
+    if (language === 'dom' && rubric.trim()) {
+      try {
+        JSON.parse(rubric);
+      } catch (e) {
+        toast.error('Rubric must be valid JSON');
         return;
       }
     }
@@ -372,8 +418,12 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       max_score: maxScore,
       language,
       initial_files: firstTask.initial_files,
-      test_cases: firstTask.test_cases ?? [],
-      tasks,
+      test_cases: language !== 'dom' ? (firstTask.test_cases ?? []) : [],
+      tasks: tasks.map(t => ({
+        ...t,
+        test_cases: language !== 'dom' ? (t.test_cases ?? []) : []
+      })),
+      rubric: language === 'dom' && rubric.trim() ? JSON.parse(rubric) : null,
     });
 
     // Reset
@@ -382,6 +432,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     setMaxScore(100);
     setLanguage('dom');
     setTasks([makeTask('dom')]);
+    setRubric('');
   };
 
   if (!isOpen) return null;
@@ -480,16 +531,52 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                   canRemove={tasks.length > 1}
                   onChange={updateTask}
                   onRemove={() => removeTask(task.id)}
+                  language={language}
                 />
               ))}
             </div>
 
-            <p className='mt-2 text-xs text-slate-400'>
-              Use <code className='bg-slate-100 px-1 rounded'>__test(description, fn)</code> and{' '}
-              <code className='bg-slate-100 px-1 rounded'>__expect(value).toBe(expected)</code> in test cases.
-              Score is aggregated across all tasks with test cases.
-            </p>
+            {language !== 'dom' && (
+              <p className='mt-2 text-xs text-slate-400'>
+                Use <code className='bg-slate-100 px-1 rounded'>__test(description, fn)</code> and{' '}
+                <code className='bg-slate-100 px-1 rounded'>__expect(value).toBe(expected)</code> in test cases.
+                Score is aggregated across all tasks with test cases.
+              </p>
+            )}
           </div>
+
+          {/* Rubric */}
+          {language === 'dom' && (
+            <div>
+              <div className='flex items-center justify-between mb-2'>
+                <label className='text-sm font-medium text-slate-700'>
+                  Evaluation Rubric
+                  <span className='ml-2 text-xs text-slate-400 font-normal'>JSON array of criteria (optional)</span>
+                </label>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={handleGenerateRubric}
+                  disabled={generatingRubric}
+                  className='h-7 text-xs bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-700'
+                >
+                  {generatingRubric ? (
+                    <Loader2 className='mr-1.5 h-3.5 w-3.5 animate-spin' />
+                  ) : (
+                    <Wand2 className='mr-1.5 h-3.5 w-3.5' />
+                  )}
+                  ✨ Auto-Generate Rubric
+                </Button>
+              </div>
+              <textarea
+                value={rubric}
+                onChange={(e) => setRubric(e.target.value)}
+                placeholder='[\n  { "name": "Code Correctness", "weight": 60, "description": "Meets task requirements" },\n  { "name": "Code Structure", "weight": 40, "description": "Proper functions and variables" }\n]'
+                className='w-full min-h-[140px] rounded-lg border border-slate-300 p-3 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+              />
+            </div>
+          )}
         </div>
 
         <div className='mt-6 flex gap-3'>

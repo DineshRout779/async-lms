@@ -79,6 +79,7 @@ export interface Exercise {
   initial_files?: { name: string; content: string }[];
   test_cases?: TestCase[];
   tasks?: ExerciseTask[];
+  rubric?: any;
 }
 
 export interface CollegeAssignment {
@@ -266,6 +267,7 @@ export interface ExerciseModalProps {
     initial_files: { name: string; content: string }[];
     test_cases: TestCase[];
     tasks: ExerciseTask[];
+    rubric?: any;
   }) => void;
   editData?: {
     title: string;
@@ -275,6 +277,7 @@ export interface ExerciseModalProps {
     initial_files?: { name: string; content: string }[];
     test_cases?: TestCase[];
     tasks?: ExerciseTask[];
+    rubric?: any;
   };
   subtopicTitle: string;
   loading?: boolean;

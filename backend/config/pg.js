@@ -49,6 +49,9 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE assignments ADD COLUMN IF NOT EXISTS rubric JSONB`,
     );
+    await client.query(
+      `ALTER TABLE exercises ADD COLUMN IF NOT EXISTS rubric JSONB`,
+    );
     await client.query(`
       CREATE TABLE IF NOT EXISTS college_assignments (
         id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -82,6 +85,11 @@ pool.on('error', (err, client) => {
     await client.query(`
       ALTER TABLE student_profiles 
       ALTER COLUMN expected_graduation_year TYPE TEXT USING expected_graduation_year::TEXT
+    `);
+
+    await client.query(`
+      ALTER TABLE exercise_submissions ADD COLUMN IF NOT EXISTS feedback TEXT,
+      ADD COLUMN IF NOT EXISTS test_results JSONB
     `);
 
     await client.query(`

@@ -314,11 +314,10 @@ const Lesson = () => {
           ? `Exercise submitted! Score: ${score} 🎉`
           : 'Exercise submitted! 🎉',
       );
-      if (result.isPassed && !lessonCompleted) {
-        setIsNavigating(true);
-      }
+      return result;
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit exercise'));
+      throw error;
     }
   };
 
