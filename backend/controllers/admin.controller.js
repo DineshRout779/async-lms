@@ -1528,7 +1528,7 @@ exports.getExercise = async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      'SELECT id, title, instructions, max_score, subtopic_id, language, initial_files, test_cases, tasks FROM exercises WHERE id = $1 AND is_deleted = false',
+      'SELECT id, title, instructions, max_score, subtopic_id, language, initial_files, test_cases, tasks, rubric FROM exercises WHERE id = $1 AND is_deleted = false',
       [id],
     );
     if (!result.rowCount) return res.status(404).json({ message: 'Exercise not found' });
@@ -1540,7 +1540,7 @@ exports.getExercise = async (req, res) => {
 
 exports.createExercise = async (req, res) => {
   try {
-    const { subtopic_id, title, instructions, max_score, language, initial_files, test_cases, tasks } = req.body;
+    const { subtopic_id, title, instructions, max_score, language, initial_files, test_cases, tasks, rubric } = req.body;
 
     if (!subtopic_id || !title || !max_score) {
       return res.status(400).json({
@@ -1550,8 +1550,8 @@ exports.createExercise = async (req, res) => {
     }
 
     const query = `
-      INSERT INTO exercises (subtopic_id, title, instructions, max_score, language, initial_files, test_cases, tasks)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO exercises (subtopic_id, title, instructions, max_score, language, initial_files, test_cases, tasks, rubric)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *;
     `;
 
@@ -1564,6 +1564,7 @@ exports.createExercise = async (req, res) => {
       JSON.stringify(initial_files || []),
       JSON.stringify(test_cases || []),
       JSON.stringify(tasks || []),
+      rubric ? JSON.stringify(rubric) : null
     ]);
 
     logAction({ req, action: 'CREATE', entityType: 'exercise', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
@@ -1618,6 +1619,10 @@ exports.updateExercise = async (req, res) => {
     if (tasks !== undefined) {
       updates.push(`tasks = $${paramCount++}`);
       values.push(JSON.stringify(tasks));
+    }
+    if (rubric !== undefined) {
+      updates.push(`rubric = $${paramCount++}`);
+      values.push(rubric ? JSON.stringify(rubric) : null);
     }
 
     if (updates.length === 0) {

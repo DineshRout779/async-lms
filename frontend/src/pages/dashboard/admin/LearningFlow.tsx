@@ -591,8 +591,9 @@ const LearningFlow: React.FC = () => {
     initial_files: { name: string; content: string }[];
     test_cases: import('@/utils/types').TestCase[];
     tasks: import('@/utils/types').ExerciseTask[];
+    rubric?: any;
   }) => {
-    if (!selectedSubtopicForExercise) return;
+    if (!selectedSubtopicForExercise) return; 
 
     try {
       const response = await apiClient.post('/admin/exercises', {
@@ -603,6 +604,7 @@ const LearningFlow: React.FC = () => {
         language: data.language,
         initial_files: data.initial_files,
         tasks: data.tasks,
+        rubric: data.rubric, 
       });
 
       if (response.data.success) {
@@ -687,6 +689,7 @@ const LearningFlow: React.FC = () => {
     initial_files: { name: string; content: string }[];
     test_cases: import('@/utils/types').TestCase[];
     tasks: import('@/utils/types').ExerciseTask[];
+    rubric?: any;
   }) => {
     if (!editingExercise) return;
 
@@ -698,6 +701,7 @@ const LearningFlow: React.FC = () => {
         language: data.language,
         initial_files: data.initial_files,
         tasks: data.tasks,
+        rubric: data.rubric,
       });
       toast.success('Exercise updated');
       refreshStructure();
@@ -2078,6 +2082,7 @@ const LearningFlow: React.FC = () => {
                 initial_files: editingExercise.initial_files || [],
                 test_cases: editingExercise.test_cases || [],
                 tasks: editingExercise.tasks || [],
+                rubric: editingExercise.rubric,
               }
             : undefined
         }

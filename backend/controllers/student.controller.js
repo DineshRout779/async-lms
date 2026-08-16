@@ -1,4 +1,5 @@
 const serverError = require('../utils/serverError');
+const axios = require('axios');
 const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
@@ -878,9 +879,10 @@ exports.submitExercise = async (req, res) => {
   try {
     const userId = req.user.id;
     const { exerciseId } = req.params;
+    const { files } = req.body;
 
     const exerciseQuery = await pool.query(
-      'SELECT max_score, language, test_cases, tasks, subtopic_id FROM exercises WHERE id = $1',
+      'SELECT max_score, language, test_cases, tasks, subtopic_id, rubric FROM exercises WHERE id = $1',
       [exerciseId],
     );
 
@@ -895,8 +897,9 @@ exports.submitExercise = async (req, res) => {
     let testResults = null;
 
     const hasTasks = Array.isArray(exercise.tasks) && exercise.tasks.length > 0;
+    const hasTestCases = hasTasks ? exercise.tasks.some(t => t.test_cases && t.test_cases.length > 0) : (exercise.test_cases && exercise.test_cases.length > 0);
 
-    if (hasTasks) {
+    if (hasTasks && hasTestCases) {
       // Multi-task exercise: run tests for each task and aggregate
       let totalPassed = 0;
       let totalTests = 0;
@@ -910,7 +913,29 @@ exports.submitExercise = async (req, res) => {
           String(userId),
           `exercise-${exerciseId}-task-${task.id}`,
         );
-        if (!fs.existsSync(taskWorkspaceDir)) continue;
+        if (!fs.existsSync(taskWorkspaceDir)) {
+          if (files && Array.isArray(files)) {
+            fs.mkdirSync(taskWorkspaceDir, { recursive: true });
+          } else {
+            continue;
+          }
+        }
+        
+        // Write files to workspace if provided
+        if (files && Array.isArray(files)) {
+          for (const file of files) {
+            if (file.path && typeof file.content === 'string') {
+              const filePath = path.join(taskWorkspaceDir, file.path);
+              const relative = path.relative(taskWorkspaceDir, filePath);
+              const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+              if (isSafe) {
+                fs.mkdirSync(path.dirname(filePath), { recursive: true });
+                fs.writeFileSync(filePath, file.content);
+              }
+            }
+          }
+        }
+        
         anyWorkspaceFound = true;
         try {
           const result = await runTestCases(
@@ -959,12 +984,31 @@ exports.submitExercise = async (req, res) => {
         `exercise-${exerciseId}`,
       );
       if (!fs.existsSync(workspaceDir)) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: 'Workspace not initialised. Open the exercise first.',
-          });
+        if (files && Array.isArray(files)) {
+          fs.mkdirSync(workspaceDir, { recursive: true });
+        } else {
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message: 'Workspace not initialised. Open the exercise first.',
+            });
+        }
+      }
+      
+      // Write files to workspace if provided
+      if (files && Array.isArray(files)) {
+        for (const file of files) {
+          if (file.path && typeof file.content === 'string') {
+            const filePath = path.join(workspaceDir, file.path);
+            const relative = path.relative(workspaceDir, filePath);
+            const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+            if (isSafe) {
+              fs.mkdirSync(path.dirname(filePath), { recursive: true });
+              fs.writeFileSync(filePath, file.content);
+            }
+          }
+        }
       }
       try {
         testResults = await runTestCases(
@@ -981,6 +1025,206 @@ exports.submitExercise = async (req, res) => {
       } catch (err) {
         return serverError(res, err);
       }
+    } else if (exercise.rubric || ['dom', 'react', 'backend'].includes(exercise.language)) {
+      if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ success: false, message: 'Files are required for this environment.' });
+      }
+
+      const evalTypeMap = { 'dom': 'visual', 'react': 'react', 'backend': 'backend', 'javascript': 'javascript', 'python': 'python' };
+      const evaluatorType = evalTypeMap[exercise.language] || 'backend';
+
+      const payload = {
+        type: evaluatorType,
+        ideFiles: files,
+      };
+
+      if (evaluatorType === 'visual') {
+        payload.expectedUrl = "https://example.com"; // placeholder since it's ide files
+        
+        let rubricStr = "";
+        if (Array.isArray(exercise.rubric)) {
+          rubricStr = exercise.rubric.map(item => `- ${item.name}: ${item.description} (Weight: ${item.weight}%)`).join('\n');
+        } else if (typeof exercise.rubric === 'string') {
+          rubricStr = exercise.rubric;
+        } else if (exercise.rubric?.criteria) {
+          rubricStr = exercise.rubric.criteria.map(item => `- ${item.name}: ${item.description} (Weight: ${item.weight}%)`).join('\n');
+        } else {
+          rubricStr = "Evaluate the HTML/CSS code";
+        }
+        
+        payload.rubricText = rubricStr;
+        payload.submissions = [{ 
+           studentId: userId,
+           studentName: req.user.full_name || 'Student',
+           repoUrl: "https://github.com/example/placeholder", 
+           ideFiles: files 
+        }];
+      } else {
+        payload.rubric = exercise.rubric || { criteria: [{ name: "Completeness", weight: 100 }] };
+      }
+
+      const CENTRAL_URL = process.env.CENTRAL_EVALUATOR_URL || 'http://localhost:3004';
+      
+      let evalResponse = null;
+      let postRetries = 3;
+      for (let attempt = 1; attempt <= postRetries; attempt++) {
+        try {
+          evalResponse = await axios.post(`${CENTRAL_URL}/evaluate`, payload, {
+             headers: { 'x-api-key': process.env.CENTRAL_EVALUATOR_API_KEY || 'test-key-123' }
+          });
+          break;
+        } catch (error) {
+          if (attempt === postRetries) throw error;
+          await new Promise(res => setTimeout(res, 1500));
+        }
+      }
+      
+      const jobId = evalResponse.data.jobId || (evalResponse.data.jobs && evalResponse.data.jobs[0].jobId);
+      if (!jobId) throw new Error("Failed to get job ID from central evaluator");
+      
+      let evalResult = null;
+      for (let i = 0; i < 30; i++) { // wait up to 60 seconds
+        await new Promise(res => setTimeout(res, 2000));
+        try {
+          const statusResponse = await axios.get(`${CENTRAL_URL}/jobs/${evaluatorType}/${jobId}`);
+          if (statusResponse.data.state === 'completed') {
+             evalResult = statusResponse.data.result || statusResponse.data.returnvalue;
+             break;
+          } else if (statusResponse.data.state === 'failed') {
+             throw new Error("Evaluation failed: " + statusResponse.data.failedReason);
+          }
+        } catch(e) {
+          const status = e.response ? e.response.status : null;
+          // Continue polling on 404 (not yet ready), or transient gateway/proxy errors (502/503/504)
+          if (status === 404 || status === 502 || status === 503 || status === 504 || !e.response) {
+            continue;
+          }
+          throw e;
+        }
+      }
+
+      if (!evalResult) throw new Error("Evaluation timed out");
+      const resultObj = evalResult.result ? evalResult.result[0] : evalResult.results;
+      score = evalResult.success ? (resultObj?.score || 0) : 0;
+
+      let rawFeedback = resultObj?.feedback || "";
+      let feedbackText = typeof rawFeedback === 'object' && rawFeedback !== null
+        ? (rawFeedback.feedback || rawFeedback.reason || JSON.stringify(rawFeedback))
+        : rawFeedback;
+
+      let rubricBreakdown = [];
+      if (resultObj) {
+        // Get the list of allowed rubric criteria names and descriptions from the exercise
+        const allowedNames = [];
+        const allowedDescriptions = [];
+        const rubricItems = Array.isArray(exercise.rubric) 
+          ? exercise.rubric 
+          : exercise.rubric?.criteria 
+            ? exercise.rubric.criteria 
+            : [];
+
+        rubricItems.forEach(item => {
+          if (item.name) allowedNames.push(item.name.toLowerCase().trim());
+          if (item.description) allowedDescriptions.push(item.description.toLowerCase().trim());
+        });
+
+        if (Array.isArray(resultObj.rubric_breakdown)) {
+          rubricBreakdown = resultObj.rubric_breakdown;
+        } else {
+          // Merge visual, dom, behavior, and code breakdowns
+          const breakdowns = [
+            ...(resultObj.domBreakdown || []),
+            ...(resultObj.behaviorBreakdown || []),
+            ...(resultObj.codeBreakdown || []),
+            ...(resultObj.visualBreakdown || [])
+          ];
+          
+          rubricBreakdown = breakdowns
+            .map(item => {
+              const itemName = item.item || item.name || "";
+              // Find matching criteria in the database rubric by either name or description
+              const match = rubricItems.find(r => 
+                (r.name && r.name.toLowerCase().trim() === itemName.toLowerCase().trim()) ||
+                (r.description && r.description.toLowerCase().trim() === itemName.toLowerCase().trim())
+              );
+
+              // Extract max weight
+              const maxVal = item.max !== undefined ? item.max : (item.max_score || 100);
+              let awardedVal = item.awarded !== undefined ? item.awarded : (item.score || 0);
+
+              // Auto-generate details for DOM/Code checks
+              let itemFeedback = item.reason || item.feedback || "";
+              
+              if (Array.isArray(item.checks)) {
+                // Special check correction: if criterion is to "avoid divs", and the check is '<div' passed=false,
+                // that means they successfully avoided divs! Give them full credit.
+                const isAvoidDiv = match && 
+                  ((match.name || "").toLowerCase().includes("avoid") || (match.description || "").toLowerCase().includes("avoid")) &&
+                  ((match.name || "").toLowerCase().includes("div") || (match.description || "").toLowerCase().includes("div"));
+                
+                if (isAvoidDiv) {
+                  const divCheck = item.checks.find(c => (c.selector || c.pattern) === '<div');
+                  if (divCheck && divCheck.passed === false) {
+                    awardedVal = maxVal;
+                    itemFeedback = "Success: Correctly avoided using generic <div> containers.";
+                    divCheck.passed = true; // Mark as passed
+                  }
+                }
+
+                if (!itemFeedback) {
+                  const failedChecks = item.checks.filter(c => !c.passed);
+                  if (failedChecks.length > 0) {
+                    itemFeedback = `Missing or incorrect element(s): ` + 
+                      failedChecks.map(c => `\`${c.selector || c.pattern}\u200b\``).join(', ');
+                  }
+                }
+              }
+
+              return {
+                name: match ? match.name : itemName,
+                score: awardedVal,
+                max_score: maxVal,
+                feedback: itemFeedback
+              };
+            })
+            .filter(item => {
+              if (allowedNames.length === 0) return true;
+              const nameLower = (item.name || "").toLowerCase().trim();
+              return allowedNames.includes(nameLower);
+            });
+        }
+      }
+
+      // Recalculate score from the mapped rubric breakdown (since we corrected the 'avoid div' check)
+      if (rubricBreakdown.length > 0) {
+        const totalAwarded = rubricBreakdown.reduce((sum, item) => sum + item.score, 0);
+        const totalMax = rubricBreakdown.reduce((sum, item) => sum + item.max_score, 0);
+        score = totalMax > 0 ? (totalAwarded / totalMax) * 100 : 0;
+      }
+
+      // If the exercise does not contain visual layout criteria but the OpenAI vision output returned
+      // a general layout/spacing mismatch feedback, dynamically construct student feedback from the rubric results
+      const hasVisualCriteria = resultObj?.visualBreakdown && resultObj.visualBreakdown.some(item => item.max > 0);
+
+      if (!hasVisualCriteria && rubricBreakdown.length > 0) {
+        const failedItems = rubricBreakdown.filter(item => item.score < item.max_score);
+        if (failedItems.length > 0) {
+          feedbackText = `Your code is close, but has some issues: \n` + 
+            failedItems.map(item => `- **${item.name}**: ${item.feedback || "Check that you implemented all elements correctly."}`).join('\n') + 
+            `\n\nPlease review the instructions and update your code accordingly.`;
+        } else {
+          feedbackText = "Excellent job! All criteria for this semantic layout exercise have been met perfectly.";
+        }
+      }
+
+      testResults = {
+        feedback: feedbackText,
+        rubric_breakdown: rubricBreakdown
+      };
+      
+      // Rescale the score relative to max_score
+      score = Math.round((score / 100) * exercise.max_score);
+
     } else {
       // No test cases — accept manual score from body (legacy behaviour)
       score = req.body.score ?? exercise.max_score;
@@ -989,10 +1233,10 @@ exports.submitExercise = async (req, res) => {
     const isPassed = score >= exercise.max_score * 0.7;
 
     const submissionResult = await pool.query(
-      `INSERT INTO exercise_submissions (exercise_id, user_id, score, is_passed)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO exercise_submissions (exercise_id, user_id, score, is_passed, feedback, test_results)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *;`,
-      [exerciseId, userId, score, isPassed],
+      [exerciseId, userId, score, isPassed, testResults?.feedback || null, testResults ? JSON.stringify(testResults) : null],
     );
 
     // Delta System: Find previous highest score for this exercise
@@ -1278,7 +1522,30 @@ exports.initExerciseWorkspace = async (req, res) => {
         content: fs.readFileSync(path.join(workspaceDir, name), 'utf-8'),
       }));
 
-    res.json({ success: true, data: { language, files, projectId } });
+    // Fetch the latest submission for this student and exercise
+    const latestSubmission = await pool.query(
+      `SELECT score, is_passed, feedback, test_results 
+       FROM exercise_submissions 
+       WHERE user_id = $1 AND exercise_id = $2 
+       ORDER BY submitted_at DESC LIMIT 1`,
+      [userId, exerciseId]
+    );
+
+    const submission = latestSubmission.rows[0] || null;
+
+    res.json({ 
+      success: true, 
+      data: { 
+        language, 
+        files, 
+        projectId,
+        submission: submission ? {
+          score: submission.score,
+          isPassed: submission.is_passed,
+          testResults: submission.test_results || (submission.feedback ? { feedback: submission.feedback } : null)
+        } : null
+      } 
+    });
   } catch (error) {
     console.error('Error initialising exercise workspace:', error);
     serverError(res, error);
@@ -1286,49 +1553,52 @@ exports.initExerciseWorkspace = async (req, res) => {
 };
 
 /**
- * Run the student's exercise code and return stdout + stderr.
- * POST /api/students/exercise/:exerciseId/run
+ * Save exercise workspace.
+ * Writes student's modified code files to their local workspace.
+ * POST /api/students/exercise/:exerciseId/workspace/save
  */
-exports.runExercise = async (req, res) => {
+exports.saveExerciseWorkspace = async (req, res) => {
   try {
     const userId = req.user.id;
     const { exerciseId } = req.params;
-    const { taskId } = req.body;
+    const { files, taskId } = req.body;
 
-    const exerciseResult = await pool.query(
-      'SELECT language FROM exercises WHERE id = $1',
-      [exerciseId],
-    );
-
-    if (exerciseResult.rows.length === 0) {
+    if (!files || !Array.isArray(files)) {
       return res
-        .status(404)
-        .json({ success: false, message: 'Exercise not found' });
+        .status(400)
+        .json({ success: false, message: 'Files array is required' });
     }
 
-    const { language } = exerciseResult.rows[0];
-    const runner = EXERCISE_RUNNER[language] ?? EXERCISE_RUNNER.javascript;
     const projectId = taskId
       ? `exercise-${exerciseId}-task-${taskId}`
       : `exercise-${exerciseId}`;
     const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
 
-    if (!fs.existsSync(workspaceDir)) {
-      return res
-        .status(400)
-        .json({ success: false, message: 'Workspace not initialised' });
+    fs.mkdirSync(workspaceDir, { recursive: true });
+
+    for (const file of files) {
+      if (file.name && typeof file.content === 'string') {
+        // Skip saving instruction file to disk since it's read-only
+        if (file.name === 'Instructions.md') continue;
+        
+        const filePath = path.join(workspaceDir, file.name);
+        const relative = path.relative(workspaceDir, filePath);
+        const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+        if (isSafe) {
+          fs.mkdirSync(path.dirname(filePath), { recursive: true });
+          fs.writeFileSync(filePath, file.content, 'utf-8');
+        }
+      }
     }
 
-    const { output, exitCode } = await runnerService.execute(
-      workspaceDir,
-      language,
-    );
-    res.json({ success: true, data: { output, exitCode } });
+    res.json({ success: true, message: 'Workspace saved successfully' });
   } catch (error) {
-    console.error('Error running exercise:', error);
+    console.error('Error saving exercise workspace:', error);
     serverError(res, error);
   }
 };
+
+/**
 
 /**
  * Run test cases against the student's workspace (without submitting).
@@ -1388,6 +1658,50 @@ exports.runExerciseTests = async (req, res) => {
     res.json({ success: true, data: testResult });
   } catch (error) {
     console.error('Error running exercise tests:', error);
+    serverError(res, error);
+  }
+};
+
+/**
+ * Run exercise code.
+ * POST /api/students/exercise/:exerciseId/run
+ */
+exports.runExercise = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { exerciseId } = req.params;
+    const { taskId, activeFile } = req.body;
+
+    const result = await pool.query(
+      'SELECT language FROM exercises WHERE id = $1',
+      [exerciseId],
+    );
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Exercise not found' });
+    }
+
+    const { language } = result.rows[0];
+
+    const projectId = taskId
+      ? `exercise-${exerciseId}-task-${taskId}`
+      : `exercise-${exerciseId}`;
+    const workspaceDir = path.join(WORKSPACE_ROOT, String(userId), projectId);
+    if (!fs.existsSync(workspaceDir)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Workspace not initialised' });
+    }
+
+    const runResult = await runnerService.execute(
+      workspaceDir,
+      language,
+      activeFile,
+    );
+    res.json({ success: true, data: runResult });
+  } catch (error) {
+    console.error('Error running exercise:', error);
     serverError(res, error);
   }
 };

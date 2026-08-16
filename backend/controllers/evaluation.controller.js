@@ -811,34 +811,46 @@ CRITICAL RULES:
 2. Each object must have exactly three keys: "name" (string), "description" (string), and "weight" (number).
 3. The sum of all "weight" values MUST equal exactly 100.
 4. Each "name" must be UNIQUE. Do not use the same name twice.
-5. Do not include any explanation.`;
+5. Do not include any explanation.
+6. ASSIGNMENT COMPLEXITY ADAPTATION:
+Identify the complexity of the assignment based on the title and instructions:
+- **Simple / Introductory Class Exercise** (e.g., introductory topics, basic tags, simple scripts, small practice tasks):
+  - Generate 2-3 simple, highly focused criteria.
+  - ONLY assess features explicitly mentioned in the instructions.
+  - DO NOT include advanced/generic engineering constraints like ARIA/accessibility, responsive design, complex optimization, database index scaling, security/encryption, or robust error handling unless explicitly requested in the instructions. Keep criteria simple and direct.
+- **Standard Project / Mid-level Assignment** (e.g., building a complete component, a landing page, a standard CRUD feature):
+  - Generate 3-4 criteria.
+  - May include standard development practices (e.g., basic code structure, clean formatting, simple responsive layout if HTML/CSS).
+- **Advanced / Complex Assignment** (e.g., production-grade features, complex workflows, full applications):
+  - Generate 4-6 strict criteria.
+  - Include rigorous requirements like edge-case handling, security/auth, ARIA/accessibility, performance, and advanced architecture patterns.`;
 
     if (evaluatorType === 'react') {
-      systemPrompt += `\n5. For React assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
+      systemPrompt += `\n7. For React assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
 - "Components Render Correctly" (Use for UI rendering / layout)
 - "State Updates" (Use for React state management, hooks)
 - "Props Handling" (Use for props passing, data flow)
 - "Routing Works" (Use for React Router or navigation)
 - "API Integration" (Use for fetch/axios/data fetching)
 - "Code Structure" (Use for clean code, standard practices)
-You may choose 3-5 from this list based on the instructions, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
+You may choose 2-5 from this list based on the instructions and the complexity rules above, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
     } else if (evaluatorType === 'backend' || evaluatorType === 'AI') {
-      systemPrompt += `\n5. For Backend assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
+      systemPrompt += `\n7. For Backend assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
 - "API Endpoints" (Use for routing, endpoints, HTTP methods)
 - "Database Operations" (Use for Models, Schemas, Queries, CRUD)
 - "Middleware & Auth" (Use for error handling, JWT, authentication)
 - "Controller Logic" (Use for business logic, data formatting)
 - "Code Structure" (Use for clean code, separation of concerns, MVC)
-You may choose 3-5 from this list based on the instructions, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
+You may choose 2-5 from this list based on the instructions and the complexity rules above, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
     } else if (evaluatorType?.toLowerCase() === 'fullstack') {
-      systemPrompt += `\n5. For Fullstack assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
+      systemPrompt += `\n7. For Fullstack assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
 - "Frontend UI & Components" (Use for React rendering, responsive design, structure)
 - "Frontend State & Data Fetching" (Use for React state, hooks, fetch/axios)
 - "Backend API & Routing" (Use for Express routes, HTTP methods, CORS)
 - "Backend Logic & Database" (Use for business logic, validation, database models)
 - "Fullstack Integration" (Use for end-to-end data flow between client and server)
 - "Code Quality & Structure" (Use for clean code, file structure, package.json across both environments)
-You must select 4-6 criteria from this list that cover both Frontend and Backend, based on the instructions. YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
+You must select 3-6 criteria from this list that cover both Frontend and Backend, based on the instructions and complexity rules above. YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
     }
 
     systemPrompt += `
