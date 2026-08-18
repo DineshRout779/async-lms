@@ -176,7 +176,79 @@ exports.getAdminAnalytics = async (req, res) => {
   }
 };
 
-// Get all students with their college details
+// ── Student Registrations Chart (dynamic date range) ───────────────────────
+// GET /admin/analytics/registrations?days=30
+// GET /admin/analytics/registrations?from=2026-08-01&to=2026-08-18
+
+exports.getStudentRegistrations = async (req, res) => {
+  try {
+    let { days, from, to } = req.query;
+
+    let startDate, endDate, groupBy;
+
+    if (from && to) {
+      // Custom date range
+      const startStr = /^\d{4}-\d{2}-\d{2}$/.test(from) ? `${from}T00:00:00.000Z` : from;
+      const endStr = /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
+
+      startDate = new Date(startStr);
+      endDate = new Date(endStr);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate > endDate) {
+        return res.status(400).json({ success: false, message: 'Invalid date range. "from" must be before "to".' });
+      }
+      // Clamp to max 365 days
+      const diffDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+      if (diffDays > 365) {
+        return res.status(400).json({ success: false, message: 'Date range cannot exceed 365 days.' });
+      }
+      groupBy = diffDays > 31 ? 'month' : 'day';
+    } else {
+      // Preset days
+      const numDays = Math.min(parseInt(days) || 7, 365);
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - numDays);
+      groupBy = numDays > 31 ? 'month' : 'day';
+    }
+
+    const labelFormat = groupBy === 'month' ? 'Mon YYYY' : 'Mon DD';
+    const truncUnit = groupBy === 'month' ? 'month' : 'day';
+
+    const result = await pool.query(
+      `SELECT
+         TO_CHAR(DATE_TRUNC($1, u.created_at), $2) AS label,
+         COUNT(*) AS count
+       FROM users u
+       JOIN roles r ON r.id = u.role_id
+       WHERE r.role_key = 'STUDENT'
+         AND u.created_at >= $3
+         AND u.created_at <= $4
+       GROUP BY DATE_TRUNC($1, u.created_at)
+       ORDER BY DATE_TRUNC($1, u.created_at)`,
+      [truncUnit, labelFormat, startDate.toISOString(), endDate.toISOString()]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        registrations: result.rows.map((r) => ({
+          label: r.label,
+          count: parseInt(r.count),
+        })),
+        meta: {
+          from: startDate.toISOString().split('T')[0],
+          to: endDate.toISOString().split('T')[0],
+          groupBy,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching student registrations:', error);
+    res.status(500).json({ success: false, message: 'Error fetching student registrations' });
+  }
+};
+
+
 exports.getAllStudents = async (req, res) => {
   try {
     const query = `

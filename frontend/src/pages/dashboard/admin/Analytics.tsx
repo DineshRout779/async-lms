@@ -52,6 +52,153 @@ function StatCard({ icon: Icon, label, value, sub, iconBg, iconColor }: {
   );
 }
 
+// ─── Student Registrations Chart Component ─────────────────────────────────────
+
+function StudentRegistrationsChart() {
+  const [rangeType, setRangeType] = useState<string>('7');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+  const [registrations, setRegistrations] = useState<{ label: string; count: number }[]>([]);
+  const [meta, setMeta] = useState<{ from: string; to: string } | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchRegistrations = (params: any) => {
+    setLoading(true);
+    setError(null);
+    apiClient.get<{ success: boolean; data: { registrations: any[]; meta: any } }>('/admin/analytics/registrations', { params })
+      .then((res) => {
+        setRegistrations(res.data.data.registrations);
+        setMeta(res.data.data.meta);
+      })
+      .catch((err) => {
+        setError(err?.response?.data?.message || 'Failed to load registrations');
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (rangeType !== 'custom') {
+      fetchRegistrations({ days: rangeType });
+    } else if (fromDate && toDate) {
+      fetchRegistrations({ from: fromDate, to: toDate });
+    }
+  }, [rangeType, fromDate, toDate]);
+
+  // Set default dates when clicking custom
+  const handleCustomClick = () => {
+    setRangeType('custom');
+    if (!fromDate || !toDate) {
+      const today = new Date().toISOString().split('T')[0];
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+      setFromDate(thirtyAgoStr);
+      setToDate(today);
+    }
+  };
+
+  const maxDayCount = Math.max(...registrations.map((d) => d.count), 1);
+
+  const formatDateLabel = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  return (
+    <Card className='border-none shadow-sm flex flex-col justify-between min-h-[280px]'>
+      <CardHeader className='pb-2 pt-5 px-5'>
+        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
+          <CardTitle className='text-sm font-semibold text-slate-700 flex items-center gap-2'>
+            <TrendingUp className='w-4 h-4 text-violet-500' />
+            New Students {meta ? `— ${formatDateLabel(meta.from)} to ${formatDateLabel(meta.to)}` : ''}
+          </CardTitle>
+          
+          <div className='flex flex-wrap gap-1 bg-slate-100 p-0.5 rounded-lg text-xs w-fit'>
+            {[
+              { label: '7D', value: '7' },
+              { label: '15D', value: '15' },
+              { label: '1M', value: '30' },
+              { label: '3M', value: '90' },
+              { label: '1Y', value: '365' },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setRangeType(p.value)}
+                className={`px-2 py-1 rounded-md transition-all ${
+                  rangeType === p.value ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+            <button
+              onClick={handleCustomClick}
+              className={`px-2 py-1 rounded-md transition-all ${
+                rangeType === 'custom' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              📅 Custom
+            </button>
+          </div>
+        </div>
+        
+        {rangeType === 'custom' && (
+          <div className='flex items-center gap-2 mt-3 animate-in slide-in-from-top duration-200'>
+            <div className='flex flex-col gap-0.5'>
+              <span className='text-[10px] text-slate-400 font-semibold uppercase'>From</span>
+              <input
+                type='date'
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className='text-xs px-2 py-1 border rounded bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500'
+              />
+            </div>
+            <div className='flex flex-col gap-0.5'>
+              <span className='text-[10px] text-slate-400 font-semibold uppercase'>To</span>
+              <input
+                type='date'
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className='text-xs px-2 py-1 border rounded bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500'
+              />
+            </div>
+          </div>
+        )}
+      </CardHeader>
+      
+      <CardContent className='px-5 pb-5 flex-1 flex flex-col justify-end min-h-[140px]'>
+        {loading ? (
+          <div className='flex h-32 items-center justify-center'>
+            <Loader2 className='w-6 h-6 animate-spin text-violet-500' />
+          </div>
+        ) : error ? (
+          <p className='text-xs text-red-500 text-center py-8'>{error}</p>
+        ) : registrations.length === 0 ? (
+          <p className='text-xs text-slate-400 text-center py-8'>No registrations in this period.</p>
+        ) : (
+          <div className='flex items-end gap-2 h-32 pt-4 overflow-x-auto pb-1 scrollbar-thin'>
+            {registrations.map((d) => (
+              <div key={d.label} className='flex flex-col items-center gap-1 flex-1 min-w-[20px] max-w-[60px]'>
+                <span className='text-[9px] font-semibold text-slate-700'>{d.count}</span>
+                <div 
+                  className='w-full rounded-t bg-violet-400 hover:bg-violet-500 transition-all duration-300' 
+                  style={{ height: `${Math.max((d.count / maxDayCount) * 88, 4)}px` }}
+                  title={`${d.count} students registered on ${d.label}`}
+                />
+                <span className='text-[9px] text-slate-400 truncate w-full text-center' title={d.label}>
+                  {d.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── General Analytics tab ────────────────────────────────────────────────────
 
 function GeneralAnalytics() {
@@ -73,9 +220,8 @@ function GeneralAnalytics() {
     return <div className='flex h-64 items-center justify-center text-slate-400 text-sm'>Failed to load analytics.</div>;
   }
 
-  const { quizStats, exerciseStats, contentInventory, studentsPerCollege, dailyRegistrations, subjectActivity } = data;
+  const { quizStats, exerciseStats, contentInventory, studentsPerCollege, subjectActivity } = data;
   const maxCollegeCount = Math.max(...studentsPerCollege.map((c) => c.count), 1);
-  const maxDayCount = Math.max(...dailyRegistrations.map((d) => d.count), 1);
   const maxAttempts = Math.max(...subjectActivity.map((s) => s.attempts), 1);
 
   return (
@@ -99,22 +245,8 @@ function GeneralAnalytics() {
             ))}
           </CardContent>
         </Card>
-        <Card className='border-none shadow-sm'>
-          <CardHeader className='pb-2 pt-5 px-5'><CardTitle className='text-sm font-semibold text-slate-700 flex items-center gap-2'><TrendingUp className='w-4 h-4 text-violet-500' /> New Students — Last 7 Days</CardTitle></CardHeader>
-          <CardContent className='px-5 pb-5'>
-            {dailyRegistrations.length === 0 ? <p className='text-xs text-slate-400'>No new registrations in the last 7 days.</p> : (
-              <div className='flex items-end gap-2 h-32'>
-                {dailyRegistrations.map((d) => (
-                  <div key={d.label} className='flex flex-col items-center gap-1 flex-1 min-w-0'>
-                    <span className='text-[10px] font-semibold text-slate-700'>{d.count}</span>
-                    <div className='w-full rounded-t bg-violet-400 transition-all duration-500' style={{ height: `${Math.max((d.count / maxDayCount) * 88, 4)}px` }} />
-                    <span className='text-[9px] text-slate-400 truncate w-full text-center'>{d.label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        
+        <StudentRegistrationsChart />
       </div>
 
       <Card className='border-none shadow-sm'>
