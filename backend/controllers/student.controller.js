@@ -2263,7 +2263,7 @@ exports.enrollInSubject = async (req, res) => {
 
     // Verify subject exists and is published
     const subjectCheck = await client.query(
-      'SELECT id FROM subjects WHERE id = $1 AND is_published = true',
+      'SELECT id FROM subjects WHERE id = $1 AND is_published = true AND is_deleted = false',
       [subjectId],
     );
     if (subjectCheck.rows.length === 0) {
