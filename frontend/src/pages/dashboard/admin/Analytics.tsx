@@ -242,6 +242,197 @@ function StudentRegistrationsChart() {
   );
 }
 
+// ─── Active Students Chart Component ─────────────────────────────────────
+
+function ActiveStudentsChart() {
+  const [rangeType, setRangeType] = useState<string>('7');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+  const [activeUsers, setActiveUsers] = useState<{ label: string; count: number }[]>([]);
+  const [meta, setMeta] = useState<{ from: string; to: string } | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fillTimeline = (
+    data: { label: string; count: number }[],
+    metaInfo: { from: string; to: string; groupBy: 'day' | 'month' }
+  ) => {
+    if (!metaInfo) return data;
+    const start = new Date(metaInfo.from + 'T00:00:00Z');
+    const end = new Date(metaInfo.to + 'T23:59:59Z');
+    const result: { label: string; count: number }[] = [];
+    const map = new Map(data.map((r) => [r.label, r.count]));
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    let current = new Date(start);
+    let iterations = 0;
+
+    while (current <= end && iterations < 366) {
+      iterations++;
+      const monthLabel = months[current.getUTCMonth()];
+      let label = '';
+      if (metaInfo.groupBy === 'month') {
+        label = `${monthLabel} ${current.getUTCFullYear()}`;
+      } else {
+        const dayLabel = String(current.getUTCDate()).padStart(2, '0');
+        label = `${monthLabel} ${dayLabel}`;
+      }
+
+      result.push({
+        label,
+        count: map.get(label) || 0,
+      });
+
+      if (metaInfo.groupBy === 'month') {
+        current.setUTCMonth(current.getUTCMonth() + 1);
+      } else {
+        current.setUTCDate(current.getUTCDate() + 1);
+      }
+    }
+    return result;
+  };
+
+  const fetchActiveUsers = (params: any) => {
+    setLoading(true);
+    setError(null);
+    apiClient.get<{ success: boolean; data: { activeUsers: any[]; meta: any } }>('/admin/analytics/active-users', { params })
+      .then((res) => {
+        const raw = res.data.data.activeUsers;
+        const metaInfo = res.data.data.meta;
+        const filled = fillTimeline(raw, metaInfo);
+        setActiveUsers(filled);
+        setMeta(metaInfo);
+      })
+      .catch((err) => {
+        setError(err?.response?.data?.message || 'Failed to load active student data');
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (rangeType !== 'custom') {
+      fetchActiveUsers({ days: rangeType });
+    } else if (fromDate && toDate) {
+      fetchActiveUsers({ from: fromDate, to: toDate });
+    }
+  }, [rangeType, fromDate, toDate]);
+
+  // Set default dates when clicking custom
+  const handleCustomClick = () => {
+    setRangeType('custom');
+    if (!fromDate || !toDate) {
+      const today = new Date().toISOString().split('T')[0];
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+      setFromDate(thirtyAgoStr);
+      setToDate(today);
+    }
+  };
+
+  const maxActiveCount = Math.max(...activeUsers.map((d) => d.count), 1);
+
+  const formatDateLabel = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  return (
+    <Card className='border-none shadow-sm flex flex-col justify-between min-h-[280px]'>
+      <CardHeader className='pb-2 pt-5 px-5'>
+        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
+          <CardTitle className='text-sm font-semibold text-slate-700 flex items-center gap-2'>
+            <Users className='w-4 h-4 text-rose-500' />
+            Active Students {meta ? `— ${formatDateLabel(meta.from)} to ${formatDateLabel(meta.to)}` : ''}
+          </CardTitle>
+          
+          <div className='flex flex-wrap gap-1 bg-slate-100 p-0.5 rounded-lg text-xs w-fit'>
+            {[
+              { label: '7D', value: '7' },
+              { label: '15D', value: '15' },
+              { label: '1M', value: '30' },
+              { label: '3M', value: '90' },
+              { label: '6M', value: '180' },
+              { label: '1Y', value: '365' },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setRangeType(p.value)}
+                className={`px-2 py-1 rounded-md transition-all ${
+                  rangeType === p.value ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+            <button
+              onClick={handleCustomClick}
+              className={`px-2 py-1 rounded-md transition-all ${
+                rangeType === 'custom' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              📅 Custom
+            </button>
+          </div>
+        </div>
+        
+        {rangeType === 'custom' && (
+          <div className='flex items-center gap-2 mt-3 animate-in slide-in-from-top duration-200'>
+            <div className='flex flex-col gap-0.5'>
+              <span className='text-[10px] text-slate-400 font-semibold uppercase'>From</span>
+              <input
+                type='date'
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className='text-xs px-2 py-1 border rounded bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500'
+              />
+            </div>
+            <div className='flex flex-col gap-0.5'>
+              <span className='text-[10px] text-slate-400 font-semibold uppercase'>To</span>
+              <input
+                type='date'
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className='text-xs px-2 py-1 border rounded bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500'
+              />
+            </div>
+          </div>
+        )}
+      </CardHeader>
+      
+      <CardContent className='px-5 pb-5 flex-1 flex flex-col justify-end min-h-[140px]'>
+        {loading ? (
+          <div className='flex h-32 items-center justify-center'>
+            <Loader2 className='w-6 h-6 animate-spin text-rose-500' />
+          </div>
+        ) : error ? (
+          <p className='text-xs text-red-500 text-center py-8'>{error}</p>
+        ) : activeUsers.length === 0 ? (
+          <p className='text-xs text-slate-400 text-center py-8'>No active student activity in this period.</p>
+        ) : (
+          <div className='flex items-end gap-2 h-32 pt-4 overflow-x-auto pb-1 scrollbar-thin'>
+            {activeUsers.map((d) => (
+              <div key={d.label} className='flex flex-col items-center gap-1 flex-1 min-w-[20px] max-w-[60px]'>
+                <span className='text-[9px] font-semibold text-slate-700'>{d.count}</span>
+                <div 
+                  className='w-full rounded-t bg-rose-400 hover:bg-rose-500 transition-all duration-300' 
+                  style={{ height: `${Math.max((d.count / maxActiveCount) * 88, 4)}px` }}
+                  title={`${d.count} active students on ${d.label}`}
+                />
+                <span className='text-[9px] text-slate-400 truncate w-full text-center' title={d.label}>
+                  {d.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── General Analytics tab ────────────────────────────────────────────────────
 
 function GeneralAnalytics() {
@@ -269,13 +460,6 @@ function GeneralAnalytics() {
 
   return (
     <div className='space-y-6'>
-      <div className='grid grid-cols-2 lg:grid-cols-4 gap-4'>
-        <StatCard icon={ClipboardList} label='Quiz Attempts' value={quizStats.totalAttempts.toLocaleString()} sub={`${quizStats.passRate}% pass rate · avg ${quizStats.avgScore}`} iconBg='bg-indigo-50' iconColor='text-indigo-600' />
-        <StatCard icon={Code2} label='Exercise Submissions' value={exerciseStats.totalSubmissions.toLocaleString()} sub={`${exerciseStats.passRate}% pass rate`} iconBg='bg-emerald-50' iconColor='text-emerald-600' />
-        <StatCard icon={BookOpen} label='Content Items' value={(contentInventory.lessons + contentInventory.quizzes + contentInventory.exercises).toLocaleString()} sub={`${contentInventory.lessons} lessons · ${contentInventory.quizzes} quizzes · ${contentInventory.exercises} exercises`} iconBg='bg-amber-50' iconColor='text-amber-600' />
-        <StatCard icon={TrendingUp} label='Course Structure' value={contentInventory.topics} sub={`${contentInventory.units} units · ${contentInventory.subtopics} subtopics`} iconBg='bg-violet-50' iconColor='text-violet-600' />
-      </div>
-
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <Card className='border-none shadow-sm'>
           <CardHeader className='pb-2 pt-5 px-5'><CardTitle className='text-sm font-semibold text-slate-700 flex items-center gap-2'><Users className='w-4 h-4 text-indigo-500' /> Students per College</CardTitle></CardHeader>
@@ -291,6 +475,8 @@ function GeneralAnalytics() {
         
         <StudentRegistrationsChart />
       </div>
+
+      <ActiveStudentsChart />
 
       <Card className='border-none shadow-sm'>
         <CardHeader className='pb-2 pt-5 px-5'><CardTitle className='text-sm font-semibold text-slate-700'>Subject Activity</CardTitle></CardHeader>
