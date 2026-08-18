@@ -38,12 +38,13 @@ const menuItems = [
     icon: BarChart2,
     path: '/dashboard/facilitator/analytics',
   },
-  {
-    name: 'Student Growth',
-    icon: TrendingUp,
-    path: '/dashboard/facilitator/student-growth',
-  },
-  { name: 'Reports', icon: FileText, path: '/dashboard/facilitator/reports' },
+  // TODO: Unhide when features are ready
+  // {
+  //   name: 'Student Growth',
+  //   icon: TrendingUp,
+  //   path: '/dashboard/facilitator/student-growth',
+  // },
+  // { name: 'Reports', icon: FileText, path: '/dashboard/facilitator/reports' },
   { name: 'Settings', icon: Settings, path: '/dashboard/facilitator/settings' },
 ];
 
