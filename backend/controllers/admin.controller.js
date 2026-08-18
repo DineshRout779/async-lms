@@ -204,7 +204,7 @@ exports.getStudentRegistrations = async (req, res) => {
       groupBy = diffDays > 31 ? 'month' : 'day';
     } else {
       // Preset days
-      const numDays = Math.min(parseInt(days) || 7, 365);
+      const numDays = Math.max(1, Math.min(parseInt(days) || 7, 365));
       endDate = new Date();
       startDate = new Date();
       startDate.setDate(startDate.getDate() - numDays);

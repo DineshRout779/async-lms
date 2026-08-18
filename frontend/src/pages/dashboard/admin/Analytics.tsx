@@ -63,13 +63,55 @@ function StudentRegistrationsChart() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const fillTimeline = (
+    data: { label: string; count: number }[],
+    metaInfo: { from: string; to: string; groupBy: 'day' | 'month' }
+  ) => {
+    if (!metaInfo) return data;
+    const start = new Date(metaInfo.from + 'T00:00:00Z');
+    const end = new Date(metaInfo.to + 'T23:59:59Z');
+    const result: { label: string; count: number }[] = [];
+    const map = new Map(data.map((r) => [r.label, r.count]));
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    let current = new Date(start);
+    let iterations = 0;
+
+    while (current <= end && iterations < 366) {
+      iterations++;
+      const monthLabel = months[current.getUTCMonth()];
+      let label = '';
+      if (metaInfo.groupBy === 'month') {
+        label = `${monthLabel} ${current.getUTCFullYear()}`;
+      } else {
+        const dayLabel = String(current.getUTCDate()).padStart(2, '0');
+        label = `${monthLabel} ${dayLabel}`;
+      }
+
+      result.push({
+        label,
+        count: map.get(label) || 0,
+      });
+
+      if (metaInfo.groupBy === 'month') {
+        current.setUTCMonth(current.getUTCMonth() + 1);
+      } else {
+        current.setUTCDate(current.getUTCDate() + 1);
+      }
+    }
+    return result;
+  };
+
   const fetchRegistrations = (params: any) => {
     setLoading(true);
     setError(null);
     apiClient.get<{ success: boolean; data: { registrations: any[]; meta: any } }>('/admin/analytics/registrations', { params })
       .then((res) => {
-        setRegistrations(res.data.data.registrations);
-        setMeta(res.data.data.meta);
+        const raw = res.data.data.registrations;
+        const metaInfo = res.data.data.meta;
+        const filled = fillTimeline(raw, metaInfo);
+        setRegistrations(filled);
+        setMeta(metaInfo);
       })
       .catch((err) => {
         setError(err?.response?.data?.message || 'Failed to load registrations');
@@ -102,7 +144,8 @@ function StudentRegistrationsChart() {
 
   const formatDateLabel = (dateStr?: string) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
+    const parts = dateStr.split('-');
+    const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
