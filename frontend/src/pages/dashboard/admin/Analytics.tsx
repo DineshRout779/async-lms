@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ClipboardList, Code2, BookOpen, TrendingUp, Users,
+  BookOpen, TrendingUp, Users,
   Loader2, CheckSquare, BarChart2, User,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,26 +31,6 @@ function Bar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, iconBg, iconColor }: {
-  icon: React.ElementType; label: string; value: string | number; sub: string; iconBg: string; iconColor: string;
-}) {
-  return (
-    <Card className='border-none shadow-sm'>
-      <CardContent className='p-5 flex flex-col justify-between h-28'>
-        <div className='flex justify-between items-start'>
-          <div>
-            <p className='text-sm font-medium text-slate-500'>{label}</p>
-            <h3 className='text-2xl font-bold text-slate-900 mt-1'>{value}</h3>
-          </div>
-          <div className={`${iconBg} p-2.5 rounded-xl`}>
-            <Icon className={`w-5 h-5 ${iconColor}`} />
-          </div>
-        </div>
-        <p className='text-xs text-slate-400 mt-1'>{sub}</p>
-      </CardContent>
-    </Card>
-  );
-}
 
 // ─── Student Registrations Chart Component ─────────────────────────────────────
 
@@ -454,7 +434,7 @@ function GeneralAnalytics() {
     return <div className='flex h-64 items-center justify-center text-slate-400 text-sm'>Failed to load analytics.</div>;
   }
 
-  const { quizStats, exerciseStats, contentInventory, studentsPerCollege, subjectActivity } = data;
+  const { studentsPerCollege, subjectActivity } = data;
   const maxCollegeCount = Math.max(...studentsPerCollege.map((c) => c.count), 1);
   const maxAttempts = Math.max(...subjectActivity.map((s) => s.attempts), 1);
 
