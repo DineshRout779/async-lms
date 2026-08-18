@@ -5,8 +5,6 @@ import {
   ClipboardList,
   CheckSquare,
   BarChart2,
-  TrendingUp,
-  FileText,
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
