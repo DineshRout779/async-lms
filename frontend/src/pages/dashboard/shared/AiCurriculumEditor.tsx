@@ -476,7 +476,7 @@ export default function AiCurriculumEditor() {
     try {
       await aiCurriculumApi.publish(id!);
       toast.success('Course published!');
-      navigate('/dashboard/admin/subjects');
+      navigate(`${base}/ai-curriculum`);
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })
         ?.response?.data?.message;
