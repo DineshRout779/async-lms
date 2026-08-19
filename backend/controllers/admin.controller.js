@@ -14,17 +14,17 @@ exports.getAdminStats = async (req, res) => {
   try {
     const queries = [
       pool.query(
-        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1`,
+        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1 AND u.deleted_at IS NULL`,
         ['STUDENT'],
       ),
       pool.query('SELECT COUNT(*) FROM colleges'),
       pool.query('SELECT COUNT(*) FROM subjects'),
       pool.query(
-        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1`,
+        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1 AND u.deleted_at IS NULL`,
         ['FACILITATOR'],
       ),
       pool.query(
-        'SELECT full_name, email, created_at FROM users ORDER BY created_at DESC LIMIT 5',
+        'SELECT full_name, email, created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 5',
       ),
     ];
 

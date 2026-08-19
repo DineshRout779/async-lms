@@ -15,7 +15,15 @@ const verifyToken = async (req, res, next) => {
 
     // 2. Verify the token
     const verified = jwt.verify(token, process.env.JWT_SECRET);
-    // 3. Attach the user payload to the request object
+
+    // 3. Quick DB check to revoke access immediately if the user is soft-deleted
+    const pool = require('../config/pg');
+    const dbCheck = await pool.query('SELECT id FROM users WHERE id = $1 AND deleted_at IS NOT NULL', [verified.id]);
+    if (dbCheck.rowCount > 0) {
+      return res.status(401).json({ message: 'Access Denied: Account is disabled or deleted' });
+    }
+
+    // 4. Attach the user payload to the request object
     req.user = verified;
 
     const { markUserActive } = require('../services/presenceService');

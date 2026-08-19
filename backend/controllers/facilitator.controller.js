@@ -35,11 +35,12 @@ exports.getFacilitatorStats = async (req, res) => {
          WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1) AND u.deleted_at IS NULL`,
         [collegeIds],
       ),
-      // Subjects assigned to these colleges (via students or facilitator_subjects - let's keep it simple for now)
+      // Subjects assigned to these colleges (via active students or facilitator_subjects)
       pool.query(
         `SELECT COUNT(DISTINCT subject_id) FROM public.user_subjects us
          JOIN public.student_profiles sp ON us.user_id = sp.user_id
-         WHERE sp.college_id = ANY($1)`,
+         JOIN public.users u ON u.id = sp.user_id
+         WHERE sp.college_id = ANY($1) AND u.deleted_at IS NULL`,
         [collegeIds],
       ),
       // Recent students joined in these colleges
