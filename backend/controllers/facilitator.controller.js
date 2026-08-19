@@ -167,7 +167,7 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
          FROM users u
          LEFT JOIN student_profiles sp ON u.id = sp.user_id
          LEFT JOIN colleges c ON sp.college_id = c.id
-         WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')`,
+         WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND u.deleted_at IS NULL`,
         [id],
       ),
       pool.query(
@@ -180,7 +180,7 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
          FROM users u
          LEFT JOIN user_subjects us ON u.id = us.user_id
          LEFT JOIN user_streaks str ON u.id = str.user_id
-         WHERE u.id = $1`,
+         WHERE u.id = $1 AND u.deleted_at IS NULL`,
         [id],
       ),
       pool.query(
@@ -482,7 +482,7 @@ exports.verifyStudent = async (req, res) => {
     const studentRes = await pool.query(
       `SELECT u.id FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($2::uuid[])`,
+       WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($2::uuid[]) AND u.deleted_at IS NULL`,
       [id, collegeIds],
     );
 
@@ -538,7 +538,7 @@ exports.editStudent = async (req, res) => {
     const studentRes = await pool.query(
       `SELECT u.id FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($2::uuid[])`,
+       WHERE u.id = $1 AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($2::uuid[]) AND u.deleted_at IS NULL`,
       [id, collegeIds],
     );
     if (!studentRes.rowCount) {
@@ -647,7 +647,7 @@ async function getEnrolledStudentIds(collegeIds, batch, subjectId) {
      FROM student_profiles sp
      JOIN users u ON u.id = sp.user_id
      ${subjectJoin}
-     WHERE sp.college_id = ANY($1::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+     WHERE sp.college_id = ANY($1::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND u.deleted_at IS NULL
      ${batchClause} ${subjectClause}`,
     params,
   );
@@ -925,7 +925,7 @@ exports.getAssignmentAnalytics = async (req, res) => {
        FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
        ${subjectJoin}
-       WHERE sp.college_id = ANY($1::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') ${batchClause} ${subjectClause}
+       WHERE sp.college_id = ANY($1::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND u.deleted_at IS NULL ${batchClause} ${subjectClause}
        ORDER BY u.full_name`,
       params,
     );
@@ -1563,6 +1563,11 @@ exports.restoreStudent = async (req, res) => {
     await pool.query(`UPDATE users SET deleted_at = NULL, deleted_by = NULL WHERE id = $1`, [id]);
     res.json({ success: true, message: 'Student restored successfully' });
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ 
+        message: 'Cannot restore this student because another active account is already using this email address.' 
+      });
+    }
     serverError(res, err, 'restoreStudent');
   }
 };

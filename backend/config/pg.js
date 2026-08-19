@@ -38,6 +38,16 @@ pool.on('error', (err, client) => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
     `);
+    
+    // Drop the standard unique constraint on email if it exists, and replace it
+    // with a partial unique index active only for non-deleted users.
+    await client.query(`
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_active_unique 
+      ON users(email) 
+      WHERE deleted_at IS NULL;
+    `);
+
     await client.query(
       `ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`,
     );

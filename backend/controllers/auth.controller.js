@@ -22,8 +22,8 @@ exports.signup = async (req, res) => {
   }
 
   try {
-    // 1. Check if user exists
-    const exists = await pool.query('SELECT id FROM users WHERE email = $1', [
+    // 1. Check if user exists (only active accounts block new registration)
+    const exists = await pool.query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL', [
       email,
     ]);
 
@@ -299,7 +299,7 @@ exports.completeGoogleSignup = async (req, res) => {
   try {
     // Someone may have signed up (password or another Google attempt) with this
     // email while the role-selection screen was open — don't create a duplicate.
-    const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    const exists = await pool.query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL', [email]);
     if (exists.rowCount) {
       return res.status(400).json({ message: 'Email already registered' });
     }

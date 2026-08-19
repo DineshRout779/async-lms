@@ -86,9 +86,10 @@ exports.getAdminAnalytics = async (req, res) => {
       `),
       // 4. Students per college (top 10)
       pool.query(`
-        SELECT c.name AS college_name, COUNT(sp.user_id) AS student_count
+        SELECT c.name AS college_name, COUNT(u.id) AS student_count
         FROM colleges c
         LEFT JOIN student_profiles sp ON sp.college_id = c.id
+        LEFT JOIN users u ON sp.user_id = u.id AND u.deleted_at IS NULL
         GROUP BY c.id, c.name
         ORDER BY student_count DESC
         LIMIT 10
@@ -99,6 +100,7 @@ exports.getAdminAnalytics = async (req, res) => {
         FROM users u
         JOIN roles r ON r.id = u.role_id
         WHERE r.role_key = 'STUDENT'
+          AND u.deleted_at IS NULL
           AND u.created_at >= NOW() - INTERVAL '7 days'
         GROUP BY DATE(u.created_at), label
         ORDER BY DATE(u.created_at)
@@ -2672,6 +2674,7 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
       LEFT JOIN points_log pl ON u.id = pl.user_id
       LEFT JOIN user_streaks us ON u.id = us.user_id
       WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+        AND u.deleted_at IS NULL
     `;
 
     const params = [];
@@ -2781,6 +2784,7 @@ exports.getLockControlOverview = async (req, res) => {
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+          AND u.deleted_at IS NULL
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       ),
@@ -2944,6 +2948,7 @@ exports.setLockControlTopic = async (req, res) => {
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+          AND u.deleted_at IS NULL
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       ),
@@ -3026,6 +3031,7 @@ exports.setLockControlSubtopic = async (req, res) => {
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+          AND u.deleted_at IS NULL
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       )
@@ -3338,7 +3344,7 @@ exports.getStudentProfile = async (req, res) => {
          JOIN roles r ON r.id = u.role_id
          LEFT JOIN student_profiles sp ON u.id = sp.user_id
          LEFT JOIN colleges c ON sp.college_id = c.id
-         WHERE u.id = $1 AND r.role_key = 'STUDENT'`,
+         WHERE u.id = $1 AND r.role_key = 'STUDENT' AND u.deleted_at IS NULL`,
         [id],
       ),
       pool.query(
@@ -3351,7 +3357,7 @@ exports.getStudentProfile = async (req, res) => {
          FROM users u
          LEFT JOIN user_subjects us ON u.id = us.user_id
          LEFT JOIN user_streaks str ON u.id = str.user_id
-         WHERE u.id = $1`,
+         WHERE u.id = $1 AND u.deleted_at IS NULL`,
         [id],
       ),
       pool.query(
@@ -3408,7 +3414,7 @@ exports.getFacilitatorProfile = async (req, res) => {
         `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at
          FROM users u
          JOIN roles r ON r.id = u.role_id
-         WHERE u.id = $1 AND r.role_key = 'FACILITATOR'`,
+         WHERE u.id = $1 AND r.role_key = 'FACILITATOR' AND u.deleted_at IS NULL`,
         [id],
       ),
       pool.query(
@@ -3461,7 +3467,7 @@ exports.getCollegeDetail = async (req, res) => {
          FROM users u
          JOIN roles r ON r.id = u.role_id
          JOIN student_profiles sp ON sp.user_id = u.id
-         WHERE sp.college_id = $1 AND r.role_key = 'STUDENT'
+         WHERE sp.college_id = $1 AND r.role_key = 'STUDENT' AND u.deleted_at IS NULL
          ORDER BY u.created_at DESC`,
         [id],
       ),
@@ -3470,7 +3476,7 @@ exports.getCollegeDetail = async (req, res) => {
          FROM users u
          JOIN roles r ON r.id = u.role_id
          JOIN facilitator_colleges fc ON fc.facilitator_id = u.id
-         WHERE fc.college_id = $1 AND r.role_key = 'FACILITATOR'
+         WHERE fc.college_id = $1 AND r.role_key = 'FACILITATOR' AND u.deleted_at IS NULL
          ORDER BY u.created_at DESC`,
         [id],
       ),
