@@ -472,9 +472,10 @@ exports.getRecycleBin = async (req, res) => {
   try {
     // Admin sees all deleted users
     const query = `
-      SELECT u.id, u.full_name, u.email, r.role_key as role, u.deleted_at
+      SELECT u.id, u.full_name, u.email, r.role_key as role, u.deleted_at, db.full_name AS deleted_by_name
       FROM users u
       LEFT JOIN roles r ON r.id = u.role_id
+      LEFT JOIN users db ON db.id = u.deleted_by
       WHERE u.deleted_at IS NOT NULL
       ORDER BY u.deleted_at DESC
     `;

@@ -26,6 +26,7 @@ interface DeletedUser {
   email: string;
   role: string;
   deleted_at: string;
+  deleted_by_name?: string | null;
 }
 
 interface RecycleBinModalProps {
@@ -161,9 +162,14 @@ export default function RecycleBinModal({
                 <TableBody>
                   {filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell>
+                       <TableCell>
                         <p className='font-medium text-slate-900'>{user.full_name}</p>
                         <p className='text-xs text-slate-500'>{user.email}</p>
+                        {user.deleted_by_name && (
+                          <p className='text-[10px] text-slate-400 mt-1 italic'>
+                            Deleted by {user.deleted_by_name}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">{user.role}</Badge>

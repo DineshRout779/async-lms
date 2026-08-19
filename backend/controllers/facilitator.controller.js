@@ -1606,9 +1606,10 @@ exports.getRecycleBin = async (req, res) => {
     if (collegeIds.length === 0) return res.json({ success: true, data: [] });
     
     const query = `
-      SELECT u.id, u.full_name, u.email, 'student' as role, u.deleted_at
+      SELECT u.id, u.full_name, u.email, 'student' as role, u.deleted_at, db.full_name AS deleted_by_name
       FROM users u
       JOIN student_profiles sp ON u.id = sp.user_id
+      LEFT JOIN users db ON db.id = u.deleted_by
       WHERE u.deleted_at IS NOT NULL AND sp.college_id = ANY($1::uuid[])
       ORDER BY u.deleted_at DESC
     `;
