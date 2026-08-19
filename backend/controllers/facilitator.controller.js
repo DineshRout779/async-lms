@@ -32,7 +32,7 @@ exports.getFacilitatorStats = async (req, res) => {
       pool.query(
         `SELECT COUNT(*) FROM public.users u 
          JOIN public.student_profiles sp ON u.id = sp.user_id 
-         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1)`,
+         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1) AND u.deleted_at IS NULL`,
         [collegeIds],
       ),
       // Subjects assigned to these colleges (via students or facilitator_subjects - let's keep it simple for now)
@@ -46,7 +46,7 @@ exports.getFacilitatorStats = async (req, res) => {
       pool.query(
         `SELECT u.full_name, u.email, u.created_at FROM public.users u
          JOIN public.student_profiles sp ON u.id = sp.user_id
-         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1)
+         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1) AND u.deleted_at IS NULL
          ORDER BY u.created_at DESC LIMIT 5`,
         [collegeIds],
       ),
@@ -122,7 +122,7 @@ exports.getFacilitatorStudents = async (req, res) => {
         FROM public.user_subjects us
         WHERE us.user_id = u.id
       ) sm ON true
-      WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1)
+      WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') AND sp.college_id = ANY($1) AND u.deleted_at IS NULL
       ORDER BY u.created_at DESC
       LIMIT 1000
     `;
@@ -1512,5 +1512,109 @@ exports.getStudentAnalytics = async (req, res) => {
     });
   } catch (err) {
     serverError(res, err, 'getStudentAnalytics');
+  }
+};
+
+/**
+ * SOFT DELETE STUDENT (Move to Recycle Bin)
+ */
+exports.deleteStudent = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { id } = req.params;
+    
+    // Verify access
+    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1', [facilitatorId]);
+    const collegeIds = colRes.rows.map(r => r.college_id);
+    const accessCheck = await pool.query(
+      `SELECT 1 FROM student_profiles sp
+        JOIN users u ON u.id = sp.user_id
+       WHERE sp.user_id = $1 AND sp.college_id = ANY($2::uuid[]) AND u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')`,
+      [id, collegeIds]
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: 'Access denied. You can only delete your students.' });
+    }
+    await pool.query(`UPDATE users SET deleted_at = CURRENT_TIMESTAMP, deleted_by = $1 WHERE id = $2`, [facilitatorId, id]);
+    res.json({ success: true, message: 'Student moved to recycle bin' });
+  } catch (err) {
+    serverError(res, err, 'deleteStudent');
+  }
+};
+
+/**
+ * RESTORE STUDENT
+ */
+exports.restoreStudent = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { id } = req.params;
+    
+    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1', [facilitatorId]);
+    const collegeIds = colRes.rows.map(r => r.college_id);
+    const accessCheck = await pool.query(
+      `SELECT 1 FROM student_profiles sp WHERE sp.user_id = $1 AND sp.college_id = ANY($2::uuid[])`,
+      [id, collegeIds]
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    await pool.query(`UPDATE users SET deleted_at = NULL, deleted_by = NULL WHERE id = $1`, [id]);
+    res.json({ success: true, message: 'Student restored successfully' });
+  } catch (err) {
+    serverError(res, err, 'restoreStudent');
+  }
+};
+
+/**
+ * PERMANENT DELETE STUDENT
+ */
+exports.permanentDeleteStudent = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const { id } = req.params;
+    
+    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1', [facilitatorId]);
+    const collegeIds = colRes.rows.map(r => r.college_id);
+    const accessCheck = await pool.query(
+      `SELECT 1 FROM student_profiles sp WHERE sp.user_id = $1 AND sp.college_id = ANY($2::uuid[])`,
+      [id, collegeIds]
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const check = await pool.query(`SELECT id FROM users WHERE id = $1 AND deleted_at IS NOT NULL`, [id]);
+    if (check.rowCount === 0) {
+      return res.status(404).json({ message: 'Student must be in recycle bin to be permanently deleted' });
+    }
+    await pool.query(`DELETE FROM users WHERE id = $1`, [id]);
+    res.json({ success: true, message: 'Student permanently deleted' });
+  } catch (err) {
+    serverError(res, err, 'permanentDeleteStudent');
+  }
+};
+
+/**
+ * GET RECYCLE BIN (Facilitator)
+ */
+exports.getRecycleBin = async (req, res) => {
+  try {
+    const facilitatorId = req.user.id;
+    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1', [facilitatorId]);
+    const collegeIds = colRes.rows.map(r => r.college_id);
+    
+    if (collegeIds.length === 0) return res.json({ success: true, data: [] });
+    
+    const query = `
+      SELECT u.id, u.full_name, u.email, 'student' as role, u.deleted_at
+      FROM users u
+      JOIN student_profiles sp ON u.id = sp.user_id
+      WHERE u.deleted_at IS NOT NULL AND sp.college_id = ANY($1::uuid[])
+      ORDER BY u.deleted_at DESC
+    `;
+    const result = await pool.query(query, [collegeIds]);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    serverError(res, err, 'getRecycleBin');
   }
 };

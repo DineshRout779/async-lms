@@ -31,6 +31,10 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id text UNIQUE`,
     );
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES users(id) ON DELETE SET NULL;
+    `);
     await client.query(
       `ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`,
     );
