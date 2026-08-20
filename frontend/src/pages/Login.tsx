@@ -73,8 +73,14 @@ export default function Login() {
       try {
         await dispatch(loginUser(values)).unwrap();
         toast.success('Login successful!', { id: toastId });
-      } catch (err) {
-        toast.error(typeof err === 'string' ? err : 'Login failed', {
+      } catch (err: any) {
+        if (err && err.needsVerification) {
+          toast.dismiss(toastId);
+          sessionStorage.setItem('verify_email', values.email);
+          navigate('/verify-email');
+          return;
+        }
+        toast.error(err?.message || typeof err === 'string' ? err : 'Login failed', {
           id: toastId,
         });
       }
@@ -93,10 +99,12 @@ export default function Login() {
     onSubmit: async (values) => {
       const toastId = toast.loading('Creating account...');
       try {
-        await dispatch(signupUser(values)).unwrap();
-        toast.success('Account created successfully!', { id: toastId });
-      } catch (err) {
-        toast.error(typeof err === 'string' ? err : 'Signup failed', {
+        const res = await dispatch(signupUser(values)).unwrap();
+        toast.success(res?.message || 'Account created successfully!', { id: toastId });
+        sessionStorage.setItem('verify_email', values.email);
+        navigate('/verify-email');
+      } catch (err: any) {
+        toast.error(err?.message || typeof err === 'string' ? err : 'Signup failed', {
           id: toastId,
         });
       }
@@ -195,9 +203,18 @@ export default function Login() {
               </div>
 
               <div className='space-y-1'>
-                <label className='text-[13px] font-semibold text-slate-800 tracking-wide'>
-                  Password
-                </label>
+                <div className='flex justify-between items-center'>
+                  <label className='text-[13px] font-semibold text-slate-800 tracking-wide'>
+                    Password
+                  </label>
+                  <button
+                    type='button'
+                    onClick={() => navigate('/forgot-password')}
+                    className='text-[12px] font-semibold text-indigo-600 hover:text-indigo-800'
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
                 <Input
                   name='password'
                   type='password'

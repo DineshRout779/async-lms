@@ -32,6 +32,8 @@ const PendingVerification = lazyWithRetry(() => import('@/pages/PendingVerificat
 const CollegeUnderVerification = lazyWithRetry(() => import('@/pages/CollegeUnderVerification'));
 const AuthCallback = lazyWithRetry(() => import('@/pages/AuthCallback'));
 const SelectRole = lazyWithRetry(() => import('@/pages/SelectRole'));
+const VerifyEmail = lazyWithRetry(() => import('@/pages/VerifyEmail'));
+const ForgotPassword = lazyWithRetry(() => import('@/pages/ForgotPassword'));
 
 // Onboarding
 const CollegeStep = lazyWithRetry(() => import('@/pages/onboarding/CollegeStep'));
@@ -178,6 +180,8 @@ const router = createBrowserRouter([
       { path: 'code-editor', element: <CodeEditor /> },
       { path: 'pending-verification', element: <PendingVerification /> },
       { path: 'college-under-verification', element: <CollegeUnderVerification /> },
+      { path: 'verify-email', element: <VerifyEmail /> },
+      { path: 'forgot-password', element: <ForgotPassword /> },
 
       {
         element: <PrivateRoute />,

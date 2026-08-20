@@ -8,13 +8,13 @@ import type { AuthResponse, User } from './authTypes';
 export const loginUser = createAsyncThunk<
   AuthResponse,
   { email: string; password: string },
-  { rejectValue: string }
+  { rejectValue: any }
 >('auth/login', async (payload, { rejectWithValue }) => {
   try {
     const { data } = await api.post<AuthResponse>('/auth/login', payload);
     return data;
   } catch (err: any) {
-    return rejectWithValue(err.response?.data?.message || 'Login failed');
+    return rejectWithValue(err.response?.data || { message: 'Login failed' });
   }
 });
 
@@ -22,15 +22,15 @@ export const loginUser = createAsyncThunk<
  * SIGNUP
  */
 export const signupUser = createAsyncThunk<
-  AuthResponse,
+  any,
   Record<string, any>,
-  { rejectValue: string }
+  { rejectValue: any }
 >('auth/signup', async (payload, { rejectWithValue }) => {
   try {
-    const { data } = await api.post<AuthResponse>('/auth/signup', payload);
+    const { data } = await api.post<any>('/auth/signup', payload);
     return data;
   } catch (err: any) {
-    return rejectWithValue(err.response?.data?.message || 'Signup failed');
+    return rejectWithValue(err.response?.data || { message: 'Signup failed' });
   }
 });
 
