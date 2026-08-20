@@ -40,7 +40,7 @@ exports.getUserSubjects = async (req, res) => {
         ) as progress_percent
       FROM public.subjects s
       INNER JOIN public.user_subjects us ON s.id = us.subject_id 
-      WHERE us.user_id = $1 AND s.is_published = true 
+      WHERE us.user_id = $1 AND s.is_published = true AND s.is_deleted = false
       ORDER BY us.started_at DESC;
     `;
 
