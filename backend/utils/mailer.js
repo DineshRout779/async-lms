@@ -54,8 +54,17 @@ const sendMail = async ({ to, subject, html, text }) => {
     },
   });
 
+  // Resend free sandbox requires sending from onboarding@resend.dev
+  let fromEmail = user;
+  if (host.includes('resend.com')) {
+    fromEmail = 'onboarding@resend.dev';
+  }
+  if (process.env.SMTP_FROM) {
+    fromEmail = process.env.SMTP_FROM;
+  }
+
   const mailOptions = {
-    from: `"CodeGuru" <${user}>`,
+    from: `"CodeGuru" <${fromEmail}>`,
     to,
     subject,
     text,

@@ -80,9 +80,8 @@ export default function Login() {
           navigate('/verify-email');
           return;
         }
-        toast.error(err?.message || typeof err === 'string' ? err : 'Login failed', {
-          id: toastId,
-        });
+        const errMsg = typeof err === 'string' ? err : (err?.message || 'Login failed');
+        toast.error(errMsg, { id: toastId });
       }
     },
   });
@@ -104,9 +103,8 @@ export default function Login() {
         sessionStorage.setItem('verify_email', values.email);
         navigate('/verify-email');
       } catch (err: any) {
-        toast.error(err?.message || typeof err === 'string' ? err : 'Signup failed', {
-          id: toastId,
-        });
+        const errMsg = typeof err === 'string' ? err : (err?.message || 'Signup failed');
+        toast.error(errMsg, { id: toastId });
       }
     },
   });
