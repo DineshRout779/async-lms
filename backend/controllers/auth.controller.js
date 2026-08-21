@@ -13,6 +13,23 @@ const oauth2Client = new OAuth2Client(
 );
 
 /**
+ * Normalize email addresses by lowercasing, trimming, and:
+ * - For Gmail addresses, removing all dots (.) in the username.
+ * - Removing sub-addressing (+ alias) for Gmail.
+ */
+const normalizeEmail = (email) => {
+  if (!email) return '';
+  let [localPart, domain] = email.trim().toLowerCase().split('@');
+  if (!domain) return email.trim().toLowerCase();
+
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    localPart = localPart.split('+')[0].replace(/\./g, '');
+    domain = 'gmail.com';
+  }
+  return `${localPart}@${domain}`;
+};
+
+/**
  * Generates a random 6-digit numeric OTP and its SHA-256 hash.
  */
 function generateOtp() {
@@ -27,15 +44,16 @@ function generateOtp() {
 exports.signup = async (req, res) => {
   const logID = Date.now();
   const { full_name, email, password, role } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!full_name || !email || !password) {
+  if (!full_name || !normalizedEmail || !password) {
     return res.status(400).json({ message: 'All fields are required' });
   }
 
   try {
     // 1. Check if user exists (only active accounts block new registration)
     const exists = await pool.query('SELECT id, is_email_verified FROM users WHERE email = $1 AND deleted_at IS NULL', [
-      email,
+      normalizedEmail,
     ]);
 
     if (exists.rowCount) {
@@ -50,17 +68,17 @@ exports.signup = async (req, res) => {
 
       await pool.query(
         `DELETE FROM otp_codes WHERE email = $1 AND purpose = 'signup_verification'`,
-        [email]
+        [normalizedEmail]
       );
 
       await pool.query(
         `INSERT INTO otp_codes (email, otp_hash, purpose, expires_at)
          VALUES ($1, $2, 'signup_verification', $3)`,
-        [email, hash, expiresAt]
+        [normalizedEmail, hash, expiresAt]
       );
 
       await sendMail({
-        to: email,
+        to: normalizedEmail,
         subject: 'Verify your CodeGuru Account',
         text: `Your CodeGuru email verification code is: ${otp}. It expires in 15 minutes.`,
         html: `
@@ -77,7 +95,7 @@ exports.signup = async (req, res) => {
 
       return res.json({
         success: true,
-        email,
+        email: normalizedEmail,
         message: 'A new verification code has been sent to your email.'
       });
     }
@@ -107,7 +125,7 @@ exports.signup = async (req, res) => {
       `,
       [
         full_name,
-        email,
+        normalizedEmail,
         passwordHash,
         role_id,
       ],
@@ -122,7 +140,7 @@ exports.signup = async (req, res) => {
       ]);
     }
 
-    logAction({ req, action: 'CREATE', entityType: 'user', entityId: newUser.id, details: { email, role: newUser.role } });
+    logAction({ req, action: 'CREATE', entityType: 'user', entityId: newUser.id, details: { email: normalizedEmail, role: newUser.role } });
 
     // 6. Generate and send signup verification OTP
     const { otp, hash } = generateOtp();
@@ -131,19 +149,19 @@ exports.signup = async (req, res) => {
     // Invalidate any older signup OTPs for this email
     await pool.query(
       `DELETE FROM otp_codes WHERE email = $1 AND purpose = 'signup_verification'`,
-      [email]
+      [normalizedEmail]
     );
 
     // Store OTP hash
     await pool.query(
       `INSERT INTO otp_codes (email, otp_hash, purpose, expires_at)
        VALUES ($1, $2, 'signup_verification', $3)`,
-      [email, hash, expiresAt]
+      [normalizedEmail, hash, expiresAt]
     );
 
     // Send verification email
     await sendMail({
-      to: email,
+      to: normalizedEmail,
       subject: 'Verify your CodeGuru Account',
       text: `Your CodeGuru email verification code is: ${otp}. It expires in 15 minutes.`,
       html: `
@@ -176,8 +194,9 @@ exports.signup = async (req, res) => {
 exports.login = async (req, res) => {
   const logID = Date.now();
   const { email, password } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!email || !password) {
+  if (!normalizedEmail || !password) {
     return res.status(400).json({ message: 'Email and password required' });
   }
 
@@ -192,23 +211,23 @@ exports.login = async (req, res) => {
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1 AND u.deleted_at IS NULL`,
-      [email],
+      [normalizedEmail],
     );
 
     if (!userRes.rowCount) {
-      console.log(`[LOGIN FAILED] User not found or deleted for email: ${email}`);
+      console.log(`[LOGIN FAILED] User not found or deleted for email: ${normalizedEmail}`);
       return res.status(401).json({ message: 'Invalid email or password, or account is disabled' });
     }
 
     const user = userRes.rows[0];
 
     if (!user.password_hash) {
-      console.log(`[LOGIN FAILED] User uses Google Sign-In: ${email}`);
+      console.log(`[LOGIN FAILED] User uses Google Sign-In: ${normalizedEmail}`);
       return res.status(401).json({ message: 'This account uses Google Sign-In. Please click "Continue with Google".' });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
-    console.log(`[LOGIN DEBUG] Password comparison result for ${email}: valid=${valid}`);
+    console.log(`[LOGIN DEBUG] Password comparison result for ${normalizedEmail}: valid=${valid}`);
     delete user.password_hash;
 
     if (!valid) {
@@ -307,6 +326,8 @@ exports.googleCallback = async (req, res) => {
       return res.redirect(`${frontendUrl}/login?error=email_not_verified`);
     }
 
+    const normalizedEmail = normalizeEmail(email);
+
     // Upsert user
     const existingRes = await pool.query(
       `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified, u.google_id, u.token_version,
@@ -317,7 +338,7 @@ exports.googleCallback = async (req, res) => {
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1 AND u.deleted_at IS NULL`,
-      [email],
+      [normalizedEmail],
     );
 
     let user;
@@ -336,7 +357,7 @@ exports.googleCallback = async (req, res) => {
       // token carrying their verified Google identity; the account is only
       // created once they pick student/facilitator in completeGoogleSignup.
       const roleSelectToken = jwt.sign(
-        { purpose: 'google_role_select', googleId, email, name },
+        { purpose: 'google_role_select', googleId, email: normalizedEmail, name },
         process.env.JWT_SECRET,
         { expiresIn: '10m' },
       );
@@ -391,11 +412,12 @@ exports.completeGoogleSignup = async (req, res) => {
     return res.status(400).json({ message: 'Invalid request' });
   }
   const { googleId, email, name } = selection;
+  const normalizedEmail = normalizeEmail(email);
 
   try {
     // Someone may have signed up (password or another Google attempt) with this
     // email while the role-selection screen was open — don't create a duplicate.
-    const exists = await pool.query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL', [email]);
+    const exists = await pool.query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL', [normalizedEmail]);
     if (exists.rowCount) {
       return res.status(400).json({ message: 'Email already registered' });
     }
@@ -412,14 +434,14 @@ exports.completeGoogleSignup = async (req, res) => {
       `INSERT INTO users (full_name, email, google_id, role_id, onboarding_step, is_verified, is_email_verified)
        VALUES ($1, $2, $3, $4, 'college', false, true)
        RETURNING id, full_name, email, onboarding_step, is_verified, token_version`,
-      [name, email, googleId, roleRes.rows[0].id],
+      [name, normalizedEmail, googleId, roleRes.rows[0].id],
     );
     const user = { ...insertRes.rows[0], role };
 
     if (role === 'student') {
       await pool.query('INSERT INTO student_profiles (user_id) VALUES ($1)', [user.id]);
     }
-    logAction({ req, action: 'CREATE', entityType: 'user', entityId: user.id, details: { email, role } });
+    logAction({ req, action: 'CREATE', entityType: 'user', entityId: user.id, details: { email: normalizedEmail, role } });
 
     const tokenPayload = {
       id: user.id,
@@ -489,7 +511,8 @@ exports.getMe = async (req, res) => {
  */
 exports.verifyEmail = async (req, res) => {
   const { email, otp_code } = req.body;
-  if (!email || !otp_code) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !otp_code) {
     return res.status(400).json({ message: 'Email and verification code are required.' });
   }
 
@@ -500,8 +523,8 @@ exports.verifyEmail = async (req, res) => {
     // Retrieve active OTPs
     const otpRes = await pool.query(
       `SELECT id, otp_hash, attempts, expires_at FROM otp_codes 
-       WHERE email = $1 AND purpose = $2 AND expires_at > NOW()`,
-      [email, purpose]
+       WHERE email = $1 AND purpose = $2`,
+      [normalizedEmail, purpose]
     );
 
     if (otpRes.rowCount === 0) {
@@ -509,6 +532,12 @@ exports.verifyEmail = async (req, res) => {
     }
 
     const otpRecord = otpRes.rows[0];
+
+    // Check expiration using the same local clock that generated it (timezone-agnostic)
+    if (new Date(otpRecord.expires_at) < new Date()) {
+      await pool.query('DELETE FROM otp_codes WHERE id = $1', [otpRecord.id]);
+      return res.status(400).json({ message: 'Verification code is invalid or has expired.' });
+    }
 
     // Verify hash match
     if (otpRecord.otp_hash !== submittedHash) {
@@ -523,8 +552,8 @@ exports.verifyEmail = async (req, res) => {
     }
 
     // Email is verified! Update users table
-    await pool.query('UPDATE users SET is_email_verified = true WHERE email = $1 AND deleted_at IS NULL', [email]);
-    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND purpose = $2', [email, purpose]);
+    await pool.query('UPDATE users SET is_email_verified = true WHERE email = $1 AND deleted_at IS NULL', [normalizedEmail]);
+    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND purpose = $2', [normalizedEmail, purpose]);
 
     // Fetch user details to generate JWT
     const userRes = await pool.query(
@@ -536,7 +565,7 @@ exports.verifyEmail = async (req, res) => {
        LEFT JOIN student_profiles sp ON u.id = sp.user_id
        LEFT JOIN colleges c ON c.id = sp.college_id
        WHERE u.email = $1 AND u.deleted_at IS NULL`,
-      [email]
+      [normalizedEmail]
     );
 
     const user = userRes.rows[0];
@@ -593,7 +622,8 @@ exports.verifyEmail = async (req, res) => {
  */
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
-  if (!email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
     return res.status(400).json({ message: 'Email is required.' });
   }
 
@@ -609,7 +639,7 @@ exports.forgotPassword = async (req, res) => {
     // Check if active user exists
     const userRes = await pool.query(
       'SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL',
-      [email]
+      [normalizedEmail]
     );
 
     if (userRes.rowCount === 0) {
@@ -622,7 +652,7 @@ exports.forgotPassword = async (req, res) => {
       `SELECT created_at FROM otp_codes 
        WHERE email = $1 AND purpose = $2 AND created_at > NOW() - INTERVAL '60 seconds' 
        LIMIT 1`,
-      [email, purpose]
+      [normalizedEmail, purpose]
     );
     if (cooldownCheck.rowCount > 0) {
       return res.status(429).json({ message: 'Please wait 60 seconds before requesting another code.' });
@@ -632,7 +662,7 @@ exports.forgotPassword = async (req, res) => {
     const hourlyCheck = await pool.query(
       `SELECT COUNT(*)::int as count FROM otp_codes 
        WHERE email = $1 AND purpose = $2 AND created_at > NOW() - INTERVAL '1 hour'`,
-      [email, purpose]
+      [normalizedEmail, purpose]
     );
     if (hourlyCheck.rows[0].count >= 5) {
       return res.status(429).json({ message: 'Maximum verification requests exceeded. Please try again in an hour.' });
@@ -641,7 +671,7 @@ exports.forgotPassword = async (req, res) => {
     // Invalidate existing active OTPs for password reset
     await pool.query(
       `DELETE FROM otp_codes WHERE email = $1 AND purpose = $2`,
-      [email, purpose]
+      [normalizedEmail, purpose]
     );
 
     // Generate new OTP
@@ -651,26 +681,35 @@ exports.forgotPassword = async (req, res) => {
     await pool.query(
       `INSERT INTO otp_codes (email, otp_hash, purpose, expires_at)
        VALUES ($1, $2, $3, $4)`,
-      [email, hash, purpose, expiresAt]
+      [normalizedEmail, hash, purpose, expiresAt]
     );
 
-    // Dispatch email
-    await sendMail({
-      to: email,
-      subject: 'Reset your CodeGuru Password',
-      text: `Your CodeGuru password reset code is: ${otp}. It is valid for 15 minutes.`,
-      html: `
-        <div style="font-family: sans-serif; padding: 20px; color: #333;">
-          <h2>CodeGuru Password Reset</h2>
-          <p>We received a request to reset your password. Use the verification code below to proceed:</p>
-          <div style="font-size: 24px; font-weight: bold; padding: 15px; background-color: #f3f4f6; border-radius: 8px; display: inline-block; letter-spacing: 2px; color: #4f46e5; margin: 10px 0;">
-            ${otp}
+    try {
+      // Dispatch email
+      await sendMail({
+        to: normalizedEmail,
+        subject: 'Reset your CodeGuru Password',
+        text: `Your CodeGuru password reset code is: ${otp}. It is valid for 15 minutes.`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2>CodeGuru Password Reset</h2>
+            <p>We received a request to reset your password. Use the verification code below to proceed:</p>
+            <div style="font-size: 24px; font-weight: bold; padding: 15px; background-color: #f3f4f6; border-radius: 8px; display: inline-block; letter-spacing: 2px; color: #4f46e5; margin: 10px 0;">
+              ${otp}
+            </div>
+            <p>If you did not request a password reset, you can safely ignore this email.</p>
+            <p style="color: #6b7280; font-size: 14px;">This code is valid for 15 minutes.</p>
           </div>
-          <p>If you did not request a password reset, you can safely ignore this email.</p>
-          <p style="color: #6b7280; font-size: 14px;">This code is valid for 15 minutes.</p>
-        </div>
-      `
-    });
+        `
+      });
+    } catch (mailError) {
+      // If email delivery fails, remove the inserted OTP so the user is not rate-limited on retry
+      await pool.query(
+        `DELETE FROM otp_codes WHERE email = $1 AND purpose = $2`,
+        [normalizedEmail, purpose]
+      );
+      throw mailError;
+    }
 
     return res.json(genericResponse);
 
@@ -685,7 +724,8 @@ exports.forgotPassword = async (req, res) => {
  */
 exports.verifyResetOtp = async (req, res) => {
   const { email, otp_code } = req.body;
-  if (!email || !otp_code) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !otp_code) {
     return res.status(400).json({ message: 'Email and verification code are required.' });
   }
 
@@ -695,8 +735,8 @@ exports.verifyResetOtp = async (req, res) => {
 
     const otpRes = await pool.query(
       `SELECT id, otp_hash, attempts, expires_at FROM otp_codes 
-       WHERE email = $1 AND purpose = $2 AND expires_at > NOW()`,
-      [email, purpose]
+       WHERE email = $1 AND purpose = $2`,
+      [normalizedEmail, purpose]
     );
 
     if (otpRes.rowCount === 0) {
@@ -704,6 +744,12 @@ exports.verifyResetOtp = async (req, res) => {
     }
 
     const otpRecord = otpRes.rows[0];
+
+    // Check expiration using the same local clock that generated it (timezone-agnostic)
+    if (new Date(otpRecord.expires_at) < new Date()) {
+      await pool.query('DELETE FROM otp_codes WHERE id = $1', [otpRecord.id]);
+      return res.status(400).json({ message: 'Verification code is invalid or has expired.' });
+    }
 
     // Verify hash match
     if (otpRecord.otp_hash !== submittedHash) {
@@ -727,14 +773,14 @@ exports.verifyResetOtp = async (req, res) => {
     // Invalidate existing reset tokens
     await pool.query(
       `DELETE FROM otp_codes WHERE email = $1 AND purpose = 'password_reset_token'`,
-      [email]
+      [normalizedEmail]
     );
 
     // Save token hash
     await pool.query(
       `INSERT INTO otp_codes (email, otp_hash, purpose, expires_at)
        VALUES ($1, $2, 'password_reset_token', $3)`,
-      [email, tokenHash, tokenExpiresAt]
+      [normalizedEmail, tokenHash, tokenExpiresAt]
     );
 
     res.json({
@@ -753,7 +799,8 @@ exports.verifyResetOtp = async (req, res) => {
  */
 exports.resetPassword = async (req, res) => {
   const { email, resetToken, newPassword } = req.body;
-  if (!email || !resetToken || !newPassword) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !resetToken || !newPassword) {
     return res.status(400).json({ message: 'Email, reset token, and new password are required.' });
   }
 
@@ -769,7 +816,7 @@ exports.resetPassword = async (req, res) => {
     const tokenRes = await pool.query(
       `SELECT id FROM otp_codes 
        WHERE email = $1 AND otp_hash = $2 AND purpose = $3 AND expires_at > NOW()`,
-      [email, submittedHash, purpose]
+      [normalizedEmail, submittedHash, purpose]
     );
 
     if (tokenRes.rowCount === 0) {
@@ -784,7 +831,7 @@ exports.resetPassword = async (req, res) => {
       `UPDATE users 
        SET password_hash = $1, token_version = token_version + 1, is_email_verified = true 
        WHERE email = $2 AND deleted_at IS NULL`,
-      [hashed, email]
+      [hashed, normalizedEmail]
     );
 
     // Clean up reset token

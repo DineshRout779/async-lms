@@ -70,13 +70,14 @@ export default function Login() {
     validationSchema: loginSchema,
     onSubmit: async (values) => {
       const toastId = toast.loading('Signing in...');
+      const sanitizedValues = { ...values, email: values.email.trim().toLowerCase() };
       try {
-        await dispatch(loginUser(values)).unwrap();
+        await dispatch(loginUser(sanitizedValues)).unwrap();
         toast.success('Login successful!', { id: toastId });
       } catch (err: any) {
         if (err && err.needsVerification) {
           toast.dismiss(toastId);
-          sessionStorage.setItem('verify_email', values.email);
+          sessionStorage.setItem('verify_email', sanitizedValues.email);
           navigate('/verify-email');
           return;
         }
@@ -97,10 +98,11 @@ export default function Login() {
     validationSchema: signupSchema,
     onSubmit: async (values) => {
       const toastId = toast.loading('Creating account...');
+      const sanitizedValues = { ...values, email: values.email.trim().toLowerCase() };
       try {
-        const res = await dispatch(signupUser(values)).unwrap();
+        const res = await dispatch(signupUser(sanitizedValues)).unwrap();
         toast.success(res?.message || 'Account created successfully!', { id: toastId });
-        sessionStorage.setItem('verify_email', values.email);
+        sessionStorage.setItem('verify_email', sanitizedValues.email);
         navigate('/verify-email');
       } catch (err: any) {
         const errMsg = typeof err === 'string' ? err : (err?.message || 'Signup failed');

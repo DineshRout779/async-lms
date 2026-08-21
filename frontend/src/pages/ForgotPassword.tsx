@@ -35,7 +35,8 @@ export default function ForgotPassword() {
   // Step 1: Send OTP to email
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
+    const sanitizedEmail = email.trim().toLowerCase();
+    if (!sanitizedEmail) {
       toast.error('Please enter your email address.');
       return;
     }
@@ -43,7 +44,7 @@ export default function ForgotPassword() {
     setIsLoading(true);
     const toastId = toast.loading('Sending verification code...');
     try {
-      const { data } = await api.post('/auth/forgot-password', { email });
+      const { data } = await api.post('/auth/forgot-password', { email: sanitizedEmail });
       toast.success(data.message || 'If an account exists, verification code has been sent.', { id: toastId });
       setStep(2);
       setResendCooldown(60);
@@ -59,6 +60,7 @@ export default function ForgotPassword() {
   // Step 2: Verify the OTP and obtain resetToken
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    const sanitizedEmail = email.trim().toLowerCase();
     if (!otpCode || otpCode.length !== 6) {
       toast.error('Please enter a valid 6-digit verification code.');
       return;
@@ -68,7 +70,7 @@ export default function ForgotPassword() {
     const toastId = toast.loading('Verifying code...');
     try {
       const { data } = await api.post('/auth/verify-reset-otp', {
-        email,
+        email: sanitizedEmail,
         otp_code: otpCode,
       });
 
@@ -87,6 +89,7 @@ export default function ForgotPassword() {
   // Step 3: Set new password using resetToken
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    const sanitizedEmail = email.trim().toLowerCase();
     if (!newPassword || newPassword.length < 6) {
       toast.error('Password must be at least 6 characters long.');
       return;
@@ -100,7 +103,7 @@ export default function ForgotPassword() {
     const toastId = toast.loading('Resetting password...');
     try {
       const { data } = await api.post('/auth/reset-password', {
-        email,
+        email: sanitizedEmail,
         resetToken,
         newPassword,
       });

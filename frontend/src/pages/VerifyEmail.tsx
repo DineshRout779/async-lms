@@ -19,7 +19,7 @@ export default function VerifyEmail() {
   
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const email = sessionStorage.getItem('verify_email') || '';
+  const email = (sessionStorage.getItem('verify_email') || '').trim().toLowerCase();
 
   useEffect(() => {
     if (!email) {
