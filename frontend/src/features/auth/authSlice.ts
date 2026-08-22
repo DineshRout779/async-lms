@@ -31,6 +31,14 @@ const authSlice = createSlice({
       state.status = 'loading';
       localStorage.setItem('token', action.payload);
     },
+    setCredentials(state, action: PayloadAction<{ token: string; user: any }>) {
+      state.token = action.payload.token;
+      state.user = action.payload.user;
+      state.isAuthenticated = true;
+      state.status = 'succeeded';
+      state.error = null;
+      localStorage.setItem('token', action.payload.token);
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -48,24 +56,20 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload ?? null;
+        state.error = typeof action.payload === 'object' && action.payload ? (action.payload as any).message : (action.payload ?? null);
       })
 
       // SIGNUP
       .addCase(signupUser.pending, (state) => {
         state.status = 'loading';
       })
-      .addCase(signupUser.fulfilled, (state, action) => {
+      .addCase(signupUser.fulfilled, (state) => {
         state.status = 'succeeded';
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.isAuthenticated = true;
         state.error = null;
-        localStorage.setItem('token', action.payload.token);
       })
       .addCase(signupUser.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload ?? null;
+        state.error = typeof action.payload === 'object' && action.payload ? (action.payload as any).message : (action.payload ?? null);
       })
 
       // COMPLETE GOOGLE SIGNUP
@@ -104,5 +108,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearAuthError, loginWithToken } = authSlice.actions;
+export const { logout, clearAuthError, loginWithToken, setCredentials } = authSlice.actions;
 export default authSlice.reducer;
