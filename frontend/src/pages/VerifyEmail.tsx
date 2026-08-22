@@ -22,11 +22,12 @@ export default function VerifyEmail() {
   const email = (sessionStorage.getItem('verify_email') || '').trim().toLowerCase();
 
   useEffect(() => {
-    if (!email) {
+    const sessionEmail = sessionStorage.getItem('verify_email');
+    if (!sessionEmail) {
       toast.error('Session expired. Please sign up or login again.');
       navigate('/login');
     }
-  }, [email, navigate]);
+  }, [navigate]);
 
   // Handle client-side resend cooldown timer
   useEffect(() => {
@@ -56,8 +57,25 @@ export default function VerifyEmail() {
       dispatch(setCredentials({ token: data.token, user: data.user }));
       sessionStorage.removeItem('verify_email');
       
-      // Redirect to onboarding
-      navigate('/onboarding');
+      // Redirect dynamically based on role and onboarding step
+      const verifiedUser = data.user;
+      if (verifiedUser.role === 'admin') {
+        navigate('/dashboard/admin');
+      } else if (verifiedUser.role === 'curriculum_developer') {
+        navigate('/dashboard/curriculum-developer');
+      } else if (verifiedUser.role === 'facilitator') {
+        if (verifiedUser.onboarding_step !== 'done') navigate('/onboarding/facilitator');
+        else if (!verifiedUser.is_verified) navigate('/pending-verification');
+        else navigate('/dashboard/facilitator');
+      } else if (verifiedUser.role === 'student') {
+        navigate(
+          verifiedUser.onboarding_step !== 'done'
+            ? `/onboarding/${verifiedUser.onboarding_step}`
+            : '/dashboard/student',
+        );
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Verification failed. Please try again.', {
         id: toastId,
