@@ -42,9 +42,7 @@ exports.getAdminStats = async (req, res) => {
       recentActivity: recentUsers.rows,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: 'Error fetching dashboard data' });
+    res.status(500).json({ message: 'Error fetching dashboard data' });
   }
 };
 
@@ -173,9 +171,7 @@ exports.getAdminAnalytics = async (req, res) => {
       },
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: 'Error fetching analytics' });
+    res.status(500).json({ message: 'Error fetching analytics' });
   }
 };
 
@@ -493,7 +489,12 @@ exports.getAdminSubjectStructure = async (req, res) => {
           description: row.topic_description,
           order_index: row.topic_order,
           capstone: row.capstone_id
-            ? { id: row.capstone_id, title: row.capstone_title, instructions: row.capstone_instructions, max_score: row.capstone_max_score }
+            ? {
+                id: row.capstone_id,
+                title: row.capstone_title,
+                instructions: row.capstone_instructions,
+                max_score: row.capstone_max_score,
+              }
             : null,
           units: new Map(),
         });
@@ -644,7 +645,13 @@ exports.createTopic = async (req, res) => {
 
     const result = await pool.query(query, values);
 
-    logAction({ req, action: 'CREATE', entityType: 'topic', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'topic',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.status(201).json({
       success: true,
@@ -710,7 +717,13 @@ exports.updateTopic = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'topic', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'topic',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -813,7 +826,13 @@ exports.deleteTopic = async (req, res) => {
 
     await client.query('COMMIT');
 
-    logAction({ req, action: 'DELETE', entityType: 'topic', entityId: id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'topic',
+      entityId: id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -872,7 +891,13 @@ exports.createUnit = async (req, res) => {
 
     const result = await pool.query(query, values);
 
-    logAction({ req, action: 'CREATE', entityType: 'unit', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'unit',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.status(201).json({
       success: true,
@@ -951,7 +976,13 @@ exports.updateUnit = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'unit', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'unit',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -1037,7 +1068,13 @@ exports.deleteUnit = async (req, res) => {
 
     await client.query('COMMIT');
 
-    logAction({ req, action: 'DELETE', entityType: 'unit', entityId: id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'unit',
+      entityId: id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -1095,7 +1132,13 @@ exports.createSubtopic = async (req, res) => {
 
     const result = await pool.query(query, values);
 
-    logAction({ req, action: 'CREATE', entityType: 'subtopic', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'subtopic',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.status(201).json({
       success: true,
@@ -1174,7 +1217,13 @@ exports.updateSubtopic = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'subtopic', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'subtopic',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -1231,7 +1280,13 @@ exports.deleteSubtopic = async (req, res) => {
 
     await client.query('COMMIT');
 
-    logAction({ req, action: 'DELETE', entityType: 'subtopic', entityId: id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'subtopic',
+      entityId: id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -1334,7 +1389,16 @@ exports.createLessonContent = async (req, res) => {
 
     const result = await pool.query(query, values);
 
-    logAction({ req, action: 'CREATE', entityType: 'lesson_content', entityId: result.rows[0].id, details: { content_type: result.rows[0].content_type, subtopic_id: result.rows[0].subtopic_id } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'lesson_content',
+      entityId: result.rows[0].id,
+      details: {
+        content_type: result.rows[0].content_type,
+        subtopic_id: result.rows[0].subtopic_id,
+      },
+    });
 
     res.status(201).json({
       success: true,
@@ -1418,7 +1482,13 @@ exports.updateLessonContent = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'lesson_content', entityId: result.rows[0].id, details: { content_type: result.rows[0].content_type } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'lesson_content',
+      entityId: result.rows[0].id,
+      details: { content_type: result.rows[0].content_type },
+    });
 
     res.json({
       success: true,
@@ -1439,7 +1509,8 @@ exports.deleteLessonContent = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = 'UPDATE lesson_content SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
+    const query =
+      'UPDATE lesson_content SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -1449,7 +1520,16 @@ exports.deleteLessonContent = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'DELETE', entityType: 'lesson_content', entityId: id, details: { content_type: result.rows[0].content_type, subtopic_id: result.rows[0].subtopic_id } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'lesson_content',
+      entityId: id,
+      details: {
+        content_type: result.rows[0].content_type,
+        subtopic_id: result.rows[0].subtopic_id,
+      },
+    });
 
     res.json({
       success: true,
@@ -1493,7 +1573,13 @@ exports.publishLessonContent = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'PUBLISH', entityType: 'lesson_content', entityId: id, details: { is_published } });
+    logAction({
+      req,
+      action: 'PUBLISH',
+      entityType: 'lesson_content',
+      entityId: id,
+      details: { is_published },
+    });
     res.json({
       success: true,
       message: `Lesson content ${
@@ -1549,7 +1635,13 @@ exports.createQuiz = async (req, res) => {
       QUIZ_MAX_SCORE,
     ]);
 
-    logAction({ req, action: 'CREATE', entityType: 'quiz', entityId: result.rows[0].id, details: { unit_id: result.rows[0].unit_id } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'quiz',
+      entityId: result.rows[0].id,
+      details: { unit_id: result.rows[0].unit_id },
+    });
 
     res.status(201).json({
       success: true,
@@ -1605,7 +1697,13 @@ exports.updateQuiz = async (req, res) => {
     const result = await pool.query(query, values);
 
     if (result.rows.length > 0) {
-      logAction({ req, action: 'UPDATE', entityType: 'quiz', entityId: result.rows[0].id, details: { unit_id: result.rows[0].unit_id } });
+      logAction({
+        req,
+        action: 'UPDATE',
+        entityType: 'quiz',
+        entityId: result.rows[0].id,
+        details: { unit_id: result.rows[0].unit_id },
+      });
     }
 
     res.json({
@@ -1655,7 +1753,13 @@ exports.deleteQuiz = async (req, res) => {
 
     await client.query('COMMIT');
 
-    logAction({ req, action: 'DELETE', entityType: 'quiz', entityId: id, details: { unit_id: result.rows[0].unit_id } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'quiz',
+      entityId: id,
+      details: { unit_id: result.rows[0].unit_id },
+    });
 
     res.json({
       success: true,
@@ -1684,7 +1788,8 @@ exports.getExercise = async (req, res) => {
       'SELECT id, title, instructions, max_score, subtopic_id, language, initial_files, test_cases, tasks, rubric FROM exercises WHERE id = $1 AND is_deleted = false',
       [id],
     );
-    if (!result.rowCount) return res.status(404).json({ message: 'Exercise not found' });
+    if (!result.rowCount)
+      return res.status(404).json({ message: 'Exercise not found' });
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     res.status(500).json({ message: 'Internal server error' });
@@ -1693,7 +1798,17 @@ exports.getExercise = async (req, res) => {
 
 exports.createExercise = async (req, res) => {
   try {
-    const { subtopic_id, title, instructions, max_score, language, initial_files, test_cases, tasks, rubric } = req.body;
+    const {
+      subtopic_id,
+      title,
+      instructions,
+      max_score,
+      language,
+      initial_files,
+      test_cases,
+      tasks,
+      rubric,
+    } = req.body;
 
     if (!subtopic_id || !title || !max_score) {
       return res.status(400).json({
@@ -1717,10 +1832,16 @@ exports.createExercise = async (req, res) => {
       JSON.stringify(initial_files || []),
       JSON.stringify(test_cases || []),
       JSON.stringify(tasks || []),
-      rubric ? JSON.stringify(rubric) : null
+      rubric ? JSON.stringify(rubric) : null,
     ]);
 
-    logAction({ req, action: 'CREATE', entityType: 'exercise', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'exercise',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.status(201).json({
       success: true,
@@ -1739,7 +1860,16 @@ exports.createExercise = async (req, res) => {
 exports.updateExercise = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score, language, initial_files, test_cases, tasks } = req.body;
+    const {
+      title,
+      instructions,
+      max_score,
+      language,
+      initial_files,
+      test_cases,
+      tasks,
+      rubric,
+    } = req.body;
 
     const updates = [];
     const values = [];
@@ -1798,7 +1928,13 @@ exports.updateExercise = async (req, res) => {
     const result = await pool.query(query, values);
 
     if (result.rows.length > 0) {
-      logAction({ req, action: 'UPDATE', entityType: 'exercise', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+      logAction({
+        req,
+        action: 'UPDATE',
+        entityType: 'exercise',
+        entityId: result.rows[0].id,
+        details: { title: result.rows[0].title },
+      });
     }
 
     res.json({
@@ -1819,7 +1955,8 @@ exports.deleteExercise = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = 'UPDATE exercises SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
+    const query =
+      'UPDATE exercises SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -1829,7 +1966,13 @@ exports.deleteExercise = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'DELETE', entityType: 'exercise', entityId: id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'exercise',
+      entityId: id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -1855,7 +1998,8 @@ exports.getAssignment = async (req, res) => {
       'SELECT id, title, instructions, max_score, unit_id FROM assignments WHERE id = $1 AND is_deleted = false',
       [id],
     );
-    if (!result.rowCount) return res.status(404).json({ message: 'Assignment not found' });
+    if (!result.rowCount)
+      return res.status(404).json({ message: 'Assignment not found' });
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     res.status(500).json({ message: 'Internal server error' });
@@ -1867,7 +2011,15 @@ const ASSIGNMENT_MAX_SCORE = 100;
 
 exports.createAssignment = async (req, res) => {
   try {
-    const { unit_id, title, instructions, max_score, evaluator_type, test_cases, rubric } = req.body;
+    const {
+      unit_id,
+      title,
+      instructions,
+      max_score,
+      evaluator_type,
+      test_cases,
+      rubric,
+    } = req.body;
 
     if (!unit_id || !title) {
       return res.status(400).json({
@@ -1884,18 +2036,18 @@ exports.createAssignment = async (req, res) => {
 
     let testCasesObj = test_cases;
     if (typeof test_cases === 'string') {
-        try {
-            testCasesObj = JSON.parse(test_cases);
-        } catch (e) {
-            // keep as string or handle error
-        }
+      try {
+        testCasesObj = JSON.parse(test_cases);
+      } catch (e) {
+        // keep as string or handle error
+      }
     }
 
     let rubricObj = rubric;
     if (typeof rubric === 'string') {
-        try {
-            rubricObj = JSON.parse(rubric);
-        } catch (e) {}
+      try {
+        rubricObj = JSON.parse(rubric);
+      } catch (e) {}
     }
 
     const result = await pool.query(query, [
@@ -1905,10 +2057,16 @@ exports.createAssignment = async (req, res) => {
       max_score || ASSIGNMENT_MAX_SCORE,
       evaluator_type || null,
       testCasesObj ? JSON.stringify(testCasesObj) : null,
-      rubricObj ? JSON.stringify(rubricObj) : null
+      rubricObj ? JSON.stringify(rubricObj) : null,
     ]);
 
-    logAction({ req, action: 'CREATE', entityType: 'assignment', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'assignment',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.status(201).json({
       success: true,
@@ -1927,7 +2085,14 @@ exports.createAssignment = async (req, res) => {
 exports.updateAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, instructions, max_score, test_cases, evaluator_type, rubric } = req.body;
+    const {
+      title,
+      instructions,
+      max_score,
+      test_cases,
+      evaluator_type,
+      rubric,
+    } = req.body;
 
     const updates = [];
     const values = [];
@@ -1952,7 +2117,9 @@ exports.updateAssignment = async (req, res) => {
     if (test_cases !== undefined) {
       let testCasesObj = test_cases;
       if (typeof test_cases === 'string') {
-        try { testCasesObj = JSON.parse(test_cases); } catch (e) {}
+        try {
+          testCasesObj = JSON.parse(test_cases);
+        } catch (e) {}
       }
       updates.push(`test_cases = $${paramCount++}`);
       values.push(testCasesObj ? JSON.stringify(testCasesObj) : null);
@@ -1960,7 +2127,9 @@ exports.updateAssignment = async (req, res) => {
     if (rubric !== undefined) {
       let rubricObj = rubric;
       if (typeof rubric === 'string') {
-        try { rubricObj = JSON.parse(rubric); } catch (e) {}
+        try {
+          rubricObj = JSON.parse(rubric);
+        } catch (e) {}
       }
       updates.push(`rubric = $${paramCount++}`);
       values.push(rubricObj ? JSON.stringify(rubricObj) : null);
@@ -1986,7 +2155,13 @@ exports.updateAssignment = async (req, res) => {
     const result = await pool.query(query, values);
 
     if (result.rows.length > 0) {
-      logAction({ req, action: 'UPDATE', entityType: 'assignment', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+      logAction({
+        req,
+        action: 'UPDATE',
+        entityType: 'assignment',
+        entityId: result.rows[0].id,
+        details: { title: result.rows[0].title },
+      });
     }
 
     res.json({
@@ -2007,7 +2182,8 @@ exports.deleteAssignment = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = 'UPDATE assignments SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
+    const query =
+      'UPDATE assignments SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -2017,7 +2193,13 @@ exports.deleteAssignment = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'DELETE', entityType: 'assignment', entityId: id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'assignment',
+      entityId: id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -2053,9 +2235,19 @@ exports.createProject = async (req, res) => {
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [topic_id, title, instructions || null]);
+    const result = await pool.query(query, [
+      topic_id,
+      title,
+      instructions || null,
+    ]);
 
-    logAction({ req, action: 'CREATE', entityType: 'project', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'project',
+      entityId: result.rows[0].id,
+      details: { title: result.rows[0].title },
+    });
 
     res.status(201).json({
       success: true,
@@ -2109,7 +2301,13 @@ exports.updateProject = async (req, res) => {
     const result = await pool.query(query, values);
 
     if (result.rows.length > 0) {
-      logAction({ req, action: 'UPDATE', entityType: 'project', entityId: result.rows[0].id, details: { title: result.rows[0].title } });
+      logAction({
+        req,
+        action: 'UPDATE',
+        entityType: 'project',
+        entityId: result.rows[0].id,
+        details: { title: result.rows[0].title },
+      });
     }
 
     res.json({
@@ -2130,7 +2328,8 @@ exports.deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = 'UPDATE projects SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
+    const query =
+      'UPDATE projects SET is_deleted = true WHERE id = $1 AND is_deleted = false RETURNING *;';
     const result = await pool.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -2140,7 +2339,13 @@ exports.deleteProject = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'DELETE', entityType: 'project', entityId: id, details: { title: result.rows[0].title } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'project',
+      entityId: id,
+      details: { title: result.rows[0].title },
+    });
 
     res.json({
       success: true,
@@ -2201,7 +2406,13 @@ exports.createQuizQuestion = async (req, res) => {
       order_index || null,
     ]);
 
-    logAction({ req, action: 'CREATE', entityType: 'quiz_question', entityId: result.rows[0].id, details: { quiz_id: result.rows[0].quiz_id } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'quiz_question',
+      entityId: result.rows[0].id,
+      details: { quiz_id: result.rows[0].quiz_id },
+    });
 
     res.status(201).json({
       success: true,
@@ -2277,7 +2488,13 @@ exports.updateQuizQuestion = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'quiz_question', entityId: result.rows[0].id, details: { quiz_id: result.rows[0].quiz_id } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'quiz_question',
+      entityId: result.rows[0].id,
+      details: { quiz_id: result.rows[0].quiz_id },
+    });
 
     res.json({
       success: true,
@@ -2325,7 +2542,13 @@ exports.deleteQuizQuestion = async (req, res) => {
 
     await client.query('COMMIT');
 
-    logAction({ req, action: 'DELETE', entityType: 'quiz_question', entityId: id, details: { quiz_id: result.rows[0].quiz_id } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'quiz_question',
+      entityId: id,
+      details: { quiz_id: result.rows[0].quiz_id },
+    });
 
     res.json({
       success: true,
@@ -2420,7 +2643,13 @@ exports.createQuizQuestionOption = async (req, res) => {
       order_index || null,
     ]);
 
-    logAction({ req, action: 'CREATE', entityType: 'quiz_question_option', entityId: result.rows[0].id, details: { question_id: result.rows[0].question_id } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'quiz_question_option',
+      entityId: result.rows[0].id,
+      details: { question_id: result.rows[0].question_id },
+    });
 
     res.status(201).json({
       success: true,
@@ -2487,7 +2716,13 @@ exports.updateQuizQuestionOption = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'quiz_question_option', entityId: result.rows[0].id, details: { question_id: result.rows[0].question_id } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'quiz_question_option',
+      entityId: result.rows[0].id,
+      details: { question_id: result.rows[0].question_id },
+    });
 
     res.json({
       success: true,
@@ -2522,7 +2757,13 @@ exports.deleteQuizQuestionOption = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'DELETE', entityType: 'quiz_question_option', entityId: id, details: { question_id: result.rows[0].question_id } });
+    logAction({
+      req,
+      action: 'DELETE',
+      entityType: 'quiz_question_option',
+      entityId: id,
+      details: { question_id: result.rows[0].question_id },
+    });
 
     res.json({
       success: true,
@@ -2563,9 +2804,11 @@ exports.uploadLessonMarkdown = async (req, res) => {
 
     const originalExt = path.extname(req.file.originalname) || '.md';
     const safeExt = originalExt.toLowerCase() === '.md' ? '.md' : '.md';
-    const key = withS3Prefix(`${prefix}${Date.now()}-${req.file.originalname
-      .replace(/\s+/g, '-')
-      .replace(/[^a-zA-Z0-9._-]/g, '')}${safeExt}`);
+    const key = withS3Prefix(
+      `${prefix}${Date.now()}-${req.file.originalname
+        .replace(/\s+/g, '-')
+        .replace(/[^a-zA-Z0-9._-]/g, '')}${safeExt}`,
+    );
 
     const s3 = new S3Client({ region });
     await s3.send(
@@ -2579,7 +2822,13 @@ exports.uploadLessonMarkdown = async (req, res) => {
 
     const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 
-    logAction({ req, action: 'CREATE', entityType: 'lesson_markdown_upload', entityId: null, details: { url } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'lesson_markdown_upload',
+      entityId: null,
+      details: { url },
+    });
     res.json({
       success: true,
       url,
@@ -2618,16 +2867,19 @@ exports.uploadFile = async (req, res) => {
     }
 
     const isImage = req.file.mimetype.startsWith('image/');
-    const bucket = (isImage && publicBucket) ? publicBucket : privateBucket;
+    const bucket = isImage && publicBucket ? publicBucket : privateBucket;
     const prefix = isImage
-      ? (process.env.AWS_S3_PREFIX_PUBLIC_IMAGES || 'uploads/')
-      : (process.env.AWS_S3_PREFIX_FILES || 'uploads/');
+      ? process.env.AWS_S3_PREFIX_PUBLIC_IMAGES || 'uploads/'
+      : process.env.AWS_S3_PREFIX_FILES || 'uploads/';
 
     const originalExt = path.extname(req.file.originalname) || '';
-    const baseName = path.basename(req.file.originalname, originalExt)
+    const baseName = path
+      .basename(req.file.originalname, originalExt)
       .replace(/\s+/g, '-')
       .replace(/[^a-zA-Z0-9_-]/g, '');
-    const key = withS3Prefix(`${prefix}${Date.now()}-${baseName}${originalExt}`);
+    const key = withS3Prefix(
+      `${prefix}${Date.now()}-${baseName}${originalExt}`,
+    );
 
     const s3 = new S3Client({ region });
     await s3.send(
@@ -2641,7 +2893,13 @@ exports.uploadFile = async (req, res) => {
 
     const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 
-    logAction({ req, action: 'CREATE', entityType: 'file_upload', entityId: null, details: { url } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'file_upload',
+      entityId: null,
+      details: { url },
+    });
     res.json({
       success: true,
       url,
@@ -2804,7 +3062,10 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
   try {
     const { subjectId } = req.query;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const pageSize = Math.min(200, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const pageSize = Math.min(
+      200,
+      Math.max(1, parseInt(req.query.pageSize, 10) || 50),
+    );
     const offset = (page - 1) * pageSize;
 
     let query = `
@@ -3140,7 +3401,13 @@ exports.setLockControlTopic = async (req, res) => {
       console.warn('cohort_admin_locks upsert skipped:', intentErr.message);
     }
 
-    logAction({ req, action: isUnlocked ? 'UNLOCK' : 'LOCK', entityType: 'topic', entityId: topicId, details: { collegeId, batch } });
+    logAction({
+      req,
+      action: isUnlocked ? 'UNLOCK' : 'LOCK',
+      entityType: 'topic',
+      entityId: topicId,
+      details: { collegeId, batch },
+    });
     res.json({
       success: true,
       message: `Topic ${action}ed successfully`,
@@ -3213,7 +3480,13 @@ exports.setLockControlSubtopic = async (req, res) => {
       console.warn('cohort_admin_locks upsert skipped:', intentErr.message);
     }
 
-    logAction({ req, action: isUnlocked ? 'UNLOCK' : 'LOCK', entityType: 'subtopic', entityId: subtopicId, details: { collegeId, batch } });
+    logAction({
+      req,
+      action: isUnlocked ? 'UNLOCK' : 'LOCK',
+      entityType: 'subtopic',
+      entityId: subtopicId,
+      details: { collegeId, batch },
+    });
     res.json({
       success: true,
       message: `Subtopic ${action}ed successfully`,
@@ -3403,7 +3676,9 @@ exports.updateLeaderboards = async (req, res) => {
 
     if (type === 'all') {
       // Update all topic leaderboards
-      const topics = await pool.query('SELECT id FROM topics WHERE is_deleted = false');
+      const topics = await pool.query(
+        'SELECT id FROM topics WHERE is_deleted = false',
+      );
       for (const topic of topics.rows) {
         await pool.query('SELECT update_topic_leaderboard($1)', [topic.id]);
       }
@@ -3415,7 +3690,13 @@ exports.updateLeaderboards = async (req, res) => {
       }
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'leaderboard', entityId: null, details: { type, id } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'leaderboard',
+      entityId: null,
+      details: { type, id },
+    });
     res.json({
       success: true,
       message: 'Leaderboards updated successfully',
@@ -3463,7 +3744,13 @@ exports.verifyUser = async (req, res) => {
       });
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { is_verified } });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'user',
+      entityId: id,
+      details: { is_verified },
+    });
     res.json({
       success: true,
       message: `User ${is_verified ? 'verified' : 'unverified'} successfully`,

@@ -43,7 +43,7 @@ app.use(compression());
 app.use(cors());
 
 // ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
-// IMPORTANT: This must be defined BEFORE express.json(), otherwise body-parser 
+// IMPORTANT: This must be defined BEFORE express.json(), otherwise body-parser
 // consumes the stream and causes 504 Gateway Timeouts for POST requests!
 const workerProxies = new Map(); // workerIp -> proxyInstance
 
@@ -58,8 +58,8 @@ function getWorkerProxy(workerIp) {
     pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
     logger: console,
     onProxyReqWs: (proxyReq, req, socket) => {
-       // Optional: Add custom headers here if needed
-    }
+      // Optional: Add custom headers here if needed
+    },
   });
 
   workerProxies.set(workerIp, proxy);
@@ -72,7 +72,7 @@ app.use('/worker/:ip', (req, res, next) => {
 });
 
 app.use(express.json());
-app.use(morgan('combined'));
+// app.use(morgan('combined'));
 
 // custom logger
 app.use((req, res, next) => {
@@ -129,7 +129,6 @@ app.use(
   verifyToken,
   express.static(path.join(__dirname, 'public', 'uploads')),
 );
-
 
 // ── Internal worker registry endpoints (no auth — internal network only) ────
 app.post('/api/v1/internal/workers/register', (req, res) => {
