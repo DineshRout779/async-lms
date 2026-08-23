@@ -5,6 +5,7 @@ const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { withS3Prefix } = require('../utils/s3');
 const slugify = require('../utils/slugify');
 const { logAction } = require('../utils/auditLogger');
+const moment = require('moment-timezone');
 
 // ============================================
 // EXISTING ADMIN FEATURES (Keep these!)
@@ -14,17 +15,17 @@ exports.getAdminStats = async (req, res) => {
   try {
     const queries = [
       pool.query(
-        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1`,
+        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1 AND u.deleted_at IS NULL`,
         ['STUDENT'],
       ),
       pool.query('SELECT COUNT(*) FROM colleges'),
       pool.query('SELECT COUNT(*) FROM subjects'),
       pool.query(
-        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1`,
+        `SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = $1 AND u.deleted_at IS NULL`,
         ['FACILITATOR'],
       ),
       pool.query(
-        'SELECT full_name, email, created_at FROM users ORDER BY created_at DESC LIMIT 5',
+        'SELECT full_name, email, created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 5',
       ),
     ];
 
@@ -86,9 +87,10 @@ exports.getAdminAnalytics = async (req, res) => {
       `),
       // 4. Students per college (top 10)
       pool.query(`
-        SELECT c.name AS college_name, COUNT(sp.user_id) AS student_count
+        SELECT c.name AS college_name, COUNT(u.id) AS student_count
         FROM colleges c
         LEFT JOIN student_profiles sp ON sp.college_id = c.id
+        LEFT JOIN users u ON sp.user_id = u.id AND u.deleted_at IS NULL
         GROUP BY c.id, c.name
         ORDER BY student_count DESC
         LIMIT 10
@@ -99,6 +101,7 @@ exports.getAdminAnalytics = async (req, res) => {
         FROM users u
         JOIN roles r ON r.id = u.role_id
         WHERE r.role_key = 'STUDENT'
+          AND u.deleted_at IS NULL
           AND u.created_at >= NOW() - INTERVAL '7 days'
         GROUP BY DATE(u.created_at), label
         ORDER BY DATE(u.created_at)
@@ -176,7 +179,157 @@ exports.getAdminAnalytics = async (req, res) => {
   }
 };
 
-// Get all students with their college details
+// ── Student Registrations Chart (dynamic date range) ───────────────────────
+// GET /admin/analytics/registrations?days=30
+// GET /admin/analytics/registrations?from=2026-08-01&to=2026-08-18
+
+exports.getStudentRegistrations = async (req, res) => {
+  try {
+    let { days, from, to } = req.query;
+
+    let startDate, endDate, groupBy;
+
+    if (from && to) {
+      // Custom date range
+      const startStr = /^\d{4}-\d{2}-\d{2}$/.test(from) ? `${from}T00:00:00.000Z` : from;
+      const endStr = /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
+
+      startDate = new Date(startStr);
+      endDate = new Date(endStr);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate > endDate) {
+        return res.status(400).json({ success: false, message: 'Invalid date range. "from" must be before "to".' });
+      }
+      // Clamp to max 365 days
+      const diffDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+      if (diffDays > 365) {
+        return res.status(400).json({ success: false, message: 'Date range cannot exceed 365 days.' });
+      }
+      groupBy = diffDays > 90 ? 'month' : 'day';
+    } else {
+      // Preset days
+      const numDays = Math.max(1, Math.min(parseInt(days) || 7, 365));
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - numDays);
+      groupBy = numDays > 90 ? 'month' : 'day';
+    }
+
+    const labelFormat = groupBy === 'month' ? 'Mon YYYY' : 'Mon DD';
+    const truncUnit = groupBy === 'month' ? 'month' : 'day';
+
+    const result = await pool.query(
+      `SELECT
+         TO_CHAR(DATE_TRUNC($1, u.created_at), $2) AS label,
+         COUNT(*) AS count
+       FROM users u
+       JOIN roles r ON r.id = u.role_id
+       WHERE r.role_key = 'STUDENT'
+         AND u.created_at >= $3
+         AND u.created_at <= $4
+       GROUP BY DATE_TRUNC($1, u.created_at)
+       ORDER BY DATE_TRUNC($1, u.created_at)`,
+      [truncUnit, labelFormat, startDate.toISOString(), endDate.toISOString()]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        registrations: result.rows.map((r) => ({
+          label: r.label,
+          count: parseInt(r.count),
+        })),
+        meta: {
+          from: startDate.toISOString().split('T')[0],
+          to: endDate.toISOString().split('T')[0],
+          groupBy,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching student registrations:', error);
+    res.status(500).json({ success: false, message: 'Error fetching student registrations' });
+  }
+};
+
+exports.getActiveUsersTimeline = async (req, res) => {
+  try {
+    let { days, from, to } = req.query;
+
+    let startDate, endDate, groupBy;
+
+    if (from && to) {
+      // Custom date range
+      const startStr = /^\d{4}-\d{2}-\d{2}$/.test(from) ? `${from}T00:00:00.000Z` : from;
+      const endStr = /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
+
+      startDate = new Date(startStr);
+      endDate = new Date(endStr);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate > endDate) {
+        return res.status(400).json({ success: false, message: 'Invalid date range. "from" must be before "to".' });
+      }
+      // Clamp to max 365 days
+      const diffDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+      if (diffDays > 365) {
+        return res.status(400).json({ success: false, message: 'Date range cannot exceed 365 days.' });
+      }
+      groupBy = diffDays > 90 ? 'month' : 'day';
+    } else {
+      // Preset days
+      const numDays = Math.max(1, Math.min(parseInt(days) || 7, 365));
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - numDays);
+      groupBy = numDays > 90 ? 'month' : 'day';
+    }
+
+    const labelFormat = groupBy === 'month' ? 'Mon YYYY' : 'Mon DD';
+    const truncUnit = groupBy === 'month' ? 'month' : 'day';
+
+    const result = await pool.query(
+      `SELECT
+         TO_CHAR(DATE_TRUNC($1, active_actions.activity_date), $2) AS label,
+         COUNT(DISTINCT active_actions.user_id) AS count
+       FROM (
+         SELECT user_id, completed_at AS activity_date FROM public.user_subtopic_progress WHERE completed_at >= $3 AND completed_at <= $4
+         UNION ALL
+         SELECT user_id, attempted_at AS activity_date FROM public.quiz_attempts WHERE attempted_at >= $3 AND attempted_at <= $4
+         UNION ALL
+         SELECT user_id, submitted_at AS activity_date FROM public.exercise_submissions WHERE submitted_at >= $3 AND submitted_at <= $4
+         UNION ALL
+         SELECT user_id, submitted_at AS activity_date FROM public.assignment_submissions WHERE submitted_at >= $3 AND submitted_at <= $4
+         UNION ALL
+         SELECT user_id, submitted_at AS activity_date FROM public.project_submissions WHERE submitted_at >= $3 AND submitted_at <= $4
+         UNION ALL
+         SELECT student_id AS user_id, submitted_at AS activity_date FROM public.college_assignment_submissions WHERE submitted_at >= $3 AND submitted_at <= $4
+       ) active_actions
+       JOIN public.users u ON active_actions.user_id = u.id
+       JOIN public.roles r ON u.role_id = r.id
+       WHERE r.role_key = 'STUDENT'
+       GROUP BY DATE_TRUNC($1, active_actions.activity_date)
+       ORDER BY DATE_TRUNC($1, active_actions.activity_date)`,
+      [truncUnit, labelFormat, startDate.toISOString(), endDate.toISOString()]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        activeUsers: result.rows.map((r) => ({
+          label: r.label,
+          count: parseInt(r.count),
+        })),
+        meta: {
+          from: startDate.toISOString().split('T')[0],
+          to: endDate.toISOString().split('T')[0],
+          groupBy,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching active users timeline:', error);
+    res.status(500).json({ success: false, message: 'Error fetching active users timeline' });
+  }
+};
+
 exports.getAllStudents = async (req, res) => {
   try {
     const query = `
@@ -2672,6 +2825,7 @@ exports.getAllStudentsProgressSummary = async (req, res) => {
       LEFT JOIN points_log pl ON u.id = pl.user_id
       LEFT JOIN user_streaks us ON u.id = us.user_id
       WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+        AND u.deleted_at IS NULL
     `;
 
     const params = [];
@@ -2781,6 +2935,7 @@ exports.getLockControlOverview = async (req, res) => {
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+          AND u.deleted_at IS NULL
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       ),
@@ -2944,6 +3099,7 @@ exports.setLockControlTopic = async (req, res) => {
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+          AND u.deleted_at IS NULL
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       ),
@@ -3026,6 +3182,7 @@ exports.setLockControlSubtopic = async (req, res) => {
         FROM users u
         INNER JOIN student_profiles sp ON u.id = sp.user_id
         WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT')
+          AND u.deleted_at IS NULL
           AND ($1::uuid IS NULL OR sp.college_id = $1)
           AND ($2::int IS NULL OR sp.year = $2)
       )
@@ -3338,7 +3495,7 @@ exports.getStudentProfile = async (req, res) => {
          JOIN roles r ON r.id = u.role_id
          LEFT JOIN student_profiles sp ON u.id = sp.user_id
          LEFT JOIN colleges c ON sp.college_id = c.id
-         WHERE u.id = $1 AND r.role_key = 'STUDENT'`,
+         WHERE u.id = $1 AND r.role_key = 'STUDENT' AND u.deleted_at IS NULL`,
         [id],
       ),
       pool.query(
@@ -3351,7 +3508,7 @@ exports.getStudentProfile = async (req, res) => {
          FROM users u
          LEFT JOIN user_subjects us ON u.id = us.user_id
          LEFT JOIN user_streaks str ON u.id = str.user_id
-         WHERE u.id = $1`,
+         WHERE u.id = $1 AND u.deleted_at IS NULL`,
         [id],
       ),
       pool.query(
@@ -3408,7 +3565,7 @@ exports.getFacilitatorProfile = async (req, res) => {
         `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at
          FROM users u
          JOIN roles r ON r.id = u.role_id
-         WHERE u.id = $1 AND r.role_key = 'FACILITATOR'`,
+         WHERE u.id = $1 AND r.role_key = 'FACILITATOR' AND u.deleted_at IS NULL`,
         [id],
       ),
       pool.query(
@@ -3461,7 +3618,7 @@ exports.getCollegeDetail = async (req, res) => {
          FROM users u
          JOIN roles r ON r.id = u.role_id
          JOIN student_profiles sp ON sp.user_id = u.id
-         WHERE sp.college_id = $1 AND r.role_key = 'STUDENT'
+         WHERE sp.college_id = $1 AND r.role_key = 'STUDENT' AND u.deleted_at IS NULL
          ORDER BY u.created_at DESC`,
         [id],
       ),
@@ -3470,7 +3627,7 @@ exports.getCollegeDetail = async (req, res) => {
          FROM users u
          JOIN roles r ON r.id = u.role_id
          JOIN facilitator_colleges fc ON fc.facilitator_id = u.id
-         WHERE fc.college_id = $1 AND r.role_key = 'FACILITATOR'
+         WHERE fc.college_id = $1 AND r.role_key = 'FACILITATOR' AND u.deleted_at IS NULL
          ORDER BY u.created_at DESC`,
         [id],
       ),
