@@ -15,7 +15,21 @@ const verifyToken = async (req, res, next) => {
 
     // 2. Verify the token
     const verified = jwt.verify(token, process.env.JWT_SECRET);
-    // 3. Attach the user payload to the request object
+
+    // 3. Quick DB check to revoke access immediately if user is soft-deleted or token version changed
+    const pool = require('../config/pg');
+    const dbCheck = await pool.query('SELECT deleted_at, token_version FROM users WHERE id = $1', [verified.id]);
+    if (dbCheck.rowCount === 0 || dbCheck.rows[0].deleted_at !== null) {
+      return res.status(401).json({ message: 'Access Denied: Account is disabled, deleted, or not found' });
+    }
+
+    // Invalidate session if password was reset and token version has changed
+    const userDb = dbCheck.rows[0];
+    if (verified.token_version !== undefined && userDb.token_version !== verified.token_version) {
+      return res.status(401).json({ message: 'Access Denied: Session expired due to password change' });
+    }
+
+    // 4. Attach the user payload to the request object
     req.user = verified;
 
     const { markUserActive } = require('../services/presenceService');

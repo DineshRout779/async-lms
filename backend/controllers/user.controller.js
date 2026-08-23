@@ -258,6 +258,7 @@ exports.getAllUsers = async (req, res) => {
         INNER JOIN public.colleges c2 ON c2.id = fc.college_id
         WHERE fc.facilitator_id = u.id
       ) as facilitator_meta ON r.role_key = 'FACILITATOR'
+      WHERE u.deleted_at IS NULL
       ORDER BY u.created_at DESC
       LIMIT 1000
     `;
@@ -397,6 +398,91 @@ exports.changeUserRole = async (req, res) => {
     });
   } catch (err) {
     console.error('Change Role Error:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * SOFT DELETE USER (Move to Recycle Bin)
+ */
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user.id;
+        
+    const result = await pool.query(
+      `UPDATE users SET deleted_at = CURRENT_TIMESTAMP, deleted_by = $1 WHERE id = $2 RETURNING id`,
+      [adminId, id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json({ success: true, message: 'User moved to recycle bin' });
+  } catch (err) {
+    console.error('Delete User Error:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * RESTORE USER
+ */
+exports.restoreUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+        
+    const result = await pool.query(
+      `UPDATE users SET deleted_at = NULL, deleted_by = NULL WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found in recycle bin' });
+    }
+    res.json({ success: true, message: 'User restored successfully' });
+  } catch (err) {
+    console.error('Restore User Error:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * PERMANENT DELETE USER
+ */
+exports.permanentDeleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+        
+    // Ensure user is actually in the bin before hard deleting
+    const check = await pool.query(`SELECT id FROM users WHERE id = $1 AND deleted_at IS NOT NULL`, [id]);
+    if (check.rowCount === 0) {
+      return res.status(404).json({ message: 'User must be in recycle bin to be permanently deleted' });
+    }
+    await pool.query(`DELETE FROM users WHERE id = $1`, [id]);
+    res.json({ success: true, message: 'User permanently deleted' });
+  } catch (err) {
+    console.error('Permanent Delete Error:', err.message);
+    res.status(500).json({ message: 'Server error. This user may have active dependencies.' });
+  }
+};
+
+/**
+ * GET RECYCLE BIN (Admin)
+ */
+exports.getRecycleBin = async (req, res) => {
+  try {
+    // Admin sees all deleted users
+    const query = `
+      SELECT u.id, u.full_name, u.email, r.role_key as role, u.deleted_at, db.full_name AS deleted_by_name
+      FROM users u
+      LEFT JOIN roles r ON r.id = u.role_id
+      LEFT JOIN users db ON db.id = u.deleted_by
+      WHERE u.deleted_at IS NOT NULL
+      ORDER BY u.deleted_at DESC
+    `;
+    const result = await pool.query(query);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Get Bin Error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 };

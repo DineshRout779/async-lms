@@ -70,13 +70,19 @@ export default function Login() {
     validationSchema: loginSchema,
     onSubmit: async (values) => {
       const toastId = toast.loading('Signing in...');
+      const sanitizedValues = { ...values, email: values.email.trim().toLowerCase() };
       try {
-        await dispatch(loginUser(values)).unwrap();
+        await dispatch(loginUser(sanitizedValues)).unwrap();
         toast.success('Login successful!', { id: toastId });
-      } catch (err) {
-        toast.error(typeof err === 'string' ? err : 'Login failed', {
-          id: toastId,
-        });
+      } catch (err: any) {
+        if (err && err.needsVerification) {
+          toast.dismiss(toastId);
+          sessionStorage.setItem('verify_email', sanitizedValues.email);
+          navigate('/verify-email');
+          return;
+        }
+        const errMsg = typeof err === 'string' ? err : (err?.message || 'Login failed');
+        toast.error(errMsg, { id: toastId });
       }
     },
   });
@@ -92,13 +98,15 @@ export default function Login() {
     validationSchema: signupSchema,
     onSubmit: async (values) => {
       const toastId = toast.loading('Creating account...');
+      const sanitizedValues = { ...values, email: values.email.trim().toLowerCase() };
       try {
-        await dispatch(signupUser(values)).unwrap();
-        toast.success('Account created successfully!', { id: toastId });
-      } catch (err) {
-        toast.error(typeof err === 'string' ? err : 'Signup failed', {
-          id: toastId,
-        });
+        const res = await dispatch(signupUser(sanitizedValues)).unwrap();
+        toast.success(res?.message || 'Account created successfully!', { id: toastId });
+        sessionStorage.setItem('verify_email', sanitizedValues.email);
+        navigate('/verify-email');
+      } catch (err: any) {
+        const errMsg = typeof err === 'string' ? err : (err?.message || 'Signup failed');
+        toast.error(errMsg, { id: toastId });
       }
     },
   });
@@ -195,9 +203,18 @@ export default function Login() {
               </div>
 
               <div className='space-y-1'>
-                <label className='text-[13px] font-semibold text-slate-800 tracking-wide'>
-                  Password
-                </label>
+                <div className='flex justify-between items-center'>
+                  <label className='text-[13px] font-semibold text-slate-800 tracking-wide'>
+                    Password
+                  </label>
+                  <button
+                    type='button'
+                    onClick={() => navigate('/forgot-password')}
+                    className='text-[12px] font-semibold text-indigo-600 hover:text-indigo-800'
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
                 <Input
                   name='password'
                   type='password'

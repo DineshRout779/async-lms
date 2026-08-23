@@ -31,6 +31,41 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id text UNIQUE`,
     );
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES users(id) ON DELETE SET NULL;
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
+    `);
+    
+    // Drop the standard unique constraint on email if it exists, and replace it
+    // with a partial unique index active only for non-deleted users.
+    await client.query(`
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_active_unique 
+      ON users(email) 
+      WHERE deleted_at IS NULL;
+    `);
+
+    // Add verification and token_version columns to users, and create otp_codes table
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 1;
+      
+      CREATE TABLE IF NOT EXISTS otp_codes (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email       TEXT NOT NULL,
+        otp_hash    TEXT NOT NULL,
+        purpose     TEXT NOT NULL,
+        attempts    INTEGER NOT NULL DEFAULT 0,
+        expires_at  TIMESTAMPTZ NOT NULL,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_otp_lookup ON otp_codes(email, purpose, expires_at);
+    `);
+
     await client.query(
       `ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`,
     );
