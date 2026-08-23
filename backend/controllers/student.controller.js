@@ -1,4 +1,5 @@
 const serverError = require('../utils/serverError');
+const crypto = require('crypto');
 const axios = require('axios');
 const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
@@ -817,14 +818,20 @@ exports.submitQuizAttempt = async (req, res) => {
       `SELECT MAX(score) as max_score 
        FROM quiz_attempts 
        WHERE user_id = $1 AND quiz_id = $2 AND id != $3 AND is_passed = true`,
-      [userId, quizId, attemptId]
+      [userId, quizId, attemptId],
     );
     const prevMaxScore = prevMaxRes.rows[0].max_score || 0;
 
     const maxPossiblePoints = 15;
-    const prevPoints = actual_max_score > 0 ? Math.round((prevMaxScore / actual_max_score) * maxPossiblePoints) : 0;
-    const newPoints = actual_max_score > 0 ? Math.round((score / actual_max_score) * maxPossiblePoints) : 0;
-    
+    const prevPoints =
+      actual_max_score > 0
+        ? Math.round((prevMaxScore / actual_max_score) * maxPossiblePoints)
+        : 0;
+    const newPoints =
+      actual_max_score > 0
+        ? Math.round((score / actual_max_score) * maxPossiblePoints)
+        : 0;
+
     let pointsAwarded = 0;
     if (isPassed) {
       pointsAwarded = Math.max(0, newPoints - prevPoints);
@@ -879,7 +886,7 @@ exports.submitExercise = async (req, res) => {
   try {
     const userId = req.user.id;
     const { exerciseId } = req.params;
-    const { files } = req.body;
+    const { files, taskId } = req.body;
 
     const exerciseQuery = await pool.query(
       'SELECT max_score, language, test_cases, tasks, subtopic_id, rubric FROM exercises WHERE id = $1',
@@ -897,7 +904,9 @@ exports.submitExercise = async (req, res) => {
     let testResults = null;
 
     const hasTasks = Array.isArray(exercise.tasks) && exercise.tasks.length > 0;
-    const hasTestCases = hasTasks ? exercise.tasks.some(t => t.test_cases && t.test_cases.length > 0) : (exercise.test_cases && exercise.test_cases.length > 0);
+    const hasTestCases = hasTasks
+      ? exercise.tasks.some((t) => t.test_cases && t.test_cases.length > 0)
+      : exercise.test_cases && exercise.test_cases.length > 0;
 
     if (hasTasks && hasTestCases) {
       // Multi-task exercise: run tests for each task and aggregate
@@ -913,21 +922,29 @@ exports.submitExercise = async (req, res) => {
           String(userId),
           `exercise-${exerciseId}-task-${task.id}`,
         );
+        // Only the task the student just submitted carries fresh files from the
+        // client — other tasks keep whatever was last auto-saved to their own
+        // workspace dir (they must not be overwritten with this task's files).
+        const isSubmittedTask = !taskId || task.id === taskId;
+
         if (!fs.existsSync(taskWorkspaceDir)) {
-          if (files && Array.isArray(files)) {
+          if (isSubmittedTask && files && Array.isArray(files)) {
             fs.mkdirSync(taskWorkspaceDir, { recursive: true });
           } else {
             continue;
           }
         }
-        
-        // Write files to workspace if provided
-        if (files && Array.isArray(files)) {
+
+        // Write files to workspace if provided, and only for the submitted task
+        if (isSubmittedTask && files && Array.isArray(files)) {
           for (const file of files) {
             if (file.path && typeof file.content === 'string') {
               const filePath = path.join(taskWorkspaceDir, file.path);
               const relative = path.relative(taskWorkspaceDir, filePath);
-              const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+              const isSafe =
+                relative &&
+                !relative.startsWith('..') &&
+                !path.isAbsolute(relative);
               if (isSafe) {
                 fs.mkdirSync(path.dirname(filePath), { recursive: true });
                 fs.writeFileSync(filePath, file.content);
@@ -935,13 +952,13 @@ exports.submitExercise = async (req, res) => {
             }
           }
         }
-        
+
         anyWorkspaceFound = true;
         try {
-          const result = await runTestCases(
+          const result = await runTests(
             taskWorkspaceDir,
             exercise.language,
-            task.test_cases,
+            testSpecFrom(task),
           );
           totalPassed += result.passed;
           totalTests += result.total;
@@ -987,22 +1004,23 @@ exports.submitExercise = async (req, res) => {
         if (files && Array.isArray(files)) {
           fs.mkdirSync(workspaceDir, { recursive: true });
         } else {
-          return res
-            .status(400)
-            .json({
-              success: false,
-              message: 'Workspace not initialised. Open the exercise first.',
-            });
+          return res.status(400).json({
+            success: false,
+            message: 'Workspace not initialised. Open the exercise first.',
+          });
         }
       }
-      
+
       // Write files to workspace if provided
       if (files && Array.isArray(files)) {
         for (const file of files) {
           if (file.path && typeof file.content === 'string') {
             const filePath = path.join(workspaceDir, file.path);
             const relative = path.relative(workspaceDir, filePath);
-            const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+            const isSafe =
+              relative &&
+              !relative.startsWith('..') &&
+              !path.isAbsolute(relative);
             if (isSafe) {
               fs.mkdirSync(path.dirname(filePath), { recursive: true });
               fs.writeFileSync(filePath, file.content);
@@ -1011,10 +1029,10 @@ exports.submitExercise = async (req, res) => {
         }
       }
       try {
-        testResults = await runTestCases(
+        testResults = await runTests(
           workspaceDir,
           exercise.language,
-          exercise.test_cases,
+          testSpecFrom(exercise),
         );
         score =
           testResults.total > 0
@@ -1023,14 +1041,43 @@ exports.submitExercise = async (req, res) => {
               )
             : 0;
       } catch (err) {
-        return serverError(res, err);
+        // Code that fails to compile/run scores 0 with the runner output as
+        // feedback — not a 500, which told the student nothing.
+        const total = exercise.test_cases.length;
+        testResults = {
+          passed: 0,
+          failed: total,
+          total,
+          results: [
+            {
+              description: 'Your code could not be executed',
+              passed: false,
+              error: String(err.message || err).slice(0, 4000),
+            },
+          ],
+        };
+        score = 0;
       }
-    } else if (exercise.rubric || ['dom', 'react', 'backend'].includes(exercise.language)) {
+    } else if (
+      exercise.rubric ||
+      ['dom', 'react', 'backend'].includes(exercise.language)
+    ) {
       if (!files || !Array.isArray(files) || files.length === 0) {
-        return res.status(400).json({ success: false, message: 'Files are required for this environment.' });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: 'Files are required for this environment.',
+          });
       }
 
-      const evalTypeMap = { 'dom': 'visual', 'react': 'react', 'backend': 'backend', 'javascript': 'javascript', 'python': 'python' };
+      const evalTypeMap = {
+        dom: 'visual',
+        react: 'react',
+        backend: 'backend',
+        javascript: 'javascript',
+        python: 'python',
+      };
       const evaluatorType = evalTypeMap[exercise.language] || 'backend';
 
       const payload = {
@@ -1039,93 +1086,132 @@ exports.submitExercise = async (req, res) => {
       };
 
       if (evaluatorType === 'visual') {
-        payload.expectedUrl = "https://example.com"; // placeholder since it's ide files
-        
-        let rubricStr = "";
+        payload.expectedUrl = 'https://example.com'; // placeholder since it's ide files
+
+        let rubricStr = '';
         if (Array.isArray(exercise.rubric)) {
-          rubricStr = exercise.rubric.map(item => `- ${item.name}: ${item.description} (Weight: ${item.weight}%)`).join('\n');
+          rubricStr = exercise.rubric
+            .map(
+              (item) =>
+                `- ${item.name}: ${item.description} (Weight: ${item.weight}%)`,
+            )
+            .join('\n');
         } else if (typeof exercise.rubric === 'string') {
           rubricStr = exercise.rubric;
         } else if (exercise.rubric?.criteria) {
-          rubricStr = exercise.rubric.criteria.map(item => `- ${item.name}: ${item.description} (Weight: ${item.weight}%)`).join('\n');
+          rubricStr = exercise.rubric.criteria
+            .map(
+              (item) =>
+                `- ${item.name}: ${item.description} (Weight: ${item.weight}%)`,
+            )
+            .join('\n');
         } else {
-          rubricStr = "Evaluate the HTML/CSS code";
+          rubricStr = 'Evaluate the HTML/CSS code';
         }
-        
+
         payload.rubricText = rubricStr;
-        payload.submissions = [{ 
-           studentId: userId,
-           studentName: req.user.full_name || 'Student',
-           repoUrl: "https://github.com/example/placeholder", 
-           ideFiles: files 
-        }];
+        payload.submissions = [
+          {
+            studentId: userId,
+            studentName: req.user.full_name || 'Student',
+            repoUrl: 'https://github.com/example/placeholder',
+            ideFiles: files,
+          },
+        ];
       } else {
-        payload.rubric = exercise.rubric || { criteria: [{ name: "Completeness", weight: 100 }] };
+        payload.rubric = exercise.rubric || {
+          criteria: [{ name: 'Completeness', weight: 100 }],
+        };
       }
 
-      const CENTRAL_URL = process.env.CENTRAL_EVALUATOR_URL || 'http://localhost:3004';
-      
+      const CENTRAL_URL =
+        process.env.CENTRAL_EVALUATOR_URL || 'http://localhost:3004';
+
       let evalResponse = null;
       let postRetries = 3;
       for (let attempt = 1; attempt <= postRetries; attempt++) {
         try {
           evalResponse = await axios.post(`${CENTRAL_URL}/evaluate`, payload, {
-             headers: { 'x-api-key': process.env.CENTRAL_EVALUATOR_API_KEY || 'test-key-123' }
+            headers: {
+              'x-api-key':
+                process.env.CENTRAL_EVALUATOR_API_KEY || 'test-key-123',
+            },
           });
           break;
         } catch (error) {
           if (attempt === postRetries) throw error;
-          await new Promise(res => setTimeout(res, 1500));
+          await new Promise((res) => setTimeout(res, 1500));
         }
       }
-      
-      const jobId = evalResponse.data.jobId || (evalResponse.data.jobs && evalResponse.data.jobs[0].jobId);
-      if (!jobId) throw new Error("Failed to get job ID from central evaluator");
-      
+
+      const jobId =
+        evalResponse.data.jobId ||
+        (evalResponse.data.jobs && evalResponse.data.jobs[0].jobId);
+      if (!jobId)
+        throw new Error('Failed to get job ID from central evaluator');
+
       let evalResult = null;
-      for (let i = 0; i < 30; i++) { // wait up to 60 seconds
-        await new Promise(res => setTimeout(res, 2000));
+      for (let i = 0; i < 30; i++) {
+        // wait up to 60 seconds
+        await new Promise((res) => setTimeout(res, 2000));
         try {
-          const statusResponse = await axios.get(`${CENTRAL_URL}/jobs/${evaluatorType}/${jobId}`);
+          const statusResponse = await axios.get(
+            `${CENTRAL_URL}/jobs/${evaluatorType}/${jobId}`,
+          );
           if (statusResponse.data.state === 'completed') {
-             evalResult = statusResponse.data.result || statusResponse.data.returnvalue;
-             break;
+            evalResult =
+              statusResponse.data.result || statusResponse.data.returnvalue;
+            break;
           } else if (statusResponse.data.state === 'failed') {
-             throw new Error("Evaluation failed: " + statusResponse.data.failedReason);
+            throw new Error(
+              'Evaluation failed: ' + statusResponse.data.failedReason,
+            );
           }
-        } catch(e) {
+        } catch (e) {
           const status = e.response ? e.response.status : null;
           // Continue polling on 404 (not yet ready), or transient gateway/proxy errors (502/503/504)
-          if (status === 404 || status === 502 || status === 503 || status === 504 || !e.response) {
+          if (
+            status === 404 ||
+            status === 502 ||
+            status === 503 ||
+            status === 504 ||
+            !e.response
+          ) {
             continue;
           }
           throw e;
         }
       }
 
-      if (!evalResult) throw new Error("Evaluation timed out");
-      const resultObj = evalResult.result ? evalResult.result[0] : evalResult.results;
-      score = evalResult.success ? (resultObj?.score || 0) : 0;
+      if (!evalResult) throw new Error('Evaluation timed out');
+      const resultObj = evalResult.result
+        ? evalResult.result[0]
+        : evalResult.results;
+      score = evalResult.success ? resultObj?.score || 0 : 0;
 
-      let rawFeedback = resultObj?.feedback || "";
-      let feedbackText = typeof rawFeedback === 'object' && rawFeedback !== null
-        ? (rawFeedback.feedback || rawFeedback.reason || JSON.stringify(rawFeedback))
-        : rawFeedback;
+      let rawFeedback = resultObj?.feedback || '';
+      let feedbackText =
+        typeof rawFeedback === 'object' && rawFeedback !== null
+          ? rawFeedback.feedback ||
+            rawFeedback.reason ||
+            JSON.stringify(rawFeedback)
+          : rawFeedback;
 
       let rubricBreakdown = [];
       if (resultObj) {
         // Get the list of allowed rubric criteria names and descriptions from the exercise
         const allowedNames = [];
         const allowedDescriptions = [];
-        const rubricItems = Array.isArray(exercise.rubric) 
-          ? exercise.rubric 
-          : exercise.rubric?.criteria 
-            ? exercise.rubric.criteria 
+        const rubricItems = Array.isArray(exercise.rubric)
+          ? exercise.rubric
+          : exercise.rubric?.criteria
+            ? exercise.rubric.criteria
             : [];
 
-        rubricItems.forEach(item => {
+        rubricItems.forEach((item) => {
           if (item.name) allowedNames.push(item.name.toLowerCase().trim());
-          if (item.description) allowedDescriptions.push(item.description.toLowerCase().trim());
+          if (item.description)
+            allowedDescriptions.push(item.description.toLowerCase().trim());
         });
 
         if (Array.isArray(resultObj.rubric_breakdown)) {
@@ -1136,46 +1222,64 @@ exports.submitExercise = async (req, res) => {
             ...(resultObj.domBreakdown || []),
             ...(resultObj.behaviorBreakdown || []),
             ...(resultObj.codeBreakdown || []),
-            ...(resultObj.visualBreakdown || [])
+            ...(resultObj.visualBreakdown || []),
           ];
-          
+
           rubricBreakdown = breakdowns
-            .map(item => {
-              const itemName = item.item || item.name || "";
+            .map((item) => {
+              const itemName = item.item || item.name || '';
               // Find matching criteria in the database rubric by either name or description
-              const match = rubricItems.find(r => 
-                (r.name && r.name.toLowerCase().trim() === itemName.toLowerCase().trim()) ||
-                (r.description && r.description.toLowerCase().trim() === itemName.toLowerCase().trim())
+              const match = rubricItems.find(
+                (r) =>
+                  (r.name &&
+                    r.name.toLowerCase().trim() ===
+                      itemName.toLowerCase().trim()) ||
+                  (r.description &&
+                    r.description.toLowerCase().trim() ===
+                      itemName.toLowerCase().trim()),
               );
 
               // Extract max weight
-              const maxVal = item.max !== undefined ? item.max : (item.max_score || 100);
-              let awardedVal = item.awarded !== undefined ? item.awarded : (item.score || 0);
+              const maxVal =
+                item.max !== undefined ? item.max : item.max_score || 100;
+              let awardedVal =
+                item.awarded !== undefined ? item.awarded : item.score || 0;
 
               // Auto-generate details for DOM/Code checks
-              let itemFeedback = item.reason || item.feedback || "";
-              
+              let itemFeedback = item.reason || item.feedback || '';
+
               if (Array.isArray(item.checks)) {
                 // Special check correction: if criterion is to "avoid divs", and the check is '<div' passed=false,
                 // that means they successfully avoided divs! Give them full credit.
-                const isAvoidDiv = match && 
-                  ((match.name || "").toLowerCase().includes("avoid") || (match.description || "").toLowerCase().includes("avoid")) &&
-                  ((match.name || "").toLowerCase().includes("div") || (match.description || "").toLowerCase().includes("div"));
-                
+                const isAvoidDiv =
+                  match &&
+                  ((match.name || '').toLowerCase().includes('avoid') ||
+                    (match.description || '')
+                      .toLowerCase()
+                      .includes('avoid')) &&
+                  ((match.name || '').toLowerCase().includes('div') ||
+                    (match.description || '').toLowerCase().includes('div'));
+
                 if (isAvoidDiv) {
-                  const divCheck = item.checks.find(c => (c.selector || c.pattern) === '<div');
+                  const divCheck = item.checks.find(
+                    (c) => (c.selector || c.pattern) === '<div',
+                  );
                   if (divCheck && divCheck.passed === false) {
                     awardedVal = maxVal;
-                    itemFeedback = "Success: Correctly avoided using generic <div> containers.";
+                    itemFeedback =
+                      'Success: Correctly avoided using generic <div> containers.';
                     divCheck.passed = true; // Mark as passed
                   }
                 }
 
                 if (!itemFeedback) {
-                  const failedChecks = item.checks.filter(c => !c.passed);
+                  const failedChecks = item.checks.filter((c) => !c.passed);
                   if (failedChecks.length > 0) {
-                    itemFeedback = `Missing or incorrect element(s): ` + 
-                      failedChecks.map(c => `\`${c.selector || c.pattern}\u200b\``).join(', ');
+                    itemFeedback =
+                      `Missing or incorrect element(s): ` +
+                      failedChecks
+                        .map((c) => `\`${c.selector || c.pattern}\u200b\``)
+                        .join(', ');
                   }
                 }
               }
@@ -1184,12 +1288,12 @@ exports.submitExercise = async (req, res) => {
                 name: match ? match.name : itemName,
                 score: awardedVal,
                 max_score: maxVal,
-                feedback: itemFeedback
+                feedback: itemFeedback,
               };
             })
-            .filter(item => {
+            .filter((item) => {
               if (allowedNames.length === 0) return true;
-              const nameLower = (item.name || "").toLowerCase().trim();
+              const nameLower = (item.name || '').toLowerCase().trim();
               return allowedNames.includes(nameLower);
             });
         }
@@ -1197,37 +1301,60 @@ exports.submitExercise = async (req, res) => {
 
       // Recalculate score from the mapped rubric breakdown (since we corrected the 'avoid div' check)
       if (rubricBreakdown.length > 0) {
-        const totalAwarded = rubricBreakdown.reduce((sum, item) => sum + item.score, 0);
-        const totalMax = rubricBreakdown.reduce((sum, item) => sum + item.max_score, 0);
+        const totalAwarded = rubricBreakdown.reduce(
+          (sum, item) => sum + item.score,
+          0,
+        );
+        const totalMax = rubricBreakdown.reduce(
+          (sum, item) => sum + item.max_score,
+          0,
+        );
         score = totalMax > 0 ? (totalAwarded / totalMax) * 100 : 0;
       }
 
       // If the exercise does not contain visual layout criteria but the OpenAI vision output returned
       // a general layout/spacing mismatch feedback, dynamically construct student feedback from the rubric results
-      const hasVisualCriteria = resultObj?.visualBreakdown && resultObj.visualBreakdown.some(item => item.max > 0);
+      const hasVisualCriteria =
+        resultObj?.visualBreakdown &&
+        resultObj.visualBreakdown.some((item) => item.max > 0);
 
       if (!hasVisualCriteria && rubricBreakdown.length > 0) {
-        const failedItems = rubricBreakdown.filter(item => item.score < item.max_score);
+        const failedItems = rubricBreakdown.filter(
+          (item) => item.score < item.max_score,
+        );
         if (failedItems.length > 0) {
-          feedbackText = `Your code is close, but has some issues: \n` + 
-            failedItems.map(item => `- **${item.name}**: ${item.feedback || "Check that you implemented all elements correctly."}`).join('\n') + 
+          feedbackText =
+            `Your code is close, but has some issues: \n` +
+            failedItems
+              .map(
+                (item) =>
+                  `- **${item.name}**: ${item.feedback || 'Check that you implemented all elements correctly.'}`,
+              )
+              .join('\n') +
             `\n\nPlease review the instructions and update your code accordingly.`;
         } else {
-          feedbackText = "Excellent job! All criteria for this semantic layout exercise have been met perfectly.";
+          feedbackText =
+            'Excellent job! All criteria for this semantic layout exercise have been met perfectly.';
         }
       }
 
       testResults = {
         feedback: feedbackText,
-        rubric_breakdown: rubricBreakdown
+        rubric_breakdown: rubricBreakdown,
       };
-      
+
       // Rescale the score relative to max_score
       score = Math.round((score / 100) * exercise.max_score);
-
     } else {
-      // No test cases — accept manual score from body (legacy behaviour)
-      score = req.body.score ?? exercise.max_score;
+      // Nothing to grade against: no test cases and no rubric/evaluator.
+      // Previously this awarded max_score (and honoured a client-supplied
+      // `score`), so any submission — including one that does not compile —
+      // passed with full marks. Refuse instead of inventing a grade.
+      return res.status(422).json({
+        success: false,
+        message:
+          'This exercise has no test cases or rubric configured, so it cannot be graded yet. Please contact your facilitator.',
+      });
     }
 
     const isPassed = score >= exercise.max_score * 0.7;
@@ -1236,7 +1363,14 @@ exports.submitExercise = async (req, res) => {
       `INSERT INTO exercise_submissions (exercise_id, user_id, score, is_passed, feedback, test_results)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *;`,
-      [exerciseId, userId, score, isPassed, testResults?.feedback || null, testResults ? JSON.stringify(testResults) : null],
+      [
+        exerciseId,
+        userId,
+        score,
+        isPassed,
+        testResults?.feedback || null,
+        testResults ? JSON.stringify(testResults) : null,
+      ],
     );
 
     // Delta System: Find previous highest score for this exercise
@@ -1244,10 +1378,10 @@ exports.submitExercise = async (req, res) => {
       `SELECT MAX(score) as max_score 
        FROM exercise_submissions 
        WHERE user_id = $1 AND exercise_id = $2 AND id != $3`,
-      [userId, exerciseId, submissionResult.rows[0].id]
+      [userId, exerciseId, submissionResult.rows[0].id],
     );
     const prevMaxScore = prevMaxRes.rows[0].max_score || 0;
-    
+
     const prevPoints = Math.round((prevMaxScore / exercise.max_score) * 100);
     const newPoints = Math.round((score / exercise.max_score) * 100);
     const pointsAwarded = Math.max(0, newPoints - prevPoints);
@@ -1290,156 +1424,7 @@ const runnerService = require('../services/runnerService');
 
 const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
-const EXERCISE_RUNNER = {
-  javascript: { image: 'workspace-node', cmd: ['node', 'index.js'] },
-  python: { image: 'workspace-python', cmd: ['python3', 'main.py'] },
-  java: {
-    image: 'workspace-java',
-    cmd: [
-      'sh',
-      '-c',
-      'cd /workspace && javac Main.java 2>&1 && java -cp /workspace Main',
-    ],
-  },
-  sql: {
-    image: 'workspace-sql',
-    cmd: [
-      'sh',
-      '-c',
-      'sqlite3 -column -header :memory: < /workspace/solution.sql',
-    ],
-  },
-};
-
-const TEST_RUNNER_CMD = {
-  javascript: { image: 'workspace-node', cmd: ['node', '__tests__.js'] },
-  python: { image: 'workspace-python', cmd: ['python3', '__tests__.py'] },
-  java: {
-    image: 'workspace-java',
-    cmd: [
-      'sh',
-      '-c',
-      'cd /workspace && javac Main.java __Tests__.java 2>&1 && java -cp /workspace __Tests__',
-    ],
-  },
-  // sql: not supported — no test runner for SQL exercises
-};
-
-const JS_TEST_HEADER = `let __p=0,__f=0,__r=[];
-const __test=(d,fn)=>{try{fn();__r.push({description:d,passed:true});__p++;}catch(e){__r.push({description:d,passed:false,error:e.message});__f++;}};
-const __expect=(a)=>({
-  toBe:(e)=>{if(a!==e)throw new Error(\`Expected \${JSON.stringify(e)}, got \${JSON.stringify(a)}\`)},
-  toEqual:(e)=>{if(JSON.stringify(a)!==JSON.stringify(e))throw new Error(\`Expected \${JSON.stringify(e)}, got \${JSON.stringify(a)}\`)},
-  toBeTruthy:()=>{if(!a)throw new Error('Expected truthy')},
-  toBeFalsy:()=>{if(a)throw new Error('Expected falsy')},
-  toBeNull:()=>{if(a!==null)throw new Error('Expected null')},
-  toBeUndefined:()=>{if(a!==undefined)throw new Error('Expected undefined')},
-  toBeGreaterThan:(e)=>{if(a<=e)throw new Error(\`Expected greater than \${e}, got \${a}\`)},
-  toBeLessThan:(e)=>{if(a>=e)throw new Error(\`Expected less than \${e}, got \${a}\`)},
-});
-`;
-const JS_TEST_FOOTER = `\nconsole.log(JSON.stringify({passed:__p,failed:__f,total:__p+__f,results:__r}));\nprocess.exit(__f>0?1:0);\n`;
-
-const PY_TEST_HEADER = `import json,sys\n_p,_f,_r=0,0,[]\ndef __test(d,fn):\n  global _p,_f\n  try: fn();_r.append({"description":d,"passed":True});_p+=1\n  except Exception as e: _r.append({"description":d,"passed":False,"error":str(e)});_f+=1\nclass _E:\n  def __init__(self,a):self._a=a\n  def to_be(self,e):\n    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"\n  def to_equal(self,e):\n    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"\n  def to_be_truthy(self):\n    assert self._a,"Expected truthy"\n  def to_be_falsy(self):\n    assert not self._a,"Expected falsy"\ndef __expect(a): return _E(a)\n`;
-const PY_TEST_FOOTER = `\nprint(json.dumps({"passed":_p,"failed":_f,"total":_p+_f,"results":_r}))\nsys.exit(1 if _f>0 else 0)\n`;
-
-// Java test framework — test cases call static methods on the student's Main class.
-// Both Main.java and __Tests__.java are compiled together so Main's public members are accessible.
-const JAVA_TEST_HEADER = `import java.util.*;
-public class __Tests__ {
-  static int __p=0,__f=0;
-  static List<Map<String,Object>> __r=new ArrayList<>();
-  @FunctionalInterface interface __Fn{void run()throws Exception;}
-  static void __test(String d,__Fn fn){
-    try{fn.run();Map<String,Object>m=new LinkedHashMap<>();m.put("description",d);m.put("passed",true);__r.add(m);__p++;}
-    catch(Exception e){Map<String,Object>m=new LinkedHashMap<>();m.put("description",d);m.put("passed",false);String err=e.getMessage()==null?"error":e.getMessage().replace("\\\\","\\\\\\\\").replace("\\"","'");m.put("error",err);__r.add(m);__f++;}
-  }
-  static<T>__E<T>__expect(T a){return new __E<>(a);}
-  static class __E<T>{T a;__E(T v){this.a=v;}
-    public void toBe(T e){if(!Objects.equals(a,e))throw new AssertionError("Expected "+e+", got "+a);}
-    public void toEqual(T e){if(!Objects.equals(a,e))throw new AssertionError("Expected "+e+", got "+a);}
-    public void toBeTruthy(){if(a==null||Boolean.FALSE.equals(a)||Integer.valueOf(0).equals(a))throw new AssertionError("Expected truthy");}
-    public void toBeFalsy(){if(a!=null&&!Boolean.FALSE.equals(a)&&!Integer.valueOf(0).equals(a))throw new AssertionError("Expected falsy");}
-  }
-  public static void main(String[]args)throws Exception{
-`;
-const JAVA_TEST_FOOTER = `
-    StringBuilder sb=new StringBuilder();
-    sb.append("{\\"passed\\":").append(__p).append(",\\"failed\\":").append(__f).append(",\\"total\\":").append(__p+__f).append(",\\"results\\":[");
-    for(int i=0;i<__r.size();i++){Map<String,Object>m=__r.get(i);sb.append("{\\"description\\":\\"").append(m.get("description")).append("\\",\\"passed\\":").append(m.get("passed"));if(m.containsKey("error"))sb.append(",\\"error\\":\\"").append(m.get("error")).append("\\"");sb.append("}");if(i<__r.size()-1)sb.append(",");}
-    sb.append("]}");
-    System.out.println(sb);
-    System.exit(__f>0?1:0);
-  }
-}
-`;
-
-/**
- * Write the test runner file to disk, execute it via the container pool,
- * and return { passed, failed, total, results }.
- */
-async function runTestCases(workspaceDir, language, testCases) {
-  let header, footer, testFile;
-
-  if (language === 'python') {
-    const studentCode = fs.readFileSync(
-      path.join(workspaceDir, 'main.py'),
-      'utf-8',
-    );
-    const escapedCode = studentCode
-      .replace(/\\/g, '\\\\')
-      .replace(/"""/g, '\\"\\"\\"');
-    header =
-      `studentCodeString = """${escapedCode}"""\n` +
-      studentCode +
-      `\n` +
-      PY_TEST_HEADER;
-    footer = PY_TEST_FOOTER;
-    testFile = path.join(workspaceDir, '__tests__.py');
-  } else if (language === 'java') {
-    header = JAVA_TEST_HEADER;
-    footer = JAVA_TEST_FOOTER;
-    testFile = path.join(workspaceDir, '__Tests__.java');
-  } else if (language === 'sql') {
-    throw new Error(
-      'Automated test cases are not supported for SQL exercises.',
-    );
-  } else {
-    // javascript (default)
-    const studentCode = fs.readFileSync(
-      path.join(workspaceDir, 'index.js'),
-      'utf-8',
-    );
-    const escapedCode = studentCode
-      .replace(/\\/g, '\\\\')
-      .replace(/`/g, '\\`')
-      .replace(/\$/g, '\\$');
-    header =
-      `const studentCodeString = \`${escapedCode}\`;\n` +
-      studentCode +
-      `\n` +
-      JS_TEST_HEADER;
-    footer = JS_TEST_FOOTER;
-    testFile = path.join(workspaceDir, '__tests__.js');
-  }
-
-  const testCode = testCases.map((tc) => tc.test_code).join('\n');
-  fs.writeFileSync(testFile, header + testCode + footer, 'utf-8');
-
-  const result = await runnerService.executeTests(workspaceDir, language);
-  if (!result)
-    throw new Error('Test execution is not supported for this language.');
-
-  const { output } = result;
-  const lines = output.trim().split('\n');
-  for (let i = lines.length - 1; i >= 0; i--) {
-    try {
-      const parsed = JSON.parse(lines[i]);
-      if (typeof parsed.passed === 'number') return parsed;
-    } catch {}
-  }
-  throw new Error(`Test runner produced no parseable output.\n${output}`);
-}
+const { runTests, testSpecFrom } = require('../services/exerciseGrader');
 
 const DEFAULT_INITIAL_FILES = {
   javascript: [{ name: 'index.js', content: '// Write your solution here\n' }],
@@ -1528,23 +1513,29 @@ exports.initExerciseWorkspace = async (req, res) => {
        FROM exercise_submissions 
        WHERE user_id = $1 AND exercise_id = $2 
        ORDER BY submitted_at DESC LIMIT 1`,
-      [userId, exerciseId]
+      [userId, exerciseId],
     );
 
     const submission = latestSubmission.rows[0] || null;
 
-    res.json({ 
-      success: true, 
-      data: { 
-        language, 
-        files, 
+    res.json({
+      success: true,
+      data: {
+        language,
+        files,
         projectId,
-        submission: submission ? {
-          score: submission.score,
-          isPassed: submission.is_passed,
-          testResults: submission.test_results || (submission.feedback ? { feedback: submission.feedback } : null)
-        } : null
-      } 
+        submission: submission
+          ? {
+              score: submission.score,
+              isPassed: submission.is_passed,
+              testResults:
+                submission.test_results ||
+                (submission.feedback
+                  ? { feedback: submission.feedback }
+                  : null),
+            }
+          : null,
+      },
     });
   } catch (error) {
     console.error('Error initialising exercise workspace:', error);
@@ -1580,10 +1571,11 @@ exports.saveExerciseWorkspace = async (req, res) => {
       if (file.name && typeof file.content === 'string') {
         // Skip saving instruction file to disk since it's read-only
         if (file.name === 'Instructions.md') continue;
-        
+
         const filePath = path.join(workspaceDir, file.name);
         const relative = path.relative(workspaceDir, filePath);
-        const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+        const isSafe =
+          relative && !relative.startsWith('..') && !path.isAbsolute(relative);
         if (isSafe) {
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, file.content, 'utf-8');
@@ -1620,20 +1612,21 @@ exports.runExerciseTests = async (req, res) => {
         .json({ success: false, message: 'Exercise not found' });
     }
 
-    const { language, test_cases, tasks } = result.rows[0];
+    const { language, tasks } = result.rows[0];
 
-    // Resolve which test cases to run
-    let testCasesToRun = test_cases;
+    // Grade against the task the student is on, else the legacy exercise row.
+    let source = result.rows[0];
     if (taskId && Array.isArray(tasks) && tasks.length > 0) {
       const task = tasks.find((t) => t.id === taskId);
       if (!task)
         return res
           .status(404)
           .json({ success: false, message: 'Task not found' });
-      testCasesToRun = task.test_cases;
+      source = task;
     }
 
-    if (!testCasesToRun || testCasesToRun.length === 0) {
+    const spec = testSpecFrom(source);
+    if (spec.cases.length === 0) {
       return res.json({
         success: true,
         data: { message: 'No test cases defined for this task' },
@@ -1650,12 +1643,15 @@ exports.runExerciseTests = async (req, res) => {
         .json({ success: false, message: 'Workspace not initialised' });
     }
 
-    const testResult = await runTestCases(
-      workspaceDir,
-      language,
-      testCasesToRun,
-    );
-    res.json({ success: true, data: testResult });
+    // "Run tests" is the cheap feedback loop: for data-driven exercises it runs
+    // only the visible sample cases. Hidden cases are held back for Submit.
+    const testResult = await runTests(workspaceDir, language, spec, {
+      visibleOnly: true,
+    });
+    res.json({
+      success: true,
+      data: { ...testResult, sample_only: spec.kind === 'data' },
+    });
   } catch (error) {
     console.error('Error running exercise tests:', error);
     serverError(res, error);
@@ -1718,7 +1714,10 @@ exports.getOverallLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.pageSize, 10) || 50),
+    );
     const offset = (page - 1) * pageSize;
 
     const result = await pool.query(
@@ -1782,7 +1781,10 @@ exports.getWeeklyLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.pageSize, 10) || 50),
+    );
     const offset = (page - 1) * pageSize;
 
     // ISO Monday of current week
@@ -1856,7 +1858,10 @@ exports.getCollegeLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.pageSize, 10) || 50),
+    );
     const offset = (page - 1) * pageSize;
 
     const userQuery = await pool.query(
@@ -1864,12 +1869,10 @@ exports.getCollegeLeaderboard = async (req, res) => {
       [userId],
     );
     if (!userQuery.rows[0]?.college_id) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: 'User is not associated with any college',
-        });
+      return res.status(400).json({
+        success: false,
+        message: 'User is not associated with any college',
+      });
     }
 
     const collegeId = userQuery.rows[0].college_id;
@@ -1975,7 +1978,13 @@ exports.createStudentProject = async (req, res) => {
       [userId, name.trim(), profile],
     );
 
-    logAction({ req, action: 'CREATE', entityType: 'student_project', entityId: result.rows[0].id, details: { name, profile } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'student_project',
+      entityId: result.rows[0].id,
+      details: { name, profile },
+    });
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error creating student project:', error);
@@ -2106,7 +2115,13 @@ exports.submitAssignment = async (req, res) => {
       [id, userId, submission_link.trim()],
     );
 
-    logAction({ req, action: 'CREATE', entityType: 'assignment_submission', entityId: id, details: { submission_link: submission_link.trim() } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'assignment_submission',
+      entityId: id,
+      details: { submission_link: submission_link.trim() },
+    });
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting assignment:', error);
@@ -2243,7 +2258,13 @@ exports.submitCapstone = async (req, res) => {
       await checkAndAwardBadges(userId);
     }
 
-    logAction({ req, action: 'CREATE', entityType: 'project_submission', entityId: projectId, details: { submission_link: submission_link.trim() } });
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'project_submission',
+      entityId: projectId,
+      details: { submission_link: submission_link.trim() },
+    });
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting capstone:', error);
@@ -2268,12 +2289,10 @@ exports.enrollInSubject = async (req, res) => {
     );
     if (subjectCheck.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: 'Subject not found or not available',
-        });
+      return res.status(404).json({
+        success: false,
+        message: 'Subject not found or not available',
+      });
     }
 
     // Insert enrollment (idempotent)
@@ -2492,12 +2511,10 @@ exports.getStudentScorecard = async (req, res) => {
     res.json({ success: true, data: Array.from(subjectMap.values()) });
   } catch (error) {
     console.error('Error fetching scorecard:', error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: 'Failed to fetch scorecard',
-      });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch scorecard',
+    });
   }
 };
 

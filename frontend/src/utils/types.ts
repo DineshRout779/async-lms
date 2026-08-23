@@ -57,8 +57,18 @@ export interface Quiz {
 export interface TestCase {
   id: string;
   description: string;
-  test_code: string;
   is_hidden: boolean;
+  /** Code-mode only: author-written assertion code. */
+  test_code?: string;
+  /** Data-mode: arguments passed to the entry function. */
+  args?: unknown[];
+  /** Data-mode: the value the entry function must return. */
+  expected?: unknown;
+  /** Data-mode: shown as a sample and run by "Run tests"; hidden cases only run on Submit. */
+  visible?: boolean;
+  /** Editing-only scratch text, stripped before save. */
+  _argsText?: string;
+  _expectedText?: string;
 }
 
 export interface ExerciseTask {
@@ -67,6 +77,15 @@ export interface ExerciseTask {
   instructions?: string;
   initial_files: { name: string; content: string }[];
   test_cases?: TestCase[];
+  /**
+   * The author's worked answer, used only to verify the test cases at
+   * authoring time. Stripped from every student-facing response.
+   */
+  reference_solution?: { name: string; content: string }[];
+  /** 'data' = args/expected table (default for new exercises); 'code' = legacy authored test code. */
+  test_kind?: 'data' | 'code';
+  /** Data-mode: the function the test cases call, e.g. "updateSalary". */
+  entry_function?: string;
 }
 
 export interface Exercise {

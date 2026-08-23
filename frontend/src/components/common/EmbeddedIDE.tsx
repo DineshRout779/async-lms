@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import Editor, { loader } from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,13 @@ type Tab = { path: string; content: string; language: string };
 interface EmbeddedIDEProps {
   exercise: Exercise;
   submitting: boolean;
-  onSubmit: (exerciseId: string, files?: any[]) => any;
+  onSubmit: (exerciseId: string, files?: any[], taskId?: string) => any;
+}
+
+interface TaskWorkspaceCache {
+  tree: FileNode[];
+  tabs: Tab[];
+  activeTab: string | null;
 }
 
 export default function EmbeddedIDE({ exercise, submitting, onSubmit }: EmbeddedIDEProps) {
@@ -36,7 +42,15 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
   const [tree, setTree] = useState<FileNode[]>([]);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
-  
+
+  // Multi-task exercises: which task is currently open. In-memory edits for
+  // tasks the student has already visited this session are cached in a ref
+  // (not state) so switching tabs doesn't lose unsaved work or trigger refetches.
+  const tasks = exercise.tasks && exercise.tasks.length > 0 ? exercise.tasks : null;
+  const [activeTaskIndex, setActiveTaskIndex] = useState(0);
+  const activeTask = tasks ? tasks[activeTaskIndex] : undefined;
+  const taskWorkspaceCache = useRef<Record<string, TaskWorkspaceCache>>({});
+
   // Layout states
   const [isFullscreen, setIsFullscreen] = useState(false);
   
@@ -156,15 +170,26 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     };
   }, []);
 
-  // Initialize from backend workspace if available, otherwise fallback to exercise initial_files
+  // Initialize from backend workspace if available, otherwise fallback to exercise initial_files.
+  // Re-runs whenever the active task changes; a task already visited this session
+  // is restored from the in-memory cache instead of re-fetching.
   useEffect(() => {
     let active = true;
-    
+    const taskKey = activeTask?.id ?? 'default';
+
+    const cached = taskWorkspaceCache.current[taskKey];
+    if (cached) {
+      setTree(cached.tree);
+      setTabs(cached.tabs);
+      setActiveTab(cached.activeTab);
+      return;
+    }
+
     const initWorkspace = async () => {
       let filesToLoad = [];
       try {
         const res = await apiClient.post(`/students/exercise/${exercise.id}/workspace/init`, {
-          taskId: exercise.tasks?.[0]?.id
+          taskId: activeTask?.id
         });
         if (res.data?.success && res.data.data?.files && res.data.data.files.length > 0) {
           // Map backend response 'name' to the expected tab shape
@@ -201,17 +226,17 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
       if (!active) return;
 
       if (filesToLoad.length === 0) {
-        filesToLoad = exercise.tasks?.[0]?.initial_files || [];
+        filesToLoad = activeTask?.initial_files || [];
       }
-      
+
       // Ensure Instructions.md is present
       const hasInstructions = filesToLoad.some((f: any) => f.name === 'Instructions.md');
-      const initialFiles = hasInstructions 
-        ? filesToLoad 
+      const initialFiles = hasInstructions
+        ? filesToLoad
         : [
-            { 
-              name: 'Instructions.md', 
-              content: exercise.instructions || exercise.tasks?.[0]?.instructions || '# Instructions\n\nNo instructions provided.' 
+            {
+              name: 'Instructions.md',
+              content: activeTask?.instructions || exercise.instructions || '# Instructions\n\nNo instructions provided.'
             },
             ...filesToLoad
           ];
@@ -237,15 +262,19 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
         });
         return root;
       };
-      setTree(buildTree(initialFiles));
-      
+      const newTree = buildTree(initialFiles);
+      setTree(newTree);
+
       const newTabs = initialFiles.map((f: any) => ({
         path: f.name,
         content: f.content,
         language: f.name === 'Instructions.md' ? 'markdown' : f.name.endsWith('.py') ? 'python' : f.name.endsWith('.js') ? 'javascript' : f.name.endsWith('.html') ? 'html' : f.name.endsWith('.css') ? 'css' : 'plaintext'
       }));
       setTabs(newTabs);
-      if (newTabs.length > 0) setActiveTab(newTabs[0].path);
+      const newActiveTab = newTabs.length > 0 ? newTabs[0].path : null;
+      setActiveTab(newActiveTab);
+
+      taskWorkspaceCache.current[taskKey] = { tree: newTree, tabs: newTabs, activeTab: newActiveTab };
     };
 
     initWorkspace();
@@ -253,7 +282,30 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     return () => {
       active = false;
     };
-  }, [exercise]);
+  }, [exercise, activeTaskIndex]);
+
+  // Switch to a different task tab, caching the outgoing task's in-memory edits first.
+  const handleTaskSwitch = (index: number) => {
+    if (!tasks || index === activeTaskIndex) return;
+    const outgoingKey = tasks[activeTaskIndex]?.id ?? 'default';
+    taskWorkspaceCache.current[outgoingKey] = { tree, tabs, activeTab };
+    setTerminalOutput('Ready.');
+    setActiveTaskIndex(index);
+  };
+
+  // Single source of truth for the Instructions pane. For a multi-task exercise
+  // the active task's instructions are what the student needs — the exercise
+  // overview is kept above as context. Previously the pane read the exercise
+  // overview first, so per-task instructions were never shown.
+  const instructionsMarkdown = (() => {
+    const overview = exercise.instructions?.trim();
+    const taskText = activeTask?.instructions?.trim();
+    if (tasks && tasks.length > 1 && taskText) {
+      const heading = `## ${activeTask?.title ?? 'Task'}\n\n${taskText}`;
+      return overview ? `${overview}\n\n---\n\n${heading}` : heading;
+    }
+    return taskText || overview || '*No instructions provided.*';
+  })();
 
   const handleSave = async () => {
     setSaving(true);
@@ -266,7 +318,7 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
 
       await apiClient.post(`/students/exercise/${exercise.id}/workspace/save`, {
         files: filesPayload,
-        taskId: exercise.tasks?.[0]?.id
+        taskId: activeTask?.id
       });
       toast.success('Progress saved successfully!');
     } catch (err) {
@@ -437,21 +489,15 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
   };
 
   const handleRun = async () => {
-    // 1. If active tab is HTML, ALWAYS run the DOM preview
-    if (activeTab?.endsWith('.html')) {
+    // Dispatch on the exercise's environment, not on whichever file happens to
+    // be open. A JavaScript exercise always runs its JS entry file — the student
+    // is never told to "select an HTML file".
+    const lang = exercise.language;
+
+    // DOM exercises are the only ones that render a preview. Whichever of the
+    // html/css/js files is open, the preview is rebuilt from all three.
+    if (lang === 'dom') {
       updatePreview();
-      return;
-    }
-
-    // 2. If it is a DOM exercise and they try to run CSS or JS, alert them
-    if (exercise.language === 'dom' && (activeTab?.endsWith('.css') || activeTab?.endsWith('.js'))) {
-      alert("You're not in an HTML file. Please select an HTML file to run the preview.");
-      return;
-    }
-
-    // 3. If CSS in any other exercise, also alert them (CSS cannot be 'run' on its own)
-    if (activeTab?.endsWith('.css')) {
-      alert("Please select an HTML file to run.");
       return;
     }
 
@@ -459,8 +505,8 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     setTerminalOutput('Executing...\n');
     setBottomTab('terminal');
 
-    // 4. Backend fallback for Java and SQL
-    if (exercise.language === 'java' || exercise.language === 'sql') {
+    // Backend runner for Java and SQL
+    if (lang === 'java' || lang === 'sql') {
       try {
         setTerminalOutput('Executing on backend runner...\n----------------\n');
         // Save current progress first so runner sees the latest file modifications
@@ -470,11 +516,11 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
         }));
         await apiClient.post(`/students/exercise/${exercise.id}/workspace/save`, {
           files: filesPayload,
-          taskId: exercise.tasks?.[0]?.id
+          taskId: activeTask?.id
         });
 
         const res = await apiClient.post(`/students/exercise/${exercise.id}/run`, {
-          taskId: exercise.tasks?.[0]?.id,
+          taskId: activeTask?.id,
           activeFile: activeTab
         });
 
@@ -490,8 +536,8 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
       return;
     }
     
-    // 5. Python execution (cached Pyodide)
-    if (activeTab?.endsWith('.py') || exercise.language === 'python') {
+    // Python execution (cached Pyodide, in-browser for instant feedback)
+    if (lang === 'python') {
       try {
         let pyodide = cachedPyodide;
         if (!pyodide) {
@@ -517,10 +563,12 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
         pyodide.setStderr({ batched: (text: string) => setTerminalOutput(prev => prev + text + '\n') });
         
         setTerminalOutput('Running...\n----------------\n');
-        let pythonCode = activeTabContent;
-        if (!activeTab?.endsWith('.py')) {
-            pythonCode = tabs.find(t => t.path === 'main.py' || t.path.endsWith('.py'))?.content || '';
-        }
+        // Run the open .py file if there is one, else the entry file.
+        const pythonCode = activeTab?.endsWith('.py')
+          ? activeTabContent
+          : (tabs.find(t => t.path === 'main.py')?.content
+            ?? tabs.find(t => t.path.endsWith('.py'))?.content
+            ?? '');
         await pyodide.runPythonAsync(pythonCode);
         setTerminalOutput(prev => prev + '\n[Execution completed successfully]');
       } catch (err: any) {
@@ -531,14 +579,16 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
       return;
     }
 
-    // 6. JavaScript execution (isolated iframe to support async logs & prevent global pollution)
-    if (activeTab?.endsWith('.js') || exercise.language === 'javascript') {
+    // JavaScript execution (isolated iframe to support async logs & prevent global pollution)
+    if (lang === 'javascript') {
       try {
         setTerminalOutput('Running...\n----------------\n');
-        let jsCode = activeTabContent;
-        if (!activeTab?.endsWith('.js')) {
-            jsCode = tabs.find(t => t.path === 'index.js' || t.path.endsWith('.js'))?.content || '';
-        }
+        // Run the open .js file if there is one, else the entry file.
+        const jsCode = activeTab?.endsWith('.js')
+          ? activeTabContent
+          : (tabs.find(t => t.path === 'index.js')?.content
+            ?? tabs.find(t => t.path.endsWith('.js'))?.content
+            ?? '');
 
         const iframe = document.createElement('iframe');
         iframe.style.display = 'none';
@@ -578,231 +628,79 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
       }
       return;
     }
+
+    // Unknown environment — don't leave the button spinning.
+    setIsRunning(false);
+    setTerminalOutput(`Running is not supported for the "${lang}" environment.`);
   };
 
+  // Tests always execute on the backend Docker runner — the same code path that
+  // grades a submission — so what the student sees here matches their grade
+  // exactly, and test code never has to be shipped to the browser.
   const handleRunTests = async () => {
-    const testCases = exercise.tasks?.[0]?.test_cases || [];
+    const testCases = activeTask?.test_cases || [];
     if (testCases.length === 0) {
-      alert("No test cases are defined for this exercise.");
+      toast.error('No test cases are defined for this exercise.');
       return;
     }
 
     setIsRunning(true);
-    setTerminalOutput('Running tests...\n----------------\n');
+    setTerminalOutput('Running tests on the grader...\n----------------\n');
     setBottomTab('terminal');
 
-    // 1. Backend fallback for Java (SQL tests not supported)
-    if (exercise.language === 'java') {
-      try {
-        setTerminalOutput('Running tests on backend runner...\n----------------\n');
-        // Save first so backend runs latest code
-        const filesPayload = tabs.map(t => ({
-          name: t.path,
-          content: t.content
-        }));
-        await apiClient.post(`/students/exercise/${exercise.id}/workspace/save`, {
-          files: filesPayload,
-          taskId: exercise.tasks?.[0]?.id
-        });
-
-        const res = await apiClient.post(`/students/exercise/${exercise.id}/run-tests`, {
-          taskId: exercise.tasks?.[0]?.id
-        });
-
-        if (res.data?.success && res.data.data) {
-          const { results, passed, failed } = res.data.data;
-          let out = 'Test Results:\n';
-          results.forEach((r: any) => {
-            if (r.passed) {
-              out += `✅ ${r.description}\n`;
-            } else {
-              out += `❌ ${r.description} - ${r.error}\n`;
-            }
-          });
-          out += `\nPassed ${passed} / ${passed + failed} tests.`;
-          setTerminalOutput(out);
-        }
-      } catch (err: any) {
-        setTerminalOutput('Error executing tests on backend: ' + (err.response?.data?.message || err.message));
-      } finally {
-        setIsRunning(false);
-      }
-      return;
-    }
-
-    // 2. Python execution (cached Pyodide)
-    if (activeTab?.endsWith('.py') || exercise.language === 'python') {
-      try {
-        let pyodide = cachedPyodide;
-        if (!pyodide) {
-          setTerminalOutput('Loading Python environment for testing...\n');
-          if (!(window as any).loadPyodide) {
-             await new Promise((resolve, reject) => {
-               const script = document.createElement('script');
-               script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-               script.onload = resolve;
-               script.onerror = reject;
-               document.head.appendChild(script);
-             });
-          }
-          
-          pyodide = await (window as any).loadPyodide({
-            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
-          });
-          cachedPyodide = pyodide;
-        }
-        
-        const combinedTestCode = testCases.map(tc => tc.test_code).join('\n\n');
-        
-        const pyHeader = `
-import json,sys,builtins,asyncio
-_p,_f,_r=0,0,[]
-__logs=[]
-_original_print = builtins.print
-def _custom_print(*args, **kwargs):
-    sep = kwargs.get('sep', ' ')
-    if len(args) == 1:
-        __logs.append(args[0])
-    else:
-        __logs.append(sep.join(str(a) for a in args))
-    _original_print(*args, **kwargs)
-builtins.print = _custom_print
-
-__testQueue = []
-def __test(d,fn):
-  __testQueue.append((d,fn))
-class _E:
-  def __init__(self,a):self._a=a
-  def to_be(self,e):
-    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"
-  def to_equal(self,e):
-    assert self._a==e,f"Expected {repr(e)}, got {repr(self._a)}"
-  def to_be_truthy(self):
-    assert self._a,"Expected truthy"
-  def to_be_falsy(self):
-    assert not self._a,"Expected falsy"
-def __expect(a): return _E(a)
-`;
-
-        const pythonCode = tabs.find(t => t.path === 'main.py' || t.path.endsWith('.py'))?.content || '';
-        const pyFooter = `
-async def __run_tests():
-  global _p, _f
-  for d, fn in __testQueue:
-    try:
-      if asyncio.iscoroutinefunction(fn):
-        await fn()
-      else:
-        fn()
-      _r.append({"description":d,"passed":True});_p+=1
-    except Exception as e:
-      _r.append({"description":d,"passed":False,"error":str(e)});_f+=1
-await __run_tests()
-json.dumps(_r)
-`;
-        const fullScript = `${pyHeader}\n${pythonCode}\n${combinedTestCode}\n${pyFooter}`;
-
-        const resultJson = await pyodide.runPythonAsync(fullScript);
-        const results = JSON.parse(resultJson);
-        
-        let out = 'Test Results:\n';
-        let passedCount = 0;
-        results.forEach((r: any) => {
-          if (r.passed) {
-            out += `✅ ${r.description}\n`;
-            passedCount++;
-          } else {
-            out += `❌ ${r.description} - ${r.error}\n`;
-          }
-        });
-        out += `\nPassed ${passedCount} / ${results.length} tests.`;
-        setTerminalOutput(out);
-      } catch (err: any) {
-        setTerminalOutput('[Error executing tests]: ' + err.message);
-      } finally {
-        setIsRunning(false);
-      }
-      return;
-    }
-
-    // 3. JavaScript execution (cleanup original Log & Error functions in try-finally)
-    if (activeTab?.endsWith('.js') || exercise.language === 'javascript') {
-      try {
-        const combinedTestCode = testCases.map(tc => tc.test_code).join('\n\n');
-        
-        const jsHeader = `
-const __r=[],__p=0,__f=0;
-const __logs=[];
-const _originalLog = console.log;
-const _originalError = console.error;
-console.log = (...args) => {
-  __logs.push(args.length === 1 ? args[0] : args.join(' '));
-  _originalLog(...args);
-};
-console.error = (...args) => {
-  __logs.push('[Error]: ' + (args.length === 1 ? args[0] : args.join(' ')));
-  _originalError(...args);
-};
-const __testQueue = [];
-const __test = (d, fn) => {
-  __testQueue.push(async () => {
     try {
-      await fn();
-      __r.push({description:d, passed:true});
-    } catch(e) {
-      __r.push({description:d, passed:false, error:e.message});
-    }
-  });
-};
-class _E{constructor(a){this._a=a;}
-toBe(e){if(this._a!==e)throw new Error('Expected '+e+', got '+this._a);}
-toEqual(e){if(JSON.stringify(this._a)!==JSON.stringify(e))throw new Error('Expected '+JSON.stringify(e)+', got '+JSON.stringify(this._a));}
-toBeTruthy(){if(!this._a)throw new Error('Expected truthy');}
-toBeFalsy(){if(this._a)throw new Error('Expected falsy');}}
-const __expect=(a)=>new _E(a);
-`;
-        
-        const jsCode = tabs.find(t => t.path === 'index.js' || t.path.endsWith('.js'))?.content || '';
-        const fullScript = `
-${jsHeader}
-try {
-  ${jsCode}
-  ${combinedTestCode}
-  for (const t of __testQueue) await t();
-} finally {
-  console.log = _originalLog;
-  console.error = _originalError;
-}
-return __r;
-`;
-        
-        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-        const fn = new AsyncFunction(fullScript);
-        const results = await fn();
-        
-        let out = 'Test Results:\n';
-        let passedCount = 0;
-        results.forEach((r: any) => {
-          if (r.passed) {
-            out += `✅ ${r.description}\n`;
-            passedCount++;
-          } else {
-            out += `❌ ${r.description} - ${r.error}\n`;
-          }
-        });
-        out += `\nPassed ${passedCount} / ${results.length} tests.`;
-        setTerminalOutput(out);
-      } catch (err: any) {
-        setTerminalOutput('[Error executing tests]: ' + err.message);
-      } finally {
-        setIsRunning(false);
+      // Save first so the runner sees the latest edits
+      const filesPayload = tabs.map(t => ({ name: t.path, content: t.content }));
+      await apiClient.post(`/students/exercise/${exercise.id}/workspace/save`, {
+        files: filesPayload,
+        taskId: activeTask?.id,
+      });
+
+      const res = await apiClient.post(`/students/exercise/${exercise.id}/run-tests`, {
+        taskId: activeTask?.id,
+      });
+
+      const data = res.data?.data;
+      if (!data || !Array.isArray(data.results)) {
+        setTerminalOutput(data?.message || 'No test results were returned.');
+        return;
       }
+
+      let out = data.sample_only ? 'Sample tests:\n' : 'Test Results:\n';
+      data.results.forEach((r: any) => {
+        if (r.passed) {
+          out += `✅ ${r.description}\n`;
+          return;
+        }
+        out += `❌ ${r.description}\n`;
+        // Data-driven cases know the input and both values — show all three
+        // rather than a bare "expected X, got Y" with no context.
+        if (r.input !== undefined) {
+          out += `     input     ${r.input}\n`;
+          out += `     expected  ${r.expected}\n`;
+          out += `     actual    ${r.actual ?? '—'}\n`;
+          if (r.actual === null && r.error) out += `     ${r.error}\n`;
+        } else if (r.error) {
+          out += `     ${r.error}\n`;
+        }
+      });
+      out += `\nPassed ${data.passed} / ${data.total} tests.`;
+      if (data.sample_only) {
+        out += '\nSubmit to run the full set, including hidden tests.';
+      }
+      setTerminalOutput(out);
+    } catch (err: any) {
+      setTerminalOutput(
+        'Could not run tests: ' + (err.response?.data?.message || err.message),
+      );
+    } finally {
+      setIsRunning(false);
     }
   };
 
   const handleSubmit = async () => {
     try {
-      const result = await onSubmit(exercise.id, tabs);
+      const result = await onSubmit(exercise.id, tabs, activeTask?.id);
       
       const testRes = result?.testResults || result?.data?.test_results;
       const submissionScore = result?.score !== undefined ? result.score : result?.data?.submission?.score;
@@ -839,17 +737,42 @@ return __r;
 
   return (
     <div className={`flex w-full ${isDark ? 'bg-[#0b0f19] text-slate-300 border-slate-800' : 'bg-slate-50 text-slate-700 border-slate-200'} shadow-2xl overflow-hidden transition-all duration-200 ${
-      isFullscreen 
-        ? 'fixed inset-0 z-50 rounded-none' 
+      isFullscreen
+        ? 'fixed inset-0 z-50 rounded-none'
         : 'h-[800px] border rounded-xl relative'
-    }`}>
-      
+    } ${tasks && tasks.length > 1 ? 'flex-col' : ''}`}>
+
+      {/* Task tabs (multi-task exercises only) */}
+      {tasks && tasks.length > 1 && (
+        <div className={`flex items-center overflow-x-auto shrink-0 [&::-webkit-scrollbar]:hidden ${isDark ? 'bg-[#0f172a] border-b border-slate-800' : 'bg-slate-100 border-b border-slate-200'}`}>
+          {tasks.map((task, idx) => (
+            <button
+              key={task.id}
+              onClick={() => handleTaskSwitch(idx)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold whitespace-nowrap transition-colors border-r ${isDark ? 'border-slate-800' : 'border-slate-200'} ${
+                activeTaskIndex === idx
+                  ? (isDark ? 'bg-indigo-600/20 text-white' : 'bg-indigo-50 text-indigo-700')
+                  : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-550 hover:text-slate-800')
+              }`}
+            >
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                activeTaskIndex === idx ? 'bg-indigo-500 text-white' : (isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-300 text-slate-700')
+              }`}>
+                {idx + 1}
+              </span>
+              {task.title}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className={`flex flex-1 min-h-0 w-full`}>
       {/* Activity Bar */}
       <div className={`w-12 flex flex-col items-center py-4 ${isDark ? 'bg-[#0f172a] border-r border-slate-800' : 'bg-slate-100 border-r border-slate-200'} shrink-0 gap-4`}>
         <button 
           onClick={() => {
             if (!tabs.find(t => t.path === 'Instructions.md')) {
-              setTabs(prev => [{ path: 'Instructions.md', content: exercise.instructions || exercise.tasks?.[0]?.instructions || '', language: 'markdown' }, ...prev]);
+              setTabs(prev => [{ path: 'Instructions.md', content: instructionsMarkdown, language: 'markdown' }, ...prev]);
             }
             setActiveTab('Instructions.md');
           }}
@@ -943,7 +866,7 @@ return __r;
                 <Play className={`w-3.5 h-3.5 mr-1 ${exercise.language === 'dom' ? 'text-emerald-400' : ''}`} /> Run
               </Button>
               
-              {exercise.tasks?.[0]?.test_cases && exercise.tasks[0].test_cases.length > 0 && exercise.language !== 'dom' && (
+              {activeTask?.test_cases && activeTask.test_cases.length > 0 && exercise.language !== 'dom' && exercise.language !== 'sql' && (
                 <Button 
                   size='sm' 
                   variant='secondary'
@@ -1012,7 +935,7 @@ return __r;
                     prose-hr:${isDark ? 'border-slate-800' : 'border-slate-200'}
                   `}>
                     <ReactMarkdown>
-                      {exercise.instructions || exercise.tasks?.[0]?.instructions || '*No instructions provided.*'}
+                      {instructionsMarkdown}
                     </ReactMarkdown>
                   </div>
                 </div>
@@ -1186,6 +1109,7 @@ return __r;
           )}
         </Panel>
       </PanelGroup>
+      </div>
     </div>
   );
 }

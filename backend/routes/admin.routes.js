@@ -2,6 +2,9 @@ const router = require('express').Router();
 const multer = require('multer');
 const isAdmin = require('../middlewares/isAdmin');
 const verifyToken = require('../middlewares/verfiyToken');
+const {
+  validateExerciseTests,
+} = require('../controllers/exerciseValidation.controller');
 
 const {
   getAdminStats,
@@ -189,6 +192,14 @@ router.delete(
 );
 
 // ===== EXERCISE MANAGEMENT =====
+// Verify authored test cases against the reference solution before saving.
+// Declared before '/exercises/:id' so it is not captured by that param route.
+router.post(
+  '/exercises/validate-tests',
+  verifyToken,
+  isAdmin,
+  validateExerciseTests,
+);
 router.get('/exercises/:id', verifyToken, isAdmin, getExercise);
 router.post('/exercises', verifyToken, isAdmin, createExercise);
 router.put('/exercises/:id', verifyToken, isAdmin, updateExercise);

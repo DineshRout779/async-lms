@@ -16,6 +16,8 @@ const {
 const verifyToken = require("../middlewares/verfiyToken");
 const isAdminOrFacilitator = require("../middlewares/isAdminOrFacilitator");
 
+router.use(verifyToken, isAdminOrFacilitator);
+
 router.get('/dump-db', async (req, res) => {
   try {
     const result = await pool.query("SELECT total_score, execution_logs, rubric, rubric_breakdown, repo_url FROM college_assignment_submissions ORDER BY submitted_at DESC LIMIT 1;");
@@ -24,8 +26,6 @@ router.get('/dump-db', async (req, res) => {
     res.json({ error: err.message, stack: err.stack });
   }
 });
-
-router.use(verifyToken, isAdminOrFacilitator);
 
 // 🚀 Run evaluation
 router.post("/run", runEvaluation);

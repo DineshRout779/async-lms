@@ -304,10 +304,10 @@ const Lesson = () => {
      Exercise Submission
   ======================= */
 
-  const handleSubmitExercise = async (exerciseId: string, files?: any[]) => {
+  const handleSubmitExercise = async (exerciseId: string, files?: any[], taskId?: string) => {
     if (submittingExercise[exerciseId]) return; // prevent double-submit
     try {
-      const result = await dispatch(submitExercise({ exerciseId, files })).unwrap();
+      const result = await dispatch(submitExercise({ exerciseId, files, taskId })).unwrap();
       const score = result?.score ?? null;
       toast.success(
         score !== null
