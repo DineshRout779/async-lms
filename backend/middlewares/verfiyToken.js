@@ -35,13 +35,11 @@ const verifyToken = async (req, res, next) => {
     const { markUserActive } = require('../services/presenceService');
     markUserActive(req.user.id);
 
-    console.log('Logged in user role:', req.user.role);
-
     // 4. Move to the next middleware or controller
     next();
   } catch (error) {
     console.log('Error: ', error);
-    res.status(403).json({ message: 'Invalid or expired token' });
+    res.status(401).json({ message: 'Invalid or expired token' });
   }
 };
 
