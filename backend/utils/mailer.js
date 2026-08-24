@@ -1,20 +1,89 @@
 const nodemailer = require('nodemailer');
 
 /**
- * Sends transactional email via SMTP (Resend/Brevo/SES)
- * If SMTP environment variables are missing and NODE_ENV is development,
- * it gracefully falls back to logging the mail and OTP code to the console.
+ * Sends transactional email via SMTP (local dev) or HTTP API (production/Render).
+ * HTTP API is used in production to bypass outbound SMTP port blocking on Render.
  */
 const sendMail = async ({ to, subject, html, text }) => {
   const isDev = (process.env.NODE_ENV || 'development').trim() === 'development';
-  
-  const host = (process.env.SMTP_HOST || '').trim();
+  const isProduction = !isDev;
+
+  const host = (process.env.SMTP_HOST || '').trim().toLowerCase();
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const user = (process.env.SMTP_USER || '').trim();
   const pass = (process.env.SMTP_PASS || '').trim();
+  
+  // Resolve default from email
+  let fromEmail = process.env.SMTP_FROM || user;
+  if (host.includes('resend.com') && !process.env.SMTP_FROM) {
+    fromEmail = 'onboarding@resend.dev';
+  }
 
+  // ------------------------------------------------------------------
+  // 1. PRODUCTION HTTP API ROUTE (Bypasses SMTP port blocks on Render)
+  // ------------------------------------------------------------------
+  if (isProduction) {
+    console.log(`[mailer] Production: dispatching via HTTP API to bypass SMTP restrictions...`);
+
+    // A. BREVO HTTP API
+    if (host.includes('brevo.com')) {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': pass, // Brevo API key is the SMTP password
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'CodeGuru', email: fromEmail },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorDetails = await response.json();
+        throw new Error(`Brevo HTTP API Error: ${response.status} - ${JSON.stringify(errorDetails)}`);
+      }
+
+      const data = await response.json();
+      console.log(`[mailer] Email sent successfully via Brevo HTTP API: ${data.messageId}`);
+      return { success: true, messageId: data.messageId };
+    }
+
+    // B. RESEND HTTP API
+    if (host.includes('resend.com')) {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${pass}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `CodeGuru <${fromEmail}>`,
+          to: [to],
+          subject,
+          html,
+          text,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorDetails = await response.json();
+        throw new Error(`Resend HTTP API Error: ${response.status} - ${JSON.stringify(errorDetails)}`);
+      }
+
+      const data = await response.json();
+      console.log(`[mailer] Email sent successfully via Resend HTTP API: ${data.id}`);
+      return { success: true, messageId: data.id };
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // 2. LOCAL DEV / FALLBACK ROUTE (Standard SMTP logic)
+  // ------------------------------------------------------------------
   const isSmtpConfigured = host && user && pass;
-
   if (!isSmtpConfigured) {
     if (isDev) {
       console.log('\n==================================================');
@@ -43,7 +112,6 @@ const sendMail = async ({ to, subject, html, text }) => {
     }
   }
 
-  // Create transporter
   const transporter = nodemailer.createTransport({
     host,
     port,
@@ -54,15 +122,6 @@ const sendMail = async ({ to, subject, html, text }) => {
     },
   });
 
-  // Resend free sandbox requires sending from onboarding@resend.dev
-  let fromEmail = user;
-  if (host.includes('resend.com')) {
-    fromEmail = 'onboarding@resend.dev';
-  }
-  if (process.env.SMTP_FROM) {
-    fromEmail = process.env.SMTP_FROM;
-  }
-
   const mailOptions = {
     from: `"CodeGuru" <${fromEmail}>`,
     to,
@@ -71,14 +130,9 @@ const sendMail = async ({ to, subject, html, text }) => {
     html,
   };
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[mailer] Email sent successfully: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error('[mailer] Failed to send email:', error);
-    throw error;
-  }
+  const info = await transporter.sendMail(mailOptions);
+  console.log(`[mailer] Email sent successfully via SMTP: ${info.messageId}`);
+  return { success: true, messageId: info.messageId };
 };
 
 module.exports = { sendMail };
