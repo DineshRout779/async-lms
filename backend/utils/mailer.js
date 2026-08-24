@@ -11,7 +11,7 @@ const sendMail = async ({ to, subject, html, text }) => {
   const host = (process.env.SMTP_HOST || '').trim().toLowerCase();
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const user = (process.env.SMTP_USER || '').trim();
-  const pass = (process.env.SMTP_PASS || '').trim();
+  const pass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
   
   // Resolve default from email
   let fromEmail = process.env.SMTP_FROM || user;
