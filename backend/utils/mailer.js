@@ -19,6 +19,11 @@ const sendMail = async ({ to, subject, html, text }) => {
     fromEmail = 'onboarding@resend.dev';
   }
 
+  // Debug API Key properties safely in production
+  if (isProduction) {
+    console.log(`[mailer] DEBUG: SMTP_PASS length is ${pass.length} | Starts with: ${pass.substring(0, 12)}... | Ends with: ...${pass.substring(pass.length - 12)}`);
+  }
+
   // ------------------------------------------------------------------
   // 1. PRODUCTION HTTP API ROUTE (Bypasses SMTP port blocks on Render)
   // ------------------------------------------------------------------
