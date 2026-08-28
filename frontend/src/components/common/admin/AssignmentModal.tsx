@@ -150,7 +150,8 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
     }
 
     let finalTestCases = testCases.trim();
-    if (evaluatorType === 'REACT' || evaluatorType === 'AI' || evaluatorType === 'FULLSTACK') {
+    const upperType = (evaluatorType || '').toUpperCase();
+    if (upperType === 'REACT' || upperType === 'AI' || upperType === 'FULLSTACK' || upperType === 'BACKEND') {
       const isJs = !finalTestCases.startsWith('{') && !finalTestCases.startsWith('[');
       if (isJs && finalTestCases) {
         try {
