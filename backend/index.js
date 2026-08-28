@@ -41,6 +41,7 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(compression());
 app.use(cors());
+app.use(morgan('combined'));
 
 // ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
 // IMPORTANT: This must be defined BEFORE express.json(), otherwise body-parser
@@ -51,7 +52,7 @@ function getWorkerProxy(workerIp) {
   if (workerProxies.has(workerIp)) return workerProxies.get(workerIp);
 
   const workerPort = process.env.WORKER_PORT || 4000;
-  const proxy = require('http-proxy-middleware').createProxyMiddleware({
+  const proxy = createProxyMiddleware({
     target: `http://${workerIp}:${workerPort}`,
     changeOrigin: true,
     ws: false, // Handle upgrades manually below instead of automatically
@@ -98,6 +99,8 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many requests, please try again later.' },
 });
+
+app.use(express.json());
 
 const server = http.createServer(app);
 
