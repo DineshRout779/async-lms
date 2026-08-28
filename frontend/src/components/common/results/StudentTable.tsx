@@ -125,7 +125,7 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
     if (!evaluation?.id) return;
 
     let retries = 0;
-    const MAX_RETRIES = 40; // ~2 minutes at 3s interval
+    const MAX_RETRIES = 200; // ~10 minutes at 3s interval (defense against large class queue delays)
     let lastCompletedCount = -1; // Track progress — only refresh when count increases
 
     const interval = setInterval(async () => {

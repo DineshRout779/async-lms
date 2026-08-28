@@ -393,7 +393,8 @@ exports.syncEvaluationStatus = async (req, res) => {
         if (!job.status_url) {
           // Job has no status URL — it was never queued.
           // Auto-fail after 10 minutes so the UI stops polling.
-          const ageMinutes = (Date.now() - new Date(job.created_at || 0).getTime()) / 60000;
+          const createdAtTime = job.created_at ? new Date(job.created_at).getTime() : Date.now();
+          const ageMinutes = (Date.now() - createdAtTime) / 60000;
           if (ageMinutes > 10) {
             const failFeedback = JSON.stringify({
               summary: 'This submission was not sent to the grader (submitted after evaluation started). Please use "Evaluate Selected" to re-evaluate this student.',
