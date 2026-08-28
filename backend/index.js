@@ -44,6 +44,8 @@ app.use(cors());
 app.use(morgan('combined'));
 
 // ── Secure Worker Proxy (Orchestrator -> Workers) ───────────────────────────
+// IMPORTANT: This must be defined BEFORE express.json(), otherwise body-parser
+// consumes the stream and causes 504 Gateway Timeouts for POST requests!
 const workerProxies = new Map(); // workerIp -> proxyInstance
 
 function getWorkerProxy(workerIp) {
@@ -57,8 +59,8 @@ function getWorkerProxy(workerIp) {
     pathRewrite: (path) => path.replace(new RegExp(`^/worker/${workerIp}`), ''),
     logger: console,
     onProxyReqWs: (proxyReq, req, socket) => {
-       // Optional: Add custom headers here if needed
-    }
+      // Optional: Add custom headers here if needed
+    },
   });
 
   workerProxies.set(workerIp, proxy);
@@ -69,6 +71,9 @@ app.use('/worker/:ip', (req, res, next) => {
   const proxy = getWorkerProxy(req.params.ip);
   return proxy(req, res, next);
 });
+
+app.use(express.json());
+// app.use(morgan('combined'));
 
 // custom logger
 app.use((req, res, next) => {
@@ -127,7 +132,6 @@ app.use(
   verifyToken,
   express.static(path.join(__dirname, 'public', 'uploads')),
 );
-
 
 // ── Internal worker registry endpoints (no auth — internal network only) ────
 app.post('/api/v1/internal/workers/register', (req, res) => {
@@ -217,6 +221,27 @@ server.on('upgrade', (req, socket, head) => {
   // If it's NOT a worker request, we DO NOT call any proxy logic.
   // The built-in socket.io listeners will handle the upgrade automatically.
 });
+
+// ── Automated Background Jobs ───────────────────────────────────────────────
+const pool = require('./config/pg');
+
+// Runs once a day to permanently delete users in the bin > 30 days
+const purgeOldDeletedUsers = async () => {
+  try {
+    const res = await pool.query(`DELETE FROM users WHERE deleted_at < NOW() - INTERVAL '30 days'`);
+    if (res.rowCount > 0) {
+      console.log(`[Cron] Purged ${res.rowCount} users from recycle bin older than 30 days.`);
+    }
+  } catch (error) {
+    console.error('[Cron Error] Failed to purge recycle bin:', error);
+  }
+};
+
+// Run immediately on boot
+purgeOldDeletedUsers();
+
+// Schedule to run every 24 hours
+setInterval(purgeOldDeletedUsers, 24 * 60 * 60 * 1000);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {

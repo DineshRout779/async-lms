@@ -174,13 +174,13 @@ exports.runEvaluation = async (req, res) => {
 
       // Create payloads based on evaluator type capabilities
       // visual and javascript accept arrays. backend and react accept singles.
-      if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual') {
-        const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : evaluatorType);
+      if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual' || evaluatorType === 'PYTHON' || evaluatorType === 'python') {
+        const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : (evaluatorType === 'PYTHON' ? 'python' : evaluatorType));
         
         let jsConfig = { testCases: assignment.test_cases };
         
         // If test_cases is a JSON object containing advanced JS configs, extract them
-        if (payloadType === 'javascript' && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
+        if ((payloadType === 'javascript' || payloadType === 'python') && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
            jsConfig = {
              testCases: assignment.test_cases.testCases || [],
              evaluationMode: assignment.test_cases.evaluationMode || 'function',
@@ -198,7 +198,7 @@ exports.runEvaluation = async (req, res) => {
             studentName: s.student_name,
             studentId: s.user_id || s.student_id,
           })),
-          testCases: assignment.test_cases,
+          ...jsConfig,
           rubricText: assignment.rubric
             ? JSON.stringify(assignment.rubric)
             : 'Standard evaluation',
@@ -381,6 +381,7 @@ exports.syncEvaluationStatus = async (req, res) => {
         const jobState = jobData.status || jobData.state; // Handles different bullmq status formats
 
         if (jobState === 'completed' || jobState === 'failed') {
+          console.log(`Job ${job.id} state: ${jobState}, resData: ${JSON.stringify(jobData.result)}`);
           // Extract marks and feedback (Central evaluator format can vary slightly)
           let marks = 0;
           let feedback = '';
@@ -416,6 +417,7 @@ exports.syncEvaluationStatus = async (req, res) => {
           }
 
           // Update result row
+          console.log(`Updating DB for ${job.id} with status ${jobState}, marks ${marks}`);
           await pool.query(
             `UPDATE evaluation_results 
              SET status = 'completed', marks = $1, feedback = $2
@@ -500,6 +502,147 @@ exports.getLatestEvaluationByAssignment = async (req, res) => {
   }
 };
 
+exports.getResultsByAssignment = async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    // Check if evaluation exists
+    const evalRes = await pool.query(
+      `SELECT e.*, COALESCE(a.title, c.title) as assignment_name
+       FROM evaluations e
+       LEFT JOIN assignments a ON e.assignment_id = a.id
+       LEFT JOIN college_assignments c ON e.college_assignment_id = c.id
+       WHERE e.assignment_id = $1 OR e.college_assignment_id = $1
+       ORDER BY created_at DESC LIMIT 1`,
+      [assignmentId],
+    );
+
+    const isFacilitator = req.user.role !== 'admin';
+    const facilitatorCollegeIds = req.user.college_ids || [];
+
+    if (evalRes.rows.length > 0) {
+      // Evaluation exists, fetch results just like getEvaluationResults
+      const evaluation = evalRes.rows[0];
+      const values = [evaluation.id];
+      let collegeFilter = '';
+      if (isFacilitator) {
+        values.push(facilitatorCollegeIds);
+        collegeFilter = ' AND col.id = ANY($2)';
+      }
+
+      const resultsRes = await pool.query(
+        `SELECT r.*,
+                COALESCE(s.submission_link, cs.submission_link) as submission_link,
+                cs.submission_file_url as submission_file_url,
+                sp.expected_graduation_year,
+                col.name as college_name,
+                col.id as college_id
+         FROM evaluation_results r
+         JOIN evaluations e ON r.evaluation_id = e.id
+         LEFT JOIN assignment_submissions s ON r.submission_id = s.id AND e.assignment_id IS NOT NULL
+         LEFT JOIN college_assignment_submissions cs ON r.submission_id = cs.id AND e.college_assignment_id IS NOT NULL
+         LEFT JOIN student_profiles sp ON r.student_id = sp.user_id
+         LEFT JOIN colleges col ON sp.college_id = col.id
+         WHERE r.evaluation_id = $1${collegeFilter}`,
+        values,
+      );
+
+      const results = await Promise.all(
+        resultsRes.rows.map(async (row) => ({
+          ...row,
+          submission_link: await presignS3Url(row.submission_link),
+          submission_file_url: await presignS3Url(row.submission_file_url),
+        })),
+      );
+
+      return res.json({
+        success: true,
+        evaluation: evaluation,
+        results: results,
+      });
+    }
+
+    // No evaluation exists, fetch all submissions and generate pending results
+    const isCollegeAssignment = await pool.query(`SELECT id FROM college_assignments WHERE id = $1`, [assignmentId]);
+    const isCollege = isCollegeAssignment.rows.length > 0;
+
+    let submissionQuery = '';
+    let values = [assignmentId];
+
+    if (isCollege) {
+      submissionQuery = `
+        SELECT s.id as submission_id,
+               s.submission_link,
+               s.submission_file_url,
+               s.student_id as student_id,
+               u.full_name as student_name,
+               sp.expected_graduation_year,
+               col.name as college_name,
+               col.id as college_id
+        FROM college_assignment_submissions s
+        JOIN users u ON s.student_id = u.id
+        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+        LEFT JOIN colleges col ON sp.college_id = col.id
+        WHERE s.assignment_id = $1
+      `;
+    } else {
+      submissionQuery = `
+        SELECT s.id as submission_id,
+               s.submission_link,
+               null as submission_file_url,
+               s.user_id as student_id,
+               u.full_name as student_name,
+               sp.expected_graduation_year,
+               col.name as college_name,
+               col.id as college_id
+        FROM assignment_submissions s
+        JOIN users u ON s.user_id = u.id
+        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+        LEFT JOIN colleges col ON sp.college_id = col.id
+        WHERE s.assignment_id = $1
+      `;
+    }
+
+    if (isFacilitator) {
+      values.push(facilitatorCollegeIds);
+      submissionQuery += ` AND col.id = ANY($2)`;
+    }
+
+    const submissionsRes = await pool.query(submissionQuery, values);
+
+    const pendingResults = await Promise.all(
+      submissionsRes.rows.map(async (row) => ({
+        ...row,
+        submission_link: await presignS3Url(row.submission_link),
+        submission_file_url: await presignS3Url(row.submission_file_url),
+        status: 'pending',
+        marks: 0,
+        feedback: '-',
+      }))
+    );
+
+    const assignmentInfo = await pool.query(
+      `SELECT title, evaluator_type FROM ${isCollege ? 'college_assignments' : 'assignments'} WHERE id = $1`,
+      [assignmentId]
+    );
+
+    return res.json({
+      success: true,
+      evaluation: {
+        id: null,
+        assignment_id: assignmentId,
+        assignment_name: assignmentInfo.rows[0]?.title,
+        evaluator_type: assignmentInfo.rows[0]?.evaluator_type || 'REACT',
+        status: 'pending',
+      },
+      results: pendingResults,
+    });
+
+  } catch (error) {
+    serverError(res, error);
+  }
+};
+
 exports.getEvaluationResults = async (req, res) => {
   try {
     const { id } = req.params;
@@ -577,7 +720,7 @@ const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
 
 exports.generateTestCases = async (req, res) => {
   try {
-    const { title, instructions, evaluatorType } = req.body;
+    const { title, instructions, evaluatorType, rubric } = req.body;
 
     if (!instructions) {
       return res.status(400).json({ success: false, message: "Instructions are required to generate test cases." });
@@ -585,7 +728,9 @@ exports.generateTestCases = async (req, res) => {
 
     const systemPrompt = `You are an expert technical curriculum designer. Your task is to generate strict JSON test case configurations for an automated code grading system.
     
-Based on the Assignment Title and Instructions provided by the user, you must output ONLY a raw JSON object that will be used by our JavaScript automated evaluator. DO NOT output any markdown blocks like \`\`\`json, just output the raw JSON string starting with { and ending with }.
+Based on the Assignment Title, Instructions, and Evaluation Rubric provided by the user, you must output ONLY a raw JSON object that will be used by our JavaScript automated evaluator. DO NOT output any markdown blocks like \`\`\`json, just output the raw JSON string starting with { and ending with }.
+
+CRITICAL RULE: Your generated test cases must closely align with the provided Evaluation Rubric criteria. Ensure that the tests verify exactly what the rubric expects the student to build.
 
 If the assignment asks students to write global variables and use console.log (e.g. basic variables assignment), use "script" mode.
 CRITICAL RULES FOR SCRIPT MODE:
@@ -612,7 +757,13 @@ Example output for function mode:
 If you are unsure or it doesn't fit neatly into function mode, fallback to script mode.
 Do not include any explanation.`;
 
-    const userPrompt = `Assignment Title: ${title || 'Untitled'}\n\nInstructions:\n${instructions}`;
+    const userPrompt = `Assignment Title: ${title || 'Untitled'}
+
+Instructions:
+${instructions}
+
+Evaluation Rubric:
+${rubric ? JSON.stringify(rubric, null, 2) : 'No rubric provided'}`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -640,5 +791,337 @@ Do not include any explanation.`;
   } catch (error) {
     console.error("AI Generation Error:", error);
     return serverError(res, error);
+  }
+};
+
+exports.generateRubric = async (req, res) => {
+  try {
+    const { title, instructions, evaluatorType } = req.body;
+
+    if (!instructions) {
+      return res.status(400).json({ success: false, message: "Instructions are required to generate a rubric." });
+    }
+
+    let systemPrompt = `You are an expert technical curriculum designer. Your task is to generate a strict JSON evaluation rubric for an automated code grading system.
+    
+Based on the Assignment Title and Instructions provided by the user, you must output ONLY a raw JSON array of objects. DO NOT output any markdown blocks like \`\`\`json, just output the raw JSON string starting with [ and ending with ].
+
+CRITICAL RULES:
+1. The output MUST be a JSON array of objects.
+2. Each object must have exactly three keys: "name" (string), "description" (string), and "weight" (number).
+3. The sum of all "weight" values MUST equal exactly 100.
+4. Each "name" must be UNIQUE. Do not use the same name twice.
+5. Do not include any explanation.
+6. ASSIGNMENT COMPLEXITY ADAPTATION:
+Identify the complexity of the assignment based on the title and instructions:
+- **Simple / Introductory Class Exercise** (e.g., introductory topics, basic tags, simple scripts, small practice tasks):
+  - Generate 2-3 simple, highly focused criteria.
+  - ONLY assess features explicitly mentioned in the instructions.
+  - DO NOT include advanced/generic engineering constraints like ARIA/accessibility, responsive design, complex optimization, database index scaling, security/encryption, or robust error handling unless explicitly requested in the instructions. Keep criteria simple and direct.
+- **Standard Project / Mid-level Assignment** (e.g., building a complete component, a landing page, a standard CRUD feature):
+  - Generate 3-4 criteria.
+  - May include standard development practices (e.g., basic code structure, clean formatting, simple responsive layout if HTML/CSS).
+- **Advanced / Complex Assignment** (e.g., production-grade features, complex workflows, full applications):
+  - Generate 4-6 strict criteria.
+  - Include rigorous requirements like edge-case handling, security/auth, ARIA/accessibility, performance, and advanced architecture patterns.`;
+
+    if (evaluatorType === 'react') {
+      systemPrompt += `\n7. For React assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
+- "Components Render Correctly" (Use for UI rendering / layout)
+- "State Updates" (Use for React state management, hooks)
+- "Props Handling" (Use for props passing, data flow)
+- "Routing Works" (Use for React Router or navigation)
+- "API Integration" (Use for fetch/axios/data fetching)
+- "Code Structure" (Use for clean code, standard practices)
+You may choose 2-5 from this list based on the instructions and the complexity rules above, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
+    } else if (evaluatorType === 'backend' || evaluatorType === 'AI') {
+      systemPrompt += `\n7. For Backend assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
+- "API Endpoints" (Use for routing, endpoints, HTTP methods)
+- "Database Operations" (Use for Models, Schemas, Queries, CRUD)
+- "Middleware & Auth" (Use for error handling, JWT, authentication)
+- "Controller Logic" (Use for business logic, data formatting)
+- "Code Structure" (Use for clean code, separation of concerns, MVC)
+You may choose 2-5 from this list based on the instructions and the complexity rules above, but YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
+    } else if (evaluatorType?.toLowerCase() === 'fullstack') {
+      systemPrompt += `\n7. For Fullstack assignments, the "name" field MUST be chosen strictly from the following exact predefined list:
+- "Frontend UI & Components" (Use for React rendering, responsive design, structure)
+- "Frontend State & Data Fetching" (Use for React state, hooks, fetch/axios)
+- "Backend API & Routing" (Use for Express routes, HTTP methods, CORS)
+- "Backend Logic & Database" (Use for business logic, validation, database models)
+- "Fullstack Integration" (Use for end-to-end data flow between client and server)
+- "Code Quality & Structure" (Use for clean code, file structure, package.json across both environments)
+You must select 3-6 criteria from this list that cover both Frontend and Backend, based on the instructions and complexity rules above. YOU MUST NOT INVENT CUSTOM NAMES outside of this exact list.`;
+    }
+
+    systemPrompt += `
+
+Example output:
+[
+  { "name": "${evaluatorType === 'react' ? 'State Updates' : (evaluatorType === 'backend' ? 'API Endpoints' : (evaluatorType?.toLowerCase() === 'fullstack' ? 'Fullstack Integration' : 'Feature A'))}", "description": "Implements endpoints correctly.", "weight": 40 },
+  { "name": "${evaluatorType === 'react' ? 'Components Render Correctly' : (evaluatorType === 'backend' ? 'Database Operations' : (evaluatorType?.toLowerCase() === 'fullstack' ? 'Backend API & Routing' : 'Feature B'))}", "description": "Implements logic correctly.", "weight": 40 },
+  { "name": "Code Quality & Structure", "description": "Clean and readable code.", "weight": 20 }
+]`;
+
+    const userPrompt = `Assignment Title: ${title || 'Untitled'}
+
+Instructions:
+${instructions}`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.1,
+    });
+
+    let rawJson = completion.choices[0].message.content.trim();
+    if (rawJson.startsWith('```json')) rawJson = rawJson.substring(7);
+    if (rawJson.startsWith('```')) rawJson = rawJson.substring(3);
+    if (rawJson.endsWith('```')) rawJson = rawJson.substring(0, rawJson.length - 3);
+    rawJson = rawJson.trim();
+
+    const parsedJson = JSON.parse(rawJson);
+
+    return res.json({
+      success: true,
+      rubric: JSON.stringify(parsedJson, null, 2)
+    });
+  } catch (error) {
+    console.error("AI Generation Error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error during generation" });
+  }
+};
+
+exports.reEvaluateSubmission = async (req, res) => {
+  let { evaluationId, assignmentId, submissionIds, evaluatorType } = req.body;
+  if (!submissionIds || !Array.isArray(submissionIds) || submissionIds.length === 0 || !evaluatorType) {
+    return res.status(400).json({ success: false, message: 'an array of submissionIds, and evaluatorType are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let isCollegeAssignment = false;
+
+    // Auto-create evaluation if evaluationId is missing
+    if (!evaluationId) {
+      if (!assignmentId) throw new Error("Either evaluationId or assignmentId must be provided");
+
+      const isCollegeAssignmentRes = await client.query(`SELECT id FROM college_assignments WHERE id = $1`, [assignmentId]);
+      isCollegeAssignment = isCollegeAssignmentRes.rows.length > 0;
+      
+      const newEval = await client.query(
+        `INSERT INTO evaluations (assignment_id, college_assignment_id, evaluator_type, status, total_submissions)
+         VALUES ($1, $2, $3, 'running', $4) RETURNING id`,
+        [isCollegeAssignment ? null : assignmentId, isCollegeAssignment ? assignmentId : null, evaluatorType, submissionIds.length]
+      );
+      evaluationId = newEval.rows[0].id;
+      
+      // Pre-create the evaluation_results rows for pending state
+      const initialSubmissionsRes = await client.query(
+        isCollegeAssignment
+        ? `SELECT s.id as submission_id, s.student_id as user_id, u.full_name as student_name
+           FROM college_assignment_submissions s
+           JOIN users u ON s.student_id = u.id
+           WHERE s.id = ANY($1)`
+        : `SELECT s.id as submission_id, s.user_id, u.full_name as student_name
+           FROM assignment_submissions s
+           JOIN users u ON s.user_id = u.id
+           WHERE s.id = ANY($1)`,
+        [submissionIds]
+      );
+      
+      for (const s of initialSubmissionsRes.rows) {
+        await client.query(
+          `INSERT INTO evaluation_results 
+           (evaluation_id, submission_id, student_id, student_name, status, marks, feedback) 
+           VALUES ($1, $2, $3, $4, 'pending', 0, '-')`,
+          [evaluationId, s.submission_id, s.user_id, s.student_name]
+        );
+      }
+    } else {
+      // Fetch the evaluation to get assignmentId or collegeAssignmentId
+      const evalRes = await client.query(
+        `SELECT assignment_id, college_assignment_id FROM evaluations WHERE id = $1`,
+        [evaluationId]
+      );
+
+      if (evalRes.rows.length === 0) {
+        throw new Error("Evaluation not found");
+      }
+
+      const evaluation = evalRes.rows[0];
+      isCollegeAssignment = !!evaluation.college_assignment_id;
+      assignmentId = isCollegeAssignment ? evaluation.college_assignment_id : evaluation.assignment_id;
+    }
+
+    // Fetch assignment for rubric/test_cases
+    let assignmentRes;
+    if (isCollegeAssignment) {
+      assignmentRes = await client.query(`SELECT id, title, NULL as evaluator_type, NULL as test_cases, NULL as rubric, 'college' as type FROM college_assignments WHERE id = $1`, [assignmentId]);
+    } else {
+      assignmentRes = await client.query(`SELECT id, title, evaluator_type, test_cases, rubric, 'unit' as type FROM assignments WHERE id = $1`, [assignmentId]);
+    }
+    const assignment = assignmentRes.rows[0];
+    if (!assignment) throw new Error("Assignment not found");
+
+    // Fetch the specific submissions
+    const queryStr = isCollegeAssignment
+      ? `SELECT s.id as submission_id, s.submission_link, s.student_id as user_id, u.full_name as student_name
+         FROM college_assignment_submissions s
+         JOIN users u ON s.student_id = u.id
+         WHERE s.id = ANY($1)`
+      : `SELECT s.id as submission_id, s.submission_link, s.user_id, u.full_name as student_name
+         FROM assignment_submissions s
+         JOIN users u ON s.user_id = u.id
+         WHERE s.id = ANY($1)`;
+         
+    const submissionsRes = await client.query(queryStr, [submissionIds]);
+    const submissions = submissionsRes.rows;
+
+    if (!submissions.length) {
+      throw new Error('Submissions not found');
+    }
+
+    const validSubmissions = submissions.filter((s) => !!s.submission_link);
+    const invalidSubmissions = submissions.filter((s) => !s.submission_link);
+
+    if (invalidSubmissions.length > 0) {
+      for (const invalid of invalidSubmissions) {
+        await client.query(
+          `UPDATE evaluation_results 
+           SET status = 'failed', marks = 0, feedback = 'No repository URL provided by student.' 
+           WHERE evaluation_id = $1 AND submission_id = $2`,
+          [evaluationId, invalid.submission_id || invalid.id]
+        );
+      }
+    }
+
+    if (validSubmissions.length === 0) {
+      await client.query('COMMIT');
+      return res.json({ success: true, message: "Only invalid submissions found, marked as failed." });
+    }
+
+    // Now send to central evaluator
+    const evaluatorUrl = `${process.env.CENTRAL_EVALUATOR_URL}/evaluate`;
+    const evaluatorApiKey = process.env.CENTRAL_EVALUATOR_API_KEY;
+
+    let jobIdsAndLinks = [];
+
+    if (evaluatorType === 'JS' || evaluatorType === 'VISUAL' || evaluatorType === 'javascript' || evaluatorType === 'visual' || evaluatorType === 'PYTHON' || evaluatorType === 'python') {
+        const payloadType = (evaluatorType === 'JS') ? 'javascript' : (evaluatorType === 'VISUAL' ? 'visual' : (evaluatorType === 'PYTHON' ? 'python' : evaluatorType));
+        
+        let jsConfig = { testCases: assignment.test_cases };
+        if ((payloadType === 'javascript' || payloadType === 'python') && assignment.test_cases && typeof assignment.test_cases === 'object' && !Array.isArray(assignment.test_cases)) {
+           jsConfig = {
+             testCases: assignment.test_cases.testCases || [],
+             evaluationMode: assignment.test_cases.evaluationMode || 'function',
+             entryFunction: assignment.test_cases.entryFunction,
+             functions: assignment.test_cases.functions,
+             expectedLogs: assignment.test_cases.expectedLogs
+           };
+        }
+
+        const payload = {
+          type: payloadType,
+          submissions: validSubmissions.map((s) => ({
+            submissionId: s.submission_id || s.id,
+            repoUrl: s.submission_link,
+            studentName: s.student_name,
+            studentId: s.user_id || s.student_id,
+          })),
+          ...jsConfig,
+          rubricText: assignment.rubric ? JSON.stringify(assignment.rubric) : 'Standard evaluation',
+          expectedUrl: assignment.expected_url || 'https://example.com',
+        };
+
+        const response = await postToEvaluatorWithRetry(evaluatorUrl, payload, {
+          headers: { 'x-api-key': evaluatorApiKey },
+          timeout: 45000,
+        });
+
+        const jobs = response.data.jobs || [response.data];
+        jobs.forEach((job, index) => {
+          jobIdsAndLinks.push({
+            jobId: job.jobId || job.id,
+            statusUrl: job.statusUrl,
+            submissionId: validSubmissions[index].submission_id || validSubmissions[index].id,
+          });
+        });
+    } else {
+        const typeMap = { REACT: 'react', PYTHON: 'python', FULLSTACK: 'fullstack', AI: 'backend' };
+        const payloadType = typeMap[evaluatorType] || typeMap[evaluatorType.toUpperCase()] || 'backend';
+
+        let rubricObj = assignment.rubric;
+        if (typeof assignment.rubric === 'string') {
+          try {
+            rubricObj = JSON.parse(assignment.rubric);
+          } catch (e) {
+            console.error('Failed to parse rubric:', e);
+          }
+        }
+
+        let formattedRubric;
+        if (rubricObj && Array.isArray(rubricObj)) {
+          formattedRubric = { criteria: rubricObj };
+        } else if (rubricObj && rubricObj.criteria && Array.isArray(rubricObj.criteria)) {
+          formattedRubric = rubricObj;
+        } else {
+          formattedRubric = { criteria: [{ name: 'Standard Grading', weight: 100 }] };
+        }
+
+        for (const s of validSubmissions) {
+          const payload = {
+            type: payloadType,
+            submissionId: s.submission_id || s.id,
+            repoUrl: s.submission_link,
+            rubric: formattedRubric,
+          };
+          
+          const response = await postToEvaluatorWithRetry(evaluatorUrl, payload, {
+            headers: { 'x-api-key': evaluatorApiKey },
+            timeout: 45000,
+          });
+
+          jobIdsAndLinks.push({
+            jobId: response.data.jobId || response.data.id,
+            statusUrl: response.data.statusUrl,
+            submissionId: s.submission_id || s.id,
+          });
+        }
+    }
+
+    // Update the rows
+    for (const j of jobIdsAndLinks) {
+      await client.query(
+        `UPDATE evaluation_results
+         SET job_id = $1, status = 'pending', status_url = $2, marks = 0, feedback = ''
+         WHERE evaluation_id = $3 AND submission_id = $4`,
+        [j.jobId, j.statusUrl, evaluationId, j.submissionId]
+      );
+    }
+
+    // Ensure evaluation itself is not completed
+    await client.query(
+      `UPDATE evaluations SET status = 'running' WHERE id = $1`,
+      [evaluationId]
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({ success: true, message: "Re-evaluation started" });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.log('Re-evaluate Error:', error.message);
+    if (error.response) {
+      console.log('Evaluator API Response Data:', error.response.data);
+      return res.status(500).json({ success: false, message: error.response.data.error || error.response.data.message || error.message });
+    }
+    return res.status(500).json({ success: false, message: error.message });
+  } finally {
+    client.release();
   }
 };

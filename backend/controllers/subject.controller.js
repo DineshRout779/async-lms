@@ -9,6 +9,30 @@ const slugify = require('../utils/slugify');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
+/**
+ * Strip executable test code before sending an exercise to a student.
+ * `test_code` contains the expected answers, and hidden tests must not be
+ * readable at all. Tests run server-side, so the client never needs the code.
+ */
+const publicTestCases = (testCases) =>
+  Array.isArray(testCases)
+    ? testCases.map((tc) => ({
+        id: tc.id,
+        description: tc.is_hidden ? 'Hidden test' : tc.description,
+        is_hidden: !!tc.is_hidden,
+      }))
+    : testCases;
+
+const publicTasks = (tasks) =>
+  Array.isArray(tasks)
+    ? tasks.map(({ reference_solution, ...t }) => ({
+        // reference_solution is the author's worked answer, kept only for
+        // authoring-time test verification — never send it to a student.
+        ...t,
+        test_cases: publicTestCases(t.test_cases),
+      }))
+    : tasks;
+
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -622,8 +646,8 @@ exports.getSubtopicContent = async (req, res) => {
           max_score: row.exercise_max_score,
           language: row.exercise_language,
           initial_files: row.exercise_initial_files,
-          test_cases: row.exercise_test_cases,
-          tasks: row.exercise_tasks,
+          test_cases: publicTestCases(row.exercise_test_cases),
+          tasks: publicTasks(row.exercise_tasks),
         });
       }
     });
@@ -906,8 +930,8 @@ exports.getExerciseContent = async (req, res) => {
             max_score: row.exercise_max_score,
             language: row.exercise_language,
             initial_files: row.exercise_initial_files,
-            test_cases: row.exercise_test_cases,
-            tasks: row.exercise_tasks,
+            test_cases: publicTestCases(row.exercise_test_cases),
+            tasks: publicTasks(row.exercise_tasks),
           },
         ],
       },

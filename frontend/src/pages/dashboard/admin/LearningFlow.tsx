@@ -591,8 +591,9 @@ const LearningFlow: React.FC = () => {
     initial_files: { name: string; content: string }[];
     test_cases: import('@/utils/types').TestCase[];
     tasks: import('@/utils/types').ExerciseTask[];
+    rubric?: any;
   }) => {
-    if (!selectedSubtopicForExercise) return;
+    if (!selectedSubtopicForExercise) return; 
 
     try {
       const response = await apiClient.post('/admin/exercises', {
@@ -603,6 +604,7 @@ const LearningFlow: React.FC = () => {
         language: data.language,
         initial_files: data.initial_files,
         tasks: data.tasks,
+        rubric: data.rubric, 
       });
 
       if (response.data.success) {
@@ -623,6 +625,7 @@ const LearningFlow: React.FC = () => {
     max_score: number;
     evaluator_type?: string | null;
     test_cases?: string | null;
+    rubric?: string | null;
   }) => {
     if (!selectedUnitForAssignment) return;
 
@@ -686,6 +689,7 @@ const LearningFlow: React.FC = () => {
     initial_files: { name: string; content: string }[];
     test_cases: import('@/utils/types').TestCase[];
     tasks: import('@/utils/types').ExerciseTask[];
+    rubric?: any;
   }) => {
     if (!editingExercise) return;
 
@@ -697,6 +701,7 @@ const LearningFlow: React.FC = () => {
         language: data.language,
         initial_files: data.initial_files,
         tasks: data.tasks,
+        rubric: data.rubric,
       });
       toast.success('Exercise updated');
       refreshStructure();
@@ -727,6 +732,7 @@ const LearningFlow: React.FC = () => {
     max_score: number;
     evaluator_type?: string | null;
     test_cases?: string | null;
+    rubric?: string | null;
   }) => {
     if (!editingAssignment) return;
 
@@ -2076,6 +2082,7 @@ const LearningFlow: React.FC = () => {
                 initial_files: editingExercise.initial_files || [],
                 test_cases: editingExercise.test_cases || [],
                 tasks: editingExercise.tasks || [],
+                rubric: editingExercise.rubric,
               }
             : undefined
         }
@@ -2110,6 +2117,7 @@ const LearningFlow: React.FC = () => {
                 max_score: editingAssignment.max_score,
                 evaluator_type: (editingAssignment as any).evaluator_type,
                 test_cases: (editingAssignment as any).test_cases,
+                rubric: (editingAssignment as any).rubric,
               }
             : undefined
         }
