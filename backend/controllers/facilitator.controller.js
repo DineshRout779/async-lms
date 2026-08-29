@@ -102,14 +102,16 @@ exports.getFacilitatorStudents = async (req, res) => {
         u.is_verified,
         c.name as college_name,
         c.short_code as college_short_name,
-        COALESCE(sm.enrolled_courses, 0) as enrolled_courses
+        COALESCE(sm.enrolled_courses, 0) as enrolled_courses,
+        COALESCE(sm.progress_percent, 0) as progress_percent
       FROM public.users u
       JOIN public.roles r ON r.id = u.role_id
       JOIN public.student_profiles sp ON u.id = sp.user_id
       LEFT JOIN public.colleges c ON sp.college_id = c.id
       LEFT JOIN LATERAL (
         SELECT 
-          COUNT(DISTINCT us.subject_id)::int as enrolled_courses
+          COUNT(DISTINCT us.subject_id)::int as enrolled_courses,
+          COALESCE(ROUND(AVG(us.progress_percent))::int, 0) as progress_percent
         FROM public.user_subjects us
         WHERE us.user_id = u.id
       ) sm ON true
@@ -119,27 +121,7 @@ exports.getFacilitatorStudents = async (req, res) => {
     `;
 
     const result = await pool.query(query, [collegeIds]);
-    const enrichedRows = await Promise.all(
-      result.rows.map(async (row) => {
-        const enrolledRes = await pool.query(
-          'SELECT subject_id FROM user_subjects WHERE user_id = $1',
-          [row.id]
-        );
-        if (enrolledRes.rows.length === 0) {
-          return { ...row, progress_percent: 0 };
-        }
-        let totalPct = 0;
-        for (const s of enrolledRes.rows) {
-          const { percent } = await calculateSubjectProgress(row.id, s.subject_id);
-          totalPct += percent;
-        }
-        return {
-          ...row,
-          progress_percent: Math.round(totalPct / enrolledRes.rows.length),
-        };
-      })
-    );
-    res.json(enrichedRows);
+    res.json(result.rows);
   } catch (err) {
     console.error('Facilitator Students Error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -213,21 +195,90 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
       ),
       pool.query(
         `SELECT s.id, s.name,
-           COALESCE((
-             SELECT COUNT(DISTINCT lc.subtopic_id)::int 
-             FROM public.user_lesson_progress ulp
-             INNER JOIN public.lesson_content lc ON lc.id = ulp.lesson_content_id
-             INNER JOIN public.subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
-             INNER JOIN public.units un ON st.unit_id = un.id AND un.is_deleted = false
-             INNER JOIN public.topics t ON un.topic_id = t.id AND t.is_deleted = false
-             WHERE ulp.user_id = $1 AND t.subject_id = s.id AND ulp.is_completed = true AND lc.is_deleted = false
-           ), 0) AS completed_subtopics,
-           COALESCE((
-             SELECT COUNT(*)::int FROM subtopics st
+           (
+             SELECT COUNT(lc.id)::int FROM lesson_content lc
+             JOIN subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
              JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
              JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
-             WHERE t.subject_id = s.id AND st.is_deleted = false
-           ), 0) AS total_subtopics
+             WHERE t.subject_id = s.id AND lc.is_published = true AND lc.is_deleted = false
+           ) + 
+           (
+             SELECT COUNT(q.id)::int FROM quizzes q
+             JOIN units un ON q.unit_id = un.id AND un.is_deleted = false
+             JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+             WHERE t.subject_id = s.id AND q.is_deleted = false
+           ) +
+           (
+             SELECT COUNT(e.id)::int FROM exercises e
+             JOIN subtopics st ON e.subtopic_id = st.id AND st.is_deleted = false
+             JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+             JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+             WHERE t.subject_id = s.id AND e.is_deleted = false
+           ) +
+           (
+             SELECT COUNT(a.id)::int FROM assignments a
+             JOIN units un ON a.unit_id = un.id AND un.is_deleted = false
+             JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+             WHERE t.subject_id = s.id AND a.is_deleted = false
+           ) +
+           (
+             SELECT COUNT(p.id)::int FROM projects p
+             JOIN topics t ON p.topic_id = t.id AND t.is_deleted = false
+             WHERE t.subject_id = s.id AND p.is_deleted = false
+           ) as total_subtopics,
+
+           (
+             SELECT COUNT(DISTINCT ulp.lesson_content_id)::int FROM user_lesson_progress ulp
+             WHERE ulp.user_id = $1 AND ulp.is_completed = true 
+               AND ulp.lesson_content_id IN (
+                 SELECT lc.id FROM lesson_content lc
+                 JOIN subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
+                 JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+                 JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+                 WHERE t.subject_id = s.id AND lc.is_published = true AND lc.is_deleted = false
+               )
+           ) +
+           (
+             SELECT COUNT(DISTINCT qa.quiz_id)::int FROM quiz_attempts qa
+             WHERE qa.user_id = $1 AND qa.is_passed = true
+               AND qa.quiz_id IN (
+                 SELECT q.id FROM quizzes q
+                 JOIN units un ON q.unit_id = un.id AND un.is_deleted = false
+                 JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+                 WHERE t.subject_id = s.id AND q.is_deleted = false
+               )
+           ) +
+           (
+             SELECT COUNT(DISTINCT es.exercise_id)::int FROM exercise_submissions es
+             WHERE es.user_id = $1 AND es.is_passed = true
+               AND es.exercise_id IN (
+                 SELECT e.id FROM exercises e
+                 JOIN subtopics st ON e.subtopic_id = st.id AND st.is_deleted = false
+                 JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+                 JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+                 WHERE t.subject_id = s.id AND e.is_deleted = false
+               )
+           ) +
+           (
+             SELECT COUNT(DISTINCT asub.assignment_id)::int FROM assignment_submissions asub
+             WHERE asub.user_id = $1
+               AND asub.assignment_id IN (
+                 SELECT a.id FROM assignments a
+                 JOIN units un ON a.unit_id = un.id AND un.is_deleted = false
+                 JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+                 WHERE t.subject_id = s.id AND a.is_deleted = false
+               )
+           ) +
+           (
+             SELECT COUNT(DISTINCT ps.project_id)::int FROM project_submissions ps
+             WHERE ps.user_id = $1
+               AND ps.project_id IN (
+                 SELECT p.id FROM projects p
+                 JOIN topics t ON p.topic_id = t.id AND t.is_deleted = false
+                 WHERE t.subject_id = s.id AND p.is_deleted = false
+               )
+           ) as completed_subtopics,
+           us.progress_percent as progress_percent
          FROM user_subjects us
          JOIN subjects s ON us.subject_id = s.id
          WHERE us.user_id = $1
@@ -240,17 +291,7 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    const subjects = await Promise.all(
-      subjectsRes.rows.map(async (s) => {
-        const { total, completed, percent } = await calculateSubjectProgress(id, s.id);
-        return {
-          ...s,
-          total_subtopics: total,
-          completed_subtopics: completed,
-          progress_percent: percent,
-        };
-      })
-    );
+    const subjects = subjectsRes.rows;
 
     res.json({
       success: true,

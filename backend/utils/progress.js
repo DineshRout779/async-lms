@@ -100,3 +100,29 @@ exports.calculateSubjectProgress = async (userId, subjectId) => {
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   return { total, completed, percent };
 };
+
+/**
+ * Recalculates course progress for a user and subject, and saves it in the database.
+ * 
+ * @param {string} userId - User ID (UUID)
+ * @param {string} subjectId - Subject ID (UUID)
+ * @returns {Promise<number>} - Saved progress percentage
+ */
+exports.syncUserSubjectProgress = async (userId, subjectId) => {
+  if (!userId || !subjectId) {
+    console.warn('[Progress] syncUserSubjectProgress called with missing userId or subjectId');
+    return 0;
+  }
+  const { total, completed, percent } = await exports.calculateSubjectProgress(userId, subjectId);
+  console.log(`[Progress] calculateSubjectProgress → userId=${userId} subjectId=${subjectId} total=${total} completed=${completed} percent=${percent}%`);
+  const updateRes = await pool.query(
+    'UPDATE user_subjects SET progress_percent = $1 WHERE user_id = $2 AND subject_id = $3 RETURNING user_id',
+    [percent, userId, subjectId]
+  );
+  if (updateRes.rowCount === 0) {
+    console.warn(`[Progress] syncUserSubjectProgress → no row updated. userId=${userId} may not be enrolled in subjectId=${subjectId}`);
+  } else {
+    console.log(`[Progress] user_subjects.progress_percent updated to ${percent}% → userId=${userId} subjectId=${subjectId}`);
+  }
+  return percent;
+};
