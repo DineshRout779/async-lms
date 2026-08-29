@@ -170,6 +170,13 @@ app.get('/api/v1/internal/workers/status', (req, res) => {
   res.json(getStatus());
 });
 
+// Runner pool state. A silently-empty pool used to present as a 60s hang and
+// then a 504 with nothing in the logs; this makes it a single curl.
+app.get('/api/v1/internal/runner/health', (req, res) => {
+  const health = require('./services/runnerService').getPoolHealth();
+  res.status(health.healthy ? 200 : 503).json(health);
+});
+
 //  404 Catch-all
 app.use((req, res) => {
   res.status(404).json({ message: `Route ${req.originalUrl} not found` });
@@ -251,7 +258,7 @@ server.listen(PORT, () => {
 
 initPools().catch((err) => {
   console.error(
-    '[WARN] Runner pool init failed (exercise run/test unavailable):',
+    '[ERROR] Runner pool init threw (exercise run/test unavailable):',
     err.message,
   );
 });
