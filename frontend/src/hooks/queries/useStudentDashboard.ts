@@ -1,8 +1,22 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/services/api';
 import type { Assignment, Subject } from '@/utils/types';
 
 export function useMySubjects() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['student', 'subjects'] });
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    };
+    window.addEventListener('course-progress-updated', handleUpdate);
+    return () => {
+      window.removeEventListener('course-progress-updated', handleUpdate);
+    };
+  }, [queryClient]);
+
   return useQuery<Subject[]>({
     queryKey: ['student', 'subjects'],
     queryFn: () =>

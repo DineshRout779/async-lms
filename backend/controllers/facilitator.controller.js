@@ -1,6 +1,7 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
+const { calculateSubjectProgress } = require('../utils/progress');
 
 /**
  * Get Facilitator Scoped Stats
@@ -101,25 +102,14 @@ exports.getFacilitatorStudents = async (req, res) => {
         u.is_verified,
         c.name as college_name,
         c.short_code as college_short_name,
-        COALESCE(sm.enrolled_courses, 0) as enrolled_courses,
-        COALESCE(sm.progress_percent, 0) as progress_percent
+        COALESCE(sm.enrolled_courses, 0) as enrolled_courses
       FROM public.users u
       JOIN public.roles r ON r.id = u.role_id
       JOIN public.student_profiles sp ON u.id = sp.user_id
       LEFT JOIN public.colleges c ON sp.college_id = c.id
       LEFT JOIN LATERAL (
         SELECT 
-          COUNT(DISTINCT us.subject_id)::int as enrolled_courses,
-          ROUND(AVG(
-            COALESCE((
-              SELECT (COUNT(usp.id)::float / NULLIF((SELECT COUNT(st.id) FROM public.subtopics st JOIN public.units u ON st.unit_id = u.id JOIN public.topics t ON u.topic_id = t.id WHERE t.subject_id = us.subject_id), 0) * 100)
-              FROM public.user_subtopic_progress usp
-              JOIN public.subtopics st2 ON usp.subtopic_id = st2.id
-              JOIN public.units u2 ON st2.unit_id = u2.id
-              JOIN public.topics t2 ON u2.topic_id = t2.id
-              WHERE usp.user_id = u.id AND t2.subject_id = us.subject_id AND usp.is_completed = true
-            ), 0)
-          ))::int as progress_percent
+          COUNT(DISTINCT us.subject_id)::int as enrolled_courses
         FROM public.user_subjects us
         WHERE us.user_id = u.id
       ) sm ON true
@@ -129,7 +119,27 @@ exports.getFacilitatorStudents = async (req, res) => {
     `;
 
     const result = await pool.query(query, [collegeIds]);
-    res.json(result.rows);
+    const enrichedRows = await Promise.all(
+      result.rows.map(async (row) => {
+        const enrolledRes = await pool.query(
+          'SELECT subject_id FROM user_subjects WHERE user_id = $1',
+          [row.id]
+        );
+        if (enrolledRes.rows.length === 0) {
+          return { ...row, progress_percent: 0 };
+        }
+        let totalPct = 0;
+        for (const s of enrolledRes.rows) {
+          const { percent } = await calculateSubjectProgress(row.id, s.subject_id);
+          totalPct += percent;
+        }
+        return {
+          ...row,
+          progress_percent: Math.round(totalPct / enrolledRes.rows.length),
+        };
+      })
+    );
+    res.json(enrichedRows);
   } catch (err) {
     console.error('Facilitator Students Error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -184,19 +194,39 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
         [id],
       ),
       pool.query(
+        `SELECT
+           COUNT(DISTINCT us.subject_id)::int AS enrolled_subjects,
+           COALESCE((
+             SELECT COUNT(DISTINCT lc.subtopic_id)::int 
+             FROM public.user_lesson_progress ulp
+             INNER JOIN public.lesson_content lc ON lc.id = ulp.lesson_content_id
+             WHERE ulp.user_id = $1 AND ulp.is_completed = true AND lc.is_deleted = false
+           ), 0) AS completed_subtopics,
+           COALESCE((SELECT SUM(points)::int FROM points_log WHERE user_id = $1), 0) AS total_points,
+           COALESCE(MAX(str.current_streak), 0)::int AS current_streak,
+           COALESCE(MAX(str.longest_streak), 0)::int AS longest_streak
+         FROM users u
+         LEFT JOIN user_subjects us ON u.id = us.user_id
+         LEFT JOIN user_streaks str ON u.id = str.user_id
+         WHERE u.id = $1 AND u.deleted_at IS NULL`,
+        [id],
+      ),
+      pool.query(
         `SELECT s.id, s.name,
            COALESCE((
-             SELECT COUNT(*)::int FROM user_subtopic_progress usp
-             JOIN subtopics st ON usp.subtopic_id = st.id
-             JOIN units un ON st.unit_id = un.id
-             JOIN topics t ON un.topic_id = t.id
-             WHERE usp.user_id = $1 AND t.subject_id = s.id AND usp.is_completed = true
+             SELECT COUNT(DISTINCT lc.subtopic_id)::int 
+             FROM public.user_lesson_progress ulp
+             INNER JOIN public.lesson_content lc ON lc.id = ulp.lesson_content_id
+             INNER JOIN public.subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
+             INNER JOIN public.units un ON st.unit_id = un.id AND un.is_deleted = false
+             INNER JOIN public.topics t ON un.topic_id = t.id AND t.is_deleted = false
+             WHERE ulp.user_id = $1 AND t.subject_id = s.id AND ulp.is_completed = true AND lc.is_deleted = false
            ), 0) AS completed_subtopics,
            COALESCE((
              SELECT COUNT(*)::int FROM subtopics st
-             JOIN units un ON st.unit_id = un.id
-             JOIN topics t ON un.topic_id = t.id
-             WHERE t.subject_id = s.id
+             JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+             JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+             WHERE t.subject_id = s.id AND st.is_deleted = false
            ), 0) AS total_subtopics
          FROM user_subjects us
          JOIN subjects s ON us.subject_id = s.id
@@ -210,13 +240,17 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    const subjects = subjectsRes.rows.map((s) => ({
-      ...s,
-      progress_percent:
-        s.total_subtopics > 0
-          ? Math.round((s.completed_subtopics / s.total_subtopics) * 100)
-          : 0,
-    }));
+    const subjects = await Promise.all(
+      subjectsRes.rows.map(async (s) => {
+        const { total, completed, percent } = await calculateSubjectProgress(id, s.id);
+        return {
+          ...s,
+          total_subtopics: total,
+          completed_subtopics: completed,
+          progress_percent: percent,
+        };
+      })
+    );
 
     res.json({
       success: true,

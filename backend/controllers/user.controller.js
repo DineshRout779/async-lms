@@ -1,6 +1,7 @@
 const pool = require('../config/pg');
 const bcrypt = require('bcrypt');
 const { logAction } = require('../utils/auditLogger');
+const { calculateSubjectProgress } = require('../utils/progress');
 
 // @desc    Get subjects for a specific student
 exports.getUserSubjects = async (req, res) => {
@@ -45,7 +46,16 @@ exports.getUserSubjects = async (req, res) => {
     `;
 
     const { rows } = await pool.query(query, [userId]);
-    res.json({ success: true, data: rows });
+    const enrichedRows = await Promise.all(
+      rows.map(async (row) => {
+        const { percent } = await calculateSubjectProgress(userId, row.id);
+        return {
+          ...row,
+          progress_percent: percent,
+        };
+      })
+    );
+    res.json({ success: true, data: enrichedRows });
   } catch (err) {
     console.error('Error fetching student subjects:', err);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -239,15 +249,21 @@ exports.getAllUsers = async (req, res) => {
       LEFT JOIN LATERAL (
         SELECT
           COUNT(DISTINCT us.subject_id)::int as enrolled_courses,
-          COUNT(DISTINCT st.id) FILTER (WHERE usp.is_completed = true)::int as completed_subtopics,
+          COUNT(DISTINCT st.id) FILTER (
+            WHERE EXISTS (
+              SELECT 1 FROM public.user_lesson_progress ulp
+              INNER JOIN public.lesson_content lc ON lc.id = ulp.lesson_content_id
+              WHERE ulp.user_id = u.id
+                AND lc.subtopic_id = st.id
+                AND ulp.is_completed = true
+                AND lc.is_deleted = false
+            )
+          )::int as completed_subtopics,
           COUNT(DISTINCT st.id)::int as total_subtopics
         FROM public.user_subjects us
-        LEFT JOIN public.topics t ON t.subject_id = us.subject_id
-        LEFT JOIN public.units un ON un.topic_id = t.id
-        LEFT JOIN public.subtopics st ON st.unit_id = un.id
-        LEFT JOIN public.user_subtopic_progress usp
-          ON usp.user_id = u.id
-          AND usp.subtopic_id = st.id
+        LEFT JOIN public.topics t ON t.subject_id = us.subject_id AND t.is_deleted = false
+        LEFT JOIN public.units un ON un.topic_id = t.id AND un.is_deleted = false
+        LEFT JOIN public.subtopics st ON st.unit_id = un.id AND st.is_deleted = false
         WHERE us.user_id = u.id
       ) as student_meta ON r.role_key = 'STUDENT'
       LEFT JOIN LATERAL (
@@ -263,7 +279,35 @@ exports.getAllUsers = async (req, res) => {
       LIMIT 1000
     `;
     const result = await pool.query(query);
-    res.json(result.rows);
+    const enrichedRows = await Promise.all(
+      result.rows.map(async (row) => {
+        if (row.role !== 'student') {
+          return row;
+        }
+        const enrolledRes = await pool.query(
+          'SELECT subject_id FROM user_subjects WHERE user_id = $1',
+          [row.id]
+        );
+        if (enrolledRes.rows.length === 0) {
+          return { ...row, completed_subtopics: 0, total_subtopics: 0, progress_percent: 0 };
+        }
+        let totalItems = 0;
+        let completedItems = 0;
+        for (const s of enrolledRes.rows) {
+          const { total, completed } = await calculateSubjectProgress(row.id, s.subject_id);
+          totalItems += total;
+          completedItems += completed;
+        }
+        const percent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+        return {
+          ...row,
+          completed_subtopics: completedItems,
+          total_subtopics: totalItems,
+          progress_percent: percent,
+        };
+      })
+    );
+    res.json(enrichedRows);
   } catch (err) {
     console.error('Get All Users Error:', err.message);
     res.status(500).json({ message: 'Server error' });

@@ -5,6 +5,7 @@ const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
 const { getTotalXP } = require('../services/xpService');
+const { calculateSubjectProgress } = require('../utils/progress');
 // ============================================
 // HELPERS
 // ============================================
@@ -166,17 +167,17 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       EXISTS (
         SELECT 1
         FROM lesson_content
-        WHERE subtopic_id = $1 AND is_published = true
+        WHERE subtopic_id = $1 AND is_published = true AND is_deleted = false
       ) AS has_lesson,
       EXISTS (
         SELECT 1
         FROM quizzes
-        WHERE unit_id = (SELECT unit_id FROM subtopics WHERE id = $1)
+        WHERE unit_id = (SELECT unit_id FROM subtopics WHERE id = $1 AND is_deleted = false) AND is_deleted = false
       ) AS has_quiz,
       EXISTS (
         SELECT 1
         FROM exercises
-        WHERE subtopic_id = $1
+        WHERE subtopic_id = $1 AND is_deleted = false
       ) AS has_exercise
   `;
 
@@ -192,6 +193,7 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
         AND lc.subtopic_id = $2
         AND ulp.is_completed = true
         AND lc.is_published = true
+        AND lc.is_deleted = false
     ) AS lesson_done
   `;
 
@@ -201,8 +203,9 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       FROM quiz_attempts qa
       INNER JOIN quizzes q ON q.id = qa.quiz_id
       WHERE qa.user_id = $1
-        AND q.unit_id = (SELECT unit_id FROM subtopics WHERE id = $2)
+        AND q.unit_id = (SELECT unit_id FROM subtopics WHERE id = $2 AND is_deleted = false)
         AND qa.is_passed = true
+        AND q.is_deleted = false
     ) AS quiz_done
   `;
 
@@ -214,6 +217,7 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       WHERE es.user_id = $1
         AND e.subtopic_id = $2
         AND es.is_passed = true
+        AND e.is_deleted = false
     ) AS exercise_done
   `;
 
@@ -437,10 +441,8 @@ exports.getMyProgress = async (req, res) => {
       units: Array.from(topic.units.values()),
     }));
 
-    const overallProgress =
-      totalSubtopics > 0
-        ? Math.round((completedSubtopics / totalSubtopics) * 100)
-        : 0;
+    const progressData = await calculateSubjectProgress(userId, subjectId);
+    const overallProgress = progressData.percent;
 
     // Get user stats
     const statsQuery = `
@@ -475,8 +477,8 @@ exports.getMyProgress = async (req, res) => {
       success: true,
       data: {
         overall_progress: overallProgress,
-        total_subtopics: totalSubtopics,
-        completed_subtopics: completedSubtopics,
+        total_subtopics: progressData.total,
+        completed_subtopics: progressData.completed,
         total_points: totalPoints,
         last_accessed_subtopic_slug: lastAccessedSlug,
         stats: stats,

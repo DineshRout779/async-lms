@@ -6,6 +6,7 @@ const { withS3Prefix } = require('../utils/s3');
 const slugify = require('../utils/slugify');
 const { logAction } = require('../utils/auditLogger');
 const moment = require('moment-timezone');
+const { calculateSubjectProgress } = require('../utils/progress');
 
 // ============================================
 // EXISTING ADMIN FEATURES (Keep these!)
@@ -3020,21 +3021,8 @@ exports.getStudentProgress = async (req, res) => {
 
     const result = await pool.query(query, [userId, subjectId]);
 
-    // Calculate overall progress
-    let totalSubtopics = 0;
-    let completedSubtopics = 0;
-
-    result.rows.forEach((topic) => {
-      topic.subtopics.forEach((subtopic) => {
-        totalSubtopics++;
-        if (subtopic.is_completed) completedSubtopics++;
-      });
-    });
-
-    const overallProgress =
-      totalSubtopics > 0
-        ? Math.round((completedSubtopics / totalSubtopics) * 100)
-        : 0;
+    const progressData = await calculateSubjectProgress(userId, subjectId);
+    const overallProgress = progressData.percent;
 
     res.json({
       success: true,
@@ -3788,7 +3776,12 @@ exports.getStudentProfile = async (req, res) => {
       pool.query(
         `SELECT
            COUNT(DISTINCT us.subject_id)::int AS enrolled_subjects,
-           COALESCE((SELECT COUNT(*)::int FROM user_subtopic_progress WHERE user_id = $1 AND is_completed = true), 0) AS completed_subtopics,
+           COALESCE((
+             SELECT COUNT(DISTINCT lc.subtopic_id)::int 
+             FROM public.user_lesson_progress ulp
+             INNER JOIN public.lesson_content lc ON lc.id = ulp.lesson_content_id
+             WHERE ulp.user_id = $1 AND ulp.is_completed = true AND lc.is_deleted = false
+           ), 0) AS completed_subtopics,
            COALESCE((SELECT SUM(points)::int FROM points_log WHERE user_id = $1), 0) AS total_points,
            COALESCE(MAX(str.current_streak), 0)::int AS current_streak,
            COALESCE(MAX(str.longest_streak), 0)::int AS longest_streak
@@ -3801,11 +3794,13 @@ exports.getStudentProfile = async (req, res) => {
       pool.query(
         `SELECT s.id, s.name,
            COALESCE((
-             SELECT COUNT(*)::int FROM user_subtopic_progress usp
-             JOIN subtopics st ON usp.subtopic_id = st.id AND st.is_deleted = false
-             JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
-             JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
-             WHERE usp.user_id = $1 AND t.subject_id = s.id AND usp.is_completed = true
+             SELECT COUNT(DISTINCT lc.subtopic_id)::int 
+             FROM public.user_lesson_progress ulp
+             INNER JOIN public.lesson_content lc ON lc.id = ulp.lesson_content_id
+             INNER JOIN public.subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
+             INNER JOIN public.units un ON st.unit_id = un.id AND un.is_deleted = false
+             INNER JOIN public.topics t ON un.topic_id = t.id AND t.is_deleted = false
+             WHERE ulp.user_id = $1 AND t.subject_id = s.id AND ulp.is_completed = true AND lc.is_deleted = false
            ), 0) AS completed_subtopics,
            COALESCE((
              SELECT COUNT(*)::int FROM subtopics st
@@ -3825,13 +3820,17 @@ exports.getStudentProfile = async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    const subjects = subjectsRes.rows.map((s) => ({
-      ...s,
-      progress_percent:
-        s.total_subtopics > 0
-          ? Math.round((s.completed_subtopics / s.total_subtopics) * 100)
-          : 0,
-    }));
+    const subjects = await Promise.all(
+      subjectsRes.rows.map(async (s) => {
+        const { total, completed, percent } = await calculateSubjectProgress(id, s.id);
+        return {
+          ...s,
+          total_subtopics: total,
+          completed_subtopics: completed,
+          progress_percent: percent,
+        };
+      })
+    );
 
     res.json({
       success: true,
