@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { KeyRound, ArrowRight, ArrowLeft, CheckCircle2, RotateCw } from 'lucide-react';
+import { KeyRound, ArrowRight, ArrowLeft, CheckCircle2, RotateCw, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import api from '@/services/api';
@@ -17,6 +17,36 @@ export default function ForgotPassword() {
   
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [newPasswordError, setNewPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+
+  const validateNewPassword = (val: string) => {
+    if (!val) {
+      setNewPasswordError('Password is required');
+      return false;
+    } else if (val.length < 8) {
+      setNewPasswordError('Must be at least 8 characters');
+      return false;
+    } else {
+      setNewPasswordError('');
+      return true;
+    }
+  };
+
+  const validateConfirmPassword = (val: string, newPass: string) => {
+    if (!val) {
+      setConfirmPasswordError('Please confirm your password');
+      return false;
+    } else if (val !== newPass) {
+      setConfirmPasswordError('Passwords do not match');
+      return false;
+    } else {
+      setConfirmPasswordError('');
+      return true;
+    }
+  };
 
   const [isLoading, setIsLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -89,16 +119,13 @@ export default function ForgotPassword() {
   // Step 3: Set new password using resetToken
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    const sanitizedEmail = email.trim().toLowerCase();
-    if (!newPassword || newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters long.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match.');
+    const isNewPassValid = validateNewPassword(newPassword);
+    const isConfirmPassValid = validateConfirmPassword(confirmPassword, newPassword);
+    if (!isNewPassValid || !isConfirmPassValid) {
       return;
     }
 
+    const sanitizedEmail = email.trim().toLowerCase();
     setIsLoading(true);
     const toastId = toast.loading('Resetting password...');
     try {
@@ -270,30 +297,79 @@ export default function ForgotPassword() {
                   <label htmlFor='new_password' className='text-[13px] font-semibold text-slate-800 tracking-wide'>
                     New Password
                   </label>
-                  <Input
-                    id='new_password'
-                    type='password'
-                    required
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder='Enter new password'
-                    className='h-11 rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 text-slate-800'
-                  />
+                  <div className="relative">
+                    <Input
+                      id='new_password'
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      value={newPassword}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewPassword(val);
+                        if (newPasswordError) {
+                          validateNewPassword(val);
+                        }
+                        if (confirmPasswordError) {
+                          validateConfirmPassword(confirmPassword, val);
+                        }
+                      }}
+                      onBlur={() => validateNewPassword(newPassword)}
+                      placeholder='Enter new password'
+                      className={`h-11 pr-10 rounded-xl focus:border-indigo-500 focus:ring-indigo-500 text-slate-800 ${
+                        newPasswordError ? 'border-destructive focus:border-destructive focus:ring-destructive' : 'border-slate-200'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      {showNewPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                    </button>
+                  </div>
+                  {newPasswordError && (
+                    <p className='text-xs text-destructive mt-1'>
+                      {newPasswordError}
+                    </p>
+                  )}
                 </div>
 
                 <div className='space-y-1'>
                   <label htmlFor='confirm_password' className='text-[13px] font-semibold text-slate-800 tracking-wide'>
                     Confirm Password
                   </label>
-                  <Input
-                    id='confirm_password'
-                    type='password'
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder='Confirm new password'
-                    className='h-11 rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 text-slate-800'
-                  />
+                  <div className="relative">
+                    <Input
+                      id='confirm_password'
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setConfirmPassword(val);
+                        if (confirmPasswordError) {
+                          validateConfirmPassword(val, newPassword);
+                        }
+                      }}
+                      onBlur={() => validateConfirmPassword(confirmPassword, newPassword)}
+                      placeholder='Confirm new password'
+                      className={`h-11 pr-10 rounded-xl focus:border-indigo-500 focus:ring-indigo-500 text-slate-800 ${
+                        confirmPasswordError ? 'border-destructive focus:border-destructive focus:ring-destructive' : 'border-slate-200'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                    </button>
+                  </div>
+                  {confirmPasswordError && (
+                    <p className='text-xs text-destructive mt-1'>
+                      {confirmPasswordError}
+                    </p>
+                  )}
                 </div>
 
                 <Button

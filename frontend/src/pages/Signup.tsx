@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Eye, EyeOff } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -26,6 +27,9 @@ const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL}/api/v1/auth/google`;
 
 export default function Login() {
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('signup');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -213,15 +217,24 @@ export default function Login() {
                     Forgot Password?
                   </button>
                 </div>
-                <Input
-                  name='password'
-                  type='password'
-                  className='h-10 text-sm'
-                  placeholder='Enter Password'
-                  value={loginForm.values.password}
-                  onChange={loginForm.handleChange}
-                  onBlur={loginForm.handleBlur}
-                />
+                <div className="relative">
+                  <Input
+                    name='password'
+                    type={showLoginPassword ? 'text' : 'password'}
+                    className='h-10 text-sm pr-10'
+                    placeholder='Enter Password'
+                    value={loginForm.values.password}
+                    onChange={loginForm.handleChange}
+                    onBlur={loginForm.handleBlur}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                  >
+                    {showLoginPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                  </button>
+                </div>
                 {loginForm.touched.password && loginForm.errors.password && (
                   <p className='text-xs text-destructive mt-1'>
                     {loginForm.errors.password}
@@ -287,15 +300,24 @@ export default function Login() {
                 <label className='text-[13px] font-semibold text-slate-800 tracking-wide'>
                   Password
                 </label>
-                <Input
-                  name='password'
-                  type='password'
-                  className='h-10 text-sm'
-                  placeholder='Create a Password'
-                  value={signupForm.values.password}
-                  onChange={signupForm.handleChange}
-                  onBlur={signupForm.handleBlur}
-                />
+                <div className="relative">
+                  <Input
+                    name='password'
+                    type={showSignupPassword ? 'text' : 'password'}
+                    className='h-10 text-sm pr-10'
+                    placeholder='Create a Password'
+                    value={signupForm.values.password}
+                    onChange={signupForm.handleChange}
+                    onBlur={signupForm.handleBlur}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupPassword(!showSignupPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                  >
+                    {showSignupPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                  </button>
+                </div>
                 {signupForm.touched.password && signupForm.errors.password && (
                   <p className='text-xs text-destructive mt-1'>
                     {signupForm.errors.password}
@@ -307,15 +329,24 @@ export default function Login() {
                 <label className='text-[13px] font-semibold text-slate-800 tracking-wide'>
                   Confirm Password
                 </label>
-                <Input
-                  name='confirmPassword'
-                  type='password'
-                  className='h-10 text-sm'
-                  placeholder='Confirm your Password'
-                  value={signupForm.values.confirmPassword}
-                  onChange={signupForm.handleChange}
-                  onBlur={signupForm.handleBlur}
-                />
+                <div className="relative">
+                  <Input
+                    name='confirmPassword'
+                    type={showSignupConfirmPassword ? 'text' : 'password'}
+                    className='h-10 text-sm pr-10'
+                    placeholder='Confirm your Password'
+                    value={signupForm.values.confirmPassword}
+                    onChange={signupForm.handleChange}
+                    onBlur={signupForm.handleBlur}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                  >
+                    {showSignupConfirmPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                  </button>
+                </div>
                 {signupForm.touched.confirmPassword &&
                   signupForm.errors.confirmPassword && (
                     <p className='text-xs text-destructive mt-1'>
