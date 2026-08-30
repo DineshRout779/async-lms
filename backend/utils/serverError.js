@@ -18,6 +18,14 @@ function serverError(res, err, context = '') {
     });
   }
 
+  // Errors explicitly marked safe to show carry their own status and wording
+  // (e.g. "not enrolled in this course"). Everything else stays generic.
+  if (err?.expose === true && err?.statusCode) {
+    return res
+      .status(err.statusCode)
+      .json({ success: false, message: err.message });
+  }
+
   res.status(500).json({ success: false, message: 'Internal server error' });
 }
 
