@@ -111,6 +111,13 @@ jobs:
 
             npm install
 
+            # Rotate PM2 logs. Without this they grow until the disk fills, and
+            # a multi-GB file is not greppable during an incident anyway.
+            pm2 install pm2-logrotate || true
+            pm2 set pm2-logrotate:max_size 20M
+            pm2 set pm2-logrotate:retain 14
+            pm2 set pm2-logrotate:compress true
+
             # Restart ONLY the orchestrator process via ecosystem.config.js
             pm2 start ecosystem.config.js --only codeguru-lms-prod || pm2 restart codeguru-lms-prod --update-env
             pm2 save
