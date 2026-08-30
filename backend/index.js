@@ -86,20 +86,28 @@ app.use(require('./middlewares/requestContext'));
 // Successful GETs are deliberately not recorded: they are the bulk of traffic
 // and carry no state change. Denied ones are, because "who tried to reach what
 // they should not" is exactly the question an audit trail gets asked.
+// Machine-to-machine traffic has no actor and never will. Worker heartbeats
+// alone are ~2900 requests per worker per day; left in, they bury every line
+// an audit trail exists to surface. Failures on these paths still get logged.
+const AUDIT_SKIP_PATHS = /^\/api\/v1\/internal\//;
+
 app.use((req, res, next) => {
   res.on('finish', () => {
-    const denied = res.statusCode === 401 || res.statusCode === 403;
-    const isRead = req.method === 'GET';
-
     if (req._audited) return;
-    if (isRead && !denied) return;
+
+    const failed = res.statusCode >= 400;
+    const denied = res.statusCode === 401 || res.statusCode === 403;
+
+    // Successful GETs change nothing and are the bulk of traffic.
+    if (req.method === 'GET' && !failed) return;
+    // Internal plumbing is only interesting when it breaks.
+    if (AUDIT_SKIP_PATHS.test(req.path) && !failed) return;
 
     logAction({
       req,
-      action: denied ? 'ACCESS_DENIED' : req.method,
+      action: denied ? 'ACCESS_DENIED' : failed ? 'REQUEST_FAILED' : 'REQUEST',
       entityType: 'http_request',
       entityId: null,
-      details: { statusCode: res.statusCode },
     });
   });
   next();
