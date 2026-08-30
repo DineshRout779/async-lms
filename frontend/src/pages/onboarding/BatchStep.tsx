@@ -4,6 +4,7 @@ import { Stepper } from './Stepper';
 import { useNavigate } from 'react-router';
 import apiClient from '@/services/api';
 import Logo from '@/components/common/Logo';
+import OnboardingExit from '@/components/common/OnboardingExit';
 import {
   Select,
   SelectContent,
@@ -94,6 +95,8 @@ export default function BatchStep() {
     >
       {/* Blue tinted overlay */}
       <div className='absolute inset-0 bg-[#344499]/70 backdrop-blur-[2px]' />
+
+      <OnboardingExit />
 
       <div className='flex flex-col items-center mb-6 relative z-10'>
         <Logo className='h-14 w-14 mb-2' />

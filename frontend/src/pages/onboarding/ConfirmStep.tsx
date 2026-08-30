@@ -8,6 +8,7 @@ import { loadUser } from '@/features/auth/authThunks';
 import { useState, useEffect } from 'react';
 import apiClient from '@/services/api';
 import Logo from '@/components/common/Logo';
+import OnboardingExit from '@/components/common/OnboardingExit';
 
 interface StudentProfile {
   college_name: string;
@@ -66,6 +67,8 @@ export default function ConfirmStep() {
     >
       {/* Blue tinted overlay */}
       <div className='absolute inset-0 bg-[#344499]/70 backdrop-blur-[2px]' />
+
+      <OnboardingExit />
 
       <div className='flex flex-col items-center mb-6 relative z-10'>
         <Logo className='h-14 w-14 mb-2' />

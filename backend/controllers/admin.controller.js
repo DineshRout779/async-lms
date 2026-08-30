@@ -3859,7 +3859,7 @@ exports.getFacilitatorProfile = async (req, res) => {
         `SELECT c.id, c.name, c.short_code
          FROM facilitator_colleges fc
          JOIN colleges c ON fc.college_id = c.id
-         WHERE fc.facilitator_id = $1
+         WHERE fc.facilitator_id = $1 AND fc.is_deleted = false
          ORDER BY c.name`,
         [id],
       ),
@@ -3913,7 +3913,7 @@ exports.getCollegeDetail = async (req, res) => {
         `SELECT u.id, u.full_name, u.email, u.is_verified, u.created_at
          FROM users u
          JOIN roles r ON r.id = u.role_id
-         JOIN facilitator_colleges fc ON fc.facilitator_id = u.id
+         JOIN facilitator_colleges fc ON fc.facilitator_id = u.id AND fc.is_deleted = false
          WHERE fc.college_id = $1 AND r.role_key = 'FACILITATOR' AND u.deleted_at IS NULL
          ORDER BY u.created_at DESC`,
         [id],

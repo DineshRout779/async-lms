@@ -71,7 +71,7 @@ exports.getUserProfile = async (req, res) => {
        LEFT JOIN public.roles r ON r.id = u.role_id
        LEFT JOIN public.student_profiles sp ON sp.user_id = u.id
        LEFT JOIN public.colleges c ON c.id = sp.college_id
-       LEFT JOIN public.facilitator_colleges fc ON fc.facilitator_id = u.id
+       LEFT JOIN public.facilitator_colleges fc ON fc.facilitator_id = u.id AND fc.is_deleted = false
        LEFT JOIN public.colleges fc_c ON fc_c.id = fc.college_id
        LEFT JOIN public.user_streaks us ON us.user_id = u.id
        WHERE u.id = $1
@@ -256,7 +256,7 @@ exports.getAllUsers = async (req, res) => {
           ARRAY_AGG(c2.name ORDER BY c2.name) as college_names
         FROM public.facilitator_colleges fc
         INNER JOIN public.colleges c2 ON c2.id = fc.college_id
-        WHERE fc.facilitator_id = u.id
+        WHERE fc.facilitator_id = u.id AND fc.is_deleted = false
       ) as facilitator_meta ON r.role_key = 'FACILITATOR'
       WHERE u.deleted_at IS NULL
       ORDER BY u.created_at DESC

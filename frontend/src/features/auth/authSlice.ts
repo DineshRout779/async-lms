@@ -76,13 +76,11 @@ const authSlice = createSlice({
       .addCase(completeGoogleSignup.pending, (state) => {
         state.status = 'loading';
       })
-      .addCase(completeGoogleSignup.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.isAuthenticated = true;
+      // Returns only a single-use code now; the session is established when
+      // AuthCallback exchanges it, so there is nothing to store here.
+      .addCase(completeGoogleSignup.fulfilled, (state) => {
+        state.status = 'idle';
         state.error = null;
-        localStorage.setItem('token', action.payload.token);
       })
       .addCase(completeGoogleSignup.rejected, (state, action) => {
         state.status = 'failed';

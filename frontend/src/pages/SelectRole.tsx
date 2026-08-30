@@ -21,7 +21,9 @@ export default function SelectRole() {
     setLoadingRole(role);
     try {
       const result = await dispatch(completeGoogleSignup({ token, role })).unwrap();
-      navigate(`/auth/callback?token=${result.token}`);
+      // Single-use code, exchanged for the session token over POST on the
+      // callback screen — the token never appears in a URL.
+      navigate(`/auth/callback?code=${result.code}`);
     } catch (err) {
       toast.error(typeof err === 'string' ? err : 'Could not complete sign-up');
       setLoadingRole(null);
