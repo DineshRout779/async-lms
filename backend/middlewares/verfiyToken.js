@@ -26,9 +26,12 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ message: 'Access Denied: Account is disabled, deleted, or not found' });
     }
 
-    // Invalidate session if password was reset and token version has changed
+    // Invalidate session if password was reset and token version has changed.
+    // A token with no token_version claim predates this mechanism and can never
+    // be revoked, so it is rejected outright rather than waved through — the
+    // holder simply signs in again and gets a token that can be revoked.
     const userDb = dbCheck.rows[0];
-    if (verified.token_version !== undefined && userDb.token_version !== verified.token_version) {
+    if (verified.token_version === undefined || userDb.token_version !== verified.token_version) {
       return res.status(401).json({ message: 'Access Denied: Session expired due to password change' });
     }
 

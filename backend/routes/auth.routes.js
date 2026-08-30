@@ -1,4 +1,4 @@
-const { login, signup, getMe, googleRedirect, googleCallback, completeGoogleSignup, verifyEmail, forgotPassword, verifyResetOtp, resetPassword } = require('../controllers/auth.controller');
+const { login, signup, getMe, googleRedirect, googleCallback, completeGoogleSignup, exchangeGoogleAuthCode, verifyEmail, forgotPassword, verifyResetOtp, resetPassword } = require('../controllers/auth.controller');
 const { validateLogin, validateSignup } = require('../middlewares/validators');
 const verifyToken = require('../middlewares/verfiyToken');
 
@@ -16,6 +16,7 @@ router.post('/reset-password', resetPassword);
 router.get('/google', googleRedirect);
 router.get('/google/callback', googleCallback);
 router.post('/google/complete', completeGoogleSignup);
+router.post('/google/exchange', exchangeGoogleAuthCode);
 
 // Protected routes
 router.get('/me', verifyToken, getMe);
