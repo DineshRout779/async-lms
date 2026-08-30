@@ -214,28 +214,42 @@ exports.login = async (req, res) => {
       [normalizedEmail],
     );
 
+    // Failed sign-ins are audited with the reason and the source IP. Without
+    // these, the trail cannot answer "was this account attacked?" or "who was
+    // trying to get in" — the questions asked most often after an incident.
+    const logLoginFailure = (reason, userId = null) =>
+      logAction({
+        req,
+        action: 'LOGIN_FAILED',
+        entityType: 'user',
+        entityId: userId,
+        actor: { id: userId, email: normalizedEmail, role: null },
+        details: { reason },
+      });
+
     if (!userRes.rowCount) {
-      console.log(`[LOGIN FAILED] User not found or deleted for email: ${normalizedEmail}`);
+      logLoginFailure('no_such_user');
       return res.status(401).json({ message: 'Invalid email or password, or account is disabled' });
     }
 
     const user = userRes.rows[0];
 
     if (!user.password_hash) {
-      console.log(`[LOGIN FAILED] User uses Google Sign-In: ${normalizedEmail}`);
+      logLoginFailure('oauth_account_no_password', user.id);
       return res.status(401).json({ message: 'This account uses Google Sign-In. Please click "Continue with Google".' });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
-    console.log(`[LOGIN DEBUG] Password comparison result for ${normalizedEmail}: valid=${valid}`);
     delete user.password_hash;
 
     if (!valid) {
+      logLoginFailure('bad_password', user.id);
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Enforce email verification check
     if (!user.is_email_verified) {
+      logLoginFailure('email_not_verified', user.id);
       return res.status(400).json({
         message: 'Please verify your email address before logging in.',
         needsVerification: true,
@@ -264,6 +278,15 @@ exports.login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '7d' },
     );
+
+    logAction({
+      req,
+      action: 'LOGIN',
+      entityType: 'user',
+      entityId: user.id,
+      actor: { id: user.id, email: user.email, role: user.role },
+      details: { method: 'password' },
+    });
 
     res.json({
       token,
@@ -820,6 +843,13 @@ exports.resetPassword = async (req, res) => {
     );
 
     if (tokenRes.rowCount === 0) {
+      logAction({
+        req,
+        action: 'PASSWORD_RESET_FAILED',
+        entityType: 'user',
+        actor: { id: null, email: normalizedEmail, role: null },
+        details: { reason: 'invalid_or_expired_token' },
+      });
       return res.status(400).json({ message: 'Reset token is invalid or has expired. Please restart the forgot password process.' });
     }
 
@@ -827,15 +857,26 @@ exports.resetPassword = async (req, res) => {
     const hashed = await bcrypt.hash(newPassword, 10);
 
     // Update password & increment token_version to invalidate active sessions
-    await pool.query(
-      `UPDATE users 
-       SET password_hash = $1, token_version = token_version + 1, is_email_verified = true 
-       WHERE email = $2 AND deleted_at IS NULL`,
+    const updated = await pool.query(
+      `UPDATE users
+       SET password_hash = $1, token_version = token_version + 1, is_email_verified = true
+       WHERE email = $2 AND deleted_at IS NULL
+       RETURNING id`,
       [hashed, normalizedEmail]
     );
 
     // Clean up reset token
     await pool.query('DELETE FROM otp_codes WHERE id = $1', [tokenRes.rows[0].id]);
+
+    // A password change invalidates every active session for the account, so
+    // it is the event most worth being able to point at later.
+    logAction({
+      req,
+      action: 'PASSWORD_RESET',
+      entityType: 'user',
+      entityId: updated.rows[0]?.id ?? null,
+      actor: { id: updated.rows[0]?.id ?? null, email: normalizedEmail, role: null },
+    });
 
     res.json({
       success: true,

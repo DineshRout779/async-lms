@@ -1,7 +1,46 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const runnerService = require('./runnerService');
+
+// Files the grader generates. They inline every test case — including hidden
+// ones and their expected values — so they must never live in, or be read back
+// out of, a student's workspace.
+const HARNESS_FILES = new Set([
+  '__tests__.js',
+  '__tests__.py',
+  '__Tests__.java',
+  '__Tests__.class',
+]);
+
+/**
+ * Copy a student's workspace into a throwaway directory to grade in.
+ *
+ * The harness used to be written into the workspace itself and left there;
+ * `workspace/init` lists that directory and hands everything back, so the next
+ * time the student opened the exercise they received the full generated test
+ * file — hidden cases, expected values and all. Grading against a copy keeps
+ * their workspace untouched.
+ */
+function createStagingDir(workspaceDir) {
+  const dir = path.join(
+    os.tmpdir(),
+    'codeguru-grade',
+    crypto.randomBytes(12).toString('hex'),
+  );
+  fs.mkdirSync(dir, { recursive: true });
+  fs.cpSync(workspaceDir, dir, {
+    recursive: true,
+    // Skip any harness file left behind by a pre-fix run.
+    filter: (src) => !HARNESS_FILES.has(path.basename(src)),
+  });
+  return dir;
+}
+
+function removeStagingDir(dir) {
+  fs.rm(dir, { recursive: true, force: true }, () => {});
+}
 
 const ENTRY_FILE = {
   javascript: 'index.js',
@@ -131,11 +170,15 @@ const JAVA_TEST_FOOTER = (sentinel) => `
  * and return { passed, failed, total, results }.
  */
 async function runTestCases(workspaceDir, language, testCases) {
-  let header, footer, testFile;
-
   // Per-run unguessable marker: only the harness knows it, so student code
   // cannot print a fake result line and have it accepted as the grade.
   const sentinel = `__RESULT_${crypto.randomBytes(16).toString('hex')}__`;
+
+  if (language === 'sql') {
+    throw new Error(
+      'Automated test cases are not supported for SQL exercises.',
+    );
+  }
 
   // The harness reads a fixed entry file per language. Fail loudly if the
   // exercise was authored without it rather than surfacing a raw ENOENT.
@@ -146,54 +189,59 @@ async function runTestCases(workspaceDir, language, testCases) {
     );
   }
 
-  if (language === 'python') {
-    const studentCode = fs.readFileSync(
-      path.join(workspaceDir, 'main.py'),
-      'utf-8',
-    );
-    const escapedCode = studentCode
-      .replace(/\\/g, '\\\\')
-      .replace(/"""/g, '\\"\\"\\"');
-    header =
-      PY_PRELUDE +
-      `studentCodeString = """${escapedCode}"""\n` +
-      studentCode +
-      `\n` +
-      PY_TEST_HEADER;
-    footer = PY_TEST_FOOTER(sentinel);
-    testFile = path.join(workspaceDir, '__tests__.py');
-  } else if (language === 'java') {
-    header = JAVA_TEST_HEADER;
-    footer = JAVA_TEST_FOOTER(sentinel);
-    testFile = path.join(workspaceDir, '__Tests__.java');
-  } else if (language === 'sql') {
-    throw new Error(
-      'Automated test cases are not supported for SQL exercises.',
-    );
-  } else {
-    // javascript (default)
-    const studentCode = fs.readFileSync(
-      path.join(workspaceDir, 'index.js'),
-      'utf-8',
-    );
-    const escapedCode = studentCode
-      .replace(/\\/g, '\\\\')
-      .replace(/`/g, '\\`')
-      .replace(/\$/g, '\\$');
-    header =
-      JS_PRELUDE +
-      `const studentCodeString = \`${escapedCode}\`;\n` +
-      studentCode +
-      `\n` +
-      JS_TEST_HEADER;
-    footer = JS_TEST_FOOTER(sentinel);
-    testFile = path.join(workspaceDir, '__tests__.js');
+  // Everything below writes the generated harness — grade against a copy so
+  // none of it lands in the student's workspace.
+  const stagingDir = createStagingDir(workspaceDir);
+  try {
+    let header, footer, testFile;
+
+    if (language === 'python') {
+      const studentCode = fs.readFileSync(
+        path.join(stagingDir, 'main.py'),
+        'utf-8',
+      );
+      const escapedCode = studentCode
+        .replace(/\\/g, '\\\\')
+        .replace(/"""/g, '\\"\\"\\"');
+      header =
+        PY_PRELUDE +
+        `studentCodeString = """${escapedCode}"""\n` +
+        studentCode +
+        `\n` +
+        PY_TEST_HEADER;
+      footer = PY_TEST_FOOTER(sentinel);
+      testFile = path.join(stagingDir, '__tests__.py');
+    } else if (language === 'java') {
+      header = JAVA_TEST_HEADER;
+      footer = JAVA_TEST_FOOTER(sentinel);
+      testFile = path.join(stagingDir, '__Tests__.java');
+    } else {
+      // javascript (default)
+      const studentCode = fs.readFileSync(
+        path.join(stagingDir, 'index.js'),
+        'utf-8',
+      );
+      const escapedCode = studentCode
+        .replace(/\\/g, '\\\\')
+        .replace(/`/g, '\\`')
+        .replace(/\$/g, '\\$');
+      header =
+        JS_PRELUDE +
+        `const studentCodeString = \`${escapedCode}\`;\n` +
+        studentCode +
+        `\n` +
+        JS_TEST_HEADER;
+      footer = JS_TEST_FOOTER(sentinel);
+      testFile = path.join(stagingDir, '__tests__.js');
+    }
+
+    const testCode = testCases.map((tc) => tc.test_code).join('\n');
+    fs.writeFileSync(testFile, header + testCode + footer, 'utf-8');
+
+    return await executeAndParse(stagingDir, language, sentinel);
+  } finally {
+    removeStagingDir(stagingDir);
   }
-
-  const testCode = testCases.map((tc) => tc.test_code).join('\n');
-  fs.writeFileSync(testFile, header + testCode + footer, 'utf-8');
-
-  return executeAndParse(workspaceDir, language, sentinel);
 }
 
 // ── Shared execution + trusted-result parsing ────────────────────────────────
@@ -352,27 +400,37 @@ async function runDataCases(workspaceDir, language, entryFunction, cases) {
     );
   }
 
-  const studentCode = fs.readFileSync(entryPath, 'utf-8');
-  let contents, testFile;
+  // The generated runner embeds every case, hidden ones included — write it to
+  // a throwaway copy so it can never be read back out of the workspace.
+  const stagingDir = createStagingDir(workspaceDir);
+  try {
+    const studentCode = fs.readFileSync(
+      path.join(stagingDir, entryFile),
+      'utf-8',
+    );
+    let contents, testFile;
 
-  if (language === 'python') {
-    contents =
-      PY_PRELUDE +
-      studentCode +
-      '\n' +
-      PY_DATA_RUNNER(entryFunction, cases, sentinel);
-    testFile = path.join(workspaceDir, '__tests__.py');
-  } else {
-    contents =
-      JS_PRELUDE +
-      studentCode +
-      '\n' +
-      JS_DATA_RUNNER(entryFunction, cases, sentinel);
-    testFile = path.join(workspaceDir, '__tests__.js');
+    if (language === 'python') {
+      contents =
+        PY_PRELUDE +
+        studentCode +
+        '\n' +
+        PY_DATA_RUNNER(entryFunction, cases, sentinel);
+      testFile = path.join(stagingDir, '__tests__.py');
+    } else {
+      contents =
+        JS_PRELUDE +
+        studentCode +
+        '\n' +
+        JS_DATA_RUNNER(entryFunction, cases, sentinel);
+      testFile = path.join(stagingDir, '__tests__.js');
+    }
+
+    fs.writeFileSync(testFile, contents, 'utf-8');
+    return await executeAndParse(stagingDir, language, sentinel);
+  } finally {
+    removeStagingDir(stagingDir);
   }
-
-  fs.writeFileSync(testFile, contents, 'utf-8');
-  return executeAndParse(workspaceDir, language, sentinel);
 }
 
 /**
@@ -424,4 +482,5 @@ module.exports = {
   ENTRY_FILE,
   TEST_RUNNER_CMD,
   DATA_SUPPORTED_LANGUAGES,
+  HARNESS_FILES,
 };
