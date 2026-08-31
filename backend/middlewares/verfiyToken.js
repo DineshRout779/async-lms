@@ -32,6 +32,17 @@ const verifyToken = async (req, res, next) => {
     // 4. Attach the user payload to the request object
     req.user = verified;
 
+    // 5. Check if the token is restricted to password reset
+    if (verified.scope === 'password_reset_only') {
+      const isChangePasswordRoute = req.originalUrl.includes('/change-password');
+      if (!isChangePasswordRoute) {
+        return res.status(403).json({ 
+          message: 'Access Denied: You must change your password before accessing this resource.',
+          requiresPasswordReset: true
+        });
+      }
+    }
+
     const { markUserActive } = require('../services/presenceService');
     markUserActive(req.user.id);
 

@@ -214,7 +214,11 @@ export default function AiCurriculumReview() {
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
   const isAdmin = user?.role === 'admin';
-  const base = isAdmin ? '/dashboard/admin' : '/dashboard/facilitator';
+  const base = isAdmin
+    ? '/dashboard/admin'
+    : user?.role === 'curriculum_developer'
+    ? '/dashboard/curriculum-developer'
+    : '/dashboard/facilitator';
 
   const [course, setCourse] = useState<AiCourse | null>(null);
   const [loading, setLoading] = useState(true);

@@ -28,6 +28,11 @@ pool.on('error', (err, client) => {
     console.log(`📁 Target database: ${connectedDb}`);
 
     // Idempotent schema migrations
+    await client.query(`
+      INSERT INTO roles (role_key, role_name) 
+      VALUES ('CURRICULUM_DEVELOPER', 'Curriculum Developer') 
+      ON CONFLICT (role_key) DO NOTHING;
+    `);
     await client.query(
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id text UNIQUE`,
     );
@@ -52,6 +57,7 @@ pool.on('error', (err, client) => {
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
       
       CREATE TABLE IF NOT EXISTS otp_codes (
         id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

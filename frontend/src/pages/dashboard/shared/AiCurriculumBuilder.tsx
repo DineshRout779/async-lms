@@ -432,7 +432,11 @@ export default function AiCurriculumBuilder() {
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
   const isAdmin = user?.role === 'admin';
-  const base = isAdmin ? '/dashboard/admin' : '/dashboard/facilitator';
+  const base = isAdmin
+    ? '/dashboard/admin'
+    : user?.role === 'curriculum_developer'
+    ? '/dashboard/curriculum-developer'
+    : '/dashboard/facilitator';
 
   const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState<CourseFormData>(EMPTY_FORM);

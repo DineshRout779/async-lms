@@ -7,6 +7,7 @@ const slugify = require('../utils/slugify');
 const { logAction } = require('../utils/auditLogger');
 const moment = require('moment-timezone');
 const { calculateSubjectProgress } = require('../utils/progress');
+const bcrypt = require('bcrypt');
 
 // ============================================
 // EXISTING ADMIN FEATURES (Keep these!)
@@ -3995,6 +3996,72 @@ exports.getCollegeDetail = async (req, res) => {
   } catch (err) {
     console.error('getCollegeDetail error:', err);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+// ============================================
+// CURRICULUM DEVELOPER MANAGEMENT
+// ============================================
+
+exports.createCurriculumDeveloper = async (req, res) => {
+  const { full_name, email, password } = req.body;
+
+  if (!full_name || !email || !password) {
+    return res.status(400).json({ message: 'Full name, email, and password are required' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  try {
+    // 1. Check for email collision
+    const existing = await pool.query(
+      'SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL',
+      [normalizedEmail]
+    );
+
+    if (existing.rowCount > 0) {
+      return res.status(400).json({ message: 'Email already in use' });
+    }
+
+    // 2. Resolve CURRICULUM_DEVELOPER role ID
+    const roleRes = await pool.query(
+      'SELECT id FROM roles WHERE role_key = $1',
+      ['CURRICULUM_DEVELOPER']
+    );
+
+    if (!roleRes.rowCount) {
+      return res.status(500).json({ message: 'CURRICULUM_DEVELOPER role not found in database' });
+    }
+    const role_id = roleRes.rows[0].id;
+
+    // 3. Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // 4. Create user
+    const insertRes = await pool.query(
+      `
+      INSERT INTO users (full_name, email, password_hash, role_id, onboarding_step, is_verified, is_email_verified, must_change_password)
+      VALUES ($1, $2, $3, $4, 'done', true, true, true)
+      RETURNING id, full_name, email
+      `,
+      [full_name.trim(), normalizedEmail, passwordHash, role_id]
+    );
+
+    logAction({
+      req,
+      action: 'CREATE',
+      entityType: 'user',
+      entityId: insertRes.rows[0].id,
+      details: { email: normalizedEmail, role: 'CURRICULUM_DEVELOPER' }
+    });
+
+    res.json({
+      success: true,
+      data: insertRes.rows[0],
+      message: 'Curriculum Developer created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating curriculum developer:', error);
+    res.status(500).json({ message: 'Server error creating user' });
   }
 };
 

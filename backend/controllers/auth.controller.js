@@ -23,7 +23,7 @@ const normalizeEmail = (email) => {
   if (!domain) return email.trim().toLowerCase();
 
   if (domain === 'gmail.com' || domain === 'googlemail.com') {
-    localPart = localPart.split('+')[0].replace(/\./g, '');
+    localPart = localPart.split('+')[0];
     domain = 'gmail.com';
   }
   return `${localPart}@${domain}`;
@@ -203,7 +203,7 @@ exports.login = async (req, res) => {
   try {
     const userRes = await pool.query(
       `SELECT u.id, u.full_name, u.email, u.password_hash, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified,
-              u.is_email_verified, u.token_version,
+              u.is_email_verified, u.token_version, u.must_change_password,
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified
        FROM users u
@@ -258,6 +258,7 @@ exports.login = async (req, res) => {
         id: user.id, // UUID string
         role: user.role,
         token_version: user.token_version,
+        scope: user.must_change_password ? 'password_reset_only' : undefined,
         college_id: user.role === 'student' ? user.college_id : undefined,
         college_ids: user.role === 'facilitator' ? collegeIds : undefined,
       },
@@ -275,6 +276,7 @@ exports.login = async (req, res) => {
         onboarding_step: user.onboarding_step,
         is_verified: user.is_verified,
         is_email_verified: user.is_email_verified,
+        must_change_password: user.must_change_password,
         college_id: user.college_id,
         college_ids: collegeIds,
         college_is_verified: user.college_is_verified,
@@ -844,6 +846,86 @@ exports.resetPassword = async (req, res) => {
 
   } catch (error) {
     console.error('Reset Password Error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ message: 'New password is required' });
+  }
+  try {
+    const userId = req.user.id;
+    const hashed = await bcrypt.hash(password, 10);
+    
+    // Update password, remove flag, increment token version
+    await pool.query(
+      `UPDATE users 
+       SET password_hash = $1, must_change_password = false, token_version = token_version + 1 
+       WHERE id = $2 AND deleted_at IS NULL`,
+      [hashed, userId]
+    );
+
+    // Fetch user to generate new token
+    const userRes = await pool.query(
+      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified,
+              u.is_email_verified, u.token_version, u.must_change_password,
+              sp.college_id, sp.degree, sp.year,
+              c.is_verified AS college_is_verified
+       FROM users u
+       LEFT JOIN roles r ON r.id = u.role_id
+       LEFT JOIN student_profiles sp ON u.id = sp.user_id
+       LEFT JOIN colleges c ON c.id = sp.college_id
+       WHERE u.id = $1`,
+      [userId]
+    );
+
+    const user = userRes.rows[0];
+
+    // Fetch facilitator college scope if applicable
+    let collegeIds = [];
+    if (user.role === 'facilitator') {
+      const colRes = await pool.query(
+        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+        [user.id]
+      );
+      collegeIds = colRes.rows.map((r) => r.college_id);
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.id,
+        role: user.role,
+        token_version: user.token_version,
+        scope: undefined, // Fully clear the scope!
+        college_id: user.role === 'student' ? user.college_id : undefined,
+        college_ids: user.role === 'facilitator' ? collegeIds : undefined,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role,
+        onboarding_step: user.onboarding_step,
+        is_verified: user.is_verified,
+        is_email_verified: user.is_email_verified,
+        must_change_password: user.must_change_password,
+        college_id: user.college_id,
+        college_ids: collegeIds,
+        college_is_verified: user.college_is_verified,
+        degree: user.degree,
+        year: user.year,
+      },
+    });
+  } catch (error) {
+    console.error('Change Password Error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

@@ -43,7 +43,11 @@ export default function AiCurriculumEditor() {
   const [dragModuleIdx, setDragModuleIdx] = useState<number | null>(null);
   const [dragModuleOver, setDragModuleOver] = useState<number | null>(null);
 
-  const base = isAdmin ? '/dashboard/admin' : '/dashboard/facilitator';
+  const base = isAdmin
+    ? '/dashboard/admin'
+    : user?.role === 'curriculum_developer'
+    ? '/dashboard/curriculum-developer'
+    : '/dashboard/facilitator';
 
   const load = useCallback(async () => {
     if (!id) return;
