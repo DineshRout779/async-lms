@@ -169,6 +169,8 @@ exports.assignFacilitator = async (req, res) => {
   if (!Array.isArray(college_ids)) {
     return res.status(400).json({ success: false, message: 'college_ids must be an array' });
   }
+  // Deduplicate: ON CONFLICT DO UPDATE cannot affect the same row twice in one statement
+  const uniqueCollegeIds = [...new Set(college_ids)];
 
   const client = await pool.connect();
   try {
@@ -180,7 +182,7 @@ exports.assignFacilitator = async (req, res) => {
       [facilitator_id],
     );
 
-    if (college_ids.length > 0) {
+    if (uniqueCollegeIds.length > 0) {
       // Upsert: if the (facilitator_id, college_id) pair already exists (soft-deleted),
       // reactivate it instead of inserting a duplicate — avoids unique constraint violation.
       await client.query(
@@ -188,7 +190,7 @@ exports.assignFacilitator = async (req, res) => {
          SELECT $1, unnest($2::uuid[])
          ON CONFLICT (facilitator_id, college_id)
          DO UPDATE SET is_deleted = false, updated_at = NOW()`,
-        [facilitator_id, college_ids],
+        [facilitator_id, uniqueCollegeIds],
       );
     }
 
