@@ -12,7 +12,7 @@ exports.getFacilitatorStats = async (req, res) => {
 
     // 1. Get assigned colleges
     const colRes = await pool.query(
-      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
       [facilitatorId],
     );
     const collegeIds = colRes.rows.map((r) => r.college_id);
@@ -81,7 +81,7 @@ exports.getFacilitatorStudents = async (req, res) => {
 
     // 1. Get assigned colleges
     const colRes = await pool.query(
-      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
       [facilitatorId],
     );
     const collegeIds = colRes.rows.map((r) => r.college_id);
@@ -138,7 +138,7 @@ exports.getFacilitatorStudentProfile = async (req, res) => {
     const { id } = req.params;
 
     const colRes = await pool.query(
-      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
       [facilitatorId],
     );
     const collegeIds = colRes.rows.map((r) => r.college_id);
@@ -317,7 +317,7 @@ exports.getFacilitatorStudentModuleAnalytics = async (req, res) => {
       accessCheck = { rows: [{}] }; // Admins have full access
     } else {
       const colRes = await pool.query(
-        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
         [facilitatorId],
       );
       const collegeIds = colRes.rows.map((r) => r.college_id);
@@ -501,7 +501,7 @@ exports.getBatches = async (req, res) => {
   try {
     const facilitatorId = req.user.id;
     const colRes = await pool.query(
-      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
       [facilitatorId],
     );
     const collegeIds = colRes.rows.map((r) => r.college_id);
@@ -545,7 +545,7 @@ exports.verifyStudent = async (req, res) => {
     }
 
     const colRes = await pool.query(
-      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
       [facilitatorId],
     );
     const collegeIds = colRes.rows.map((r) => r.college_id);
@@ -602,7 +602,7 @@ exports.editStudent = async (req, res) => {
       req.body;
 
     const colRes = await pool.query(
-      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
       [facilitatorId],
     );
     const collegeIds = colRes.rows.map((r) => r.college_id);
@@ -667,7 +667,7 @@ exports.getFacilitatorColleges = async (req, res) => {
         `SELECT c.id, c.name, c.is_verified
          FROM colleges c
          JOIN facilitator_colleges fc ON c.id = fc.college_id
-         WHERE fc.facilitator_id = $1
+         WHERE fc.facilitator_id = $1 AND fc.is_deleted = false
          ORDER BY c.name`,
         [facilitatorId],
       );
@@ -687,7 +687,7 @@ async function getFacilitatorCollegeIds(facilitatorId, requestedCollegeId, role)
     return allRes.rows.map((r) => r.college_id);
   }
   const colRes = await pool.query(
-    'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
+    'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
     [facilitatorId],
   );
   const allowed = colRes.rows.map((r) => r.college_id);

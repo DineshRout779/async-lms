@@ -72,6 +72,23 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE project_submissions ADD COLUMN IF NOT EXISTS submission_link text`,
     );
+    // Ensure unique constraint on facilitator_colleges for upsert safety
+    console.log('[Migration] Ensuring unique constraint on facilitator_colleges(facilitator_id, college_id)...');
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'facilitator_colleges'::regclass
+            AND conname = 'facilitator_colleges_facilitator_id_college_id_key'
+        ) THEN
+          ALTER TABLE facilitator_colleges
+            ADD CONSTRAINT facilitator_colleges_facilitator_id_college_id_key
+            UNIQUE (facilitator_id, college_id);
+          RAISE NOTICE '[Migration] Created unique constraint on facilitator_colleges.';
+        END IF;
+      END $$;
+    `);
     console.log('[Migration] Ensuring progress_percent column on user_subjects...');
     await client.query(`
       ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS progress_percent INT NOT NULL DEFAULT 0;

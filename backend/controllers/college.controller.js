@@ -161,28 +161,52 @@ exports.toggleSubjectAccess = async (req, res) => {
 // ASSIGN colleges to facilitator (Batch)
 exports.assignFacilitator = async (req, res) => {
   const { facilitator_id, college_ids } = req.body;
+
+  // Input validation
+  if (!facilitator_id) {
+    return res.status(400).json({ success: false, message: 'facilitator_id is required' });
+  }
+  if (!Array.isArray(college_ids)) {
+    return res.status(400).json({ success: false, message: 'college_ids must be an array' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Soft-delete all current assignments for this facilitator
     await client.query(
       'UPDATE facilitator_colleges SET is_deleted = true WHERE facilitator_id = $1 AND is_deleted = false',
       [facilitator_id],
     );
-    if (college_ids?.length > 0) {
+
+    if (college_ids.length > 0) {
+      // Upsert: if the (facilitator_id, college_id) pair already exists (soft-deleted),
+      // reactivate it instead of inserting a duplicate — avoids unique constraint violation.
       await client.query(
-        'INSERT INTO facilitator_colleges (facilitator_id, college_id) SELECT $1, unnest($2::uuid[])',
+        `INSERT INTO facilitator_colleges (facilitator_id, college_id)
+         SELECT $1, unnest($2::uuid[])
+         ON CONFLICT (facilitator_id, college_id)
+         DO UPDATE SET is_deleted = false, updated_at = NOW()`,
         [facilitator_id, college_ids],
       );
     }
+
     await client.query('COMMIT');
-    logAction({ req, action: 'UPDATE', entityType: 'facilitator_college', entityId: facilitator_id, details: { college_ids } });
-    res
-      .status(200)
-      .json({ success: true, message: 'Colleges assigned successfully' });
+    logAction({
+      req,
+      action: 'UPDATE',
+      entityType: 'facilitator_college',
+      entityId: facilitator_id,
+      details: { college_ids },
+    });
+    res.status(200).json({ success: true, message: 'Colleges assigned successfully' });
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(400).json({ success: false, message: 'Bad request' });
+    console.error('[assignFacilitator] Error assigning colleges to facilitator:', error);
+    serverError(res, error);
   } finally {
     client.release();
   }
 };
+

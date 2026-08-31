@@ -227,9 +227,13 @@ exports.selectFacilitatorColleges = async (req, res) => {
       [userId],
     );
 
+    // Upsert: reactivate any previously soft-deleted assignments instead of
+    // inserting a duplicate row (which would violate the unique constraint).
     const insertQuery = `
       INSERT INTO facilitator_colleges (facilitator_id, college_id)
       SELECT $1, unnest($2::uuid[])
+      ON CONFLICT (facilitator_id, college_id)
+      DO UPDATE SET is_deleted = false, updated_at = CURRENT_TIMESTAMP
     `;
     await client.query(insertQuery, [userId, college_ids]);
 
