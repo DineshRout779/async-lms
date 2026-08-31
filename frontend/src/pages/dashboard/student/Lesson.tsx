@@ -308,12 +308,7 @@ const Lesson = () => {
     if (submittingExercise[exerciseId]) return; // prevent double-submit
     try {
       const result = await dispatch(submitExercise({ exerciseId, files, taskId })).unwrap();
-      const score = result?.score ?? null;
-      toast.success(
-        score !== null
-          ? `Exercise submitted! Score: ${score} 🎉`
-          : 'Exercise submitted! 🎉',
-      );
+      toast.success('Exercise submitted! 🎉');
       return result;
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit exercise'));

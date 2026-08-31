@@ -55,7 +55,7 @@ exports.getUserProfile = async (req, res) => {
        LEFT JOIN public.roles r ON r.id = u.role_id
        LEFT JOIN public.student_profiles sp ON sp.user_id = u.id
        LEFT JOIN public.colleges c ON c.id = sp.college_id
-       LEFT JOIN public.facilitator_colleges fc ON fc.facilitator_id = u.id
+       LEFT JOIN public.facilitator_colleges fc ON fc.facilitator_id = u.id AND fc.is_deleted = false
        LEFT JOIN public.colleges fc_c ON fc_c.id = fc.college_id
        LEFT JOIN public.user_streaks us ON us.user_id = u.id
        WHERE u.id = $1

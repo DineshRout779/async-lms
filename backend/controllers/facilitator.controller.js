@@ -1600,7 +1600,7 @@ exports.deleteStudent = async (req, res) => {
     const { id } = req.params;
     
     // Verify access
-    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1', [facilitatorId]);
+    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false', [facilitatorId]);
     const collegeIds = colRes.rows.map(r => r.college_id);
     const accessCheck = await pool.query(
       `SELECT 1 FROM student_profiles sp
@@ -1626,7 +1626,7 @@ exports.restoreStudent = async (req, res) => {
     const facilitatorId = req.user.id;
     const { id } = req.params;
     
-    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1', [facilitatorId]);
+    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false', [facilitatorId]);
     const collegeIds = colRes.rows.map(r => r.college_id);
     const accessCheck = await pool.query(
       `SELECT 1 FROM student_profiles sp WHERE sp.user_id = $1 AND sp.college_id = ANY($2::uuid[])`,
@@ -1655,7 +1655,7 @@ exports.permanentDeleteStudent = async (req, res) => {
     const facilitatorId = req.user.id;
     const { id } = req.params;
     
-    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1', [facilitatorId]);
+    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false', [facilitatorId]);
     const collegeIds = colRes.rows.map(r => r.college_id);
     const accessCheck = await pool.query(
       `SELECT 1 FROM student_profiles sp WHERE sp.user_id = $1 AND sp.college_id = ANY($2::uuid[])`,
@@ -1681,7 +1681,7 @@ exports.permanentDeleteStudent = async (req, res) => {
 exports.getRecycleBin = async (req, res) => {
   try {
     const facilitatorId = req.user.id;
-    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1', [facilitatorId]);
+    const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false', [facilitatorId]);
     const collegeIds = colRes.rows.map(r => r.college_id);
     
     if (collegeIds.length === 0) return res.json({ success: true, data: [] });

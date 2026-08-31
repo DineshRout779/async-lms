@@ -903,6 +903,78 @@ exports.submitQuizAttempt = async (req, res) => {
   }
 };
 
+/** An access decision the student may safely be told about. */
+class ExerciseAccessError extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.name = 'ExerciseAccessError';
+    this.statusCode = statusCode;
+    this.expose = true;
+  }
+}
+
+const EXERCISE_COLUMNS = `
+  e.id, e.language, e.initial_files, e.test_cases, e.tasks, e.rubric,
+  e.max_score, e.subtopic_id, e.unit_id
+`;
+
+/**
+ * Load an exercise the student is actually entitled to work on.
+ *
+ * Every exercise endpoint used to look up `WHERE id = $1` and nothing else, so
+ * any authenticated student could initialise a workspace for, execute code
+ * against, grade and submit any exercise UUID — including ones an admin had
+ * soft-deleted, and ones belonging to courses they were never enrolled in.
+ *
+ * Entitlement follows enrolment: an exercise hangs off either a subtopic or a
+ * unit directly, and both roads lead to units → topics → subjects, which is
+ * what `user_subjects` records.
+ *
+ * @throws {ExerciseAccessError} 404 if missing or deleted, 403 if not enrolled
+ */
+async function loadAccessibleExercise(userId, exerciseId) {
+  const { rows } = await pool.query(
+    `SELECT ${EXERCISE_COLUMNS},
+            COALESCE(t_unit.subject_id, t_sub.subject_id) AS subject_id
+       FROM exercises e
+       LEFT JOIN units     u_direct ON u_direct.id = e.unit_id
+       LEFT JOIN topics    t_unit   ON t_unit.id   = u_direct.topic_id
+       LEFT JOIN subtopics st       ON st.id       = e.subtopic_id
+       LEFT JOIN units     u_sub    ON u_sub.id    = st.unit_id
+       LEFT JOIN topics    t_sub    ON t_sub.id    = u_sub.topic_id
+      WHERE e.id = $1 AND e.is_deleted = false`,
+    [exerciseId],
+  );
+
+  const exercise = rows[0];
+  if (!exercise) {
+    throw new ExerciseAccessError(404, 'Exercise not found');
+  }
+
+  // An exercise not reachable from any subject cannot be checked against
+  // enrolment. Refuse rather than fall open — an unlinked exercise is an
+  // authoring mistake, not a public one.
+  if (!exercise.subject_id) {
+    throw new ExerciseAccessError(
+      403,
+      'This exercise is not linked to a course yet. Please contact your facilitator.',
+    );
+  }
+
+  const enrolled = await pool.query(
+    'SELECT 1 FROM user_subjects WHERE user_id = $1 AND subject_id = $2',
+    [userId, exercise.subject_id],
+  );
+  if (enrolled.rowCount === 0) {
+    throw new ExerciseAccessError(
+      403,
+      'You are not enrolled in the course this exercise belongs to.',
+    );
+  }
+
+  return exercise;
+}
+
 /**
  * Submit exercise
  * POST /api/students/exercise/:exerciseId/submit
@@ -913,18 +985,7 @@ exports.submitExercise = async (req, res) => {
     const { exerciseId } = req.params;
     const { files, taskId } = req.body;
 
-    const exerciseQuery = await pool.query(
-      'SELECT max_score, language, test_cases, tasks, subtopic_id, rubric FROM exercises WHERE id = $1',
-      [exerciseId],
-    );
-
-    if (exerciseQuery.rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Exercise not found' });
-    }
-
-    const exercise = exerciseQuery.rows[0];
+    const exercise = await loadAccessibleExercise(userId, exerciseId);
     let score;
     let testResults = null;
 
@@ -1465,7 +1526,11 @@ const runnerService = require('../services/runnerService');
 
 const WORKSPACE_ROOT = path.join(__dirname, '..', 'workspaces');
 
-const { runTests, testSpecFrom } = require('../services/exerciseGrader');
+const {
+  runTests,
+  testSpecFrom,
+  HARNESS_FILES,
+} = require('../services/exerciseGrader');
 
 const DEFAULT_INITIAL_FILES = {
   javascript: [{ name: 'index.js', content: '// Write your solution here\n' }],
@@ -1491,18 +1556,10 @@ exports.initExerciseWorkspace = async (req, res) => {
     const { exerciseId } = req.params;
     const { taskId } = req.body;
 
-    const exerciseResult = await pool.query(
-      'SELECT language, initial_files, tasks FROM exercises WHERE id = $1',
-      [exerciseId],
+    const { language, initial_files, tasks } = await loadAccessibleExercise(
+      userId,
+      exerciseId,
     );
-
-    if (exerciseResult.rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Exercise not found' });
-    }
-
-    const { language, initial_files, tasks } = exerciseResult.rows[0];
 
     // Determine which files to seed: task-specific or exercise-level
     let filesToSeedFromDb = null;
@@ -1536,6 +1593,17 @@ exports.initExerciseWorkspace = async (req, res) => {
         const filePath = path.join(workspaceDir, file.name);
         fs.mkdirSync(path.dirname(filePath), { recursive: true });
         fs.writeFileSync(filePath, file.content, 'utf-8');
+      }
+    }
+
+    // Workspaces graded before the harness moved to a staging directory still
+    // hold a generated __tests__ file containing every hidden case and its
+    // expected value. Delete it rather than merely hiding it — it has no reason
+    // to exist on disk, and leaving it there keeps the answers one path
+    // traversal away.
+    for (const name of fs.readdirSync(workspaceDir)) {
+      if (HARNESS_FILES.has(name)) {
+        fs.rmSync(path.join(workspaceDir, name), { force: true });
       }
     }
 
@@ -1601,6 +1669,11 @@ exports.saveExerciseWorkspace = async (req, res) => {
         .json({ success: false, message: 'Files array is required' });
     }
 
+    // Saving creates directories on disk keyed by exercise id — gate it on the
+    // same entitlement as the rest, so an unenrolled student cannot seed
+    // arbitrary workspaces.
+    await loadAccessibleExercise(userId, exerciseId);
+
     const projectId = taskId
       ? `exercise-${exerciseId}-task-${taskId}`
       : `exercise-${exerciseId}`;
@@ -1643,20 +1716,11 @@ exports.runExerciseTests = async (req, res) => {
     const { exerciseId } = req.params;
     const { taskId } = req.body;
 
-    const result = await pool.query(
-      'SELECT language, test_cases, tasks FROM exercises WHERE id = $1',
-      [exerciseId],
-    );
-    if (result.rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Exercise not found' });
-    }
-
-    const { language, tasks } = result.rows[0];
+    const exercise = await loadAccessibleExercise(userId, exerciseId);
+    const { language, tasks } = exercise;
 
     // Grade against the task the student is on, else the legacy exercise row.
-    let source = result.rows[0];
+    let source = exercise;
     if (taskId && Array.isArray(tasks) && tasks.length > 0) {
       const task = tasks.find((t) => t.id === taskId);
       if (!task)
@@ -1709,17 +1773,7 @@ exports.runExercise = async (req, res) => {
     const { exerciseId } = req.params;
     const { taskId, activeFile } = req.body;
 
-    const result = await pool.query(
-      'SELECT language FROM exercises WHERE id = $1',
-      [exerciseId],
-    );
-    if (result.rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Exercise not found' });
-    }
-
-    const { language } = result.rows[0];
+    const { language } = await loadAccessibleExercise(userId, exerciseId);
 
     const projectId = taskId
       ? `exercise-${exerciseId}-task-${taskId}`

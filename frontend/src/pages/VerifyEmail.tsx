@@ -16,10 +16,12 @@ export default function VerifyEmail() {
   const [isLoading, setIsLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isResending, setIsResending] = useState(false);
-  
+
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const email = (sessionStorage.getItem('verify_email') || '').trim().toLowerCase();
+  const email = (sessionStorage.getItem('verify_email') || '')
+    .trim()
+    .toLowerCase();
 
   useEffect(() => {
     const sessionEmail = sessionStorage.getItem('verify_email');
@@ -56,7 +58,7 @@ export default function VerifyEmail() {
       toast.success('Email verified successfully!', { id: toastId });
       dispatch(setCredentials({ token: data.token, user: data.user }));
       sessionStorage.removeItem('verify_email');
-      
+
       // Redirect dynamically based on role and onboarding step
       const verifiedUser = data.user;
       if (verifiedUser.role === 'admin') {
@@ -64,7 +66,8 @@ export default function VerifyEmail() {
       } else if (verifiedUser.role === 'curriculum_developer') {
         navigate('/dashboard/curriculum-developer');
       } else if (verifiedUser.role === 'facilitator') {
-        if (verifiedUser.onboarding_step !== 'done') navigate('/onboarding/facilitator');
+        if (verifiedUser.onboarding_step !== 'done')
+          navigate('/onboarding/facilitator');
         else if (!verifiedUser.is_verified) navigate('/pending-verification');
         else navigate('/dashboard/facilitator');
       } else if (verifiedUser.role === 'student') {
@@ -77,9 +80,12 @@ export default function VerifyEmail() {
         navigate('/');
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Verification failed. Please try again.', {
-        id: toastId,
-      });
+      toast.error(
+        err.response?.data?.message || 'Verification failed. Please try again.',
+        {
+          id: toastId,
+        },
+      );
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +103,7 @@ export default function VerifyEmail() {
         full_name: 'User', // Placeholder; DB checks existing unverified email and triggers OTP resend
         password: 'dummyPasswordTemp123',
       });
-      
+
       toast.success('A new verification code has been sent!', { id: toastId });
       setResendCooldown(60); // 60 seconds cooldown
     } catch (err: any) {
@@ -111,10 +117,16 @@ export default function VerifyEmail() {
 
   return (
     <div className='min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-slate-50'>
-      <SEO title='Verify Email' description='Verify your CodeGuru account email address.' />
-      
-      <div className='sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center'>
-        <Logo />
+      <SEO
+        title='Verify Email'
+        description='Verify your CodeGuru account email address.'
+      />
+
+      <div className='sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center gap-2.5'>
+        <Logo className='h-16 w-16' />
+        <span className='text-2xl font-bold tracking-tight text-slate-900'>
+          CodeGuru
+        </span>
       </div>
 
       <div className='mt-8 sm:mx-auto sm:w-full sm:max-w-md'>
@@ -129,7 +141,9 @@ export default function VerifyEmail() {
               <MailOpen className='h-8 w-8' />
             </div>
             <div className='space-y-1.5'>
-              <h2 className='text-2xl font-bold text-slate-900 tracking-tight'>Verify your email</h2>
+              <h2 className='text-2xl font-bold text-slate-900 tracking-tight'>
+                Verify your email
+              </h2>
               <p className='text-sm text-slate-500'>
                 We've sent a 6-digit verification code to
               </p>
@@ -141,7 +155,10 @@ export default function VerifyEmail() {
 
           <form onSubmit={handleVerify} className='space-y-6'>
             <div className='space-y-1'>
-              <label htmlFor='otp' className='text-[13px] font-semibold text-slate-800 tracking-wide'>
+              <label
+                htmlFor='otp'
+                className='text-[13px] font-semibold text-slate-800 tracking-wide'
+              >
                 Verification Code
               </label>
               <Input
@@ -151,8 +168,12 @@ export default function VerifyEmail() {
                 maxLength={6}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                inputMode='numeric'
+                autoComplete='one-time-code'
                 placeholder='Enter 6-digit code'
-                className='h-12 text-center text-xl font-bold tracking-[8px] rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 text-slate-800'
+                // The wide tracking is for the digits; without the placeholder:
+                // overrides it stretches the hint text into an unreadable smear.
+                className='h-12 text-xl font-bold tracking-[8px] rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 text-slate-800 placeholder:text-sm placeholder:font-medium placeholder:tracking-normal placeholder:text-slate-400'
               />
             </div>
 
@@ -175,8 +196,12 @@ export default function VerifyEmail() {
                   : 'text-indigo-600 hover:text-indigo-800'
               }`}
             >
-              <RotateCw className={`h-4 w-4 ${isResending ? 'animate-spin' : ''}`} />
-              {resendCooldown > 0 ? `Resend Code in ${resendCooldown}s` : 'Resend Code'}
+              <RotateCw
+                className={`h-4 w-4 ${isResending ? 'animate-spin' : ''}`}
+              />
+              {resendCooldown > 0
+                ? `Resend Code in ${resendCooldown}s`
+                : 'Resend Code'}
             </button>
 
             <button
