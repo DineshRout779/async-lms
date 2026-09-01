@@ -134,15 +134,15 @@ export default function StudentAnalytics() {
   }, []);
 
   return (
-    <div className='p-6 md:p-8 space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500'>
+    <div className='p-3.5 sm:p-6 md:p-8 space-y-6 sm:space-y-8 max-w-7xl mx-auto'>
       <div>
-        <p className='text-[11px] text-slate-400 font-medium uppercase tracking-wider mb-1'>
+        <p className='text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1'>
           Student Dashboard / Analytics
         </p>
-        <h1 className='text-2xl md:text-3xl font-bold text-slate-900'>
+        <h1 className='text-2xl sm:text-3xl font-bold text-slate-900'>
           Performance Dashboard
         </h1>
-        <p className='text-sm text-slate-500 mt-1'>
+        <p className='text-xs sm:text-sm text-slate-500 mt-1'>
           Viewing analytics for{' '}
           <span className='font-semibold text-slate-700'>
             {user?.full_name || 'Student'}
@@ -157,7 +157,7 @@ export default function StudentAnalytics() {
       ) : (
         <>
           {/* Summary stat cards */}
-          <div className='grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3'>
+          <div className='grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3'>
             <StatCard
               label='Overall Progress'
               value={`${overallProgress}%`}

@@ -47,7 +47,7 @@ export default function NotificationBell() {
   // Socket.io real-time subscription
   useEffect(() => {
     if (!user?.id) return;
-    const socket = io(import.meta.env.VITE_API_URL, { transports: ['websocket'] });
+    const socket = io(import.meta.env.VITE_API_URL || undefined, { transports: ['websocket'] });
     socket.on('connect', () => socket.emit('notification:subscribe', { userId: user.id }));
     socket.on('notification:new', (n: Notification) => dispatch(pushNotification(n)));
     return () => { socket.disconnect(); };

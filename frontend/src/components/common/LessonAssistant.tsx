@@ -121,9 +121,9 @@ export default function LessonAssistant({ lessonContext }: Props) {
 
       {/* ── Chat dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className='flex flex-col gap-0 p-0 sm:max-w-240 h-[80vh]'>
+        <DialogContent className='flex flex-col gap-0 p-0 w-[95vw] sm:max-w-2xl h-[85dvh] max-h-[700px] rounded-2xl'>
           {/* Header */}
-          <DialogHeader className='px-5 py-4 border-b shrink-0'>
+          <DialogHeader className='px-4 sm:px-5 py-3.5 sm:py-4 border-b shrink-0'>
             <div className='flex items-center gap-3'>
               <div className='h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0'>
                 <Bot className='h-4 w-4 text-indigo-600' />

@@ -23,7 +23,7 @@ import Logo from '@/components/common/Logo';
 import SEO from '@/components/common/SEO';
 import { loginSchema, signupSchema } from '@/lib/validations';
 
-const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL}/api/v1/auth/google`;
+const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL || ''}/api/v1/auth/google`;
 
 export default function Login() {
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('signup');

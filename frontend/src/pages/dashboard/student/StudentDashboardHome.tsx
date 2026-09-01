@@ -40,14 +40,14 @@ const StatCard: React.FC<StatCardProps> = ({
   bgColor,
 }) => (
   <Card className='border-none shadow-sm hover:shadow-md transition-all duration-300'>
-    <CardContent className='pt-6 flex flex-col items-center'>
-      <div className={cn('p-3 rounded-full mb-3', bgColor)}>
-        <Icon className={cn('w-6 h-6', iconColor)} />
+    <CardContent className='p-4 sm:pt-6 flex flex-col items-center text-center'>
+      <div className={cn('p-2.5 sm:p-3 rounded-full mb-2 sm:mb-3', bgColor)}>
+        <Icon className={cn('w-5 h-5 sm:w-6 sm:h-6', iconColor)} />
       </div>
-      <div className='text-2xl font-bold tracking-tight text-slate-900'>
+      <div className='text-xl sm:text-2xl font-bold tracking-tight text-slate-900'>
         {value}
       </div>
-      <p className='text-[10px] uppercase font-bold text-muted-foreground tracking-widest mt-1'>
+      <p className='text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground tracking-widest mt-1'>
         {label}
       </p>
     </CardContent>
@@ -72,31 +72,31 @@ const StudentDashboardHome: React.FC = () => {
   const pendingCount = assignments.length;
 
   return (
-    <main className='flex-1 space-y-8 p-4 md:p-8 pt-6 max-w-7xl mx-auto overflow-hidden'>
+    <main className='flex-1 space-y-6 sm:space-y-8 p-3.5 sm:p-6 md:p-8 pt-4 sm:pt-6 max-w-7xl mx-auto overflow-hidden'>
       {/* 1. Hero Section */}
-      <section className='relative overflow-hidden rounded-[2rem] bg-[#1e293b] text-white p-8 md:p-12 shadow-2xl'>
+      <section className='relative overflow-hidden rounded-2xl sm:rounded-[2rem] bg-[#1e293b] text-white p-5 sm:p-8 md:p-12 shadow-xl'>
         <div className='relative z-10 max-w-2xl'>
-          <Badge className='bg-slate-700/50 hover:bg-slate-700 text-slate-100 border-none px-3 py-1 mb-6 backdrop-blur-md'>
+          <Badge className='bg-slate-700/50 hover:bg-slate-700 text-slate-100 border-none px-2.5 py-0.5 sm:px-3 sm:py-1 mb-4 sm:mb-6 text-[10px] sm:text-xs backdrop-blur-md'>
             WELCOME BACK
           </Badge>
-          <h1 className='text-4xl md:text-5xl font-extrabold tracking-tight mb-4 leading-[1.1]'>
+          <h1 className='text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-3 sm:mb-4 leading-[1.15]'>
             Ready to continue,{' '}
             <span className='text-yellow-400'>
               {user?.full_name?.split(' ')[0] || 'there'}?
             </span>
           </h1>
-          <p className='text-slate-400 text-lg mb-8 max-w-md leading-relaxed'>
+          <p className='text-slate-400 text-sm sm:text-lg mb-6 sm:mb-8 max-w-md leading-relaxed'>
             {loadingAssignments
               ? 'Loading your progress...'
               : pendingCount > 0
                 ? `You have ${pendingCount} pending assignment${pendingCount !== 1 ? 's' : ''}. Keep up the momentum!`
                 : 'All caught up! Keep learning and growing.'}
           </p>
-          <div className='flex flex-wrap gap-4'>
+          <div className='flex flex-col sm:flex-row gap-3 sm:gap-4'>
             <Button
               size='lg'
               onClick={() => navigate('/dashboard/student/courses')}
-              className='bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 h-12 font-semibold transition-all hover:scale-105'
+              className='bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6 sm:px-8 h-11 sm:h-12 font-semibold transition-all w-full sm:w-auto min-h-[44px]'
             >
               <Play className='mr-2 h-4 w-4 fill-current' /> Continue Learning
             </Button>
@@ -104,7 +104,7 @@ const StudentDashboardHome: React.FC = () => {
               size='lg'
               variant='secondary'
               onClick={() => navigate('/dashboard/student/assignments')}
-              className='bg-slate-700 hover:bg-slate-600 text-white border-none rounded-xl px-8 h-12 font-semibold'
+              className='bg-slate-700 hover:bg-slate-600 text-white border-none rounded-xl px-6 sm:px-8 h-11 sm:h-12 font-semibold w-full sm:w-auto min-h-[44px]'
             >
               View Assignments
             </Button>
@@ -115,7 +115,7 @@ const StudentDashboardHome: React.FC = () => {
       </section>
 
       {/* 2. Stats Grid */}
-      <section className='grid gap-4 grid-cols-2 lg:grid-cols-4'>
+      <section className='grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4'>
         <StatCard
           label='Courses'
           value={loadingCourses ? '—' : courses.length}

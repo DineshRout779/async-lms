@@ -388,16 +388,16 @@ const Leaderboard = () => {
   };
 
   return (
-    <main className='flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-6xl mx-auto'>
+    <main className='flex-1 space-y-5 sm:space-y-6 p-3.5 sm:p-6 md:p-8 pt-4 sm:pt-6 max-w-6xl mx-auto'>
       <div>
-        <h1 className='text-3xl font-bold tracking-tight text-slate-900'>Leaderboard</h1>
-        <p className='text-muted-foreground mt-1'>
+        <h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-slate-900'>Leaderboard</h1>
+        <p className='text-muted-foreground mt-1 text-xs sm:text-sm'>
           See how you stack up against fellow students
         </p>
       </div>
 
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-3'>
-        <div className='inline-flex items-center gap-1 rounded-2xl bg-slate-100 p-1.5'>
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
+        <div className='inline-flex items-center gap-1 rounded-xl sm:rounded-2xl bg-slate-100 p-1 overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0'>
           {(Object.keys(tabMeta) as TabKey[]).map((key) => {
             const Icon = tabMeta[key].icon;
             const isActive = activeTab === key;
@@ -407,18 +407,18 @@ const Leaderboard = () => {
                 key={key}
                 onClick={() => setActiveTab(key)}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all',
+                  'flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 min-h-[38px]',
                   isActive
                     ? 'bg-[#1e293b] text-white shadow-md'
                     : 'text-slate-500 hover:text-slate-800',
                 )}
               >
-                <Icon className={cn('h-4 w-4', isActive ? 'text-yellow-400' : 'text-slate-400')} />
-                {tabMeta[key].label}
+                <Icon className={cn('h-3.5 w-3.5 sm:h-4 sm:w-4', isActive ? 'text-yellow-400' : 'text-slate-400')} />
+                <span>{tabMeta[key].label}</span>
                 {rank !== undefined && (
                   <span
                     className={cn(
-                      'text-[11px] font-extrabold px-1.5 py-0.5 rounded-full',
+                      'text-[10px] sm:text-[11px] font-extrabold px-1.5 py-0.5 rounded-full',
                       isActive ? 'bg-white/15 text-white' : 'bg-white text-slate-500',
                     )}
                   >
