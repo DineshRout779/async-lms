@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import apiClient from '@/services/api';
 
 type Result = {
@@ -6,7 +6,7 @@ type Result = {
   id?: string;
   student_name: string;
   marks: number;
-  feedback: string;
+  feedback: string | Record<string, any> | null;
   submission_link?: string;
   submission_file_url?: string;
   status?: string;
@@ -20,21 +20,27 @@ type Props = {
 };
 
 // Evaluator feedback comes back in different shapes depending on evaluator
-// type: a plain string (Python), or a JSON string with a `summary`/`feedback`
-// field plus optional `strengths`/`issues`/`breakdown` arrays (JS/Visual).
+// type: a plain string (Python), or a JSON string/object with `summary`/`feedback`
+// field plus optional `strengths`/`issues`/`breakdown` arrays (JS/Visual/React).
 // Parse it defensively and render something readable either way.
-const FeedbackCell = ({ feedback }: { feedback: string }) => {
+const FeedbackCell = ({ feedback }: { feedback: string | object | null }) => {
   if (!feedback) return <span className="text-slate-400">—</span>;
 
   let parsed: any = null;
-  try {
-    parsed = JSON.parse(feedback);
-  } catch {
-    // not JSON — plain string feedback, render as-is
+
+  if (typeof feedback === 'object') {
+    // pg already deserialized JSONB
+    parsed = feedback;
+  } else {
+    try {
+      parsed = JSON.parse(feedback as string);
+    } catch {
+      // not JSON — plain string feedback, render as-is
+    }
   }
 
   if (!parsed || typeof parsed !== 'object') {
-    return <span>{feedback}</span>;
+    return <span>{feedback as string}</span>;
   }
 
   // Handle arrays (e.g. syntax or validation errors from the evaluator)
@@ -49,29 +55,46 @@ const FeedbackCell = ({ feedback }: { feedback: string }) => {
   }
 
   const summary: string | undefined = parsed.summary || parsed.feedback;
-  const lists: { label: string; items: string[] }[] = [
-    { label: 'Strengths', items: parsed.strengths || [] },
-    { label: 'Issues', items: parsed.issues || [] },
+  const lists: { label: string; items: string[]; color?: string }[] = [
     {
-      label: 'Breakdown',
+      label: '✅ Strengths',
+      items: parsed.strengths || [],
+      color: 'text-emerald-600',
+    },
+    {
+      label: '⚠️ Issues',
+      items: parsed.issues || [],
+      color: 'text-red-500',
+    },
+    {
+      label: '📊 Score Breakdown',
       items: Array.isArray(parsed.breakdown)
-        ? parsed.breakdown.map((b: any) => `${b.item}: ${b.awarded}/${b.max} — ${b.reason}`)
+        ? parsed.breakdown.map(
+            (b: any) => `${b.item}: ${b.awarded}/${b.max} pts — ${b.reason}`
+          )
         : [],
+      color: 'text-slate-600',
     },
   ].filter((l) => l.items.length > 0);
 
   return (
     <div className="max-w-xs">
-      {summary && <p>{summary}</p>}
+      {summary && <p className="text-sm text-slate-700 leading-snug">{summary}</p>}
       {lists.length > 0 && (
-        <details className="mt-1 text-xs text-slate-500">
-          <summary className="cursor-pointer select-none">Details</summary>
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer select-none font-medium text-slate-500 hover:text-slate-700">
+            View Details
+          </summary>
           {lists.map((l) => (
-            <div key={l.label} className="mt-1">
-              <span className="font-medium">{l.label}:</span>
-              <ul className="list-disc list-inside">
+            <div key={l.label} className="mt-2">
+              <span className={`font-semibold ${l.color || 'text-slate-600'}`}>
+                {l.label}:
+              </span>
+              <ul className="list-disc list-inside mt-0.5 space-y-0.5">
                 {l.items.map((item, i) => (
-                  <li key={i}>{item}</li>
+                  <li key={i} className={l.color || 'text-slate-500'}>
+                    {item}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -85,27 +108,59 @@ const FeedbackCell = ({ feedback }: { feedback: string }) => {
   );
 };
 
+
 const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) => {
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
   const [bulkEvaluatorType, setBulkEvaluatorType] = useState<string>('');
   const [bulkReEvaluating, setBulkReEvaluating] = useState(false);
 
-  // Poll for updates if any row is pending
+  // Keep refs to latest values so setInterval callbacks are never stale
+  const onRefreshRef = useRef(onRefresh);
+  const resultsRef = useRef(results);
+  useEffect(() => { onRefreshRef.current = onRefresh; }, [onRefresh]);
+  useEffect(() => { resultsRef.current = results; }, [results]);
+
+  // Poll for updates if any row is pending — interval is only created once per evaluation
   useEffect(() => {
-    const hasPending = results.some((r) => r.status === 'pending');
-    if (!hasPending || !evaluation?.id || !onRefresh) return;
+    if (!evaluation?.id) return;
+
+    let retries = 0;
+    const MAX_RETRIES = 200; // ~10 minutes at 3s interval (defense against large class queue delays)
+    let lastCompletedCount = -1; // Track progress — only refresh when count increases
 
     const interval = setInterval(async () => {
+      // Only poll for REAL pending rows (those with an `id` in evaluation_results).
+      // Virtual rows (new submissions not yet queued) have no `id` — they need
+      // manual 'Evaluate Selected', not automatic polling.
+      const hasPending = resultsRef.current.some((r) => r.status === 'pending' && r.id);
+      if (!hasPending || retries >= MAX_RETRIES) {
+        clearInterval(interval);
+        return;
+      }
+      retries++;
       try {
-        await apiClient.get(`/evaluations/sync/${evaluation.id}`);
-        onRefresh();
+        const { data } = await apiClient.get(`/evaluations/sync/${evaluation.id}`);
+        const newCount = data?.progress?.completed ?? 0;
+        const isFinished = data?.progress?.isFinished ?? false;
+        if (isFinished) {
+          // Evaluation done — refresh once and stop polling entirely
+          onRefreshRef.current?.();
+          clearInterval(interval);
+          return;
+        }
+        // Only refresh when a new job just completed (count went up)
+        if (newCount > lastCompletedCount) {
+          lastCompletedCount = newCount;
+          onRefreshRef.current?.();
+        }
       } catch (err) {
         console.error('Failed to sync', err);
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [results, evaluation, onRefresh]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evaluation?.id]);
 
   const handleBulkReevaluate = async () => {
     if (!onRefresh || selectedSubmissions.length === 0) return;
@@ -206,8 +261,10 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
               </td>
               <td className="p-3">{item.student_name}</td>
               <td className="p-3">
-                {item.status === 'pending' ? (
+                {item.status === 'pending' && item.id ? (
                   <span className="text-yellow-600">Pending...</span>
+                ) : item.status === 'pending' && !item.id ? (
+                  <span className="text-orange-500" title="Submitted after evaluation started — select and click Evaluate Selected">Not evaluated</span>
                 ) : item.status === 'failed' ? (
                   <span className="text-red-600">Failed</span>
                 ) : (

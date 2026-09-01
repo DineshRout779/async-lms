@@ -53,7 +53,7 @@ exports.runEvaluation = async (req, res) => {
     // 2. If not found, try facilitator-created college assignments
     if (!assignment) {
       assignmentRes = await client.query(
-        `SELECT id, title, NULL as evaluator_type, NULL as test_cases, NULL as rubric, 'college' as type
+        `SELECT id, title, evaluator_type, test_cases, rubric, 'college' as type
          FROM college_assignments
          WHERE id = $1`,
         [assignmentId],
@@ -251,6 +251,18 @@ exports.runEvaluation = async (req, res) => {
             criteria: [{ name: 'Standard Grading', weight: 100 }],
           };
         }
+
+        let testCasesObj = assignment.test_cases;
+        if (typeof testCasesObj === 'string') {
+          try {
+            testCasesObj = JSON.parse(testCasesObj);
+          } catch (e) {
+            console.error('Failed to parse test_cases:', e);
+          }
+        }
+        if (testCasesObj && testCasesObj.specFile) {
+          formattedRubric.specFile = testCasesObj.specFile;
+        }
         for (const s of validSubmissions) {
           const payload = {
             type: payloadType,
@@ -331,46 +343,73 @@ exports.syncEvaluationStatus = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Fetch the evaluation summary
+    // Verify evaluation exists
     const evalRes = await pool.query(
-      `SELECT status, total_submissions FROM evaluations WHERE id = $1`,
+      `SELECT id, status, total_submissions FROM evaluations WHERE id = $1`,
       [id],
     );
 
     if (!evalRes.rows.length) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Evaluation not found' });
+      return res.status(404).json({ success: false, message: 'Evaluation not found' });
     }
 
-    const evaluation = evalRes.rows[0];
+    // Count actual rows — don't trust the cached status field
+    // (new students can be added after evaluation starts, making the cached counts stale)
+    const countsRes = await pool.query(
+      `SELECT
+         COUNT(*) AS total,
+         SUM(CASE WHEN status IN ('completed','failed') THEN 1 ELSE 0 END) AS done,
+         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count
+       FROM evaluation_results
+       WHERE evaluation_id = $1`,
+      [id],
+    );
 
-    // If it's already marked complete, just return
-    if (evaluation.status.startsWith('completed')) {
+    const totalRows     = parseInt(countsRes.rows[0].total)       || 0;
+    const doneRows      = parseInt(countsRes.rows[0].done)        || 0;
+    const pendingRows   = parseInt(countsRes.rows[0].pending_count) || 0;
+
+    // If there are no pending rows at all, we're done — return immediately
+    if (pendingRows === 0 && totalRows > 0) {
+      await pool.query(`UPDATE evaluations SET status = 'completed' WHERE id = $1`, [id]);
       return res.json({
         success: true,
-        progress: {
-          total: evaluation.total_submissions,
-          completed: evaluation.total_submissions,
-          isFinished: true,
-        },
+        progress: { total: totalRows, completed: doneRows, isFinished: true },
       });
     }
 
-    // Fetch all pending jobs
+    // Fetch all pending jobs and try to advance them
     const pendingJobsRes = await pool.query(
-      `SELECT id, job_id, status_url, submission_id, student_id 
-       FROM evaluation_results 
+      `SELECT id, job_id, status_url, submission_id, student_id, created_at
+       FROM evaluation_results
        WHERE evaluation_id = $1 AND status = 'pending'`,
       [id],
     );
 
-    const pendingJobs = pendingJobsRes.rows;
     let newlyCompleted = 0;
 
-    for (const job of pendingJobs) {
+    for (const job of pendingJobsRes.rows) {
       try {
-        if (!job.status_url) continue;
+        if (!job.status_url) {
+          // Job has no status URL — it was never queued.
+          // Auto-fail after 10 minutes so the UI stops polling.
+          const createdAtTime = job.created_at ? new Date(job.created_at).getTime() : Date.now();
+          const ageMinutes = (Date.now() - createdAtTime) / 60000;
+          if (ageMinutes > 10) {
+            const failFeedback = JSON.stringify({
+              summary: 'This submission was not sent to the grader (submitted after evaluation started). Please use "Evaluate Selected" to re-evaluate this student.',
+              strengths: [],
+              issues: ['Submission not queued for evaluation'],
+              breakdown: [],
+            });
+            await pool.query(
+              `UPDATE evaluation_results SET status = 'failed', marks = 0, feedback = $1::jsonb WHERE id = $2`,
+              [failFeedback, job.id],
+            );
+            newlyCompleted++;
+          }
+          continue;
+        }
 
         const url = `${process.env.CENTRAL_EVALUATOR_URL}${job.status_url}`;
         const response = await axios.get(url, {
@@ -378,11 +417,10 @@ exports.syncEvaluationStatus = async (req, res) => {
         });
 
         const jobData = response.data.job || response.data;
-        const jobState = jobData.status || jobData.state; // Handles different bullmq status formats
+        const jobState = jobData.status || jobData.state;
 
         if (jobState === 'completed' || jobState === 'failed') {
-          console.log(`Job ${job.id} state: ${jobState}, resData: ${JSON.stringify(jobData.result)}`);
-          // Extract marks and feedback (Central evaluator format can vary slightly)
+          console.log(`Job ${job.id} state: ${jobState}`);
           let marks = 0;
           let feedback = '';
 
@@ -392,42 +430,30 @@ exports.syncEvaluationStatus = async (req, res) => {
               jobData.result.evaluation ||
               jobData.result.result ||
               jobData.result;
-            // Handle visual evaluator returning an array
             const finalData = Array.isArray(resData) ? resData[0] : resData;
 
             marks = finalData?.score ?? finalData?.marks ?? 0;
-            if (
-              marks !== null &&
-              typeof marks === 'object' &&
-              marks.score !== undefined
-            ) {
+            if (marks !== null && typeof marks === 'object' && marks.score !== undefined) {
               marks = marks.score;
             }
             feedback =
-              finalData?.feedback ||
               finalData?.rubricFeedback ||
+              finalData?.feedback ||
               finalData?.error ||
               'Evaluation completed successfully.';
-            // fallback if feedback is an object
-            if (typeof feedback === 'object') {
-              feedback = JSON.stringify(feedback);
+            if (typeof feedback === 'string') {
+              feedback = { summary: feedback, strengths: [], issues: [], breakdown: [] };
             }
           } else if (jobState === 'failed') {
-            feedback = `Evaluation Failed: ${jobData.failedReason || 'Unknown error'}`;
+            feedback = { summary: `Evaluation Failed: ${jobData.failedReason || 'Unknown error'}`, strengths: [], issues: [], breakdown: [] };
           }
 
-          // Update result row
-          console.log(`Updating DB for ${job.id} with status ${jobState}, marks ${marks}`);
           await pool.query(
-            `UPDATE evaluation_results 
-             SET status = 'completed', marks = $1, feedback = $2
-             WHERE id = $3`,
-            [marks, feedback, job.id],
+            `UPDATE evaluation_results SET status = 'completed', marks = $1, feedback = $2::jsonb WHERE id = $3`,
+            [marks, JSON.stringify(feedback), job.id],
           );
-
           newlyCompleted++;
 
-          // Optionally notify student
           if (job.student_id && jobState === 'completed') {
             notify({
               userId: job.student_id,
@@ -439,42 +465,35 @@ exports.syncEvaluationStatus = async (req, res) => {
           }
         }
       } catch (err) {
-        console.error(
-          `Failed to poll status for job ${job.job_id}:`,
-          err.message,
-        );
+        console.error(`Failed to poll status for job ${job.job_id}:`, err.message);
       }
     }
 
-    // Check if we are totally finished now
-    const completedJobsRes = await pool.query(
-      `SELECT COUNT(*) FROM evaluation_results WHERE evaluation_id = $1 AND status = 'completed'`,
+    // Re-count after processing
+    const finalCountRes = await pool.query(
+      `SELECT
+         COUNT(*) AS total,
+         SUM(CASE WHEN status IN ('completed','failed') THEN 1 ELSE 0 END) AS done,
+         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS still_pending
+       FROM evaluation_results WHERE evaluation_id = $1`,
       [id],
     );
 
-    const completedCount = parseInt(completedJobsRes.rows[0].count);
+    const finalTotal   = parseInt(finalCountRes.rows[0].total)        || 0;
+    const finalDone    = parseInt(finalCountRes.rows[0].done)         || 0;
+    const stillPending = parseInt(finalCountRes.rows[0].still_pending) || 0;
+    const isFinished   = stillPending === 0 && finalTotal > 0;
 
-    if (completedCount >= evaluation.total_submissions) {
-      await pool.query(
-        `UPDATE evaluations SET status = 'completed' WHERE id = $1`,
-        [id],
-      );
+    if (isFinished) {
+      await pool.query(`UPDATE evaluations SET status = 'completed', total_submissions = $2 WHERE id = $1`, [id, finalTotal]);
     }
 
     return res.json({
       success: true,
-      progress: {
-        total: evaluation.total_submissions,
-        completed: completedCount,
-        isFinished: completedCount >= evaluation.total_submissions,
-      },
+      progress: { total: finalTotal, completed: finalDone, isFinished },
     });
   } catch (error) {
     console.error('Sync Evaluation Error:', error);
-    require('fs').writeFileSync(
-      'error_log.txt',
-      'Error: ' + error.message + '\nStack: ' + error.stack,
-    );
     return serverError(res, error);
   }
 };
@@ -555,10 +574,80 @@ exports.getResultsByAssignment = async (req, res) => {
         })),
       );
 
+      // Also fetch any NEW submissions that arrived after the evaluation was triggered
+      // (they will have no evaluation_results row yet — show them as pending)
+      const isCollege = !!evaluation.college_assignment_id;
+      const evaluatedSubmissionIds = resultsRes.rows.map((r) => r.submission_id).filter(Boolean);
+
+      let newSubValues = [assignmentId];
+      let newSubCollegeFilter = '';
+      if (isFacilitator) {
+        newSubValues.push(facilitatorCollegeIds);
+        newSubCollegeFilter = ' AND col.id = ANY($2)';
+      }
+
+      let newSubQuery = '';
+      if (isCollege) {
+        newSubQuery = `
+          SELECT s.id as submission_id,
+                 s.submission_link,
+                 s.submission_file_url,
+                 s.student_id as student_id,
+                 u.full_name as student_name,
+                 sp.expected_graduation_year,
+                 col.name as college_name,
+                 col.id as college_id
+          FROM college_assignment_submissions s
+          JOIN users u ON s.student_id = u.id
+          LEFT JOIN student_profiles sp ON u.id = sp.user_id
+          LEFT JOIN colleges col ON sp.college_id = col.id
+          WHERE s.assignment_id = $1${newSubCollegeFilter}
+        `;
+      } else {
+        newSubQuery = `
+          SELECT s.id as submission_id,
+                 s.submission_link,
+                 null as submission_file_url,
+                 s.user_id as student_id,
+                 u.full_name as student_name,
+                 sp.expected_graduation_year,
+                 col.name as college_name,
+                 col.id as college_id
+          FROM assignment_submissions s
+          JOIN users u ON s.user_id = u.id
+          LEFT JOIN student_profiles sp ON u.id = sp.user_id
+          LEFT JOIN colleges col ON sp.college_id = col.id
+          WHERE s.assignment_id = $1${newSubCollegeFilter}
+        `;
+      }
+
+      const allSubsRes = await pool.query(newSubQuery, newSubValues);
+
+      // Deduplicate by student_id too — if a student re-submitted after evaluation,
+      // their old submission_id is in evaluation_results but the new one isn't.
+      // We must not show them as pending again if they were already evaluated.
+      const evaluatedStudentIds = resultsRes.rows.map((r) => r.student_id).filter(Boolean);
+
+      const pendingNewResults = await Promise.all(
+        allSubsRes.rows
+          .filter((s) => 
+            !evaluatedSubmissionIds.includes(s.submission_id) &&
+            !evaluatedStudentIds.includes(s.student_id)
+          )
+          .map(async (row) => ({
+            ...row,
+            submission_link: await presignS3Url(row.submission_link),
+            submission_file_url: await presignS3Url(row.submission_file_url),
+            status: 'pending',
+            marks: 0,
+            feedback: null,
+          }))
+      );
+
       return res.json({
         success: true,
         evaluation: evaluation,
-        results: results,
+        results: [...results, ...pendingNewResults],
       });
     }
 
@@ -961,7 +1050,7 @@ exports.reEvaluateSubmission = async (req, res) => {
     // Fetch assignment for rubric/test_cases
     let assignmentRes;
     if (isCollegeAssignment) {
-      assignmentRes = await client.query(`SELECT id, title, NULL as evaluator_type, NULL as test_cases, NULL as rubric, 'college' as type FROM college_assignments WHERE id = $1`, [assignmentId]);
+      assignmentRes = await client.query(`SELECT id, title, evaluator_type, test_cases, rubric, 'college' as type FROM college_assignments WHERE id = $1`, [assignmentId]);
     } else {
       assignmentRes = await client.query(`SELECT id, title, evaluator_type, test_cases, rubric, 'unit' as type FROM assignments WHERE id = $1`, [assignmentId]);
     }
@@ -1073,6 +1162,18 @@ exports.reEvaluateSubmission = async (req, res) => {
           formattedRubric = { criteria: [{ name: 'Standard Grading', weight: 100 }] };
         }
 
+        let testCasesObj = assignment.test_cases;
+        if (typeof testCasesObj === 'string') {
+          try {
+            testCasesObj = JSON.parse(testCasesObj);
+          } catch (e) {
+            console.error('Failed to parse test_cases:', e);
+          }
+        }
+        if (testCasesObj && testCasesObj.specFile) {
+          formattedRubric.specFile = testCasesObj.specFile;
+        }
+
         for (const s of validSubmissions) {
           const payload = {
             type: payloadType,
@@ -1094,19 +1195,36 @@ exports.reEvaluateSubmission = async (req, res) => {
         }
     }
 
-    // Update the rows
+    // First ensure evaluation_results rows exist for all submissions being evaluated
+    // (covers new students who submitted after the original evaluation was created)
+    const submissionsForUpsert = submissionsRes.rows;
+    for (const s of submissionsForUpsert) {
+      await client.query(
+        `INSERT INTO evaluation_results 
+           (evaluation_id, submission_id, student_id, student_name, status, marks, feedback)
+         VALUES ($1, $2, $3, $4, 'pending', 0, '')
+         ON CONFLICT (evaluation_id, submission_id) DO NOTHING`,
+        [evaluationId, s.submission_id, s.user_id || s.student_id, s.student_name]
+      );
+    }
+
+    // Update the rows with job info (now guaranteed to exist)
     for (const j of jobIdsAndLinks) {
       await client.query(
         `UPDATE evaluation_results
          SET job_id = $1, status = 'pending', status_url = $2, marks = 0, feedback = ''
          WHERE evaluation_id = $3 AND submission_id = $4`,
-        [j.jobId, j.statusUrl, evaluationId, j.submissionId]
+        [j.jobId, j.statusUrl, evaluationId, j.submissionId],
       );
     }
 
-    // Ensure evaluation itself is not completed
+    // Recalculate total_submissions to account for newly added students,
+    // then reset status to 'running' so the sync doesn't prematurely finish
     await client.query(
-      `UPDATE evaluations SET status = 'running' WHERE id = $1`,
+      `UPDATE evaluations
+       SET status = 'running',
+           total_submissions = (SELECT COUNT(*) FROM evaluation_results WHERE evaluation_id = $1)
+       WHERE id = $1`,
       [evaluationId]
     );
 

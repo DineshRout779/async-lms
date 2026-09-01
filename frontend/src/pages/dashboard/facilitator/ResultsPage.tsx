@@ -63,7 +63,7 @@ const ResultsPage = () => {
 
   return (
     <div>
-      <div className='px-6'>
+      <div className='px-6 pb-12'>
         {/* Back + Title */}
         <div className='flex items-center gap-3 mt-4'>
           <button
