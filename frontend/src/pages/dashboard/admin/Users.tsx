@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Eye, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive } from 'lucide-react';
+import { Pencil, Eye, EyeOff, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import FacilitatorProfileDialog from '@/components/common/FacilitatorProfileDialog';
 import RecycleBinModal from '@/components/common/RecycleBinModal';
@@ -105,7 +105,10 @@ const Users = () => {
     full_name: '',
     email: '',
     password: '',
+    confirm_password: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserRow | null>(null);
   const [form, setForm] = useState<EditForm>({
     full_name: '',
@@ -257,8 +260,13 @@ const Users = () => {
   };
 
   const handleCreateCurriculumDeveloper = async () => {
-    if (!createForm.full_name.trim() || !createForm.email.trim() || !createForm.password) {
+    if (!createForm.full_name.trim() || !createForm.email.trim() || !createForm.password || !createForm.confirm_password) {
       toast.error('All fields are required');
+      return;
+    }
+
+    if (createForm.password !== createForm.confirm_password) {
+      toast.error('Passwords do not match');
       return;
     }
 
@@ -272,7 +280,9 @@ const Users = () => {
 
       toast.success('Curriculum Developer created successfully');
       setCreateOpen(false);
-      setCreateForm({ full_name: '', email: '', password: '' });
+      setCreateForm({ full_name: '', email: '', password: '', confirm_password: '' });
+      setShowPassword(false);
+      setShowConfirmPassword(false);
       await fetchUsers();
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to create user'));
@@ -909,14 +919,45 @@ const Users = () => {
             </div>
             <div className='space-y-2'>
               <Label htmlFor='create-password'>Password</Label>
-              <Input
-                id='create-password'
-                type='password'
-                value={createForm.password}
-                onChange={(e) =>
-                  setCreateForm((prev) => ({ ...prev, password: e.target.value }))
-                }
-              />
+              <div className='relative'>
+                <Input
+                  id='create-password'
+                  type={showPassword ? 'text' : 'password'}
+                  value={createForm.password}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, password: e.target.value }))
+                  }
+                  className='pr-10'
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowPassword(!showPassword)}
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'
+                >
+                  {showPassword ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                </button>
+              </div>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='create-confirm-password'>Confirm Password</Label>
+              <div className='relative'>
+                <Input
+                  id='create-confirm-password'
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={createForm.confirm_password}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, confirm_password: e.target.value }))
+                  }
+                  className='pr-10'
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'
+                >
+                  {showConfirmPassword ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                </button>
+              </div>
             </div>
           </div>
           <DialogFooter>
