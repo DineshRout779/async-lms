@@ -70,14 +70,15 @@ export function StatCard({ label, value, sub }: { label: string; value: string |
 
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    Submitted: 'bg-green-100 text-green-700',
-    Pending: 'bg-amber-100 text-amber-700',
-    Approved: 'bg-blue-100 text-blue-700',
-    'Not Started': 'bg-slate-100 text-slate-600',
-    'In Progress': 'bg-purple-100 text-purple-700',
+    Submitted: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+    Pending: 'bg-amber-50 text-amber-700 border-amber-200/60',
+    Approved: 'bg-blue-50 text-blue-700 border-blue-200/60',
+    'Not Started': 'bg-slate-100 text-slate-600 border-slate-200/70',
+    'In Progress': 'bg-purple-50 text-purple-700 border-purple-200/60',
+    Completed: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
   };
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[status] ?? 'bg-slate-100 text-slate-600'}`}>
+    <span className={`px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-semibold whitespace-nowrap inline-flex items-center shrink-0 border ${map[status] ?? 'bg-slate-100 text-slate-600 border-slate-200/60'}`}>
       {status}
     </span>
   );
@@ -112,39 +113,47 @@ function getPageNumbers(currentPage: number, totalPages: number) {
   if (totalPages <= 5) {
     return Array.from({ length: totalPages }, (_, i) => i + 1);
   }
-  if (currentPage <= 3) {
-    return [1, 2, 3, 4, 5, '...', totalPages];
+  if (currentPage <= 2) {
+    return [1, 2, 3, '...', totalPages];
   }
-  if (currentPage >= totalPages - 2) {
-    return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  if (currentPage >= totalPages - 1) {
+    return [1, '...', totalPages - 2, totalPages - 1, totalPages];
   }
-  return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+  return [1, '...', currentPage, '...', totalPages];
 }
 
-export function PaginationControls({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (p: number) => void }) {
+export function PaginationControls({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}) {
   const pages = getPageNumbers(page, totalPages);
-  
+
   return (
-    <div className="flex gap-1 items-center">
+    <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 shrink-0">
       <button
         onClick={() => onPageChange(page - 1)}
         disabled={page === 1}
-        className="px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-slate-600"
+        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-slate-600 min-h-[30px]"
       >
         Prev
       </button>
-      
+
       {pages.map((p, i) => (
         <button
           key={i}
           onClick={() => typeof p === 'number' && onPageChange(p)}
           disabled={p === '...'}
-          className={`w-7 h-7 flex items-center justify-center rounded-md border text-xs transition-colors ${
-            p === page 
-              ? 'bg-indigo-600 text-white border-indigo-600 font-medium' 
-              : p === '...' 
-                ? 'border-transparent text-slate-400 cursor-default' 
-                : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+          className={`min-w-[28px] h-[30px] sm:min-w-[30px] sm:h-[30px] px-1.5 flex items-center justify-center rounded-lg border text-xs transition-colors font-medium ${
+            p === page
+              ? 'bg-indigo-600 text-white border-indigo-600 font-bold shadow-xs'
+              : p === '...'
+              ? 'border-transparent text-slate-400 cursor-default'
+              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
           {p}
@@ -154,7 +163,7 @@ export function PaginationControls({ page, totalPages, onPageChange }: { page: n
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={page === totalPages}
-        className="px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-slate-600"
+        className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-slate-600 min-h-[30px]"
       >
         Next
       </button>
@@ -169,12 +178,12 @@ export function Select({
   options: { id: string; name: string }[]; placeholder: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 w-full sm:w-auto flex-1 min-w-[130px]">
       <label className="text-xs font-medium text-slate-500">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 min-w-40"
+        className="border border-slate-200 bg-white rounded-lg px-3 py-2 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 w-full sm:min-w-40 min-h-[38px]"
       >
         <option value="">{placeholder}</option>
         {options.map((o) => (
@@ -190,27 +199,29 @@ const DIST_COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6'];
 
 function QuestionAnalyticsTable({ questions }: { questions: { question_id: string; question_text: string; correct_pct: number }[] }) {
   return (
-    <table className="w-full text-sm">
-      <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-        <tr>
-          <th className="text-left px-5 py-3">Question</th>
-          <th className="text-left px-5 py-3">% Students Correct</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {questions.map((q) => (
-          <tr key={q.question_id} className="hover:bg-slate-50 transition-colors">
-            <td className="px-5 py-3 font-medium text-slate-800">{q.question_text}</td>
-            <td className="px-5 py-3">
-              <RateBar
-                value={q.correct_pct}
-                color={q.correct_pct > 70 ? 'bg-green-500' : q.correct_pct > 40 ? 'bg-amber-500' : 'bg-red-500'}
-              />
-            </td>
+    <div className="overflow-x-auto custom-scrollbar w-full min-w-0">
+      <table className="w-full min-w-[450px] text-xs sm:text-sm">
+        <thead className="bg-slate-50 text-[11px] sm:text-xs text-slate-500 uppercase font-semibold">
+          <tr>
+            <th className="text-left px-4 sm:px-5 py-3">Question</th>
+            <th className="text-left px-4 sm:px-5 py-3">% Students Correct</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {questions.map((q) => (
+            <tr key={q.question_id} className="hover:bg-slate-50/60 transition-colors">
+              <td className="px-4 sm:px-5 py-3 font-medium text-slate-800">{q.question_text}</td>
+              <td className="px-4 sm:px-5 py-3">
+                <RateBar
+                  value={q.correct_pct}
+                  color={q.correct_pct > 70 ? 'bg-green-500' : q.correct_pct > 40 ? 'bg-amber-500' : 'bg-red-500'}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -326,8 +337,8 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
                 <>
                   <QuestionAnalyticsTable questions={data.question_analytics!} />
                   {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
-                      <span>{data.question_analytics_total} questions · page {qPage} of {totalPages}</span>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+                      <span className="text-center sm:text-left">{data.question_analytics_total} questions · page {qPage} of {totalPages}</span>
                       <PaginationControls page={qPage} totalPages={totalPages} onPageChange={handlePageChange} />
                     </div>
                   )}
@@ -433,7 +444,7 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
         <>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
             <StatCard label="Total Students" value={data.total} />
             <StatCard label="Submitted" value={data.submitted} />
             <StatCard label="Not Submitted" value={data.not_submitted} />
@@ -445,32 +456,34 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
             </p>
           )}
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100">
-              <h3 className="text-sm font-semibold text-slate-700">Student Submissions</h3>
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs min-w-0">
+            <div className="px-4 sm:px-5 py-3 border-b border-slate-100">
+              <h3 className="text-xs sm:text-sm font-semibold text-slate-700">Student Submissions</h3>
             </div>
             {data.students.length === 0 ? <EmptyState message="No students found" /> : (
               <>
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                    <tr>
-                      <th className="text-left px-5 py-3">Student</th>
-                      <th className="text-left px-5 py-3">Email</th>
-                      <th className="text-left px-5 py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {data.students.map((s) => (
-                      <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
-                        <td className="px-5 py-3 text-slate-500">{s.email}</td>
-                        <td className="px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>
+                <div className="overflow-x-auto custom-scrollbar w-full min-w-0">
+                  <table className="w-full min-w-[550px] text-xs sm:text-sm">
+                    <thead className="bg-slate-50 text-[11px] sm:text-xs text-slate-500 uppercase font-semibold">
+                      <tr>
+                        <th className="text-left px-4 sm:px-5 py-3">Student</th>
+                        <th className="text-left px-4 sm:px-5 py-3">Email</th>
+                        <th className="text-left px-4 sm:px-5 py-3">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {data.students.map((s) => (
+                        <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="px-4 sm:px-5 py-3 font-medium text-slate-800">{s.name}</td>
+                          <td className="px-4 sm:px-5 py-3 text-slate-500">{s.email}</td>
+                          <td className="px-4 sm:px-5 py-3"><StatusBadge status={s.status ?? 'Pending'} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
                 {Math.ceil(data.total / 10) > 1 && (
-                  <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
                     <span>{data.total} students · page {aPage} of {Math.ceil(data.total / 10)}</span>
                     <PaginationControls page={aPage} totalPages={Math.ceil(data.total / 10)} onPageChange={handlePageChange} />
                   </div>
@@ -557,8 +570,8 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap gap-3">
+    <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
+      <div className="flex flex-wrap gap-2.5 sm:gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
@@ -568,15 +581,15 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
         <>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
             <StatCard label="Total Students" value={data.total ?? 0} />
             <StatCard label="Not Started" value={data.not_started} />
             <StatCard label="Submitted" value={data.submitted} />
             <StatCard label="Approved" value={data.approved} />
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="text-sm font-semibold text-slate-700 mb-4">Project Status Distribution</h3>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs min-w-0">
+            <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-4">Project Status Distribution</h3>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData} barSize={60}>
                 <CartesianGrid stroke="#F1F5F9" vertical={false} />
@@ -592,32 +605,34 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
             </ResponsiveContainer>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100">
-              <h3 className="text-sm font-semibold text-slate-700">Student Project Status</h3>
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs min-w-0">
+            <div className="px-4 sm:px-5 py-3 border-b border-slate-100">
+              <h3 className="text-xs sm:text-sm font-semibold text-slate-700">Student Project Status</h3>
             </div>
             {data.students.length === 0 ? <EmptyState message="No students found" /> : (
               <>
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                    <tr>
-                      <th className="text-left px-5 py-3">Student</th>
-                      <th className="text-left px-5 py-3">Email</th>
-                      <th className="text-left px-5 py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {data.students.map((s) => (
-                      <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
-                        <td className="px-5 py-3 text-slate-500">{s.email}</td>
-                        <td className="px-5 py-3"><StatusBadge status={s.status} /></td>
+                <div className="overflow-x-auto custom-scrollbar w-full min-w-0">
+                  <table className="w-full min-w-[550px] text-xs sm:text-sm">
+                    <thead className="bg-slate-50 text-[11px] sm:text-xs text-slate-500 uppercase font-semibold">
+                      <tr>
+                        <th className="text-left px-4 sm:px-5 py-3">Student</th>
+                        <th className="text-left px-4 sm:px-5 py-3">Email</th>
+                        <th className="text-left px-4 sm:px-5 py-3">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {data.students.map((s) => (
+                        <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="px-4 sm:px-5 py-3 font-medium text-slate-800">{s.name}</td>
+                          <td className="px-4 sm:px-5 py-3 text-slate-500">{s.email}</td>
+                          <td className="px-4 sm:px-5 py-3"><StatusBadge status={s.status} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
                 {Math.ceil((data.total ?? 0) / 10) > 1 && (
-                  <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
                     <span>{data.total} students · page {pPage} of {Math.ceil((data.total ?? 0) / 10)}</span>
                     <PaginationControls page={pPage} totalPages={Math.ceil((data.total ?? 0) / 10)} onPageChange={handlePageChange} />
                   </div>
@@ -669,8 +684,8 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap gap-3">
+    <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
+      <div className="flex flex-wrap gap-2.5 sm:gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
@@ -679,7 +694,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
 
       {loading ? <LoadingState /> : !data ? <EmptyState /> : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3">
             <StatCard label="Students Enrolled" value={data.enrolled} />
             <StatCard label="Active Students" value={data.active_students} sub="Online & active today" />
             <StatCard label="Avg Batch Streak" value={`${data.avg_batch_streak} days`} />
@@ -691,36 +706,38 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
           </div>
 
           {data.subjects.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-3 border-b border-slate-100">
-                <h3 className="text-sm font-semibold text-slate-700">Module-Level Breakdown</h3>
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs min-w-0">
+              <div className="px-4 sm:px-5 py-3 border-b border-slate-100">
+                <h3 className="text-xs sm:text-sm font-semibold text-slate-700">Module-Level Breakdown</h3>
               </div>
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                  <tr>
-                    <th className="text-left px-5 py-3">Module</th>
-                    <th className="text-left px-5 py-3">Quiz Completion</th>
-                    <th className="text-left px-5 py-3">Pass Rate</th>
-                    <th className="text-left px-5 py-3">Assignment Completion</th>
-                    <th className="text-left px-5 py-3">Project Completion</th>
-                    <th className="text-left px-5 py-3">Lessons Read</th>
-                    <th className="text-left px-5 py-3">Avg Progress</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.subjects.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-slate-800">{s.name}</td>
-                      <td className="px-5 py-3"><RateBar value={s.quiz_completion} /></td>
-                      <td className="px-5 py-3"><RateBar value={s.pass_rate} color="bg-green-500" /></td>
-                      <td className="px-5 py-3"><RateBar value={s.assignment_completion} color="bg-amber-500" /></td>
-                      <td className="px-5 py-3"><RateBar value={s.project_completion} color="bg-purple-500" /></td>
-                      <td className="px-5 py-3"><RateBar value={s.lesson_completion} color="bg-blue-500" /></td>
-                      <td className="px-5 py-3"><RateBar value={s.module_progress} color="bg-indigo-600" /></td>
+              <div className="overflow-x-auto custom-scrollbar w-full min-w-0">
+                <table className="w-full min-w-[700px] text-xs sm:text-sm">
+                  <thead className="bg-slate-50 text-[11px] sm:text-xs text-slate-500 uppercase font-semibold">
+                    <tr>
+                      <th className="text-left px-4 sm:px-5 py-3">Module</th>
+                      <th className="text-left px-4 sm:px-5 py-3">Quiz Completion</th>
+                      <th className="text-left px-4 sm:px-5 py-3">Pass Rate</th>
+                      <th className="text-left px-4 sm:px-5 py-3">Assignment Completion</th>
+                      <th className="text-left px-4 sm:px-5 py-3">Project Completion</th>
+                      <th className="text-left px-4 sm:px-5 py-3">Lessons Read</th>
+                      <th className="text-left px-4 sm:px-5 py-3">Avg Progress</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.subjects.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-4 sm:px-5 py-3 font-medium text-slate-800">{s.name}</td>
+                        <td className="px-4 sm:px-5 py-3"><RateBar value={s.quiz_completion} /></td>
+                        <td className="px-4 sm:px-5 py-3"><RateBar value={s.pass_rate} color="bg-green-500" /></td>
+                        <td className="px-4 sm:px-5 py-3"><RateBar value={s.assignment_completion} color="bg-amber-500" /></td>
+                        <td className="px-4 sm:px-5 py-3"><RateBar value={s.project_completion} color="bg-purple-500" /></td>
+                        <td className="px-4 sm:px-5 py-3"><RateBar value={s.lesson_completion} color="bg-blue-500" /></td>
+                        <td className="px-4 sm:px-5 py-3"><RateBar value={s.module_progress} color="bg-indigo-600" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>
@@ -795,31 +812,31 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
   const totalPages = Math.ceil(total / STUDENTS_PAGE_SIZE);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap gap-3">
+    <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
+      <div className="flex flex-wrap gap-2.5 sm:gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
         <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
         <StatCard label="Quizzes Attempted" value={aggregates.quizzes_attempted} sub={`out of ${total} students`} />
         <StatCard label="Assignments Submitted" value={aggregates.assignments_submitted} sub={`out of ${total} students`} />
         <StatCard label="Projects Completed" value={aggregates.projects_completed} sub={`out of ${total} students`} />
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">Per-Student Performance</h3>
-          <div className="relative w-64">
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs min-w-0">
+        <div className="px-4 sm:px-5 py-3 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700">Per-Student Performance</h3>
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
             <input
               type="text"
               placeholder="Search students..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all min-h-[36px]"
             />
           </div>
         </div>
@@ -830,77 +847,79 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
           <EmptyState message="No students found" />
         ) : (
           <>
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-100 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                <tr>
-                  <th className="px-5 py-4">Student</th>
-                  <th className="px-5 py-4">Quizzes</th>
-                  <th className="px-5 py-4">Assignment</th>
-                  <th className="px-5 py-4">Project</th>
-                  <th className="px-5 py-4"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-slate-800">{s.name}</p>
-                      <p className="text-xs text-slate-400">{s.email}</p>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={
-                          s.quiz_submitted_count === 0 ? 'Not Started'
-                            : s.quiz_submitted_count >= s.quiz_total_count ? 'Completed'
-                            : 'In Progress'
-                        } />
-                        <span className="text-xs text-slate-500 font-medium">
-                          ({s.quiz_submitted_count} / {s.quiz_total_count})
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={
-                          s.assignment_submitted_count === 0 ? 'Not Started'
-                            : s.assignment_submitted_count >= s.assignment_total_count ? 'Completed'
-                            : 'In Progress'
-                        } />
-                        <span className="text-xs text-slate-500 font-medium">
-                          ({s.assignment_submitted_count} / {s.assignment_total_count})
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={
-                          s.project_submitted_count === 0 ? 'Not Started'
-                            : s.project_submitted_count >= s.project_total_count ? 'Completed'
-                            : 'In Progress'
-                        } />
-                        <span className="text-xs text-slate-500 font-medium">
-                          ({s.project_submitted_count} / {s.project_total_count})
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <button
-                        onClick={() => {
-                          setSelectedStudentId(s.id);
-                          setSelectedStudentName(s.name);
-                          setIsModalOpen(true);
-                        }}
-                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors"
-                      >
-                        View Progress
-                      </button>
-                    </td>
+            <div className="overflow-x-auto custom-scrollbar w-full min-w-0">
+              <table className="w-full min-w-[780px] text-xs sm:text-sm">
+                <thead className="bg-slate-50 border-b border-slate-100 text-left text-[11px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 sm:px-5 py-3.5 whitespace-nowrap">Student</th>
+                    <th className="px-4 sm:px-5 py-3.5 whitespace-nowrap">Quizzes</th>
+                    <th className="px-4 sm:px-5 py-3.5 whitespace-nowrap">Assignment</th>
+                    <th className="px-4 sm:px-5 py-3.5 whitespace-nowrap">Project</th>
+                    <th className="px-4 sm:px-5 py-3.5 text-right whitespace-nowrap"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-4 sm:px-5 py-3 whitespace-nowrap">
+                        <p className="font-semibold text-slate-800">{s.name}</p>
+                        <p className="text-[11px] text-slate-400">{s.email}</p>
+                      </td>
+                      <td className="px-4 sm:px-5 py-3 whitespace-nowrap">
+                        <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                          <StatusBadge status={
+                            s.quiz_submitted_count === 0 ? 'Not Started'
+                              : s.quiz_submitted_count >= s.quiz_total_count ? 'Completed'
+                              : 'In Progress'
+                          } />
+                          <span className="text-[11px] text-slate-500 font-semibold px-2 py-0.5 bg-slate-100/90 border border-slate-200/70 rounded-md whitespace-nowrap tracking-tight">
+                            {s.quiz_submitted_count}/{s.quiz_total_count}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 sm:px-5 py-3 whitespace-nowrap">
+                        <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                          <StatusBadge status={
+                            s.assignment_submitted_count === 0 ? 'Not Started'
+                              : s.assignment_submitted_count >= s.assignment_total_count ? 'Completed'
+                              : 'In Progress'
+                          } />
+                          <span className="text-[11px] text-slate-500 font-semibold px-2 py-0.5 bg-slate-100/90 border border-slate-200/70 rounded-md whitespace-nowrap tracking-tight">
+                            {s.assignment_submitted_count}/{s.assignment_total_count}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 sm:px-5 py-3 whitespace-nowrap">
+                        <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                          <StatusBadge status={
+                            s.project_submitted_count === 0 ? 'Not Started'
+                              : s.project_submitted_count >= s.project_total_count ? 'Completed'
+                              : 'In Progress'
+                          } />
+                          <span className="text-[11px] text-slate-500 font-semibold px-2 py-0.5 bg-slate-100/90 border border-slate-200/70 rounded-md whitespace-nowrap tracking-tight">
+                            {s.project_submitted_count}/{s.project_total_count}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 sm:px-5 py-3 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => {
+                            setSelectedStudentId(s.id);
+                            setSelectedStudentName(s.name);
+                            setIsModalOpen(true);
+                          }}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors min-h-[30px] whitespace-nowrap"
+                        >
+                          View Progress
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {totalPages > 1 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-t border-slate-100 text-xs text-slate-500">
                 <span>{total} students · page {page} of {totalPages}</span>
                 <PaginationControls page={page} totalPages={totalPages} onPageChange={handlePageChange} />
               </div>

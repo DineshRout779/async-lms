@@ -62,30 +62,30 @@ const ResultsPage = () => {
   });
 
   return (
-    <div>
-      <div className='px-6'>
+    <div className='min-w-0'>
+      <div className='px-1 sm:px-6 space-y-4 min-w-0'>
         {/* Back + Title */}
-        <div className='flex items-center gap-3 mt-4'>
+        <div className='flex items-center gap-3 mt-2 sm:mt-4'>
           <button
             onClick={() => navigate(-1)}
-            className='text-sm text-blue-600'
+            className='p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition min-h-[36px] min-w-[36px] flex items-center justify-center text-sm font-semibold'
           >
-            ←
+            ← Back
           </button>
 
-          <h1 className='text-xl font-semibold'>Evaluation Results</h1>
+          <h1 className='text-lg sm:text-xl font-bold text-slate-900 tracking-tight'>Evaluation Results</h1>
         </div>
 
-        <div className='flex flex-wrap justify-between items-center'>
+        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2.5'>
           {/* Assignment */}
-          <p className='text-sm text-gray-500 mt-1'>{assignmentName}</p>
+          <p className='text-xs sm:text-sm text-slate-500 font-medium truncate max-w-md'>{assignmentName}</p>
           <TopHeader onFilterChange={setFilters} />
         </div>
 
         {loading ? (
-          <div className='mt-6 space-y-6'>
+          <div className='mt-4 sm:mt-6 space-y-4 sm:space-y-6'>
             {/* Stat cards skeleton */}
-            <div className='grid grid-cols-4 gap-4'>
+            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4'>
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
@@ -123,7 +123,7 @@ const ResultsPage = () => {
             </div>
           </div>
         ) : (
-          <>
+          <div className='space-y-4 sm:space-y-6 min-w-0'>
             {/* Cards */}
             <StatsCard results={filteredResults} />
 
@@ -138,9 +138,9 @@ const ResultsPage = () => {
               results={filteredResults} 
               evaluation={evaluation} 
               assignmentId={id}
-              onRefresh={fetchResults} 
+              onRefresh={fetchResults}
             />
-          </>
+          </div>
         )}
       </div>
     </div>

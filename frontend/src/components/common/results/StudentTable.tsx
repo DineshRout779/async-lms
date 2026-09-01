@@ -142,16 +142,16 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
     );
   };
   return (
-    <div className="mt-6 border rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="font-medium text-sm">Student Results</h2>
+    <div className="mt-4 sm:mt-6 border border-slate-200 bg-white rounded-2xl overflow-hidden shadow-xs min-w-0">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 p-3.5 sm:p-4 border-b border-slate-100">
+        <h2 className="font-semibold text-xs sm:text-sm text-slate-800">Student Results</h2>
         
         {evaluation && (
-          <div className='flex items-center gap-2'>
+          <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto'>
             <select
               value={bulkEvaluatorType}
               onChange={(e) => setBulkEvaluatorType(e.target.value)}
-              className='text-sm border-gray-300 rounded-md py-1.5'
+              className='text-xs sm:text-sm border border-slate-200 bg-white rounded-lg px-3 py-1.5 text-slate-700 min-h-[36px]'
             >
               <option value=''>Auto (based on assignment)</option>
               <option value='REACT'>React</option>
@@ -162,7 +162,7 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
               <option value='fullstack'>Fullstack</option>
             </select>
             <button 
-              className="text-sm px-4 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="text-xs sm:text-sm font-semibold px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[36px] transition shadow-xs"
               onClick={handleBulkReevaluate}
               disabled={bulkReEvaluating || selectedSubmissions.length === 0}
             >
@@ -172,72 +172,72 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
         )}
       </div>
 
-      <table className="w-full text-sm">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="p-3 text-left w-12">
-              <input 
-                type="checkbox" 
-                onChange={handleSelectAll}
-                checked={results.length > 0 && selectedSubmissions.length === results.length}
-                className="w-4 h-4 rounded border-gray-300"
-              />
-            </th>
-            <th className="p-3 text-left">Student</th>
-            <th className="p-3">Status</th>
-            <th className="p-3">Score</th>
-            <th className="p-3">Feedback</th>
-            <th className="p-3">Action</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {results.map((item, i) => {
-            const rowId = item.submission_id || item.id || '';
-            return (
-            <tr key={i} className="border-t">
-              <td className="p-3 text-left">
+      <div className="overflow-x-auto custom-scrollbar w-full min-w-0">
+        <table className="w-full min-w-[700px] text-xs sm:text-sm border-separate border-spacing-0">
+          <thead className="bg-slate-50/60 text-slate-500 text-[11px] sm:text-xs uppercase">
+            <tr>
+              <th className="p-3 text-left w-12">
                 <input 
                   type="checkbox" 
-                  checked={selectedSubmissions.includes(rowId)}
-                  onChange={() => handleSelect(rowId)}
-                  className="w-4 h-4 rounded border-gray-300"
+                  onChange={handleSelectAll}
+                  checked={results.length > 0 && selectedSubmissions.length === results.length}
+                  className="w-4 h-4 rounded border-slate-300"
                 />
-              </td>
-              <td className="p-3">{item.student_name}</td>
-              <td className="p-3">
-                {item.status === 'pending' ? (
-                  <span className="text-yellow-600">Pending...</span>
-                ) : item.status === 'failed' ? (
-                  <span className="text-red-600">Failed</span>
-                ) : (
-                  <span className="text-green-600">Evaluated</span>
-                )}
-              </td>
-              <td className="p-3">{item.marks}</td>
-              <td className="p-3"><FeedbackCell feedback={item.feedback} /></td>
-              <td className="p-3">
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
+              </th>
+              <th className="p-3 text-left font-semibold">Student</th>
+              <th className="p-3 font-semibold text-center">Status</th>
+              <th className="p-3 font-semibold text-center">Score</th>
+              <th className="p-3 font-semibold">Feedback</th>
+              <th className="p-3 font-semibold text-right">Action</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {results.map((item, i) => {
+              const rowId = item.submission_id || item.id || '';
+              return (
+              <tr key={i} className="border-t border-slate-100 hover:bg-slate-50/60 transition">
+                <td className="p-3 text-left">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedSubmissions.includes(rowId)}
+                    onChange={() => handleSelect(rowId)}
+                    className="w-4 h-4 rounded border-slate-300"
+                  />
+                </td>
+                <td className="p-3 font-medium text-slate-900">{item.student_name}</td>
+                <td className="p-3 text-center">
+                  {item.status === 'pending' ? (
+                    <span className="text-yellow-600 text-xs font-semibold bg-yellow-50 px-2 py-0.5 rounded-full">Pending...</span>
+                  ) : item.status === 'failed' ? (
+                    <span className="text-red-600 text-xs font-semibold bg-red-50 px-2 py-0.5 rounded-full">Failed</span>
+                  ) : (
+                    <span className="text-green-600 text-xs font-semibold bg-green-50 px-2 py-0.5 rounded-full">Evaluated</span>
+                  )}
+                </td>
+                <td className="p-3 text-center font-bold text-slate-900">{item.marks}</td>
+                <td className="p-3"><FeedbackCell feedback={item.feedback} /></td>
+                <td className="p-3 text-right">
+                  <div className="flex items-center justify-end gap-2">
                     {item.submission_link ? (
-                      <a href={item.submission_link} target="_blank" rel="noreferrer" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
+                      <a href={item.submission_link} target="_blank" rel="noreferrer" className="text-blue-600 text-xs sm:text-sm font-semibold hover:underline flex items-center gap-1">
                         View Link
                       </a>
                     ) : item.submission_file_url ? (
-                      <a href={item.submission_file_url} target="_blank" rel="noreferrer" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
+                      <a href={item.submission_file_url} target="_blank" rel="noreferrer" className="text-blue-600 text-xs sm:text-sm font-semibold hover:underline flex items-center gap-1">
                         View File
                       </a>
                     ) : (
-                      <span className="text-slate-400 text-sm">—</span>
+                      <span className="text-slate-400 text-xs sm:text-sm">—</span>
                     )}
                   </div>
-                </div>
-              </td>
-            </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                </td>
+              </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

@@ -111,23 +111,23 @@ const EvaluationTable = ({
   }
 
   return (
-    <div className='mt-6 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden'>
-      <div className='overflow-x-auto'>
-        <table className='w-full min-w-180 text-sm border-separate border-spacing-0'>
-          <thead className='text-slate-500 text-[12px] uppercase'>
+    <div className='mt-4 sm:mt-6 bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden min-w-0'>
+      <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+        <table className='w-full min-w-[780px] text-xs sm:text-sm border-separate border-spacing-0'>
+          <thead className='text-slate-500 text-[11px] sm:text-[12px] uppercase bg-slate-50/60'>
             <tr>
-              <th className='px-4 py-3 text-left font-medium'>#</th>
-              <th className='px-4 py-3 text-left font-medium'>
+              <th className='px-3.5 sm:px-4 py-3 text-left font-semibold'>#</th>
+              <th className='px-3.5 sm:px-4 py-3 text-left font-semibold'>
                 Assignment Name
               </th>
-              <th className='px-4 py-3 text-left font-medium'>Type</th>
-              <th className='px-4 py-3 text-left font-medium'>
+              <th className='px-3.5 sm:px-4 py-3 text-left font-semibold'>Type</th>
+              <th className='px-3.5 sm:px-4 py-3 text-left font-semibold'>
                 Course / Domain
               </th>
-              <th className='px-4 py-3 text-left font-medium'>Colleges</th>
-              <th className='px-4 py-3 text-left font-medium'>Submissions</th>
-              <th className='px-4 py-3 text-left font-medium'>Status</th>
-              <th className='px-4 py-3 text-right font-medium'>Action</th>
+              <th className='px-3.5 sm:px-4 py-3 text-left font-semibold'>Colleges</th>
+              <th className='px-3.5 sm:px-4 py-3 text-left font-semibold'>Submissions</th>
+              <th className='px-3.5 sm:px-4 py-3 text-left font-semibold'>Status</th>
+              <th className='px-3.5 sm:px-4 py-3 text-right font-semibold'>Action</th>
             </tr>
           </thead>
 
@@ -135,17 +135,17 @@ const EvaluationTable = ({
             {assignments.map((item, index) => (
               <tr
                 key={`${item.id}-${item.evaluation_id ?? 'none'}-${index}`}
-                className='border-t border-slate-100 hover:bg-slate-50 transition'
+                className='border-t border-slate-100 hover:bg-slate-50/60 transition'
               >
-                <td className='px-4 py-3 text-slate-500 text-[14px]'>
+                <td className='px-3.5 sm:px-4 py-3 text-slate-500 text-xs sm:text-sm'>
                   {index + 1}
                 </td>
-                <td className='px-4 py-3 font-medium text-slate-800 text-[14px]'>
+                <td className='px-3.5 sm:px-4 py-3 font-medium text-slate-800 text-xs sm:text-sm'>
                   {item.title}
                 </td>
-                <td className='px-4 py-3'>
+                <td className='px-3.5 sm:px-4 py-3'>
                   <span
-                    className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                       item.type === 'unit'
                         ? 'bg-indigo-100 text-indigo-700'
                         : 'bg-amber-100 text-amber-700'
@@ -154,22 +154,22 @@ const EvaluationTable = ({
                     {item.type === 'unit' ? 'Curriculum' : 'College'}
                   </span>
                 </td>
-                <td className='px-4 py-3 text-slate-500 text-[14px]'>
+                <td className='px-3.5 sm:px-4 py-3 text-slate-500 text-xs sm:text-sm'>
                   {item.course}
                 </td>
-                <td className='px-4 py-3 text-slate-700 text-[14px]'>
+                <td className='px-3.5 sm:px-4 py-3 text-slate-700 text-xs sm:text-sm'>
                   {item.college_name}
                 </td>
-                <td className='px-4 py-3 text-slate-700 font-medium text-[14px]'>
+                <td className='px-3.5 sm:px-4 py-3 text-slate-700 font-medium text-xs sm:text-sm'>
                   {item.submissions_count}
                 </td>
-                <td className='px-4 py-3'>
+                <td className='px-3.5 sm:px-4 py-3'>
                   <div className='flex flex-col gap-1'>
                     <StatusBadge status={item.status} />
                   </div>
                 </td>
-                <td className='px-4 py-3 text-right'>
-                  <div className='flex items-center justify-end gap-2'>
+                <td className='px-3.5 sm:px-4 py-3 text-right'>
+                  <div className='flex items-center justify-end gap-1.5 sm:gap-2'>
                     <button
                       onClick={() => {
                         setSubmissionsAssignment({
@@ -178,14 +178,14 @@ const EvaluationTable = ({
                         });
                         setSubmissionsOpen(true);
                       }}
-                      className='inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded px-2 py-1 transition'
+                      className='inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 transition hover:bg-slate-50 min-h-[30px]'
                       title='View student submissions'
                     >
-                      <Eye size={12} /> Submissions
+                      <Eye size={13} /> Submissions
                     </button>
                     <Link
                       to={`/dashboard/facilitator/results/${item.id}`}
-                      className='inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium ml-2'
+                      className='inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-semibold px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition min-h-[30px]'
                       title='View Evaluation Results'
                     >
                       <FileText size={14} /> View Results
@@ -199,8 +199,8 @@ const EvaluationTable = ({
       </div>
 
       {assignments.length > 0 && (
-        <div className='flex items-center justify-between px-4 py-3 border-t border-slate-100 text-sm'>
-          <span className='text-slate-500'>
+        <div className='flex flex-col sm:flex-row items-center justify-between gap-3 px-3.5 sm:px-4 py-3 border-t border-slate-100 text-xs sm:text-sm'>
+          <span className='text-slate-500 text-center sm:text-left'>
             Showing {(page - 1) * PAGE_SIZE + 1}–
             {Math.min(page * PAGE_SIZE, total)} of {total}
           </span>
@@ -208,17 +208,17 @@ const EvaluationTable = ({
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className='px-3 py-1 rounded border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50'
+              className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 min-h-[32px]'
             >
               Previous
             </button>
-            <span className='text-slate-500 px-1'>
+            <span className='text-slate-500 px-1 font-medium'>
               Page {page} of {totalPages}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className='px-3 py-1 rounded border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50'
+              className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 min-h-[32px]'
             >
               Next
             </button>

@@ -302,9 +302,9 @@ export default function AssignmentManagement() {
   };
 
   return (
-    <div className='p-6 space-y-6 animate-in fade-in duration-500'>
+    <div className='p-3.5 sm:p-6 space-y-4 sm:space-y-6 animate-in fade-in duration-500 min-w-0'>
       {/* Breadcrumb */}
-      <div className='text-sm text-slate-500'>
+      <div className='text-xs sm:text-sm text-slate-500'>
         {dashboardType === 'admin' ? 'Dashboard' : 'Facilitator'} /{' '}
         <span className='font-medium text-slate-700'>
           Assignment Management
@@ -312,17 +312,17 @@ export default function AssignmentManagement() {
       </div>
 
       {/* Header */}
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3'>
         <div>
-          <h1 className='text-xl font-bold text-slate-900'>
+          <h1 className='text-xl sm:text-2xl font-bold text-slate-900 tracking-tight'>
             Assignment Management
           </h1>
-          <p className='text-sm text-slate-500 mt-0.5'>
+          <p className='text-xs sm:text-sm text-slate-500 mt-0.5'>
             Create, manage and track assignments
           </p>
         </div>
         <Button
-          className='gap-2 bg-blue-600 hover:bg-blue-700'
+          className='w-full sm:w-auto gap-2 bg-blue-600 hover:bg-blue-700 min-h-[40px]'
           onClick={() => navigate(`${basePath}/create-assignment`)}
         >
           <Plus className='w-4 h-4' />
@@ -331,11 +331,11 @@ export default function AssignmentManagement() {
       </div>
 
       {/* Filters Row */}
-      <div className='flex items-center gap-3'>
-        <div className='relative flex-1 max-w-xs'>
+      <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full'>
+        <div className='relative flex-1 w-full max-w-none sm:max-w-xs'>
           <Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400' />
           <Input
-            className='pl-9'
+            className='pl-9 text-xs sm:text-sm h-10 bg-white'
             placeholder='Search assignments...'
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -343,7 +343,7 @@ export default function AssignmentManagement() {
         </div>
 
         <Select value={collegeFilter} onValueChange={setCollegeFilter}>
-          <SelectTrigger className='w-[160px]'>
+          <SelectTrigger className='w-full sm:w-[180px] text-xs sm:text-sm h-10 bg-white'>
             <SelectValue placeholder='All Colleges' />
           </SelectTrigger>
           <SelectContent>
@@ -359,16 +359,16 @@ export default function AssignmentManagement() {
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div className='flex items-center justify-between rounded-lg bg-blue-50 border border-blue-200 px-4 py-2.5'>
-          <span className='text-sm font-medium text-blue-800'>
+        <div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 rounded-xl bg-blue-50 border border-blue-200 px-3.5 sm:px-4 py-2.5 shadow-xs'>
+          <span className='text-xs sm:text-sm font-medium text-blue-800 text-center sm:text-left'>
             {selectedIds.size} assignment{selectedIds.size > 1 ? 's' : ''}{' '}
             selected
           </span>
-          <div className='flex items-center gap-2'>
+          <div className='flex items-center justify-end gap-2'>
             <Button
               size='sm'
               variant='ghost'
-              className='h-8 text-slate-600 hover:text-slate-800'
+              className='h-8 text-xs text-slate-600 hover:text-slate-800 flex-1 sm:flex-initial'
               onClick={() => setSelectedIds(new Set())}
             >
               <X className='w-3.5 h-3.5 mr-1' />
@@ -376,7 +376,7 @@ export default function AssignmentManagement() {
             </Button>
             <Button
               size='sm'
-              className='h-8 bg-red-600 hover:bg-red-700 text-white'
+              className='h-8 text-xs bg-red-600 hover:bg-red-700 text-white flex-1 sm:flex-initial'
               onClick={() => setBulkDeleteOpen(true)}
             >
               <Trash2 className='w-3.5 h-3.5 mr-1' />
@@ -387,14 +387,14 @@ export default function AssignmentManagement() {
       )}
 
       {/* Tabs */}
-      <div className='flex items-center gap-4 border-b border-slate-200 pb-0'>
+      <div className='flex items-center gap-3 sm:gap-4 border-b border-slate-200 pb-0 overflow-x-auto no-scrollbar'>
         {tabs.map((tab) => (
           <button
             key={tab.value}
             onClick={() => setActiveTab(tab.value)}
-            className={`flex items-center gap-2 px-1 pb-3 text-sm font-medium transition-colors border-b-2 ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-1 pb-3 text-xs sm:text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
               activeTab === tab.value
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 font-semibold'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -405,33 +405,34 @@ export default function AssignmentManagement() {
       </div>
 
       {/* Table */}
-      <Card className='border-none shadow-sm overflow-hidden'>
+      <Card className='border-none shadow-sm overflow-hidden min-w-0'>
         <CardContent className='p-0'>
-          <Table>
-            <TableHeader className='bg-slate-50/50'>
-              <TableRow>
-                <TableHead className='w-10 pl-4'>
-                  <Checkbox
-                    checked={allFilteredSelected}
-                    data-state={
-                      someFilteredSelected && !allFilteredSelected
-                        ? 'indeterminate'
-                        : undefined
-                    }
-                    onCheckedChange={toggleSelectAll}
-                    disabled={filtered.length === 0}
-                  />
-                </TableHead>
-                <TableHead className='pl-2'>Assignment Name</TableHead>
-                <TableHead>Course</TableHead>
-                <TableHead>College</TableHead>
-                <TableHead>Batch</TableHead>
-                <TableHead>Submissions</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className='text-right pr-6'>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+            <Table className='min-w-[850px]'>
+              <TableHeader className='bg-slate-50/50'>
+                <TableRow>
+                  <TableHead className='w-10 pl-4'>
+                    <Checkbox
+                      checked={allFilteredSelected}
+                      data-state={
+                        someFilteredSelected && !allFilteredSelected
+                          ? 'indeterminate'
+                          : undefined
+                      }
+                      onCheckedChange={toggleSelectAll}
+                      disabled={filtered.length === 0}
+                    />
+                  </TableHead>
+                  <TableHead className='pl-2 text-[11px] sm:text-xs font-bold uppercase'>Assignment Name</TableHead>
+                  <TableHead className='text-[11px] sm:text-xs font-bold uppercase'>Course</TableHead>
+                  <TableHead className='text-[11px] sm:text-xs font-bold uppercase'>College</TableHead>
+                  <TableHead className='text-[11px] sm:text-xs font-bold uppercase'>Batch</TableHead>
+                  <TableHead className='text-[11px] sm:text-xs font-bold uppercase'>Submissions</TableHead>
+                  <TableHead className='text-[11px] sm:text-xs font-bold uppercase'>Due Date</TableHead>
+                  <TableHead className='text-[11px] sm:text-xs font-bold uppercase'>Status</TableHead>
+                  <TableHead className='text-right pr-6 text-[11px] sm:text-xs font-bold uppercase'>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
 
             <TableBody>
               {loading ? (
@@ -577,8 +578,9 @@ export default function AssignmentManagement() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+      </CardContent>
+    </Card>
 
       <AlertDialog
         open={bulkDeleteOpen}

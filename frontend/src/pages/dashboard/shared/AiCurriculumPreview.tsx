@@ -465,34 +465,34 @@ export default function AiCurriculumPreview() {
   const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   return (
-    <div className='min-h-screen bg-slate-50'>
+    <div className='min-h-screen bg-slate-50 min-w-0'>
       {/* Header */}
-      <div className='bg-white border-b border-slate-200 px-8 py-5'>
-        <div className='flex items-center gap-3 mb-4'>
+      <div className='bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-5 min-w-0'>
+        <div className='flex items-center gap-3 mb-3 sm:mb-4'>
           <button onClick={() => navigate(`${base}/ai-curriculum/${id}/edit`)}
-            className='p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors'>
+            className='p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center'>
             <ArrowLeft className='w-4 h-4' />
           </button>
-          <span className='text-[12px] text-slate-400 font-medium'>Preview Mode — student view</span>
+          <span className='text-xs text-slate-400 font-medium'>Preview Mode — student view</span>
         </div>
 
         <div className='flex items-start justify-between'>
-          <div>
-            <h1 className='text-2xl font-extrabold text-slate-900'>{course.title}</h1>
-            <p className='text-sm text-slate-500 mt-1'>{course.learning_goal}</p>
-            <div className='flex items-center gap-4 mt-3'>
-              <span className='flex items-center gap-1.5 text-[13px] text-slate-500'>
-                <BookOpen className='w-4 h-4' /> {modules.length} Modules · {totalTopics} Topics · {totalLessons} Lessons
+          <div className='min-w-0 flex-1'>
+            <h1 className='text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight'>{course.title}</h1>
+            <p className='text-xs sm:text-sm text-slate-500 mt-1'>{course.learning_goal}</p>
+            <div className='flex flex-wrap items-center gap-2 sm:gap-4 mt-3'>
+              <span className='flex items-center gap-1.5 text-xs sm:text-[13px] text-slate-600 font-medium'>
+                <BookOpen className='w-3.5 sm:w-4 h-3.5 sm:h-4 text-indigo-500' /> {modules.length} Topics · {totalTopics} Units · {totalLessons} Lessons
               </span>
               {course.duration_weeks && (
-                <span className='flex items-center gap-1.5 text-[13px] text-slate-500'>
-                  <Calendar className='w-4 h-4' /> {course.duration_weeks} weeks
+                <span className='flex items-center gap-1.5 text-xs sm:text-[13px] text-slate-600 font-medium'>
+                  <Calendar className='w-3.5 sm:w-4 h-3.5 sm:h-4 text-indigo-500' /> {course.duration_weeks} weeks
                 </span>
               )}
-              <span className='flex items-center gap-1.5 text-[13px] text-slate-500'>
-                <Clock className='w-4 h-4' /> {Math.round(totalDuration / 60)}h total
+              <span className='flex items-center gap-1.5 text-xs sm:text-[13px] text-slate-600 font-medium'>
+                <Clock className='w-3.5 sm:w-4 h-3.5 sm:h-4 text-indigo-500' /> {Math.round(totalDuration / 60)}h total
               </span>
-              <span className={`text-[12px] font-semibold px-2.5 py-1 rounded-full capitalize ${course.level === 'beginner' ? 'bg-green-100 text-green-700' : course.level === 'intermediate' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+              <span className={`text-[11px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full capitalize ${course.level === 'beginner' ? 'bg-green-100 text-green-700' : course.level === 'intermediate' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
                 {course.level}
               </span>
             </div>
@@ -500,12 +500,12 @@ export default function AiCurriculumPreview() {
         </div>
 
         {/* Tabs */}
-        <div className='flex gap-1 mt-5 border-b border-slate-100'>
+        <div className='flex gap-1 mt-4 sm:mt-5 border-b border-slate-100 overflow-x-auto no-scrollbar'>
           {(['curriculum', 'schedule'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-[13px] font-semibold capitalize transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+              className={`px-3.5 sm:px-4 py-2 text-xs sm:text-[13px] font-semibold capitalize whitespace-nowrap transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
               {tab === 'curriculum' ? 'Curriculum' : 'Week/Day Schedule'}
             </button>
@@ -513,47 +513,47 @@ export default function AiCurriculumPreview() {
         </div>
       </div>
 
-      <div className='max-w-4xl mx-auto px-6 py-8'>
+      <div className='max-w-4xl mx-auto px-3.5 sm:px-6 py-6 sm:py-8 min-w-0'>
         {activeTab === 'curriculum' && (
-          <div className='space-y-6'>
+          <div className='space-y-4 sm:space-y-6 min-w-0'>
             {modules.map((mod, mi) => {
               const isOpen = openModules.has(mod.id);
               return (
-                <div key={mod.id} className='bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm'>
+                <div key={mod.id} className='bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs min-w-0'>
                   <button
                     onClick={() => setOpenModules((s) => {
                       const next = new Set(s);
                       if (next.has(mod.id)) next.delete(mod.id); else next.add(mod.id);
                       return next;
                     })}
-                    className='w-full flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition-colors text-left'
+                    className='w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4 hover:bg-slate-50 transition-colors text-left'
                   >
-                    <span className='w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 text-[13px] font-bold flex items-center justify-center shrink-0'>
+                    <span className='w-7 sm:w-8 h-7 sm:h-8 rounded-full bg-indigo-100 text-indigo-700 text-xs sm:text-[13px] font-bold flex items-center justify-center shrink-0'>
                       {mi + 1}
                     </span>
-                    <div className='flex-1'>
-                      <p className='text-base font-bold text-slate-800'>{mod.title}</p>
-                      <p className='text-[12px] text-slate-400 mt-0.5'>{mod.topics.length} units · {mod.topics.reduce((s, t) => s + t.lessons.length, 0)} subtopics</p>
+                    <div className='flex-1 min-w-0'>
+                      <p className='text-sm sm:text-base font-bold text-slate-800 truncate'>{mod.title}</p>
+                      <p className='text-[11px] sm:text-[12px] text-slate-400 mt-0.5'>{mod.topics.length} units · {mod.topics.reduce((s, t) => s + t.lessons.length, 0)} subtopics</p>
                     </div>
-                    {isOpen ? <ChevronDown className='w-5 h-5 text-slate-300' /> : <ChevronRight className='w-5 h-5 text-slate-300' />}
+                    {isOpen ? <ChevronDown className='w-4 sm:w-5 h-4 sm:h-5 text-slate-300 shrink-0' /> : <ChevronRight className='w-4 sm:w-5 h-4 sm:h-5 text-slate-300 shrink-0' />}
                   </button>
 
                   {isOpen && (
-                    <div className='border-t border-slate-100 p-6'>
+                    <div className='border-t border-slate-100 p-4 sm:p-6 space-y-4'>
                       {mod.description && (
-                        <p className='text-[13px] text-slate-500 mb-4'>{mod.description}</p>
+                        <p className='text-xs sm:text-[13px] text-slate-500 mb-2'>{mod.description}</p>
                       )}
                       {mod.topics.map((topic) => (
                         <TopicPreview key={topic.id} topic={topic} />
                       ))}
 
                       {mod.capstone_project && (
-                        <div className='mt-4 flex items-start gap-3 px-5 py-4 rounded-xl bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200'>
+                        <div className='mt-4 flex items-start gap-3 px-4 sm:px-5 py-3.5 sm:py-4 rounded-2xl bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200'>
                           <Trophy className='w-5 h-5 text-indigo-500 shrink-0 mt-0.5' />
-                          <div>
+                          <div className='min-w-0 flex-1'>
                             <p className='text-[10px] font-bold text-indigo-400 uppercase tracking-wide mb-1'>Capstone Project</p>
-                            <p className='text-sm font-bold text-indigo-800'>{mod.capstone_project.title}</p>
-                            <p className='text-[12px] text-indigo-600 mt-1'>{mod.capstone_project.description}</p>
+                            <p className='text-xs sm:text-sm font-bold text-indigo-800'>{mod.capstone_project.title}</p>
+                            <p className='text-xs sm:text-[12px] text-indigo-600 mt-1'>{mod.capstone_project.description}</p>
                             {mod.capstone_project.instructions && (
                               <p className='text-[11px] text-indigo-500 mt-2 border-t border-indigo-100 pt-2 whitespace-pre-wrap break-words'>
                                 {typeof mod.capstone_project.instructions === 'string' 
@@ -574,33 +574,33 @@ export default function AiCurriculumPreview() {
         )}
 
         {activeTab === 'schedule' && (
-          <div className='space-y-6'>
-            <div className='bg-white rounded-xl border border-slate-200 p-4'>
-              <p className='text-sm text-slate-500'>
+          <div className='space-y-4 sm:space-y-6 min-w-0'>
+            <div className='bg-white rounded-2xl border border-slate-200 p-4 shadow-xs'>
+              <p className='text-xs sm:text-sm text-slate-500'>
                 Based on <strong>{course.duration_weeks || 'auto'} weeks</strong> at <strong>{course.daily_hours || 1} hr/day</strong> · {totalLessons} subtopics across {weekPlan.length} weeks
               </p>
             </div>
 
             {weekPlan.map(({ week, days }) => (
-              <div key={week} className='bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm'>
-                <div className='px-6 py-4 bg-slate-50 border-b border-slate-100'>
-                  <h3 className='text-base font-bold text-slate-800'>Week {week}</h3>
+              <div key={week} className='bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs min-w-0'>
+                <div className='px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 border-b border-slate-100'>
+                  <h3 className='text-sm sm:text-base font-bold text-slate-800'>Week {week}</h3>
                 </div>
-                <div className='p-4 space-y-3'>
+                <div className='p-3 sm:p-4 space-y-3'>
                   {days.map(({ day, lessons }) => (
-                    <div key={day} className='flex gap-4'>
-                      <div className='w-14 shrink-0 pt-1'>
-                        <span className='text-[12px] font-bold text-slate-400'>{DAY_NAMES[day - 1]}</span>
+                    <div key={day} className='flex flex-col sm:flex-row gap-2 sm:gap-4'>
+                      <div className='w-full sm:w-14 shrink-0 pt-0 sm:pt-1'>
+                        <span className='text-[11px] sm:text-[12px] font-bold text-indigo-600 sm:text-slate-400 uppercase tracking-wide'>{DAY_NAMES[day - 1]}</span>
                       </div>
-                      <div className='flex-1 space-y-1.5'>
+                      <div className='flex-1 space-y-1.5 min-w-0'>
                         {lessons.map(({ moduleTitle, topicTitle, lesson }) => (
-                          <div key={lesson.id} className='flex items-center gap-2.5 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100'>
+                          <div key={lesson.id} className='flex items-center gap-2.5 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100 min-w-0'>
                             <MonitorPlay className='w-3.5 h-3.5 text-blue-400 shrink-0' />
                             <div className='flex-1 min-w-0'>
-                              <p className='text-[13px] font-medium text-slate-700 truncate'>{lesson.title}</p>
-                              <p className='text-[11px] text-slate-400 truncate'>{moduleTitle} → {topicTitle}</p>
+                              <p className='text-xs sm:text-[13px] font-medium text-slate-700 truncate'>{lesson.title}</p>
+                              <p className='text-[10px] sm:text-[11px] text-slate-400 truncate'>{moduleTitle} → {topicTitle}</p>
                             </div>
-                            <span className='text-[11px] text-slate-400 shrink-0'>{lesson.duration_mins ?? 20}m</span>
+                            <span className='text-[10px] sm:text-[11px] text-slate-400 shrink-0'>{lesson.duration_mins ?? 20}m</span>
                           </div>
                         ))}
                       </div>
@@ -611,11 +611,11 @@ export default function AiCurriculumPreview() {
             ))}
 
             {modules.some(m => m.capstone_project) && (
-              <div className='flex items-center gap-4 px-6 py-4 bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl'>
+              <div className='flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4 bg-linear-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl'>
                 <Trophy className='w-5 h-5 text-indigo-500 shrink-0' />
-                <div>
-                  <p className='text-[13px] font-bold text-indigo-800'>Capstone Projects</p>
-                  <p className='text-[12px] text-indigo-500'>{modules.filter(m => m.capstone_project).map(m => m.capstone_project!.title).join(' · ')}</p>
+                <div className='min-w-0 flex-1'>
+                  <p className='text-xs sm:text-[13px] font-bold text-indigo-800'>Capstone Projects</p>
+                  <p className='text-[11px] sm:text-[12px] text-indigo-500 truncate'>{modules.filter(m => m.capstone_project).map(m => m.capstone_project!.title).join(' · ')}</p>
                 </div>
               </div>
             )}

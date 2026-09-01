@@ -205,31 +205,31 @@ const FacilitatorStudents = () => {
   if (loading) return <FacilitatorUsersSkeleton />;
 
   return (
-    <div className='space-y-6 animate-in fade-in duration-500'>
-      <div className='flex flex-col gap-2'>
-        <h1 className='text-2xl font-bold text-[#1e2653]'>
+    <div className='space-y-4 sm:space-y-6 animate-in fade-in duration-500 min-w-0'>
+      <div className='flex flex-col gap-1 sm:gap-2'>
+        <h1 className='text-xl sm:text-2xl font-bold text-[#1e2653] tracking-tight'>
           Student Management
         </h1>
-        <p className='text-slate-500 text-sm'>
+        <p className='text-slate-500 text-xs sm:text-sm'>
           Viewing all students enrolled in your assigned colleges.
         </p>
       </div>
 
-      <div className='flex items-center justify-between'>
-        <div className='flex gap-1 rounded-lg bg-slate-100 p-1 w-fit'>
+      <div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
+        <div className='flex overflow-x-auto no-scrollbar gap-1 rounded-xl bg-slate-100 p-1 w-full sm:w-fit'>
           <button
             onClick={() => setTab('all')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'all' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-3.5 sm:px-4 py-2 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-1 sm:flex-initial text-center ${tab === 'all' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
           >
             All Students
           </button>
           <button
             onClick={() => setTab('pending')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${tab === 'pending' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-3.5 sm:px-4 py-2 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap flex-1 sm:flex-initial ${tab === 'pending' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            Pending Verification
+            <span>Pending Verification</span>
             {pendingCount > 0 && (
-              <span className='bg-yellow-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none'>
+              <span className='bg-yellow-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none'>
                 {pendingCount}
               </span>
             )}
@@ -237,20 +237,20 @@ const FacilitatorStudents = () => {
         </div>
         <button
           onClick={() => setIsBinOpen(true)}
-          className='flex items-center gap-2 px-4 py-1.5 rounded-md border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm'
+          className='flex items-center justify-center gap-2 px-4 py-2 sm:py-1.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-xs w-full sm:w-auto min-h-[38px]'
         >
-          <Archive className="h-4 w-4 text-slate-500" />
-          Recycle Bin
+          <Archive className="h-4 w-4 text-slate-500 shrink-0" />
+          <span>Recycle Bin</span>
         </button>
       </div>
 
-      <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
+      <div className='flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between'>
+        <div className='flex flex-col gap-2.5 sm:gap-3 sm:flex-row sm:items-center w-full md:w-auto flex-1'>
           <div className='relative w-full sm:w-80'>
             <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400' />
             <Input
               placeholder='Search students by name or email...'
-              className='border-slate-200 bg-white pl-10'
+              className='border-slate-200 bg-white pl-10 text-xs sm:text-sm h-10'
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -258,7 +258,7 @@ const FacilitatorStudents = () => {
 
           {colleges.length > 1 && (
             <Select value={selectedCollege} onValueChange={setSelectedCollege}>
-              <SelectTrigger className='w-full sm:w-56 border-slate-200 bg-white'>
+              <SelectTrigger className='w-full sm:w-56 border-slate-200 bg-white text-xs sm:text-sm h-10'>
                 <SelectValue placeholder='All Colleges' />
               </SelectTrigger>
               <SelectContent>
@@ -273,163 +273,165 @@ const FacilitatorStudents = () => {
           )}
         </div>
 
-        <p className='text-sm font-medium text-slate-500'>
+        <p className='text-xs sm:text-sm font-medium text-slate-500'>
           Total Students:{' '}
-          <span className='text-slate-900'>{filteredStudents.length}</span>
+          <span className='font-bold text-slate-900'>{filteredStudents.length}</span>
         </p>
       </div>
 
-      <Card className='overflow-hidden border-none shadow-sm'>
-        <Table>
-          <TableHeader className='bg-slate-50/50'>
-            <TableRow>
-              <TableHead className='font-bold uppercase text-xs'>
-                Student
-              </TableHead>
-              <TableHead className='font-bold uppercase text-xs'>
-                College
-              </TableHead>
-              <TableHead className='font-bold uppercase text-xs'>
-                Degree/Batch
-              </TableHead>
-              <TableHead className='font-bold uppercase text-xs'>
-                Courses
-              </TableHead>
-              <TableHead className='font-bold uppercase text-xs'>
-                Overall Progress
-              </TableHead>
-              <TableHead className='font-bold uppercase text-xs'>
-                Status
-              </TableHead>
-              <TableHead className='font-bold uppercase text-xs'>
-                Joined
-              </TableHead>
-              <TableHead className='font-bold uppercase text-xs'>
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className='bg-white'>
-            {filteredStudents.map((student) => (
-              <TableRow
-                key={student.id}
-                className='hover:bg-slate-50/60 transition-colors'
-              >
-                <TableCell>
-                  <div>
-                    <p className='font-bold text-slate-900'>
-                      {student.full_name}
-                    </p>
-                    <p className='text-xs text-slate-500'>{student.email}</p>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className='text-sm text-slate-700'>
-                    {student.college_name || 'N/A'}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className='flex flex-col gap-1'>
-                    <span className='text-xs text-slate-600 font-medium'>
-                      {student.degree || 'N/A'}
+      <Card className='overflow-hidden border-none shadow-sm min-w-0'>
+        <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+          <Table className='min-w-[760px]'>
+            <TableHeader className='bg-slate-50/50'>
+              <TableRow>
+                <TableHead className='font-bold uppercase text-[11px] sm:text-xs'>
+                  Student
+                </TableHead>
+                <TableHead className='font-bold uppercase text-[11px] sm:text-xs'>
+                  College
+                </TableHead>
+                <TableHead className='font-bold uppercase text-[11px] sm:text-xs'>
+                  Degree/Batch
+                </TableHead>
+                <TableHead className='font-bold uppercase text-[11px] sm:text-xs'>
+                  Courses
+                </TableHead>
+                <TableHead className='font-bold uppercase text-[11px] sm:text-xs'>
+                  Overall Progress
+                </TableHead>
+                <TableHead className='font-bold uppercase text-[11px] sm:text-xs'>
+                  Status
+                </TableHead>
+                <TableHead className='font-bold uppercase text-[11px] sm:text-xs'>
+                  Joined
+                </TableHead>
+                <TableHead className='font-bold uppercase text-[11px] sm:text-xs'>
+                  Actions
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className='bg-white'>
+              {filteredStudents.map((student) => (
+                <TableRow
+                  key={student.id}
+                  className='hover:bg-slate-50/60 transition-colors'
+                >
+                  <TableCell>
+                    <div className='min-w-0'>
+                      <p className='font-bold text-xs sm:text-sm text-slate-900 truncate'>
+                        {student.full_name}
+                      </p>
+                      <p className='text-[11px] text-slate-500 truncate'>{student.email}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className='text-xs sm:text-sm text-slate-700 truncate block max-w-44'>
+                      {student.college_name || 'N/A'}
                     </span>
-                    {student.batch && (
-                      <Badge
-                        variant='outline'
-                        className='w-fit text-[10px] h-5 bg-blue-50/50 text-blue-600 border-blue-100'
-                      >
-                        Batch {student.batch}
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex flex-col gap-1'>
+                      <span className='text-xs text-slate-600 font-medium'>
+                        {student.degree || 'N/A'}
+                      </span>
+                      {student.batch && (
+                        <Badge
+                          variant='outline'
+                          className='w-fit text-[10px] h-5 bg-blue-50/50 text-blue-600 border-blue-100'
+                        >
+                          Batch {student.batch}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className='bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none text-[11px] whitespace-nowrap'>
+                      {student.enrolled_courses || 0} subjects
+                    </Badge>
+                  </TableCell>
+                  <TableCell className='min-w-36'>
+                    {student.is_verified ? (
+                      <div className='space-y-1.5'>
+                        <div className='flex items-center justify-between text-[10px] font-bold uppercase tracking-wider'>
+                          <span className='text-slate-400'>Progress</span>
+                          <span className='text-indigo-600'>
+                            {student.progress_percent || 0}%
+                          </span>
+                        </div>
+                        <Progress
+                          value={student.progress_percent || 0}
+                          className='h-1.5 bg-indigo-50'
+                        />
+                      </div>
+                    ) : (
+                      <span className='text-slate-300 text-xs'>—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {student.is_verified ? (
+                      <Badge className='bg-green-50 text-green-700 border-green-100 hover:bg-green-100 border text-[11px] whitespace-nowrap'>
+                        Verified
+                      </Badge>
+                    ) : (
+                      <Badge className='bg-yellow-50 text-yellow-700 border-yellow-100 hover:bg-yellow-100 border text-[11px] whitespace-nowrap'>
+                        Pending
                       </Badge>
                     )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge className='bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none'>
-                    {student.enrolled_courses || 0} subjects
-                  </Badge>
-                </TableCell>
-                <TableCell className='min-w-45'>
-                  {student.is_verified ? (
-                    <div className='space-y-1.5'>
-                      <div className='flex items-center justify-between text-[10px] font-bold uppercase tracking-wider'>
-                        <span className='text-slate-400'>Progress</span>
-                        <span className='text-indigo-600'>
-                          {student.progress_percent || 0}%
-                        </span>
-                      </div>
-                      <Progress
-                        value={student.progress_percent || 0}
-                        className='h-1.5 bg-indigo-50'
-                      />
+                  </TableCell>
+                  <TableCell>
+                    <p className='text-xs text-slate-500 whitespace-nowrap'>
+                      {new Date(student.joined_date).toLocaleDateString('en-GB')}
+                    </p>
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex items-center gap-1'>
+                      <button
+                        onClick={() => setProfileId(student.id)}
+                        className='p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center'
+                        title='View details'
+                      >
+                        <Eye className='w-4 h-4' />
+                      </button>
+                      <button
+                        onClick={() => openEdit(student)}
+                        className='p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center'
+                        title='Edit student'
+                      >
+                        <Pencil className='w-4 h-4' />
+                      </button>
+                      <button
+                        disabled={verifyingId === student.id}
+                        onClick={() => handleVerify(student.id, !student.is_verified)}
+                        className='p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-50 min-h-[32px] min-w-[32px] flex items-center justify-center'
+                        title={student.is_verified ? 'Unverify student' : 'Verify student'}
+                      >
+                        {student.is_verified ? (
+                          <ShieldX className='w-4 h-4' />
+                        ) : (
+                          <ShieldCheck className='w-4 h-4' />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setUserToDelete(student)}
+                        className='p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center'
+                        title='Move to recycle bin'
+                      >
+                        <Trash2 className='w-4 h-4' />
+                      </button>
                     </div>
-                  ) : (
-                    <span className='text-slate-300 text-sm'>—</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {student.is_verified ? (
-                    <Badge className='bg-green-50 text-green-700 border-green-100 hover:bg-green-100 border text-xs'>
-                      Verified
-                    </Badge>
-                  ) : (
-                    <Badge className='bg-yellow-50 text-yellow-700 border-yellow-100 hover:bg-yellow-100 border text-xs'>
-                      Pending
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <p className='text-xs text-slate-500'>
-                    {new Date(student.joined_date).toLocaleDateString('en-GB')}
-                  </p>
-                </TableCell>
-                <TableCell>
-                  <div className='flex items-center gap-1'>
-                    <button
-                      onClick={() => setProfileId(student.id)}
-                      className='p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors'
-                      title='View details'
-                    >
-                      <Eye className='w-4 h-4' />
-                    </button>
-                    <button
-                      onClick={() => openEdit(student)}
-                      className='p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors'
-                      title='Edit student'
-                    >
-                      <Pencil className='w-4 h-4' />
-                    </button>
-                    <button
-                      disabled={verifyingId === student.id}
-                      onClick={() => handleVerify(student.id, !student.is_verified)}
-                      className='p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-50'
-                      title={student.is_verified ? 'Unverify student' : 'Verify student'}
-                    >
-                      {student.is_verified ? (
-                        <ShieldX className='w-4 h-4' />
-                      ) : (
-                        <ShieldCheck className='w-4 h-4' />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setUserToDelete(student)}
-                      className='p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors'
-                      title='Move to recycle bin'
-                    >
-                      <Trash2 className='w-4 h-4' />
-                    </button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
 
         {filteredStudents.length === 0 && (
-          <div className='py-20 text-center'>
-            <div className='inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-4'>
+          <div className='py-16 text-center'>
+            <div className='inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-3'>
               <Search className='w-6 h-6 text-slate-400' />
             </div>
-            <p className='text-slate-500 font-medium'>
+            <p className='text-slate-500 font-medium text-xs sm:text-sm'>
               No students found matching your search.
             </p>
           </div>
@@ -443,15 +445,15 @@ const FacilitatorStudents = () => {
       />
 
       <Dialog open={!!editStudent} onOpenChange={(open) => !open && setEditStudent(null)}>
-        <DialogContent className='sm:max-w-md'>
+        <DialogContent className='w-[92vw] sm:max-w-md rounded-2xl p-4 sm:p-6'>
           <DialogHeader>
-            <DialogTitle>Edit Student — {editStudent?.full_name}</DialogTitle>
+            <DialogTitle className='text-base sm:text-lg'>Edit Student — {editStudent?.full_name}</DialogTitle>
           </DialogHeader>
-          <div className='space-y-4 py-2'>
+          <div className='space-y-3.5 sm:space-y-4 py-2'>
             <div className='space-y-1.5'>
-              <Label>Degree Program</Label>
+              <Label className='text-xs sm:text-sm'>Degree Program</Label>
               <Select value={editForm.degree} onValueChange={(v) => setEditForm((f) => ({ ...f, degree: v }))}>
-                <SelectTrigger className='h-10'>
+                <SelectTrigger className='h-10 text-xs sm:text-sm'>
                   <SelectValue placeholder='Select degree' />
                 </SelectTrigger>
                 <SelectContent>
@@ -462,9 +464,9 @@ const FacilitatorStudents = () => {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Academic Year</Label>
+              <Label className='text-xs sm:text-sm'>Academic Year</Label>
               <Select value={editForm.current_academic_year} onValueChange={(v) => setEditForm((f) => ({ ...f, current_academic_year: v }))}>
-                <SelectTrigger className='h-10'>
+                <SelectTrigger className='h-10 text-xs sm:text-sm'>
                   <SelectValue placeholder='Select year' />
                 </SelectTrigger>
                 <SelectContent>
@@ -475,9 +477,9 @@ const FacilitatorStudents = () => {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Expected Graduation Year</Label>
+              <Label className='text-xs sm:text-sm'>Expected Graduation Year</Label>
               <Select value={editForm.expected_graduation_year} onValueChange={(v) => setEditForm((f) => ({ ...f, expected_graduation_year: v }))}>
-                <SelectTrigger className='h-10'>
+                <SelectTrigger className='h-10 text-xs sm:text-sm'>
                   <SelectValue placeholder='Select graduation year' />
                 </SelectTrigger>
                 <SelectContent>
@@ -488,17 +490,17 @@ const FacilitatorStudents = () => {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className='flex-col-reverse sm:flex-row gap-2 mt-2'>
             <button
               onClick={() => setEditStudent(null)}
-              className='px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors'
+              className='w-full sm:w-auto px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors border border-slate-200 sm:border-transparent rounded-lg'
             >
               Cancel
             </button>
             <button
               disabled={saving}
               onClick={handleSaveEdit}
-              className='px-4 py-2 text-sm font-semibold bg-[#344499] text-white rounded-lg hover:bg-[#2c3983] disabled:opacity-50 transition-colors'
+              className='w-full sm:w-auto px-4 py-2.5 text-xs sm:text-sm font-semibold bg-[#344499] text-white rounded-lg hover:bg-[#2c3983] disabled:opacity-50 transition-colors shadow-xs'
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -514,17 +516,17 @@ const FacilitatorStudents = () => {
       />
 
       <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className='w-[92vw] sm:max-w-md rounded-2xl p-4 sm:p-6'>
           <AlertDialogHeader>
-            <AlertDialogTitle>Move to Recycle Bin?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className='text-base sm:text-lg'>Move to Recycle Bin?</AlertDialogTitle>
+            <AlertDialogDescription className='text-xs sm:text-sm'>
               This will move <strong>{userToDelete?.full_name}</strong> to the Recycle Bin. 
               They will not be able to log in, but their progress is preserved. You can restore them later.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteUser} className="bg-red-600 hover:bg-red-700 text-white">
+          <AlertDialogFooter className='flex-col-reverse sm:flex-row gap-2 mt-2'>
+            <AlertDialogCancel className='w-full sm:w-auto mt-0'>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white">
               Move to Bin
             </AlertDialogAction>
           </AlertDialogFooter>
