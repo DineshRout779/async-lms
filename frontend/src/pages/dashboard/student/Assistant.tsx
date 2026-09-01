@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Loader2, Bot, User, TriangleAlert, Copy, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -23,25 +22,49 @@ const STARTERS = [
   'Why is my output wrong?',
 ];
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Code Block Component (ChatGPT Style) ────────────────────────────────────
 
-function CopyButton({ text }: { text: string }) {
+function CodeBlock({ language, value }: { language?: string; value: string }) {
   const [isCopied, setIsCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(value);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
 
   return (
-    <button
-      onClick={handleCopy}
-      className="p-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-md text-slate-300 transition-colors border border-slate-700/50 backdrop-blur-sm"
-      title="Copy code"
-    >
-      {isCopied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
-    </button>
+    <div className='not-prose my-3 rounded-xl overflow-hidden border border-slate-800 shadow-md bg-[#0d1117] text-slate-100 font-mono'>
+      {/* ChatGPT-style Code Header Bar */}
+      <div className='flex items-center justify-between px-3.5 py-1.5 bg-[#161b22] border-b border-slate-800/80 text-xs text-slate-400 select-none'>
+        <span className='font-mono text-[11px] font-medium tracking-wide lowercase text-slate-300'>
+          {language || 'code'}
+        </span>
+        <button
+          type='button'
+          onClick={handleCopy}
+          className='flex items-center gap-1.5 px-2 py-1 rounded hover:bg-slate-700/60 text-slate-300 hover:text-white transition-all text-[11px] font-sans'
+        >
+          {isCopied ? (
+            <>
+              <Check className='h-3.5 w-3.5 text-emerald-400' />
+              <span className='text-emerald-400 font-medium'>Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className='h-3.5 w-3.5' />
+              <span>Copy code</span>
+            </>
+          )}
+        </button>
+      </div>
+      {/* Code Area */}
+      <div className='p-3.5 sm:p-4 overflow-x-auto text-[12px] sm:text-[13px] leading-relaxed text-slate-100 selection:bg-indigo-500/40'>
+        <pre className='!bg-transparent !p-0 !m-0 font-mono whitespace-pre'>
+          <code>{value}</code>
+        </pre>
+      </div>
+    </div>
   );
 }
 
@@ -101,16 +124,16 @@ export default function AIAssistant() {
   };
 
   return (
-    <div className='flex flex-col h-[calc(100dvh-4rem)] max-w-3xl mx-auto'>
+    <div className='flex flex-col h-[calc(100dvh-4rem)] w-full max-w-3xl mx-auto min-w-0 overflow-hidden'>
       {/* ── Header ── */}
-      <div className='px-4 sm:px-6 py-3 sm:py-4 border-b bg-white shrink-0'>
-        <div className='flex items-center gap-3'>
+      <div className='px-4 sm:px-6 py-3 sm:py-4 border-b bg-white shrink-0 w-full min-w-0'>
+        <div className='flex items-center gap-3 min-w-0'>
           <div className='h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-indigo-100 flex items-center justify-center shrink-0'>
             <Bot className='h-4 w-4 sm:h-5 sm:w-5 text-indigo-600' />
           </div>
-          <div>
-            <p className='font-semibold text-slate-900 text-xs sm:text-sm'>CodeGuru AI</p>
-            <p className='text-[10px] sm:text-xs text-slate-400'>
+          <div className='min-w-0 flex-1'>
+            <p className='font-semibold text-slate-900 text-xs sm:text-sm truncate'>CodeGuru AI</p>
+            <p className='text-[10px] sm:text-xs text-slate-400 truncate'>
               Personalized LMS Doubt Solver
             </p>
           </div>
@@ -118,7 +141,7 @@ export default function AIAssistant() {
       </div>
 
       {/* ── Messages ── */}
-      <ScrollArea className='flex-1 min-h-0 px-3 sm:px-6 py-4'>
+      <div className='flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 custom-scrollbar min-w-0 w-full'>
         {messages.length === 0 && (
           <div className='flex flex-col items-center justify-center h-full gap-4 text-center py-12 sm:py-16'>
             <div className='h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-indigo-50 flex items-center justify-center'>
@@ -147,12 +170,12 @@ export default function AIAssistant() {
           </div>
         )}
 
-        <div className='space-y-4'>
+        <div className='space-y-4 w-full min-w-0'>
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`flex gap-2.5 sm:gap-3 items-start ${
-                msg.role === 'user' ? 'justify-end' : ''
+              className={`flex gap-2 sm:gap-3 items-start w-full min-w-0 ${
+                msg.role === 'user' ? 'justify-end' : 'justify-start'
               }`}
             >
               {msg.role === 'assistant' && (
@@ -162,37 +185,39 @@ export default function AIAssistant() {
               )}
 
               <div
-                className={`max-w-[88%] sm:max-w-[80%] rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm ${
+                className={`max-w-[90%] sm:max-w-[82%] min-w-0 rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm break-words ${
                   msg.role === 'user'
                     ? 'bg-indigo-600 text-white rounded-tr-none'
-                    : 'bg-slate-50 border border-slate-200 text-slate-800 rounded-tl-none overflow-x-auto'
+                    : 'bg-slate-50 border border-slate-200 text-slate-800 rounded-tl-none'
                 }`}
               >
                 {msg.role === 'assistant' ? (
-                  <div className='prose prose-sm max-w-full overflow-x-auto prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:p-3'>
+                  <div className='prose prose-sm max-w-full w-full min-w-0 break-words leading-relaxed prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0'>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
                         pre({ children }: any) {
-                          return <div className="relative group">{children}</div>;
+                          return <>{children}</>;
                         },
-                        code({ className, children, ...props }: any) {
+                        code({ node, inline, className, children, ...props }: any) {
                           const match = /language-(\w+)/.exec(className || '');
                           const codeContent = String(children).replace(/\n$/, '');
-                          if (match) {
+                          const isMultiline = codeContent.includes('\n');
+                          const isCodeBlock = !inline || Boolean(match) || isMultiline || codeContent.length > 50;
+
+                          if (isCodeBlock) {
                             return (
-                              <>
-                                <div className="absolute right-2 top-2 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
-                                  <CopyButton text={codeContent} />
-                                </div>
-                                <code className={className} {...props}>
-                                  {children}
-                                </code>
-                              </>
+                              <CodeBlock
+                                language={match ? match[1] : undefined}
+                                value={codeContent}
+                              />
                             );
                           }
                           return (
-                            <code className={className} {...props}>
+                            <code
+                              className='font-mono text-[11px] sm:text-xs bg-slate-200/90 text-indigo-700 px-1.5 py-0.5 rounded font-semibold break-all'
+                              {...props}
+                            >
                               {children}
                             </code>
                           );
@@ -203,7 +228,7 @@ export default function AIAssistant() {
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className='whitespace-pre-wrap'>{msg.content}</p>
+                  <p className='whitespace-pre-wrap break-words'>{msg.content}</p>
                 )}
               </div>
 
@@ -216,7 +241,7 @@ export default function AIAssistant() {
           ))}
 
           {loading && (
-            <div className='flex gap-3 items-start'>
+            <div className='flex gap-2.5 sm:gap-3 items-start w-full min-w-0'>
               <div className='h-7 w-7 rounded-full bg-indigo-100 flex items-center justify-center shrink-0'>
                 <Bot className='h-4 w-4 text-indigo-600' />
               </div>
@@ -227,18 +252,18 @@ export default function AIAssistant() {
           )}
 
           {error && (
-            <div className='flex items-center gap-2 text-xs sm:text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5'>
+            <div className='flex items-center gap-2 text-xs sm:text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 w-full min-w-0'>
               <TriangleAlert className='h-4 w-4 shrink-0' />
-              {error}
+              <span className='break-words'>{error}</span>
             </div>
           )}
         </div>
 
         <div ref={bottomRef} />
-      </ScrollArea>
+      </div>
 
       {/* ── Input ── */}
-      <div className='px-3 sm:px-4 py-2.5 sm:py-3 border-t bg-white shrink-0'>
+      <div className='px-3 sm:px-4 py-2.5 sm:py-3 border-t bg-white shrink-0 w-full min-w-0'>
         <div className='flex items-end gap-2 rounded-xl border border-slate-300 bg-white px-3 sm:px-4 py-2 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all'>
           <textarea
             ref={textareaRef}
@@ -247,13 +272,13 @@ export default function AIAssistant() {
             onKeyDown={handleKeyDown}
             placeholder='Ask a question or paste your code…'
             rows={1}
-            className='flex-1 resize-none bg-transparent text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 outline-none py-1 max-h-36'
+            className='flex-1 resize-none bg-transparent text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 outline-none py-1 max-h-36 min-w-0'
           />
           <Button
             size='icon'
             onClick={handleSend}
             disabled={!input.trim() || loading}
-            className='h-8 w-8 sm:h-9 sm:w-9 shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-lg'
+            className='h-8 w-8 sm:h-9 sm:w-9 shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-lg min-h-[36px] min-w-[36px]'
           >
             <Send className='h-3.5 w-3.5 sm:h-4 sm:w-4' />
           </Button>

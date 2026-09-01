@@ -30,25 +30,49 @@ interface Props {
   lessonContext: LessonContext;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Code Block Component (ChatGPT Style) ────────────────────────────────────
 
-function CopyButton({ text }: { text: string }) {
+function CodeBlock({ language, value }: { language?: string; value: string }) {
   const [isCopied, setIsCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(value);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
 
   return (
-    <button
-      onClick={handleCopy}
-      className="p-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-md text-slate-300 transition-colors border border-slate-700/50 backdrop-blur-sm"
-      title="Copy code"
-    >
-      {isCopied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
-    </button>
+    <div className='not-prose my-3 rounded-xl overflow-hidden border border-slate-800 shadow-md bg-[#0d1117] text-slate-100 font-mono'>
+      {/* ChatGPT-style Code Header Bar */}
+      <div className='flex items-center justify-between px-3.5 py-1.5 bg-[#161b22] border-b border-slate-800/80 text-xs text-slate-400 select-none'>
+        <span className='font-mono text-[11px] font-medium tracking-wide lowercase text-slate-300'>
+          {language || 'code'}
+        </span>
+        <button
+          type='button'
+          onClick={handleCopy}
+          className='flex items-center gap-1.5 px-2 py-1 rounded hover:bg-slate-700/60 text-slate-300 hover:text-white transition-all text-[11px] font-sans'
+        >
+          {isCopied ? (
+            <>
+              <Check className='h-3.5 w-3.5 text-emerald-400' />
+              <span className='text-emerald-400 font-medium'>Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className='h-3.5 w-3.5' />
+              <span>Copy code</span>
+            </>
+          )}
+        </button>
+      </div>
+      {/* Code Area */}
+      <div className='p-3.5 sm:p-4 overflow-x-auto text-[12px] sm:text-[13px] leading-relaxed text-slate-100 selection:bg-indigo-500/40'>
+        <pre className='!bg-transparent !p-0 !m-0 font-mono whitespace-pre'>
+          <code>{value}</code>
+        </pre>
+      </div>
+    </div>
   );
 }
 
@@ -180,34 +204,32 @@ export default function LessonAssistant({ lessonContext }: Props) {
                     }`}
                   >
                     {msg.role === 'assistant' ? (
-                      <div className='prose prose-sm max-w-none prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-code:bg-slate-200 prose-code:px-1 prose-code:rounded prose-p:my-1 prose-ul:my-1 prose-li:my-0 [&_pre>code]:bg-transparent [&_pre>code]:p-0 [&_pre>code]:text-slate-100'>
+                      <div className='prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0'>
                         <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           components={{
-                            pre({ children, ...props }: any) {
-                              return (
-                                <pre {...props} className={`${props.className || ''} relative group`}>
-                                  {children}
-                                </pre>
-                              );
+                            pre({ children }: any) {
+                              return <>{children}</>;
                             },
-                            code({ className, children, ...props }: any) {
+                            code({ node, inline, className, children, ...props }: any) {
                               const match = /language-(\w+)/.exec(className || '');
                               const codeContent = String(children).replace(/\n$/, '');
-                              if (match) {
+                              const isMultiline = codeContent.includes('\n');
+                              const isCodeBlock = !inline || Boolean(match) || isMultiline || codeContent.length > 50;
+
+                              if (isCodeBlock) {
                                 return (
-                                  <>
-                                    <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                      <CopyButton text={codeContent} />
-                                    </div>
-                                    <code className={className} {...props}>
-                                      {children}
-                                    </code>
-                                  </>
+                                  <CodeBlock
+                                    language={match ? match[1] : undefined}
+                                    value={codeContent}
+                                  />
                                 );
                               }
                               return (
-                                <code className={className} {...props}>
+                                <code
+                                  className='font-mono text-[11px] sm:text-xs bg-slate-200/90 text-indigo-700 px-1.5 py-0.5 rounded font-semibold'
+                                  {...props}
+                                >
                                   {children}
                                 </code>
                               );

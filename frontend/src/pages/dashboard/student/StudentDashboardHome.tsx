@@ -242,27 +242,27 @@ const StudentDashboardHome: React.FC = () => {
       </section>
 
       {/* 4. Bottom Grid */}
-      <section className='grid gap-6 md:grid-cols-2'>
+      <section className='grid gap-4 sm:gap-6 md:grid-cols-2'>
         {/* Assignments */}
-        <Card className='border-none shadow-sm'>
-          <CardHeader className='pb-3'>
-            <CardTitle className='text-lg font-bold'>
+        <Card className='border-none shadow-sm overflow-hidden'>
+          <CardHeader className='p-4 sm:p-6 pb-2 sm:pb-3'>
+            <CardTitle className='text-base sm:text-lg font-bold'>
               Pending Assignments
             </CardTitle>
           </CardHeader>
-          <CardContent className='space-y-3'>
+          <CardContent className='p-4 sm:p-6 pt-0 space-y-2.5 sm:space-y-3'>
             {loadingAssignments ? (
-              <div className='space-y-3'>
+              <div className='space-y-2.5 sm:space-y-3'>
                 {[...Array(3)].map((_, i) => (
-                  <div key={i} className='flex items-center justify-between p-4 rounded-2xl border border-slate-100'>
-                    <div className='flex items-center gap-4'>
-                      <Skeleton className='h-10 w-10 rounded-xl' />
-                      <div className='space-y-1.5'>
-                        <Skeleton className='h-3.5 w-36' />
-                        <Skeleton className='h-3 w-24' />
+                  <div key={i} className='flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 min-w-0'>
+                    <div className='flex items-center gap-3 sm:gap-4 min-w-0 flex-1'>
+                      <Skeleton className='h-9 w-9 sm:h-10 sm:w-10 rounded-xl shrink-0' />
+                      <div className='space-y-1.5 min-w-0 flex-1'>
+                        <Skeleton className='h-3.5 w-3/4' />
+                        <Skeleton className='h-3 w-1/2' />
                       </div>
                     </div>
-                    <Skeleton className='h-4 w-4' />
+                    <Skeleton className='h-4 w-4 shrink-0 ml-2' />
                   </div>
                 ))}
               </div>
@@ -275,29 +275,29 @@ const StudentDashboardHome: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => navigate('/dashboard/student/assignments')}
-                  className='flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all cursor-pointer group'
+                  className='flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all cursor-pointer group min-w-0'
                 >
-                  <div className='flex items-center gap-4'>
-                    <div className='p-2.5 bg-orange-50 rounded-xl text-orange-600'>
-                      <FileText size={20} />
+                  <div className='flex items-center gap-3 sm:gap-4 min-w-0 flex-1 mr-2'>
+                    <div className='p-2 sm:p-2.5 bg-orange-50 rounded-xl text-orange-600 shrink-0'>
+                      <FileText size={18} className='sm:w-5 sm:h-5' />
                     </div>
-                    <div>
-                      <p className='text-sm font-bold text-slate-900'>
+                    <div className='min-w-0 flex-1'>
+                      <p className='text-xs sm:text-sm font-bold text-slate-900 truncate' title={item.title}>
                         {item.title}
                       </p>
-                      <p className='text-[11px] text-muted-foreground font-medium mt-0.5'>
+                      <p className='text-[10px] sm:text-[11px] text-muted-foreground font-medium mt-0.5 truncate' title={item.subject_title}>
                         {item.subject_title}
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className='w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-transform group-hover:text-indigo-600' />
+                  <ChevronRight className='w-4 h-4 text-slate-300 shrink-0 group-hover:translate-x-1 transition-transform group-hover:text-indigo-600' />
                 </div>
               ))
             )}
             <Button
               variant='outline'
               onClick={() => navigate('/dashboard/student/assignments')}
-              className='w-full mt-2 border-dashed border-slate-200 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors'
+              className='w-full mt-2 border-dashed border-slate-200 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors text-xs sm:text-sm min-h-[40px]'
             >
               View All Assignments
             </Button>
@@ -305,23 +305,23 @@ const StudentDashboardHome: React.FC = () => {
         </Card>
 
         {/* My Courses */}
-        <Card className='border-none shadow-sm'>
-          <CardHeader className='pb-3'>
-            <CardTitle className='text-lg font-bold'>My Courses</CardTitle>
+        <Card className='border-none shadow-sm overflow-hidden'>
+          <CardHeader className='p-4 sm:p-6 pb-2 sm:pb-3'>
+            <CardTitle className='text-base sm:text-lg font-bold'>My Courses</CardTitle>
           </CardHeader>
-          <CardContent className='space-y-3'>
+          <CardContent className='p-4 sm:p-6 pt-0 space-y-2.5 sm:space-y-3'>
             {loadingCourses ? (
-              <div className='space-y-3'>
+              <div className='space-y-2.5 sm:space-y-3'>
                 {[...Array(3)].map((_, i) => (
-                  <div key={i} className='flex items-center justify-between p-4 rounded-2xl border border-slate-100'>
-                    <div className='flex items-center gap-4 min-w-0'>
-                      <Skeleton className='h-10 w-10 rounded-xl shrink-0' />
-                      <div className='space-y-1.5'>
-                        <Skeleton className='h-3.5 w-40' />
-                        <Skeleton className='h-3 w-24' />
+                  <div key={i} className='flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 min-w-0'>
+                    <div className='flex items-center gap-3 sm:gap-4 min-w-0 flex-1'>
+                      <Skeleton className='h-9 w-9 sm:h-10 sm:w-10 rounded-xl shrink-0' />
+                      <div className='space-y-1.5 min-w-0 flex-1'>
+                        <Skeleton className='h-3.5 w-3/4' />
+                        <Skeleton className='h-3 w-1/2' />
                       </div>
                     </div>
-                    <Skeleton className='h-4 w-4 shrink-0' />
+                    <Skeleton className='h-4 w-4 shrink-0 ml-2' />
                   </div>
                 ))}
               </div>
@@ -336,17 +336,17 @@ const StudentDashboardHome: React.FC = () => {
                   onClick={() =>
                     navigate(`/dashboard/student/courses/${course.slug}`)
                   }
-                  className='flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all cursor-pointer group'
+                  className='flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all cursor-pointer group min-w-0'
                 >
-                  <div className='flex items-center gap-4 min-w-0'>
-                    <div className='p-2.5 bg-indigo-50 rounded-xl text-indigo-600 shrink-0'>
-                      <BookOpen size={20} />
+                  <div className='flex items-center gap-3 sm:gap-4 min-w-0 flex-1 mr-2'>
+                    <div className='p-2 sm:p-2.5 bg-indigo-50 rounded-xl text-indigo-600 shrink-0'>
+                      <BookOpen size={18} className='sm:w-5 sm:h-5' />
                     </div>
-                    <div className='min-w-0'>
-                      <p className='text-sm font-bold text-slate-900 truncate'>
+                    <div className='min-w-0 flex-1'>
+                      <p className='text-xs sm:text-sm font-bold text-slate-900 truncate' title={course.name}>
                         {course.name}
                       </p>
-                      <p className='text-[11px] text-muted-foreground font-medium mt-0.5'>
+                      <p className='text-[10px] sm:text-[11px] text-muted-foreground font-medium mt-0.5 truncate'>
                         {Math.round(course.progress_percent || 0)}% complete
                       </p>
                     </div>
@@ -358,7 +358,7 @@ const StudentDashboardHome: React.FC = () => {
             <Button
               variant='outline'
               onClick={() => navigate('/dashboard/student/courses')}
-              className='w-full mt-2 border-dashed border-slate-200 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors'
+              className='w-full mt-2 border-dashed border-slate-200 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors text-xs sm:text-sm min-h-[40px]'
             >
               View All Courses
             </Button>

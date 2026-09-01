@@ -51,19 +51,19 @@ export default function StudentHeader({
   };
 
   return (
-    <header className='h-16 border-b bg-white flex items-center justify-between px-3 sm:px-4 md:px-8 shrink-0 select-none'>
-      <div className='flex items-center gap-2 sm:gap-4 min-w-0'>
+    <header className='h-16 border-b bg-white flex items-center justify-between px-2.5 sm:px-4 md:px-8 shrink-0 select-none'>
+      <div className='flex items-center gap-1.5 sm:gap-4 min-w-0 flex-1 mr-1.5'>
         {/* Toggle Button for Mobile and Desktop */}
         <button
           onClick={handleMenuClick}
-          className='p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-all focus:outline-none focus:ring-2 focus:ring-blue-100 min-h-[44px] min-w-[44px] flex items-center justify-center'
+          className='p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-all focus:outline-none focus:ring-2 focus:ring-blue-100 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0'
           aria-label='Toggle Sidebar'
         >
           <Menu className='w-5 h-5' />
         </button>
 
         {/* Welcome Message */}
-        <h1 className='font-bold text-sm sm:text-base md:text-lg text-[#1e2653] tracking-tight truncate'>
+        <h1 className='font-bold text-xs sm:text-base md:text-lg text-[#1e2653] tracking-tight truncate min-w-0'>
           <span className='hidden sm:inline'>
             {(() => {
               const h = new Date().getHours();
@@ -80,10 +80,10 @@ export default function StudentHeader({
         </h1>
       </div>
 
-      <div className='flex items-center gap-2 sm:gap-3 md:gap-6 shrink-0'>
+      <div className='flex items-center gap-1.5 sm:gap-3 md:gap-6 shrink-0'>
         {/* Streak Badge - Compact on mobile, full on desktop */}
         <div
-          className='flex items-center gap-1 sm:gap-1.5 bg-orange-50 text-orange-600 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-orange-100 text-[11px] sm:text-xs font-bold shrink-0'
+          className='flex items-center gap-1 sm:gap-1.5 bg-orange-50 text-orange-600 px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-orange-100 text-[10px] sm:text-xs font-bold shrink-0'
           title={`${user?.current_streak ?? 0} Day Streak`}
         >
           <Flame className='w-3.5 h-3.5 fill-orange-500 shrink-0' />
@@ -93,7 +93,7 @@ export default function StudentHeader({
 
         {/* XP Badge - Compact on mobile, full on desktop */}
         <div
-          className='flex items-center gap-1 sm:gap-1.5 bg-indigo-50 text-indigo-600 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-indigo-100 text-[11px] sm:text-xs font-bold shrink-0'
+          className='flex items-center gap-1 sm:gap-1.5 bg-indigo-50 text-indigo-600 px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-indigo-100 text-[10px] sm:text-xs font-bold shrink-0'
           title={`${(user?.total_points ?? 0).toLocaleString()} XP`}
         >
           <Star className='w-3.5 h-3.5 fill-indigo-500 shrink-0' />
@@ -102,7 +102,7 @@ export default function StudentHeader({
         </div>
 
         {/* Action Controls */}
-        <div className='flex items-center gap-1.5 sm:gap-2 md:gap-4 pl-2 sm:pl-4 border-l border-slate-100'>
+        <div className='flex items-center gap-1 sm:gap-2 md:gap-4 pl-1.5 sm:pl-4 border-l border-slate-100'>
           {/* Notifications Bell */}
           <NotificationBell />
 
