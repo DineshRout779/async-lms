@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useParams, useLocation } from 'react-router';
-import { ChevronLeft, GraduationCap, BookOpen, X } from 'lucide-react';
+import { ChevronLeft, GraduationCap, BookOpen } from 'lucide-react';
 import { SubjectSidebar } from '@/components/common/subject/SubjectSidebar';
 import { useAppSelector } from '@/app/hooks';
 import { selectLessonData } from '@/features/lesson/lessonSlice';

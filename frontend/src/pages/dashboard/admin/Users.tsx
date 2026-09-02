@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Eye, EyeOff, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive } from 'lucide-react';
+import { Pencil, Eye, EyeOff, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive, UserPlus } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import FacilitatorProfileDialog from '@/components/common/FacilitatorProfileDialog';
 import RecycleBinModal from '@/components/common/RecycleBinModal';
@@ -224,20 +224,17 @@ const Users = () => {
             : null,
         college_id:
           editingUser.role === 'student' ? form.college_id || null : null,
+        facilitator_college_ids:
+          editingUser.role === 'facilitator'
+            ? form.facilitator_college_ids
+            : undefined,
       });
-
-      if (editingUser.role === 'facilitator') {
-        await apiClient.post('/colleges/assign-facilitator', {
-          facilitator_id: editingUser.id,
-          college_ids: form.facilitator_college_ids,
-        });
-      }
 
       toast.success('User updated successfully');
       closeEditModal();
       await fetchUsers();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to save user'));
+      toast.error(getErrorMessage(error, 'Failed to update user'));
     } finally {
       setSaving(false);
     }
@@ -245,26 +242,21 @@ const Users = () => {
 
   const handleVerify = async (userId: string, currentStatus: boolean) => {
     try {
-      await apiClient.patch(`/admin/users/${userId}/verify`, {
+      await apiClient.put(`/users/${userId}`, {
         is_verified: !currentStatus,
       });
-      toast.success(
-        `User ${!currentStatus ? 'verified' : 'unverified'} successfully`,
-      );
+      toast.success(`User ${!currentStatus ? 'verified' : 'unverified'} successfully`);
       await fetchUsers();
     } catch (error) {
-      toast.error(
-        getErrorMessage(error, 'Failed to update verification status'),
-      );
+      toast.error(getErrorMessage(error, 'Failed to update user verification status'));
     }
   };
 
   const handleCreateCurriculumDeveloper = async () => {
-    if (!createForm.full_name.trim() || !createForm.email.trim() || !createForm.password || !createForm.confirm_password) {
-      toast.error('All fields are required');
+    if (!createForm.full_name.trim() || !createForm.email.trim() || !createForm.password) {
+      toast.error('Please fill in all required fields');
       return;
     }
-
     if (createForm.password !== createForm.confirm_password) {
       toast.error('Passwords do not match');
       return;
@@ -272,17 +264,19 @@ const Users = () => {
 
     try {
       setSaving(true);
-      await apiClient.post('/admin/curriculum-developer', {
+      await apiClient.post('/users/curriculum-developer', {
         full_name: createForm.full_name.trim(),
         email: createForm.email.trim(),
         password: createForm.password,
       });
-
-      toast.success('Curriculum Developer created successfully');
+      toast.success('Curriculum developer created successfully');
       setCreateOpen(false);
-      setCreateForm({ full_name: '', email: '', password: '', confirm_password: '' });
-      setShowPassword(false);
-      setShowConfirmPassword(false);
+      setCreateForm({
+        full_name: '',
+        email: '',
+        password: '',
+        confirm_password: '',
+      });
       await fetchUsers();
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to create user'));
@@ -305,7 +299,7 @@ const Users = () => {
 
   if (loading) {
     return (
-      <div className='space-y-6 p-6'>
+      <div className='space-y-4 sm:space-y-6 min-w-0'>
         <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
           <Skeleton className='h-10 w-96' />
           <Skeleton className='h-4 w-36' />
@@ -314,7 +308,7 @@ const Users = () => {
           <Skeleton className='h-9 w-36 rounded-md' />
           <Skeleton className='h-9 w-36 rounded-md' />
         </div>
-        <Card className='border-none shadow-sm overflow-hidden'>
+        <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white'>
           <Table>
             <TableHeader className='bg-slate-50/50'>
               <TableRow>
@@ -358,14 +352,15 @@ const Users = () => {
   }
 
   return (
-    <div className='space-y-6 p-6 animate-in fade-in duration-500'>
-      <div className='flex flex-col gap-4 md:flex-row md:items-center md:justify-between'>
-        <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
-          <div className='relative w-full md:w-80'>
+    <div className='space-y-4 sm:space-y-6 min-w-0 animate-in fade-in duration-300'>
+      {/* Top Search & Filter Bar */}
+      <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
+        <div className='flex flex-col gap-2.5 sm:flex-row sm:items-center flex-1 min-w-0'>
+          <div className='relative w-full sm:w-80'>
             <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400' />
             <Input
               placeholder='Search by name or email...'
-              className='border-slate-200 bg-white pl-10'
+              className='border-slate-200 bg-white pl-9 h-10 rounded-xl text-xs sm:text-sm'
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setSearchQuery(e.target.value);
@@ -374,7 +369,7 @@ const Users = () => {
             />
           </div>
           <select
-            className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 w-full sm:w-52'
+            className='h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm text-slate-700 w-full sm:w-52 focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-xs'
             value={selectedCollegeId}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
               setSelectedCollegeId(e.target.value);
@@ -390,23 +385,23 @@ const Users = () => {
           </select>
         </div>
 
-        <div className='flex items-center gap-4'>
+        <div className='flex items-center gap-2 sm:gap-3 flex-wrap justify-between sm:justify-end shrink-0'>
           {activeTab === 'curriculum_developer' && (
-            <Button onClick={() => setCreateOpen(true)} className="gap-2">
-              Create User
+            <Button onClick={() => setCreateOpen(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700 min-h-[40px] rounded-xl font-semibold shadow-xs">
+              <UserPlus className="h-4 w-4" /> Create Developer
             </Button>
           )}
-          <Button variant="outline" onClick={() => setIsBinOpen(true)} className="gap-2">
+          <Button variant="outline" onClick={() => setIsBinOpen(true)} className="gap-2 min-h-[40px] rounded-xl font-semibold border-slate-200 bg-white shadow-xs">
             <Archive className="h-4 w-4 text-slate-500" />
             Recycle Bin
           </Button>
-          <p className='text-sm font-medium text-slate-500'>
-            Showing <span className='text-slate-900'>{filteredUsers.length}</span>{' '}
-            {activeTab === 'student' ? 'students' : activeTab === 'facilitator' ? 'facilitators' : 'developers'}
-          </p>
+          <span className='text-xs font-semibold text-slate-400'>
+            Showing <strong className='text-slate-800'>{filteredUsers.length}</strong> {activeTab === 'student' ? 'students' : activeTab === 'facilitator' ? 'facilitators' : 'developers'}
+          </span>
         </div>
       </div>
 
+      {/* Tabs */}
       <Tabs
         value={activeTab}
         onValueChange={(value) => {
@@ -414,306 +409,140 @@ const Users = () => {
           setSelectedCollegeId('');
           setCurrentPage(1);
         }}
+        className='space-y-4'
       >
-        <TabsList className='bg-slate-100'>
-          <TabsTrigger value='student'>Students ({studentCount})</TabsTrigger>
-          <TabsTrigger value='facilitator'>
-            Facilitators ({facilitatorCount})
-          </TabsTrigger>
-          <TabsTrigger value='curriculum_developer'>
-            AI Curriculum ({curriculumDevCount})
-          </TabsTrigger>
-        </TabsList>
+        <div className='overflow-x-auto no-scrollbar w-full'>
+          <TabsList className='bg-slate-100 p-1 rounded-2xl flex gap-1 w-full sm:w-fit'>
+            <TabsTrigger value='student' className='rounded-xl text-xs sm:text-sm font-semibold shrink-0 py-2 px-3 sm:px-4'>Students ({studentCount})</TabsTrigger>
+            <TabsTrigger value='facilitator' className='rounded-xl text-xs sm:text-sm font-semibold shrink-0 py-2 px-3 sm:px-4'>
+              Facilitators ({facilitatorCount})
+            </TabsTrigger>
+            <TabsTrigger value='curriculum_developer' className='rounded-xl text-xs sm:text-sm font-semibold shrink-0 py-2 px-3 sm:px-4'>
+              AI Curriculum ({curriculumDevCount})
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
+        {/* Student Tab */}
         <TabsContent value='student'>
-          <Card className='overflow-hidden border-none shadow-sm'>
-            <Table>
-              <TableHeader className='bg-slate-50/50'>
-                <TableRow>
-                  <TableHead className='font-bold uppercase'>Student</TableHead>
-                  <TableHead className='font-bold uppercase'>College</TableHead>
-                  <TableHead className='font-bold uppercase'>Courses</TableHead>
-                  <TableHead className='font-bold uppercase'>
-                    Progress
-                  </TableHead>
-                  <TableHead className='font-bold uppercase'>Batch</TableHead>
-                  <TableHead className='font-bold uppercase'>Status</TableHead>
-                  <TableHead className='text-right font-bold uppercase'>
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className='bg-white'>
-                {paginatedUsers.map((user) => (
-                  <TableRow key={user.id} className='hover:bg-slate-50/60'>
-                    <TableCell>
-                      <p className='font-bold text-slate-900'>
-                        {user.full_name}
-                      </p>
-                      <p className='text-xs text-slate-500'>{user.email}</p>
-                    </TableCell>
-                    <TableCell>
-                      <p className='text-sm text-slate-700'>
-                        {user.college_name || 'N/A'}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className='bg-slate-100 text-slate-700'>
-                        {user.enrolled_courses || 0} enrolled
-                      </Badge>
-                    </TableCell>
-                    <TableCell className='min-w-48'>
-                      <div className='space-y-1'>
-                        <div className='flex items-center justify-between text-xs text-slate-500'>
-                          <span>
-                            {user.completed_subtopics || 0}/
-                            {user.total_subtopics || 0} subtopics
-                          </span>
-                          <span>{user.progress_percent || 0}%</span>
+          <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white min-w-0'>
+            <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+              <Table className='min-w-[780px] text-xs sm:text-sm'>
+                <TableHeader className='bg-slate-50 border-b border-slate-100'>
+                  <TableRow>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5 pl-4 sm:pl-6'>Student</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>College</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Courses</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Progress</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Batch</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Status</TableHead>
+                    <TableHead className='text-right font-bold uppercase text-[11px] py-3.5 pr-4 sm:pr-6'>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className='divide-y divide-slate-100'>
+                  {paginatedUsers.map((user) => (
+                    <TableRow key={user.id} className='hover:bg-slate-50/60 transition-colors'>
+                      <TableCell className='pl-4 sm:pl-6 py-3.5'>
+                        <p className='font-bold text-slate-900 truncate'>{user.full_name}</p>
+                        <p className='text-xs text-slate-500 truncate'>{user.email}</p>
+                      </TableCell>
+                      <TableCell className='py-3.5'>
+                        <p className='text-xs sm:text-sm text-slate-700 truncate max-w-[160px]'>{user.college_name || 'N/A'}</p>
+                      </TableCell>
+                      <TableCell className='py-3.5 whitespace-nowrap'>
+                        <Badge className='bg-slate-100 text-slate-700 font-semibold text-[11px] border border-slate-200/60'>
+                          {user.enrolled_courses || 0} enrolled
+                        </Badge>
+                      </TableCell>
+                      <TableCell className='min-w-48 py-3.5'>
+                        <div className='space-y-1'>
+                          <div className='flex items-center justify-between text-[11px] text-slate-500 font-medium'>
+                            <span>{user.completed_subtopics || 0}/{user.total_subtopics || 0} subtopics</span>
+                            <span>{user.progress_percent || 0}%</span>
+                          </div>
+                          <Progress value={user.progress_percent || 0} className='h-1.5' />
                         </div>
-                        <Progress value={user.progress_percent || 0} />
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {user.year ? (
-                        <Badge className='bg-blue-50 text-blue-700'>
-                          Year {user.year}
-                        </Badge>
-                      ) : (
-                        <span className='text-slate-400'>N/A</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className='flex items-center gap-2'>
-                        <Badge
-                          className={
-                            user.is_verified
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-yellow-50 text-yellow-700'
-                          }
-                        >
-                          {user.is_verified ? 'Verified' : 'Unverified'}
-                        </Badge>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          className='h-7 text-[10px]'
-                          onClick={() => handleVerify(user.id, user.is_verified)}
-                        >
-                          {user.is_verified ? 'Unverify' : 'Verify'}
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='text-slate-500 hover:text-blue-600'
-                        onClick={() => setProfileId(user.id)}
-                      >
-                        <Eye className='h-4 w-4' />
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='text-slate-500 hover:text-blue-600'
-                        onClick={() => openEditModal(user)}
-                      >
-                        <Pencil className='h-4 w-4' />
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='text-slate-400 hover:text-red-600 hover:bg-red-50'
-                        onClick={() => setUserToDelete(user)}
-                      >
-                        <Trash2 className='h-4 w-4' />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            {filteredUsers.length === 0 && (
-              <div className='p-16 text-center text-slate-400'>
-                No students found.
-              </div>
-            )}
-            {totalPages > 1 && (
-              <div className='flex items-center justify-between border-t border-slate-100 px-4 py-3'>
-                <p className='text-xs text-slate-500'>
-                  Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total
-                </p>
-                <div className='flex items-center gap-1'>
-                  <Button
-                    variant='outline'
-                    size='icon'
-                    className='h-8 w-8'
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                  >
-                    <ChevronLeft className='h-4 w-4' />
-                  </Button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                    .reduce<(number | '...')[]>((acc, p, idx, arr) => {
-                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('...');
-                      acc.push(p);
-                      return acc;
-                    }, [])
-                    .map((p, i) =>
-                      p === '...' ? (
-                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-sm'>…</span>
-                      ) : (
-                        <Button
-                          key={p}
-                          variant={currentPage === p ? 'default' : 'outline'}
-                          size='icon'
-                          className='h-8 w-8 text-xs'
-                          onClick={() => setCurrentPage(p as number)}
-                        >
-                          {p}
-                        </Button>
-                      )
-                    )}
-                  <Button
-                    variant='outline'
-                    size='icon'
-                    className='h-8 w-8'
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                  >
-                    <ChevronRight className='h-4 w-4' />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-
-        <TabsContent value='facilitator'>
-          <Card className='overflow-hidden border-none shadow-sm'>
-            <Table>
-              <TableHeader className='bg-slate-50/50'>
-                <TableRow>
-                  <TableHead className='font-bold uppercase'>
-                    Facilitator
-                  </TableHead>
-                  <TableHead className='font-bold uppercase'>
-                    Assigned Colleges
-                  </TableHead>
-                  <TableHead className='font-bold uppercase'>Joined</TableHead>
-                  <TableHead className='font-bold uppercase'>Status</TableHead>
-                  <TableHead className='text-right font-bold uppercase'>
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className='bg-white'>
-                {paginatedUsers.map((user) => (
-                  <TableRow key={user.id} className='hover:bg-slate-50/60'>
-                    <TableCell>
-                      <p className='font-bold text-slate-900'>
-                        {user.full_name}
-                      </p>
-                      <p className='text-xs text-slate-500'>{user.email}</p>
-                    </TableCell>
-                    <TableCell>
-                      <div className='flex flex-wrap gap-1'>
-                        {user.facilitator_college_names &&
-                        user.facilitator_college_names.length > 0 ? (
-                          user.facilitator_college_names.map((name) => (
-                            <Badge
-                              key={`${user.id}-${name}`}
-                              className='bg-emerald-50 text-emerald-700'
-                            >
-                              {name}
-                            </Badge>
-                          ))
+                      </TableCell>
+                      <TableCell className='py-3.5 whitespace-nowrap'>
+                        {user.year ? (
+                          <Badge className='bg-blue-50 text-blue-700 border-blue-200 font-semibold text-[11px]'>
+                            Year {user.year}
+                          </Badge>
                         ) : (
-                          <span className='text-sm text-slate-400'>
-                            No colleges assigned
-                          </span>
+                          <span className='text-slate-400 text-xs'>N/A</span>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell className='text-sm text-slate-500'>
-                      {new Date(user.created_at).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <div className='flex items-center gap-2'>
-                        <Badge
-                          className={
-                            user.is_verified
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-yellow-50 text-yellow-700'
-                          }
-                        >
-                          {user.is_verified ? 'Verified' : 'Pending'}
-                        </Badge>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          className='h-7 text-[10px]'
-                          onClick={() =>
-                            handleVerify(user.id, user.is_verified)
-                          }
-                        >
-                          {user.is_verified ? 'Unverify' : 'Verify'}
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='text-slate-500 hover:text-blue-600'
-                        onClick={() => setFacilitatorProfileId(user.id)}
-                      >
-                        <Eye className='h-4 w-4' />
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='text-slate-500 hover:text-blue-600'
-                        onClick={() => openEditModal(user)}
-                      >
-                        <Pencil className='h-4 w-4' />
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='text-slate-400 hover:text-red-600 hover:bg-red-50'
-                        onClick={() => setUserToDelete(user)}
-                      >
-                        <Trash2 className='h-4 w-4' />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      </TableCell>
+                      <TableCell className='py-3.5 whitespace-nowrap'>
+                        <div className='flex items-center gap-1.5'>
+                          <Badge
+                            className={
+                              user.is_verified
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-[11px]'
+                                : 'bg-yellow-50 text-yellow-700 border-yellow-200 font-semibold text-[11px]'
+                            }
+                          >
+                            {user.is_verified ? 'Verified' : 'Unverified'}
+                          </Badge>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            className='h-6 px-2 text-[10px] rounded-md'
+                            onClick={() => handleVerify(user.id, user.is_verified)}
+                          >
+                            {user.is_verified ? 'Unverify' : 'Verify'}
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell className='text-right pr-4 sm:pr-6 py-3.5'>
+                        <div className='flex items-center justify-end gap-1'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-8 w-8 text-slate-500 hover:text-indigo-600 rounded-lg'
+                            onClick={() => setProfileId(user.id)}
+                            title='View Profile'
+                          >
+                            <Eye className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-8 w-8 text-slate-500 hover:text-indigo-600 rounded-lg'
+                            onClick={() => openEditModal(user)}
+                            title='Edit User'
+                          >
+                            <Pencil className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg'
+                            onClick={() => setUserToDelete(user)}
+                            title='Delete User'
+                          >
+                            <Trash2 className='h-4 w-4' />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
 
             {filteredUsers.length === 0 && (
-              <div className='p-16 text-center text-slate-400'>
-                No facilitators found.
+              <div className='p-12 text-center text-slate-400 text-xs sm:text-sm'>
+                No students found matching your criteria.
               </div>
             )}
             {totalPages > 1 && (
-              <div className='flex items-center justify-between border-t border-slate-100 px-4 py-3'>
-                <p className='text-xs text-slate-500'>
-                  Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total
-                </p>
+              <div className='flex flex-col sm:flex-row items-center justify-between gap-2.5 border-t border-slate-100 px-4 sm:px-6 py-3 text-xs text-slate-500'>
+                <p>Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total</p>
                 <div className='flex items-center gap-1'>
                   <Button
                     variant='outline'
                     size='icon'
-                    className='h-8 w-8'
+                    className='h-8 w-8 rounded-lg'
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
                   >
@@ -728,13 +557,13 @@ const Users = () => {
                     }, [])
                     .map((p, i) =>
                       p === '...' ? (
-                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-sm'>…</span>
+                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-xs'>…</span>
                       ) : (
                         <Button
                           key={p}
                           variant={currentPage === p ? 'default' : 'outline'}
                           size='icon'
-                          className='h-8 w-8 text-xs'
+                          className='h-8 w-8 text-xs rounded-lg'
                           onClick={() => setCurrentPage(p as number)}
                         >
                           {p}
@@ -744,7 +573,7 @@ const Users = () => {
                   <Button
                     variant='outline'
                     size='icon'
-                    className='h-8 w-8'
+                    className='h-8 w-8 rounded-lg'
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((p) => p + 1)}
                   >
@@ -755,98 +584,250 @@ const Users = () => {
             )}
           </Card>
         </TabsContent>
-        <TabsContent value='curriculum_developer'>
-          <Card className='overflow-hidden border-none shadow-sm'>
-            <Table>
-              <TableHeader className='bg-slate-50/50'>
-                <TableRow>
-                  <TableHead className='font-bold uppercase'>
-                    Developer
-                  </TableHead>
-                  <TableHead className='font-bold uppercase'>Joined</TableHead>
-                  <TableHead className='font-bold uppercase'>Status</TableHead>
-                  <TableHead className='text-right font-bold uppercase'>
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className='bg-white'>
-                {paginatedUsers.map((user) => (
-                  <TableRow key={user.id} className='hover:bg-slate-50/60'>
-                    <TableCell>
-                      <p className='font-bold text-slate-900'>
-                        {user.full_name}
-                      </p>
-                      <p className='text-xs text-slate-500'>{user.email}</p>
-                    </TableCell>
-                    <TableCell className='text-sm text-slate-500'>
-                      {new Date(user.created_at).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <div className='flex items-center gap-2'>
-                        <Badge
-                          className={
-                            user.is_verified
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-yellow-50 text-yellow-700'
-                          }
-                        >
-                          {user.is_verified ? 'Verified' : 'Pending'}
-                        </Badge>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          className='h-7 text-[10px]'
-                          onClick={() =>
-                            handleVerify(user.id, user.is_verified)
-                          }
-                        >
-                          {user.is_verified ? 'Unverify' : 'Verify'}
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='text-slate-500 hover:text-blue-600'
-                        onClick={() => openEditModal(user)}
-                      >
-                        <Pencil className='h-4 w-4' />
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='text-slate-400 hover:text-red-600 hover:bg-red-50'
-                        onClick={() => setUserToDelete(user)}
-                      >
-                        <Trash2 className='h-4 w-4' />
-                      </Button>
-                    </TableCell>
+
+        {/* Facilitator Tab */}
+        <TabsContent value='facilitator'>
+          <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white min-w-0'>
+            <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+              <Table className='min-w-[780px] text-xs sm:text-sm'>
+                <TableHeader className='bg-slate-50 border-b border-slate-100'>
+                  <TableRow>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5 pl-4 sm:pl-6'>Facilitator</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Assigned Colleges</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Joined</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Status</TableHead>
+                    <TableHead className='text-right font-bold uppercase text-[11px] py-3.5 pr-4 sm:pr-6'>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody className='divide-y divide-slate-100'>
+                  {paginatedUsers.map((user) => (
+                    <TableRow key={user.id} className='hover:bg-slate-50/60 transition-colors'>
+                      <TableCell className='pl-4 sm:pl-6 py-3.5'>
+                        <p className='font-bold text-slate-900 truncate'>{user.full_name}</p>
+                        <p className='text-xs text-slate-500 truncate'>{user.email}</p>
+                      </TableCell>
+                      <TableCell className='py-3.5'>
+                        <div className='flex flex-wrap gap-1'>
+                          {user.facilitator_college_names && user.facilitator_college_names.length > 0 ? (
+                            user.facilitator_college_names.map((name) => (
+                              <Badge key={`${user.id}-${name}`} className='bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-[11px]'>
+                                {name}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className='text-xs text-slate-400 italic'>No colleges assigned</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className='text-xs sm:text-sm text-slate-500 py-3.5 whitespace-nowrap'>
+                        {new Date(user.created_at).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </TableCell>
+                      <TableCell className='py-3.5 whitespace-nowrap'>
+                        <div className='flex items-center gap-1.5'>
+                          <Badge
+                            className={
+                              user.is_verified
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-[11px]'
+                                : 'bg-yellow-50 text-yellow-700 border-yellow-200 font-semibold text-[11px]'
+                            }
+                          >
+                            {user.is_verified ? 'Verified' : 'Pending'}
+                          </Badge>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            className='h-6 px-2 text-[10px] rounded-md'
+                            onClick={() => handleVerify(user.id, user.is_verified)}
+                          >
+                            {user.is_verified ? 'Unverify' : 'Verify'}
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell className='text-right pr-4 sm:pr-6 py-3.5'>
+                        <div className='flex items-center justify-end gap-1'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-8 w-8 text-slate-500 hover:text-indigo-600 rounded-lg'
+                            onClick={() => setFacilitatorProfileId(user.id)}
+                            title='View Profile'
+                          >
+                            <Eye className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-8 w-8 text-slate-500 hover:text-indigo-600 rounded-lg'
+                            onClick={() => openEditModal(user)}
+                            title='Edit User'
+                          >
+                            <Pencil className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg'
+                            onClick={() => setUserToDelete(user)}
+                            title='Delete User'
+                          >
+                            <Trash2 className='h-4 w-4' />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
 
             {filteredUsers.length === 0 && (
-              <div className='p-16 text-center text-slate-400'>
+              <div className='p-12 text-center text-slate-400 text-xs sm:text-sm'>
+                No facilitators found matching your criteria.
+              </div>
+            )}
+            {totalPages > 1 && (
+              <div className='flex flex-col sm:flex-row items-center justify-between gap-2.5 border-t border-slate-100 px-4 sm:px-6 py-3 text-xs text-slate-500'>
+                <p>Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total</p>
+                <div className='flex items-center gap-1'>
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='h-8 w-8 rounded-lg'
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className='h-4 w-4' />
+                  </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('...');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      p === '...' ? (
+                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-xs'>…</span>
+                      ) : (
+                        <Button
+                          key={p}
+                          variant={currentPage === p ? 'default' : 'outline'}
+                          size='icon'
+                          className='h-8 w-8 text-xs rounded-lg'
+                          onClick={() => setCurrentPage(p as number)}
+                        >
+                          {p}
+                        </Button>
+                      )
+                    )}
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='h-8 w-8 rounded-lg'
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                  >
+                    <ChevronRight className='h-4 w-4' />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* Curriculum Developer Tab */}
+        <TabsContent value='curriculum_developer'>
+          <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white min-w-0'>
+            <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+              <Table className='min-w-[700px] text-xs sm:text-sm'>
+                <TableHeader className='bg-slate-50 border-b border-slate-100'>
+                  <TableRow>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5 pl-4 sm:pl-6'>Developer</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Joined</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Status</TableHead>
+                    <TableHead className='text-right font-bold uppercase text-[11px] py-3.5 pr-4 sm:pr-6'>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className='divide-y divide-slate-100'>
+                  {paginatedUsers.map((user) => (
+                    <TableRow key={user.id} className='hover:bg-slate-50/60 transition-colors'>
+                      <TableCell className='pl-4 sm:pl-6 py-3.5'>
+                        <p className='font-bold text-slate-900 truncate'>{user.full_name}</p>
+                        <p className='text-xs text-slate-500 truncate'>{user.email}</p>
+                      </TableCell>
+                      <TableCell className='text-xs sm:text-sm text-slate-500 py-3.5 whitespace-nowrap'>
+                        {new Date(user.created_at).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </TableCell>
+                      <TableCell className='py-3.5 whitespace-nowrap'>
+                        <div className='flex items-center gap-1.5'>
+                          <Badge
+                            className={
+                              user.is_verified
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-[11px]'
+                                : 'bg-yellow-50 text-yellow-700 border-yellow-200 font-semibold text-[11px]'
+                            }
+                          >
+                            {user.is_verified ? 'Verified' : 'Pending'}
+                          </Badge>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            className='h-6 px-2 text-[10px] rounded-md'
+                            onClick={() => handleVerify(user.id, user.is_verified)}
+                          >
+                            {user.is_verified ? 'Unverify' : 'Verify'}
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell className='text-right pr-4 sm:pr-6 py-3.5'>
+                        <div className='flex items-center justify-end gap-1'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-8 w-8 text-slate-500 hover:text-indigo-600 rounded-lg'
+                            onClick={() => openEditModal(user)}
+                            title='Edit Developer'
+                          >
+                            <Pencil className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg'
+                            onClick={() => setUserToDelete(user)}
+                            title='Delete Developer'
+                          >
+                            <Trash2 className='h-4 w-4' />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {filteredUsers.length === 0 && (
+              <div className='p-12 text-center text-slate-400 text-xs sm:text-sm'>
                 No curriculum developers found.
               </div>
             )}
             {totalPages > 1 && (
-              <div className='flex items-center justify-between border-t border-slate-100 px-4 py-3'>
-                <p className='text-xs text-slate-500'>
-                  Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total
-                </p>
+              <div className='flex flex-col sm:flex-row items-center justify-between gap-2.5 border-t border-slate-100 px-4 sm:px-6 py-3 text-xs text-slate-500'>
+                <p>Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total</p>
                 <div className='flex items-center gap-1'>
                   <Button
                     variant='outline'
                     size='icon'
-                    className='h-8 w-8'
+                    className='h-8 w-8 rounded-lg'
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
                   >
@@ -861,13 +842,13 @@ const Users = () => {
                     }, [])
                     .map((p, i) =>
                       p === '...' ? (
-                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-sm'>…</span>
+                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-xs'>…</span>
                       ) : (
                         <Button
                           key={p}
                           variant={currentPage === p ? 'default' : 'outline'}
                           size='icon'
-                          className='h-8 w-8 text-xs'
+                          className='h-8 w-8 text-xs rounded-lg'
                           onClick={() => setCurrentPage(p as number)}
                         >
                           {p}
@@ -877,7 +858,7 @@ const Users = () => {
                   <Button
                     variant='outline'
                     size='icon'
-                    className='h-8 w-8'
+                    className='h-8 w-8 rounded-lg'
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((p) => p + 1)}
                   >
@@ -890,81 +871,88 @@ const Users = () => {
         </TabsContent>
       </Tabs>
 
+      {/* Create Modal */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className='sm:max-w-md'>
+        <DialogContent className='w-[94vw] sm:max-w-md rounded-2xl p-4 sm:p-6'>
           <DialogHeader>
-            <DialogTitle>Create Curriculum Developer</DialogTitle>
+            <DialogTitle className='text-base sm:text-lg font-bold text-slate-900'>Create Curriculum Developer</DialogTitle>
           </DialogHeader>
-          <div className='space-y-4 py-4'>
-            <div className='space-y-2'>
-              <Label htmlFor='create-name'>Full Name</Label>
+          <div className='space-y-3.5 py-3'>
+            <div className='space-y-1.5'>
+              <Label htmlFor='create-name' className='text-xs font-semibold text-slate-600'>Full Name</Label>
               <Input
                 id='create-name'
+                placeholder='Enter full name'
+                className='h-10 rounded-xl border-slate-200'
                 value={createForm.full_name}
                 onChange={(e) =>
                   setCreateForm((prev) => ({ ...prev, full_name: e.target.value }))
                 }
               />
             </div>
-            <div className='space-y-2'>
-              <Label htmlFor='create-email'>Email</Label>
+            <div className='space-y-1.5'>
+              <Label htmlFor='create-email' className='text-xs font-semibold text-slate-600'>Email</Label>
               <Input
                 id='create-email'
                 type='email'
+                placeholder='name@domain.com'
+                className='h-10 rounded-xl border-slate-200'
                 value={createForm.email}
                 onChange={(e) =>
                   setCreateForm((prev) => ({ ...prev, email: e.target.value }))
                 }
               />
             </div>
-            <div className='space-y-2'>
-              <Label htmlFor='create-password'>Password</Label>
+            <div className='space-y-1.5'>
+              <Label htmlFor='create-password' className='text-xs font-semibold text-slate-600'>Password</Label>
               <div className='relative'>
                 <Input
                   id='create-password'
                   type={showPassword ? 'text' : 'password'}
+                  placeholder='Create a secure password'
                   value={createForm.password}
                   onChange={(e) =>
                     setCreateForm((prev) => ({ ...prev, password: e.target.value }))
                   }
-                  className='pr-10'
+                  className='pr-10 h-10 rounded-xl border-slate-200'
                 />
                 <button
                   type='button'
                   onClick={() => setShowPassword(!showPassword)}
-                  className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1'
                 >
                   {showPassword ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
                 </button>
               </div>
             </div>
-            <div className='space-y-2'>
-              <Label htmlFor='create-confirm-password'>Confirm Password</Label>
+            <div className='space-y-1.5'>
+              <Label htmlFor='create-confirm-password' className='text-xs font-semibold text-slate-600'>Confirm Password</Label>
               <div className='relative'>
                 <Input
                   id='create-confirm-password'
                   type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder='Repeat password'
                   value={createForm.confirm_password}
                   onChange={(e) =>
                     setCreateForm((prev) => ({ ...prev, confirm_password: e.target.value }))
                   }
-                  className='pr-10'
+                  className='pr-10 h-10 rounded-xl border-slate-200'
                 />
                 <button
                   type='button'
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1'
                 >
                   {showConfirmPassword ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
                 </button>
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant='outline' onClick={() => setCreateOpen(false)}>
+          <DialogFooter className='gap-2 sm:gap-0'>
+            <Button variant='outline' onClick={() => setCreateOpen(false)} className='rounded-xl min-h-[40px]'>
               Cancel
             </Button>
-            <Button onClick={handleCreateCurriculumDeveloper} disabled={saving}>
+            <Button onClick={handleCreateCurriculumDeveloper} disabled={saving} className='bg-indigo-600 hover:bg-indigo-700 rounded-xl min-h-[40px] font-semibold'>
               {saving && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
               Create User
             </Button>
@@ -972,18 +960,20 @@ const Users = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className='sm:max-w-xl'>
+        <DialogContent className='w-[94vw] sm:max-w-xl max-h-[88vh] overflow-y-auto rounded-2xl p-4 sm:p-6 custom-scrollbar'>
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
+            <DialogTitle className='text-base sm:text-lg font-bold text-slate-900'>Edit User Details</DialogTitle>
           </DialogHeader>
 
           {editingUser && (
-            <div className='space-y-4'>
-              <div className='space-y-2'>
-                <Label htmlFor='full-name'>Full Name</Label>
+            <div className='space-y-4 py-2'>
+              <div className='space-y-1.5'>
+                <Label htmlFor='full-name' className='text-xs font-semibold text-slate-600'>Full Name</Label>
                 <Input
                   id='full-name'
+                  className='h-10 rounded-xl border-slate-200'
                   value={form.full_name}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setForm((prev) => ({ ...prev, full_name: e.target.value }))
@@ -991,18 +981,20 @@ const Users = () => {
                 />
               </div>
 
-              <div className='space-y-2'>
-                <Label>Email</Label>
-                <Input value={editingUser.email} disabled />
+              <div className='space-y-1.5'>
+                <Label className='text-xs font-semibold text-slate-600'>Email</Label>
+                <Input value={editingUser.email} disabled className='h-10 rounded-xl bg-slate-50 border-slate-200 text-slate-500' />
               </div>
 
               {editingUser.role === 'student' && (
                 <>
-                  <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-                    <div className='space-y-2'>
-                      <Label htmlFor='degree'>Degree</Label>
+                  <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                    <div className='space-y-1.5'>
+                      <Label htmlFor='degree' className='text-xs font-semibold text-slate-600'>Degree</Label>
                       <Input
                         id='degree'
+                        placeholder='B.Tech, BCA, etc.'
+                        className='h-10 rounded-xl border-slate-200'
                         value={form.degree}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           setForm((prev) => ({
@@ -1012,11 +1004,13 @@ const Users = () => {
                         }
                       />
                     </div>
-                    <div className='space-y-2'>
-                      <Label htmlFor='year'>Batch Year</Label>
+                    <div className='space-y-1.5'>
+                      <Label htmlFor='year' className='text-xs font-semibold text-slate-600'>Batch Year</Label>
                       <Input
                         id='year'
                         type='number'
+                        placeholder='2026'
+                        className='h-10 rounded-xl border-slate-200'
                         value={form.year}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           setForm((prev) => ({ ...prev, year: e.target.value }))
@@ -1025,11 +1019,11 @@ const Users = () => {
                     </div>
                   </div>
 
-                  <div className='space-y-2'>
-                    <Label htmlFor='college'>College</Label>
+                  <div className='space-y-1.5'>
+                    <Label htmlFor='college' className='text-xs font-semibold text-slate-600'>College</Label>
                     <select
                       id='college'
-                      className='h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm'
+                      className='h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-300'
                       value={form.college_id}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                         setForm((prev) => ({
@@ -1051,11 +1045,11 @@ const Users = () => {
 
               {editingUser.role === 'facilitator' && (
                 <div className='space-y-2'>
-                  <Label>Assigned Colleges</Label>
-                  <small className='block mb-2 text-xs text-muted-foreground'>
-                    Click to toggle
+                  <Label className='text-xs font-semibold text-slate-600'>Assigned Colleges</Label>
+                  <small className='block text-xs text-slate-400'>
+                    Tap to toggle college assignment
                   </small>
-                  <div className='max-h-56 space-y-2 overflow-y-auto rounded-md border border-slate-200 p-3'>
+                  <div className='max-h-56 space-y-2 overflow-y-auto rounded-xl border border-slate-200 p-3 bg-slate-50/50 custom-scrollbar'>
                     {colleges.map((college) => {
                       const isSelected = form.facilitator_college_ids.includes(
                         college.id,
@@ -1064,10 +1058,10 @@ const Users = () => {
                         <button
                           key={college.id}
                           type='button'
-                          className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                          className={`w-full rounded-xl border px-3 py-2.5 text-left text-xs sm:text-sm font-medium transition-colors ${
                             isSelected
-                              ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                              : 'border-slate-200 hover:bg-slate-50'
+                              ? 'border-emerald-300 bg-emerald-50 text-emerald-800 font-semibold'
+                              : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
                           }`}
                           onClick={() => toggleFacilitatorCollege(college.id)}
                         >
@@ -1081,15 +1075,16 @@ const Users = () => {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className='gap-2 sm:gap-0'>
             <Button
               variant='outline'
               onClick={closeEditModal}
               disabled={saving}
+              className='rounded-xl min-h-[40px]'
             >
               Cancel
             </Button>
-            <Button onClick={saveUser} disabled={saving}>
+            <Button onClick={saveUser} disabled={saving} className='bg-indigo-600 hover:bg-indigo-700 rounded-xl min-h-[40px] font-semibold'>
               {saving ? (
                 <>
                   <Loader2 className='mr-2 h-4 w-4 animate-spin' />
@@ -1115,17 +1110,17 @@ const Users = () => {
       />
 
       <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className='w-[94vw] sm:max-w-md rounded-2xl'>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will move <strong>{userToDelete?.full_name}</strong> to the Recycle Bin. 
+            <AlertDialogTitle className='text-base sm:text-lg font-bold text-slate-900'>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription className='text-xs sm:text-sm text-slate-500'>
+              This will move <strong className='text-slate-800'>{userToDelete?.full_name}</strong> to the Recycle Bin. 
               They will not be able to log in, but their progress is preserved. You can restore them later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteUser} className="bg-red-600 hover:bg-red-700 text-white">
+            <AlertDialogCancel className='rounded-xl'>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} className="bg-red-600 hover:bg-red-700 text-white rounded-xl">
               Move to Bin
             </AlertDialogAction>
           </AlertDialogFooter>

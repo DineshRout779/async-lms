@@ -155,9 +155,9 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
-      <div className='flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl'>
-        <div className='flex items-center justify-between p-6 pb-4'>
+    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs'>
+      <div className='flex max-h-[90vh] w-[94vw] sm:max-w-2xl flex-col rounded-2xl bg-white shadow-xl overflow-hidden'>
+        <div className='flex items-center justify-between p-4 sm:p-6 pb-3 sm:pb-4 border-b border-slate-100'>
           <div>
             <h3 className='text-lg font-bold text-slate-900'>
               {editData ? 'Edit Assignment' : 'Create Assignment'}

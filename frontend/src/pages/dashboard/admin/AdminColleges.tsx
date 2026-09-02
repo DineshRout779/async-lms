@@ -103,12 +103,15 @@ export default function AdminColleges() {
   ====================== */
 
   return (
-    <div className='p-6 space-y-6 animate-in fade-in duration-500'>
+    <div className='space-y-4 sm:space-y-6 min-w-0 animate-in fade-in duration-300'>
       {/* Header */}
-      <div className='flex justify-between items-center'>
-        <h2 className='text-lg font-bold text-slate-900'>Colleges</h2>
+      <div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
+        <div>
+          <h2 className='text-lg sm:text-xl font-bold text-slate-900 tracking-tight'>Colleges</h2>
+          <p className='text-xs sm:text-sm text-slate-500'>Manage registered educational institutions</p>
+        </div>
         <Button
-          className='gap-2 bg-blue-600 hover:bg-blue-700'
+          className='gap-2 bg-blue-600 hover:bg-blue-700 min-h-[40px] rounded-xl font-semibold shadow-xs shrink-0'
           disabled={loading}
           onClick={() => {
             setEditingCollege(null);
@@ -120,108 +123,111 @@ export default function AdminColleges() {
       </div>
 
       {/* Table */}
-      <Card className='border-none shadow-sm overflow-hidden'>
+      <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white min-w-0'>
         <CardContent className='p-0'>
-          <Table>
-            <TableHeader className='bg-slate-50/50'>
-              <TableRow>
-                <TableHead className='pl-6'>College</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className='w-12' />
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {loading ? (
+          <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+            <Table className='min-w-[560px] text-xs sm:text-sm'>
+              <TableHeader className='bg-slate-50 border-b border-slate-100'>
                 <TableRow>
-                  <TableCell colSpan={4} className='h-64 text-center'>
-                    <Loader2 className='w-8 h-8 animate-spin text-blue-600 mx-auto' />
-                  </TableCell>
+                  <TableHead className='pl-4 sm:pl-6 py-3.5'>College</TableHead>
+                  <TableHead className='py-3.5'>Location</TableHead>
+                  <TableHead className='py-3.5'>Status</TableHead>
+                  <TableHead className='w-14 text-right pr-4 sm:pr-6 py-3.5' />
                 </TableRow>
-              ) : colleges.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className='h-64 text-center text-slate-500'
-                  >
-                    No colleges found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                colleges.length > 0 &&
-                colleges.map((college) => (
-                  <TableRow
-                    key={college.id}
-                    className='hover:bg-slate-50/50 cursor-default'
-                  >
-                    <TableCell className='pl-6'>
-                      <div className='flex items-center gap-4'>
-                        <div className='w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs'>
-                          {getInitials(college.name)}
-                        </div>
-                        <span className='font-bold text-slate-700 text-sm'>
-                          {college.name}
-                        </span>
-                      </div>
-                    </TableCell>
+              </TableHeader>
 
-                    <TableCell>
-                      <div className='flex items-center gap-1.5 text-slate-500 text-sm'>
-                        <MapPin className='w-3.5 h-3.5' />
-                        {college.city}
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <Badge
-                        className={
-                          college.is_verified
-                            ? 'bg-emerald-50 text-emerald-600'
-                            : 'bg-orange-50 text-orange-600'
-                        }
-                      >
-                        {college.is_verified ? 'Verified' : 'Pending'}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            aria-label='College actions'
-                          >
-                            <MoreHorizontal className='w-4 h-4' />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align='end'>
-                          <DropdownMenuItem onClick={() => setDetailId(college.id)}>
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setEditingCollege(college);
-                              setFormOpen(true);
-                            }}
-                          >
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className='text-red-600'
-                            onClick={() => setDeleteId(college.id)}
-                          >
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              <TableBody className='divide-y divide-slate-100'>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className='h-64 text-center'>
+                      <Loader2 className='w-8 h-8 animate-spin text-blue-600 mx-auto' />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : colleges.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className='h-64 text-center text-slate-400 text-xs sm:text-sm'
+                    >
+                      No colleges found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  colleges.map((college) => (
+                    <TableRow
+                      key={college.id}
+                      className='hover:bg-slate-50/60 transition-colors'
+                    >
+                      <TableCell className='pl-4 sm:pl-6 py-3.5'>
+                        <div className='flex items-center gap-3 sm:gap-4 min-w-0'>
+                          <div className='w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0 border border-blue-100'>
+                            {getInitials(college.name)}
+                          </div>
+                          <span className='font-semibold text-slate-800 text-xs sm:text-sm truncate'>
+                            {college.name}
+                          </span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className='py-3.5 whitespace-nowrap'>
+                        <div className='flex items-center gap-1.5 text-slate-500 text-xs sm:text-sm'>
+                          <MapPin className='w-3.5 h-3.5 text-slate-400 shrink-0' />
+                          <span>{college.city || '—'}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className='py-3.5 whitespace-nowrap'>
+                        <Badge
+                          className={
+                            college.is_verified
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60 font-semibold text-[11px]'
+                              : 'bg-orange-50 text-orange-700 border-orange-200/60 font-semibold text-[11px]'
+                          }
+                        >
+                          {college.is_verified ? 'Verified' : 'Pending'}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className='text-right pr-4 sm:pr-6 py-3.5'>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant='ghost'
+                              size='icon'
+                              className='h-8 w-8 text-slate-400 hover:text-slate-700 rounded-lg'
+                              aria-label='College actions'
+                            >
+                              <MoreHorizontal className='w-4 h-4' />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align='end' className='rounded-xl shadow-lg border border-slate-200'>
+                            <DropdownMenuItem onClick={() => setDetailId(college.id)} className='cursor-pointer'>
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditingCollege(college);
+                                setFormOpen(true);
+                              }}
+                              className='cursor-pointer'
+                            >
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className='text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer'
+                              onClick={() => setDeleteId(college.id)}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

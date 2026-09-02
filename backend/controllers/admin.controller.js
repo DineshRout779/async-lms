@@ -3330,9 +3330,17 @@ exports.getLockControlOverview = async (req, res) => {
 exports.setLockControlTopic = async (req, res) => {
   try {
     const { topicId, action } = req.params;
-    const { collegeId, batch } = req.query;
+    const collegeId = req.query.collegeId || req.body.collegeId;
+    const batch = req.query.batch || req.body.batch;
 
-    if (!['lock', 'unlock'].includes(action)) {
+    let isUnlocked;
+    if (action === 'unlock') {
+      isUnlocked = true;
+    } else if (action === 'lock') {
+      isUnlocked = false;
+    } else if (action === 'toggle' || action === 'set') {
+      isUnlocked = req.body.unlock !== undefined ? !!req.body.unlock : !!req.body.is_unlocked;
+    } else {
       return res.status(400).json({
         success: false,
         message: 'Invalid action',
@@ -3341,7 +3349,6 @@ exports.setLockControlTopic = async (req, res) => {
 
     const collegeParam = collegeId || null;
     const batchParam = batch ? parseInt(batch, 10) : null;
-    const isUnlocked = action === 'unlock';
     const isLocked = !isUnlocked;
 
     // 1. Update existing students' progress rows
@@ -3401,7 +3408,7 @@ exports.setLockControlTopic = async (req, res) => {
     });
     res.json({
       success: true,
-      message: `Topic ${action}ed successfully`,
+      message: `Topic ${isUnlocked ? 'unlocked' : 'locked'} successfully`,
     });
   } catch (error) {
     console.error('Error updating topic lock:', error.message, error.stack);
@@ -3419,9 +3426,17 @@ exports.setLockControlTopic = async (req, res) => {
 exports.setLockControlSubtopic = async (req, res) => {
   try {
     const { subtopicId, action } = req.params;
-    const { collegeId, batch } = req.query;
+    const collegeId = req.query.collegeId || req.body.collegeId;
+    const batch = req.query.batch || req.body.batch;
 
-    if (!['lock', 'unlock'].includes(action)) {
+    let isUnlocked;
+    if (action === 'unlock') {
+      isUnlocked = true;
+    } else if (action === 'lock') {
+      isUnlocked = false;
+    } else if (action === 'toggle' || action === 'set') {
+      isUnlocked = req.body.unlock !== undefined ? !!req.body.unlock : !!req.body.is_unlocked;
+    } else {
       return res.status(400).json({
         success: false,
         message: 'Invalid action',
@@ -3430,7 +3445,6 @@ exports.setLockControlSubtopic = async (req, res) => {
 
     const collegeParam = collegeId || null;
     const batchParam = batch ? parseInt(batch, 10) : null;
-    const isUnlocked = action === 'unlock';
     const isLocked = !isUnlocked;
 
     // 1. Update existing students' progress rows
