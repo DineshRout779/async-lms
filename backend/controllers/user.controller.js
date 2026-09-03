@@ -1,6 +1,7 @@
 const pool = require('../config/pg');
 const bcrypt = require('bcrypt');
 const { logAction } = require('../utils/auditLogger');
+const { calculateSubjectProgress } = require('../utils/progress');
 
 // @desc    Get subjects for a specific student
 exports.getUserSubjects = async (req, res) => {
@@ -20,24 +21,7 @@ exports.getUserSubjects = async (req, res) => {
          JOIN public.units u ON st.unit_id = u.id
          JOIN public.topics t ON u.topic_id = t.id 
          WHERE t.subject_id = s.id) as total_lessons,
-        -- Calculate progress using user_subtopic_progress table 
-        COALESCE(
-          (SELECT (COUNT(usp.id)::float / NULLIF((
-            SELECT COUNT(st2.id) 
-            FROM public.subtopics st2 
-            JOIN public.units u2 ON st2.unit_id = u2.id
-            JOIN public.topics t2 ON u2.topic_id = t2.id 
-            WHERE t2.subject_id = s.id
-          ), 0) * 100)
-           FROM public.user_subtopic_progress usp
-           JOIN public.subtopics st3 ON usp.subtopic_id = st3.id
-           JOIN public.units u3 ON st3.unit_id = u3.id
-           JOIN public.topics t3 ON u3.topic_id = t3.id
-           WHERE usp.user_id = $1 
-             AND t3.subject_id = s.id 
-             AND usp.is_completed = true -- Using the boolean from your schema 
-          ), 0
-        ) as progress_percent
+        us.progress_percent as progress_percent
       FROM public.subjects s
       INNER JOIN public.user_subjects us ON s.id = us.subject_id 
       WHERE us.user_id = $1 AND s.is_published = true AND s.is_deleted = false
@@ -224,12 +208,7 @@ exports.getAllUsers = async (req, res) => {
         COALESCE(student_meta.enrolled_courses, 0) as enrolled_courses,
         COALESCE(student_meta.completed_subtopics, 0) as completed_subtopics,
         COALESCE(student_meta.total_subtopics, 0) as total_subtopics,
-        CASE
-          WHEN COALESCE(student_meta.total_subtopics, 0) = 0 THEN 0
-          ELSE ROUND(
-            (student_meta.completed_subtopics::numeric / student_meta.total_subtopics) * 100
-          )::int
-        END as progress_percent,
+        COALESCE(student_meta.progress_percent, 0) as progress_percent,
         COALESCE(facilitator_meta.college_ids, '{}'::uuid[]) as facilitator_college_ids,
         COALESCE(facilitator_meta.college_names, '{}'::text[]) as facilitator_college_names
       FROM public.users u
@@ -239,15 +218,105 @@ exports.getAllUsers = async (req, res) => {
       LEFT JOIN LATERAL (
         SELECT
           COUNT(DISTINCT us.subject_id)::int as enrolled_courses,
-          COUNT(DISTINCT st.id) FILTER (WHERE usp.is_completed = true)::int as completed_subtopics,
-          COUNT(DISTINCT st.id)::int as total_subtopics
+          COALESCE(ROUND(AVG(us.progress_percent))::int, 0) as progress_percent,
+          
+          -- Calculate total items across enrolled courses
+          COALESCE((
+            SELECT COUNT(lc.id)::int FROM lesson_content lc
+            JOIN subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
+            JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+            JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+            JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+            WHERE us2.user_id = u.id AND lc.is_published = true AND lc.is_deleted = false
+          ), 0) + 
+          COALESCE((
+            SELECT COUNT(q.id)::int FROM quizzes q
+            JOIN units un ON q.unit_id = un.id AND un.is_deleted = false
+            JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+            JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+            WHERE us2.user_id = u.id AND q.is_deleted = false
+          ), 0) +
+          COALESCE((
+            SELECT COUNT(e.id)::int FROM exercises e
+            JOIN subtopics st ON e.subtopic_id = st.id AND st.is_deleted = false
+            JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+            JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+            JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+            WHERE us2.user_id = u.id AND e.is_deleted = false
+          ), 0) +
+          COALESCE((
+            SELECT COUNT(a.id)::int FROM assignments a
+            JOIN units un ON a.unit_id = un.id AND un.is_deleted = false
+            JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+            JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+            WHERE us2.user_id = u.id AND a.is_deleted = false
+          ), 0) +
+          COALESCE((
+            SELECT COUNT(p.id)::int FROM projects p
+            JOIN topics t ON p.topic_id = t.id AND t.is_deleted = false
+            JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+            WHERE us2.user_id = u.id AND p.is_deleted = false
+          ), 0) as total_subtopics,
+
+          -- Calculate completed items
+          COALESCE((
+            SELECT COUNT(DISTINCT ulp.lesson_content_id)::int FROM user_lesson_progress ulp
+            WHERE ulp.user_id = u.id AND ulp.is_completed = true 
+              AND ulp.lesson_content_id IN (
+                SELECT lc.id FROM lesson_content lc
+                JOIN subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
+                JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+                JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+                JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+                WHERE us2.user_id = u.id AND lc.is_published = true AND lc.is_deleted = false
+              )
+          ), 0) +
+          COALESCE((
+            SELECT COUNT(DISTINCT qa.quiz_id)::int FROM quiz_attempts qa
+            WHERE qa.user_id = u.id AND qa.is_passed = true
+              AND qa.quiz_id IN (
+                SELECT q.id FROM quizzes q
+                JOIN units un ON q.unit_id = un.id AND un.is_deleted = false
+                JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+                JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+                WHERE us2.user_id = u.id AND q.is_deleted = false
+              )
+          ), 0) +
+          COALESCE((
+            SELECT COUNT(DISTINCT es.exercise_id)::int FROM exercise_submissions es
+            WHERE es.user_id = u.id AND es.is_passed = true
+              AND es.exercise_id IN (
+                SELECT e.id FROM exercises e
+                JOIN subtopics st ON e.subtopic_id = st.id AND st.is_deleted = false
+                JOIN units un ON st.unit_id = un.id AND un.is_deleted = false
+                JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+                JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+                WHERE us2.user_id = u.id AND e.is_deleted = false
+              )
+          ), 0) +
+          COALESCE((
+            SELECT COUNT(DISTINCT asub.assignment_id)::int FROM assignment_submissions asub
+            WHERE asub.user_id = u.id
+              AND asub.assignment_id IN (
+                SELECT a.id FROM assignments a
+                JOIN units un ON a.unit_id = un.id AND un.is_deleted = false
+                JOIN topics t ON un.topic_id = t.id AND t.is_deleted = false
+                JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+                WHERE us2.user_id = u.id AND a.is_deleted = false
+              )
+          ), 0) +
+          COALESCE((
+            SELECT COUNT(DISTINCT ps.project_id)::int FROM project_submissions ps
+            WHERE ps.user_id = u.id
+              AND ps.project_id IN (
+                SELECT p.id FROM projects p
+                JOIN topics t ON p.topic_id = t.id AND t.is_deleted = false
+                JOIN user_subjects us2 ON t.subject_id = us2.subject_id
+                WHERE us2.user_id = u.id AND p.is_deleted = false
+              )
+          ), 0) as completed_subtopics
+
         FROM public.user_subjects us
-        LEFT JOIN public.topics t ON t.subject_id = us.subject_id
-        LEFT JOIN public.units un ON un.topic_id = t.id
-        LEFT JOIN public.subtopics st ON st.unit_id = un.id
-        LEFT JOIN public.user_subtopic_progress usp
-          ON usp.user_id = u.id
-          AND usp.subtopic_id = st.id
         WHERE us.user_id = u.id
       ) as student_meta ON r.role_key = 'STUDENT'
       LEFT JOIN LATERAL (

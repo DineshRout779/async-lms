@@ -241,6 +241,7 @@ exports.getCourseStructure = async (req, res) => {
         st.slug AS subtopic_slug,
         st.description AS subtopic_description,
         st.order_index AS subtopic_order,
+        COALESCE(usp.is_completed, false) AS subtopic_is_completed,
 
         -- Lesson Content (published only)
         lc.id AS lesson_id,
@@ -290,6 +291,7 @@ exports.getCourseStructure = async (req, res) => {
       LEFT JOIN projects p ON t.id = p.topic_id AND p.is_deleted = false
       LEFT JOIN units u ON t.id = u.topic_id AND u.is_deleted = false
       LEFT JOIN subtopics st ON u.id = st.unit_id AND st.is_deleted = false
+      LEFT JOIN user_subtopic_progress usp ON usp.subtopic_id = st.id AND usp.user_id = $2
       LEFT JOIN lesson_content lc
         ON st.id = lc.subtopic_id AND lc.is_published = true AND lc.is_deleted = false
       LEFT JOIN user_lesson_progress ulp
@@ -351,7 +353,7 @@ exports.getCourseStructure = async (req, res) => {
           slug: row.subtopic_slug,
           description: row.subtopic_description,
           order_index: row.subtopic_order,
-          is_completed: false,
+          is_completed: !!row.subtopic_is_completed,
           lesson_content: [],
           exercises: [],
         });
@@ -370,9 +372,6 @@ exports.getCourseStructure = async (req, res) => {
             version: row.lesson_version,
             video_url: row.lesson_video_url,
           });
-        }
-        if (row.lesson_is_completed) {
-          subtopic.is_completed = true;
         }
       }
 

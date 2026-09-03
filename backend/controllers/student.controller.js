@@ -5,6 +5,7 @@ const pool = require('../config/pg');
 const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
 const { getTotalXP } = require('../services/xpService');
+const { calculateSubjectProgress, syncUserSubjectProgress } = require('../utils/progress');
 // ============================================
 // HELPERS
 // ============================================
@@ -166,17 +167,17 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       EXISTS (
         SELECT 1
         FROM lesson_content
-        WHERE subtopic_id = $1 AND is_published = true
+        WHERE subtopic_id = $1 AND is_published = true AND is_deleted = false
       ) AS has_lesson,
       EXISTS (
         SELECT 1
         FROM quizzes
-        WHERE unit_id = (SELECT unit_id FROM subtopics WHERE id = $1)
+        WHERE unit_id = (SELECT unit_id FROM subtopics WHERE id = $1 AND is_deleted = false) AND is_deleted = false
       ) AS has_quiz,
       EXISTS (
         SELECT 1
         FROM exercises
-        WHERE subtopic_id = $1
+        WHERE subtopic_id = $1 AND is_deleted = false
       ) AS has_exercise
   `;
 
@@ -192,6 +193,7 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
         AND lc.subtopic_id = $2
         AND ulp.is_completed = true
         AND lc.is_published = true
+        AND lc.is_deleted = false
     ) AS lesson_done
   `;
 
@@ -201,8 +203,9 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       FROM quiz_attempts qa
       INNER JOIN quizzes q ON q.id = qa.quiz_id
       WHERE qa.user_id = $1
-        AND q.unit_id = (SELECT unit_id FROM subtopics WHERE id = $2)
+        AND q.unit_id = (SELECT unit_id FROM subtopics WHERE id = $2 AND is_deleted = false)
         AND qa.is_passed = true
+        AND q.is_deleted = false
     ) AS quiz_done
   `;
 
@@ -214,6 +217,7 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
       WHERE es.user_id = $1
         AND e.subtopic_id = $2
         AND es.is_passed = true
+        AND e.is_deleted = false
     ) AS exercise_done
   `;
 
@@ -437,10 +441,8 @@ exports.getMyProgress = async (req, res) => {
       units: Array.from(topic.units.values()),
     }));
 
-    const overallProgress =
-      totalSubtopics > 0
-        ? Math.round((completedSubtopics / totalSubtopics) * 100)
-        : 0;
+    const progressData = await calculateSubjectProgress(userId, subjectId);
+    const overallProgress = progressData.percent;
 
     // Get user stats
     const statsQuery = `
@@ -475,8 +477,8 @@ exports.getMyProgress = async (req, res) => {
       success: true,
       data: {
         overall_progress: overallProgress,
-        total_subtopics: totalSubtopics,
-        completed_subtopics: completedSubtopics,
+        total_subtopics: progressData.total,
+        completed_subtopics: progressData.completed,
         total_points: totalPoints,
         last_accessed_subtopic_slug: lastAccessedSlug,
         stats: stats,
@@ -608,15 +610,26 @@ exports.completeLesson = async (req, res) => {
     }
 
     const subtopicResult = await pool.query(
-      'SELECT subtopic_id FROM lesson_content WHERE id = $1 LIMIT 1',
+      `SELECT lc.subtopic_id, t.subject_id 
+       FROM lesson_content lc
+       JOIN subtopics st ON lc.subtopic_id = st.id
+       JOIN units u ON st.unit_id = u.id
+       JOIN topics t ON u.topic_id = t.id
+       WHERE lc.id = $1 LIMIT 1`,
       [lessonId],
     );
 
-    if (subtopicResult.rows[0]?.subtopic_id) {
-      await checkAndCompleteSubtopic(
-        userId,
-        subtopicResult.rows[0].subtopic_id,
-      );
+    const subtopicId = subtopicResult.rows[0]?.subtopic_id;
+    const subjectId = subtopicResult.rows[0]?.subject_id;
+
+    if (subtopicId) {
+      await checkAndCompleteSubtopic(userId, subtopicId);
+    }
+    if (subjectId) {
+      const newPct = await syncUserSubjectProgress(userId, subjectId);
+      console.log(`[Progress] lesson ${lessonId} completed → userId=${userId} subjectId=${subjectId} percent=${newPct}%`);
+    } else {
+      console.warn(`[Progress] lesson ${lessonId} → could not resolve subjectId for userId=${userId}`);
     }
 
     res.json({
@@ -848,17 +861,29 @@ exports.submitQuizAttempt = async (req, res) => {
 
     // Trigger completion check for ALL subtopics in the unit (not just the first)
     const unitResult = await pool.query(
-      'SELECT unit_id FROM quizzes WHERE id = $1 LIMIT 1',
+      `SELECT q.unit_id, t.subject_id FROM quizzes q
+       INNER JOIN units u ON q.unit_id = u.id
+       INNER JOIN topics t ON u.topic_id = t.id
+       WHERE q.id = $1 LIMIT 1`,
       [quizId],
     );
-    if (unitResult.rows[0]?.unit_id) {
+    const unitId = unitResult.rows[0]?.unit_id;
+    const subjectId = unitResult.rows[0]?.subject_id;
+
+    if (unitId) {
       const allSubtopics = await pool.query(
         'SELECT id FROM subtopics WHERE unit_id = $1 ORDER BY order_index',
-        [unitResult.rows[0].unit_id],
+        [unitId],
       );
       for (const row of allSubtopics.rows) {
         await checkAndCompleteSubtopic(userId, row.id);
       }
+    }
+    if (subjectId) {
+      const newPct = await syncUserSubjectProgress(userId, subjectId);
+      console.log(`[Progress] quiz ${quizId} submitted → userId=${userId} subjectId=${subjectId} percent=${newPct}%`);
+    } else {
+      console.warn(`[Progress] quiz ${quizId} → could not resolve subjectId for userId=${userId}`);
     }
 
     res.json({
@@ -1458,6 +1483,22 @@ exports.submitExercise = async (req, res) => {
 
     if (exercise.subtopic_id) {
       await checkAndCompleteSubtopic(userId, exercise.subtopic_id);
+    }
+    // BUG FIX: exercises use subtopic_id (not unit_id), so join via subtopics -> units -> topics
+    const subjectIdRes = await pool.query(
+      `SELECT t.subject_id FROM exercises e
+       INNER JOIN subtopics st ON e.subtopic_id = st.id
+       INNER JOIN units u ON st.unit_id = u.id
+       INNER JOIN topics t ON u.topic_id = t.id
+       WHERE e.id = $1 LIMIT 1`,
+      [exerciseId]
+    );
+    const subjectId = subjectIdRes.rows[0]?.subject_id;
+    if (subjectId) {
+      const newPct = await syncUserSubjectProgress(userId, subjectId);
+      console.log(`[Progress] exercise ${exerciseId} synced → userId=${userId} subjectId=${subjectId} percent=${newPct}%`);
+    } else {
+      console.warn(`[Progress] exercise ${exerciseId} → could not resolve subjectId for userId=${userId}`);
     }
 
     res.json({
@@ -2176,6 +2217,22 @@ exports.submitAssignment = async (req, res) => {
       entityId: id,
       details: { submission_link: submission_link.trim() },
     });
+
+    const subjectIdRes = await pool.query(
+      `SELECT t.subject_id FROM assignments a
+       INNER JOIN units u ON a.unit_id = u.id
+       INNER JOIN topics t ON u.topic_id = t.id
+       WHERE a.id = $1 LIMIT 1`,
+      [id]
+    );
+    const subjectId = subjectIdRes.rows[0]?.subject_id;
+    if (subjectId) {
+      const newPct = await syncUserSubjectProgress(userId, subjectId);
+      console.log(`[Progress] assignment ${id} submitted → userId=${userId} subjectId=${subjectId} percent=${newPct}%`);
+    } else {
+      console.warn(`[Progress] assignment ${id} → could not resolve subjectId for userId=${userId}`);
+    }
+
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting assignment:', error);
@@ -2319,6 +2376,21 @@ exports.submitCapstone = async (req, res) => {
       entityId: projectId,
       details: { submission_link: submission_link.trim() },
     });
+
+    const subjectIdRes = await pool.query(
+      `SELECT t.subject_id FROM projects p
+       INNER JOIN topics t ON p.topic_id = t.id
+       WHERE p.id = $1 LIMIT 1`,
+      [projectId]
+    );
+    const subjectId = subjectIdRes.rows[0]?.subject_id;
+    if (subjectId) {
+      const newPct = await syncUserSubjectProgress(userId, subjectId);
+      console.log(`[Progress] capstone ${projectId} submitted → userId=${userId} subjectId=${subjectId} percent=${newPct}%`);
+    } else {
+      console.warn(`[Progress] capstone ${projectId} → could not resolve subjectId for userId=${userId}`);
+    }
+
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Error submitting capstone:', error);

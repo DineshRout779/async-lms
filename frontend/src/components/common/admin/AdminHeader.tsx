@@ -92,7 +92,11 @@ export default function AdminHeader({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className='cursor-pointer gap-2 text-zinc-600 focus:text-blue-600 focus:bg-red-50'
-                onClick={() => navigate('/dashboard/admin/profile')}
+                onClick={() => navigate(
+                  currentUser?.role === 'curriculum_developer' 
+                    ? '/dashboard/curriculum-developer/profile' 
+                    : '/dashboard/admin/profile'
+                )}
               >
                 <User size={16} /> Profile
               </DropdownMenuItem>

@@ -11,6 +11,7 @@ export interface User {
   degree?: string;
   year?: number;
   onboarding_step: string;
+  must_change_password?: boolean;
   current_streak?: number;
   total_points?: number;
 }

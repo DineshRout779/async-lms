@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Eye, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive } from 'lucide-react';
+import { Pencil, Eye, EyeOff, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import FacilitatorProfileDialog from '@/components/common/FacilitatorProfileDialog';
 import RecycleBinModal from '@/components/common/RecycleBinModal';
@@ -42,8 +42,8 @@ import apiClient from '@/services/api';
 import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 
-type UserRole = 'student' | 'facilitator' | 'admin';
-type ActiveTab = 'student' | 'facilitator';
+type UserRole = 'student' | 'facilitator' | 'admin' | 'curriculum_developer';
+type ActiveTab = 'student' | 'facilitator' | 'curriculum_developer';
 
 interface College {
   id: string;
@@ -100,6 +100,15 @@ const Users = () => {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [facilitatorProfileId, setFacilitatorProfileId] = useState<string | null>(null);
   const [isBinOpen, setIsBinOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    confirm_password: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserRow | null>(null);
   const [form, setForm] = useState<EditForm>({
     full_name: '',
@@ -130,6 +139,10 @@ const Users = () => {
     fetchUsers();
   }, [currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCollegeId]);
+
   const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return users
@@ -159,6 +172,10 @@ const Users = () => {
   );
   const facilitatorCount = useMemo(
     () => users.filter((u) => u.role === 'facilitator').length,
+    [users],
+  );
+  const curriculumDevCount = useMemo(
+    () => users.filter((u) => u.role === 'curriculum_developer').length,
     [users],
   );
 
@@ -239,6 +256,38 @@ const Users = () => {
       toast.error(
         getErrorMessage(error, 'Failed to update verification status'),
       );
+    }
+  };
+
+  const handleCreateCurriculumDeveloper = async () => {
+    if (!createForm.full_name.trim() || !createForm.email.trim() || !createForm.password || !createForm.confirm_password) {
+      toast.error('All fields are required');
+      return;
+    }
+
+    if (createForm.password !== createForm.confirm_password) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await apiClient.post('/admin/curriculum-developer', {
+        full_name: createForm.full_name.trim(),
+        email: createForm.email.trim(),
+        password: createForm.password,
+      });
+
+      toast.success('Curriculum Developer created successfully');
+      setCreateOpen(false);
+      setCreateForm({ full_name: '', email: '', password: '', confirm_password: '' });
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+      await fetchUsers();
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to create user'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -342,13 +391,18 @@ const Users = () => {
         </div>
 
         <div className='flex items-center gap-4'>
+          {activeTab === 'curriculum_developer' && (
+            <Button onClick={() => setCreateOpen(true)} className="gap-2">
+              Create User
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setIsBinOpen(true)} className="gap-2">
             <Archive className="h-4 w-4 text-slate-500" />
             Recycle Bin
           </Button>
           <p className='text-sm font-medium text-slate-500'>
             Showing <span className='text-slate-900'>{filteredUsers.length}</span>{' '}
-            {activeTab === 'student' ? 'students' : 'facilitators'}
+            {activeTab === 'student' ? 'students' : activeTab === 'facilitator' ? 'facilitators' : 'developers'}
           </p>
         </div>
       </div>
@@ -365,6 +419,9 @@ const Users = () => {
           <TabsTrigger value='student'>Students ({studentCount})</TabsTrigger>
           <TabsTrigger value='facilitator'>
             Facilitators ({facilitatorCount})
+          </TabsTrigger>
+          <TabsTrigger value='curriculum_developer'>
+            AI Curriculum ({curriculumDevCount})
           </TabsTrigger>
         </TabsList>
 
@@ -698,7 +755,222 @@ const Users = () => {
             )}
           </Card>
         </TabsContent>
+        <TabsContent value='curriculum_developer'>
+          <Card className='overflow-hidden border-none shadow-sm'>
+            <Table>
+              <TableHeader className='bg-slate-50/50'>
+                <TableRow>
+                  <TableHead className='font-bold uppercase'>
+                    Developer
+                  </TableHead>
+                  <TableHead className='font-bold uppercase'>Joined</TableHead>
+                  <TableHead className='font-bold uppercase'>Status</TableHead>
+                  <TableHead className='text-right font-bold uppercase'>
+                    Actions
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className='bg-white'>
+                {paginatedUsers.map((user) => (
+                  <TableRow key={user.id} className='hover:bg-slate-50/60'>
+                    <TableCell>
+                      <p className='font-bold text-slate-900'>
+                        {user.full_name}
+                      </p>
+                      <p className='text-xs text-slate-500'>{user.email}</p>
+                    </TableCell>
+                    <TableCell className='text-sm text-slate-500'>
+                      {new Date(user.created_at).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      <div className='flex items-center gap-2'>
+                        <Badge
+                          className={
+                            user.is_verified
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-yellow-50 text-yellow-700'
+                          }
+                        >
+                          {user.is_verified ? 'Verified' : 'Pending'}
+                        </Badge>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          className='h-7 text-[10px]'
+                          onClick={() =>
+                            handleVerify(user.id, user.is_verified)
+                          }
+                        >
+                          {user.is_verified ? 'Unverify' : 'Verify'}
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell className='text-right'>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        className='text-slate-500 hover:text-blue-600'
+                        onClick={() => openEditModal(user)}
+                      >
+                        <Pencil className='h-4 w-4' />
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        className='text-slate-400 hover:text-red-600 hover:bg-red-50'
+                        onClick={() => setUserToDelete(user)}
+                      >
+                        <Trash2 className='h-4 w-4' />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {filteredUsers.length === 0 && (
+              <div className='p-16 text-center text-slate-400'>
+                No curriculum developers found.
+              </div>
+            )}
+            {totalPages > 1 && (
+              <div className='flex items-center justify-between border-t border-slate-100 px-4 py-3'>
+                <p className='text-xs text-slate-500'>
+                  Page {currentPage} of {totalPages} &mdash; {filteredUsers.length} total
+                </p>
+                <div className='flex items-center gap-1'>
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='h-8 w-8'
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className='h-4 w-4' />
+                  </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('...');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      p === '...' ? (
+                        <span key={`ellipsis-${i}`} className='px-1 text-slate-400 text-sm'>…</span>
+                      ) : (
+                        <Button
+                          key={p}
+                          variant={currentPage === p ? 'default' : 'outline'}
+                          size='icon'
+                          className='h-8 w-8 text-xs'
+                          onClick={() => setCurrentPage(p as number)}
+                        >
+                          {p}
+                        </Button>
+                      )
+                    )}
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='h-8 w-8'
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                  >
+                    <ChevronRight className='h-4 w-4' />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className='sm:max-w-md'>
+          <DialogHeader>
+            <DialogTitle>Create Curriculum Developer</DialogTitle>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='create-name'>Full Name</Label>
+              <Input
+                id='create-name'
+                value={createForm.full_name}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({ ...prev, full_name: e.target.value }))
+                }
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='create-email'>Email</Label>
+              <Input
+                id='create-email'
+                type='email'
+                value={createForm.email}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({ ...prev, email: e.target.value }))
+                }
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='create-password'>Password</Label>
+              <div className='relative'>
+                <Input
+                  id='create-password'
+                  type={showPassword ? 'text' : 'password'}
+                  value={createForm.password}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, password: e.target.value }))
+                  }
+                  className='pr-10'
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowPassword(!showPassword)}
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'
+                >
+                  {showPassword ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                </button>
+              </div>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='create-confirm-password'>Confirm Password</Label>
+              <div className='relative'>
+                <Input
+                  id='create-confirm-password'
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={createForm.confirm_password}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, confirm_password: e.target.value }))
+                  }
+                  className='pr-10'
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'
+                >
+                  {showConfirmPassword ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                </button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateCurriculumDeveloper} disabled={saving}>
+              {saving && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+              Create User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className='sm:max-w-xl'>

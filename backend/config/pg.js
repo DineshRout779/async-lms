@@ -28,6 +28,11 @@ pool.on('error', (err, client) => {
     console.log(`📁 Target database: ${connectedDb}`);
 
     // Idempotent schema migrations
+    await client.query(`
+      INSERT INTO roles (role_key, role_name) 
+      VALUES ('CURRICULUM_DEVELOPER', 'Curriculum Developer') 
+      ON CONFLICT (role_key) DO NOTHING;
+    `);
     await client.query(
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id text UNIQUE`,
     );
@@ -52,6 +57,7 @@ pool.on('error', (err, client) => {
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
       
       CREATE TABLE IF NOT EXISTS otp_codes (
         id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -72,6 +78,107 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE project_submissions ADD COLUMN IF NOT EXISTS submission_link text`,
     );
+    // Ensure unique constraint on facilitator_colleges for upsert safety
+    console.log('[Migration] Ensuring unique constraint on facilitator_colleges(facilitator_id, college_id)...');
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'facilitator_colleges'::regclass
+            AND conname = 'facilitator_colleges_facilitator_id_college_id_key'
+        ) THEN
+          ALTER TABLE facilitator_colleges
+            ADD CONSTRAINT facilitator_colleges_facilitator_id_college_id_key
+            UNIQUE (facilitator_id, college_id);
+          RAISE NOTICE '[Migration] Created unique constraint on facilitator_colleges.';
+        END IF;
+      END $$;
+    `);
+    console.log('[Migration] Ensuring progress_percent column on user_subjects...');
+    await client.query(`
+      ALTER TABLE user_subjects ADD COLUMN IF NOT EXISTS progress_percent INT NOT NULL DEFAULT 0;
+    `);
+    console.log('[Migration] Backfilling progress_percent for existing user_subjects rows...');
+    await client.query(`
+      WITH computed AS (
+        SELECT 
+          us.user_id,
+          us.subject_id,
+          ((SELECT COUNT(*) FROM lesson_content lc
+            JOIN subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
+            JOIN units u ON st.unit_id = u.id AND u.is_deleted = false
+            JOIN topics t ON u.topic_id = t.id AND t.is_deleted = false
+            WHERE t.subject_id = us.subject_id AND lc.is_published = true AND lc.is_deleted = false) +
+           (SELECT COUNT(*) FROM quizzes q
+            JOIN units u ON q.unit_id = u.id AND u.is_deleted = false
+            JOIN topics t ON u.topic_id = t.id AND t.is_deleted = false
+            WHERE t.subject_id = us.subject_id AND q.is_deleted = false) +
+           (SELECT COUNT(*) FROM exercises e
+            JOIN subtopics st ON e.subtopic_id = st.id AND st.is_deleted = false
+            JOIN units u ON st.unit_id = u.id AND u.is_deleted = false
+            JOIN topics t ON u.topic_id = t.id AND t.is_deleted = false
+            WHERE t.subject_id = us.subject_id AND e.is_deleted = false) +
+           (SELECT COUNT(*) FROM assignments a
+            JOIN units u ON a.unit_id = u.id AND u.is_deleted = false
+            JOIN topics t ON u.topic_id = t.id AND t.is_deleted = false
+            WHERE t.subject_id = us.subject_id AND a.is_deleted = false) +
+           (SELECT COUNT(*) FROM projects p
+            JOIN topics t ON p.topic_id = t.id AND t.is_deleted = false
+            WHERE t.subject_id = us.subject_id AND p.is_deleted = false)) AS total_items,
+
+          ((SELECT COUNT(DISTINCT ulp.lesson_content_id) FROM user_lesson_progress ulp
+            WHERE ulp.user_id = us.user_id AND ulp.is_completed = true 
+              AND ulp.lesson_content_id IN (
+                SELECT lc.id FROM lesson_content lc
+                JOIN subtopics st ON lc.subtopic_id = st.id AND st.is_deleted = false
+                JOIN units u ON st.unit_id = u.id AND u.is_deleted = false
+                JOIN topics t ON u.topic_id = t.id AND t.is_deleted = false
+                WHERE t.subject_id = us.subject_id AND lc.is_published = true AND lc.is_deleted = false
+              )) +
+           (SELECT COUNT(DISTINCT qa.quiz_id) FROM quiz_attempts qa
+            WHERE qa.user_id = us.user_id AND qa.is_passed = true
+              AND qa.quiz_id IN (
+                SELECT q.id FROM quizzes q
+                JOIN units u ON q.unit_id = u.id AND u.is_deleted = false
+                JOIN topics t ON u.topic_id = t.id AND t.is_deleted = false
+                WHERE t.subject_id = us.subject_id AND q.is_deleted = false
+              )) +
+           (SELECT COUNT(DISTINCT es.exercise_id) FROM exercise_submissions es
+            WHERE es.user_id = us.user_id AND es.is_passed = true
+              AND es.exercise_id IN (
+                SELECT e.id FROM exercises e
+                JOIN subtopics st ON e.subtopic_id = st.id AND st.is_deleted = false
+                JOIN units u ON st.unit_id = u.id AND u.is_deleted = false
+                JOIN topics t ON u.topic_id = t.id AND t.is_deleted = false
+                WHERE t.subject_id = us.subject_id AND e.is_deleted = false
+              )) +
+           (SELECT COUNT(DISTINCT asub.assignment_id) FROM assignment_submissions asub
+            WHERE asub.user_id = us.user_id
+              AND asub.assignment_id IN (
+                SELECT a.id FROM assignments a
+                JOIN units u ON a.unit_id = u.id AND u.is_deleted = false
+                JOIN topics t ON u.topic_id = t.id AND t.is_deleted = false
+                WHERE t.subject_id = us.subject_id AND a.is_deleted = false
+              )) +
+           (SELECT COUNT(DISTINCT ps.project_id) FROM project_submissions ps
+            WHERE ps.user_id = us.user_id
+              AND ps.project_id IN (
+                SELECT p.id FROM projects p
+                JOIN topics t ON p.topic_id = t.id AND t.is_deleted = false
+                WHERE t.subject_id = us.subject_id AND p.is_deleted = false
+              ))) AS completed_items
+        FROM user_subjects us
+      )
+      UPDATE user_subjects us
+      SET progress_percent = CASE 
+        WHEN c.total_items = 0 THEN 0 
+        ELSE ROUND((c.completed_items::float / c.total_items) * 100)::int 
+      END
+      FROM computed c
+      WHERE us.user_id = c.user_id AND us.subject_id = c.subject_id;
+    `);
+    console.log('[Migration] progress_percent backfill complete.');
     await client.query(
       `ALTER TABLE exercises ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb`,
     );
