@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import apiClient from '@/services/api';
+import { Square } from 'lucide-react';
 
 type Result = {
   submission_id?: string;
@@ -43,6 +44,27 @@ const FeedbackCell = ({ feedback }: { feedback: string | object | null }) => {
     return <span>{feedback as string}</span>;
   }
 
+  // If summary is itself a stringified JSON (from legacy DB records), safely unwrap it
+  if (typeof parsed.summary === 'string' && parsed.summary.trim().startsWith('{')) {
+    try {
+      const inner = JSON.parse(parsed.summary);
+      if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+        parsed = {
+          ...parsed,
+          ...inner,
+          summary: inner.summary || inner.feedback || parsed.summary,
+          strengths: (Array.isArray(inner.strengths) && inner.strengths.length > 0) ? inner.strengths : parsed.strengths,
+          issues: (Array.isArray(inner.issues) && inner.issues.length > 0) ? inner.issues : parsed.issues,
+          breakdown: (Array.isArray(inner.breakdown) && inner.breakdown.length > 0)
+            ? inner.breakdown
+            : (Array.isArray(inner.rubric_breakdown) && inner.rubric_breakdown.length > 0 ? inner.rubric_breakdown : parsed.breakdown),
+        };
+      }
+    } catch {
+      // not valid JSON, keep as is
+    }
+  }
+
   // Handle arrays (e.g. syntax or validation errors from the evaluator)
   if (Array.isArray(parsed)) {
     return (
@@ -54,25 +76,27 @@ const FeedbackCell = ({ feedback }: { feedback: string | object | null }) => {
     );
   }
 
+  const breakdownData = Array.isArray(parsed.breakdown) && parsed.breakdown.length > 0
+    ? parsed.breakdown
+    : (Array.isArray(parsed.rubric_breakdown) && parsed.rubric_breakdown.length > 0 ? parsed.rubric_breakdown : []);
+
   const summary: string | undefined = parsed.summary || parsed.feedback;
   const lists: { label: string; items: string[]; color?: string }[] = [
     {
       label: '✅ Strengths',
-      items: parsed.strengths || [],
+      items: Array.isArray(parsed.strengths) ? parsed.strengths : [],
       color: 'text-emerald-600',
     },
     {
       label: '⚠️ Issues',
-      items: parsed.issues || [],
+      items: Array.isArray(parsed.issues) ? parsed.issues : [],
       color: 'text-red-500',
     },
     {
       label: '📊 Score Breakdown',
-      items: Array.isArray(parsed.breakdown)
-        ? parsed.breakdown.map(
-            (b: any) => `${b.item}: ${b.awarded}/${b.max} pts — ${b.reason}`
-          )
-        : [],
+      items: breakdownData.map(
+        (b: any) => `${b.item || b.criterion || b.name || 'Criterion'}: ${b.awarded ?? b.points_awarded ?? b.score ?? 0}/${b.max ?? b.max_points ?? b.weight ?? ''} pts — ${b.reason || b.feedback || ''}`
+      ),
       color: 'text-slate-600',
     },
   ].filter((l) => l.items.length > 0);
@@ -113,12 +137,16 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
   const [bulkEvaluatorType, setBulkEvaluatorType] = useState<string>('');
   const [bulkReEvaluating, setBulkReEvaluating] = useState(false);
+  const [stopping, setStopping] = useState(false);
 
   // Keep refs to latest values so setInterval callbacks are never stale
   const onRefreshRef = useRef(onRefresh);
   const resultsRef = useRef(results);
   useEffect(() => { onRefreshRef.current = onRefresh; }, [onRefresh]);
   useEffect(() => { resultsRef.current = results; }, [results]);
+
+  const hasPending = results.some((r) => r.status === 'pending' && r.id);
+  const hasActiveEvaluation = hasPending || bulkReEvaluating || evaluation?.status === 'running';
 
   // Poll for updates if any row is pending — interval is only created once per evaluation
   useEffect(() => {
@@ -132,8 +160,8 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
       // Only poll for REAL pending rows (those with an `id` in evaluation_results).
       // Virtual rows (new submissions not yet queued) have no `id` — they need
       // manual 'Evaluate Selected', not automatic polling.
-      const hasPending = resultsRef.current.some((r) => r.status === 'pending' && r.id);
-      if (!hasPending || retries >= MAX_RETRIES) {
+      const isStillPending = resultsRef.current.some((r) => r.status === 'pending' && r.id);
+      if (!isStillPending || retries >= MAX_RETRIES) {
         clearInterval(interval);
         return;
       }
@@ -183,9 +211,27 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
     }
   };
 
+  const handleStopEvaluation = async () => {
+    if (!evaluation?.id && !assignmentId) return;
+    if (!window.confirm('Are you sure you want to stop the ongoing evaluation?')) return;
+
+    try {
+      setStopping(true);
+      await apiClient.post('/evaluations/stop', {
+        evaluationId: evaluation?.id,
+        assignmentId: assignmentId
+      });
+      onRefresh?.();
+    } catch (err: any) {
+      alert("Failed to stop evaluation: " + (err.response?.data?.message || err.message));
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedSubmissions(results.map(r => r.submission_id || r.id || ''));
+      setSelectedSubmissions(results.map(r => r.submission_id || r.id || '').filter(Boolean));
     } else {
       setSelectedSubmissions([]);
     }
@@ -217,12 +263,23 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
               <option value='fullstack'>Fullstack</option>
             </select>
             <button 
-              className="text-sm px-4 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="text-sm px-4 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
               onClick={handleBulkReevaluate}
-              disabled={bulkReEvaluating || selectedSubmissions.length === 0}
+              disabled={bulkReEvaluating || stopping || selectedSubmissions.length === 0}
             >
               {bulkReEvaluating ? 'Evaluating...' : (evaluation?.id ? 'Re-evaluate Selected' : 'Evaluate Selected')}
             </button>
+            {hasActiveEvaluation && (
+              <button 
+                className="text-sm px-3.5 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5 transition-colors font-medium shadow-sm"
+                onClick={handleStopEvaluation}
+                disabled={stopping}
+                title="Stop ongoing evaluations"
+              >
+                <Square size={13} className="fill-current" />
+                {stopping ? 'Stopping...' : 'Stop Evaluation'}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -262,13 +319,15 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
               <td className="p-3">{item.student_name}</td>
               <td className="p-3">
                 {item.status === 'pending' && item.id ? (
-                  <span className="text-yellow-600">Pending...</span>
+                  <span className="text-yellow-600 font-medium">Pending...</span>
                 ) : item.status === 'pending' && !item.id ? (
                   <span className="text-orange-500" title="Submitted after evaluation started — select and click Evaluate Selected">Not evaluated</span>
+                ) : item.status === 'cancelled' ? (
+                  <span className="text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded text-xs">Stopped</span>
                 ) : item.status === 'failed' ? (
-                  <span className="text-red-600">Failed</span>
+                  <span className="text-red-600 font-medium">Failed</span>
                 ) : (
-                  <span className="text-green-600">Evaluated</span>
+                  <span className="text-green-600 font-medium">Evaluated</span>
                 )}
               </td>
               <td className="p-3">{item.marks}</td>

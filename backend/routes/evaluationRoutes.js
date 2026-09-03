@@ -11,7 +11,8 @@ const {
   generateTestCases,
   generateRubric,
   reEvaluateSubmission,
-  getResultsByAssignment
+  getResultsByAssignment,
+  stopEvaluation
 } = require("../controllers/evaluation.controller");
 const verifyToken = require("../middlewares/verfiyToken");
 const isAdminOrFacilitator = require("../middlewares/isAdminOrFacilitator");
@@ -29,6 +30,10 @@ router.get('/dump-db', async (req, res) => {
 
 // 🚀 Run evaluation
 router.post("/run", runEvaluation);
+
+// 🛑 Stop / Cancel evaluation
+router.post("/stop", stopEvaluation);
+router.post("/:id/stop", stopEvaluation);
 
 // 🚀 Re-evaluate single submission
 router.post("/re-evaluate", reEvaluateSubmission);

@@ -442,7 +442,16 @@ exports.syncEvaluationStatus = async (req, res) => {
               finalData?.error ||
               'Evaluation completed successfully.';
             if (typeof feedback === 'string') {
-              feedback = { summary: feedback, strengths: [], issues: [], breakdown: [] };
+              try {
+                const parsedFb = JSON.parse(feedback);
+                if (parsedFb && typeof parsedFb === 'object') {
+                  feedback = parsedFb;
+                } else {
+                  feedback = { summary: feedback, strengths: [], issues: [], breakdown: [] };
+                }
+              } catch {
+                feedback = { summary: feedback, strengths: [], issues: [], breakdown: [] };
+              }
             }
           } else if (jobState === 'failed') {
             feedback = { summary: `Evaluation Failed: ${jobData.failedReason || 'Unknown error'}`, strengths: [], issues: [], breakdown: [] };
@@ -1057,22 +1066,43 @@ exports.reEvaluateSubmission = async (req, res) => {
     const assignment = assignmentRes.rows[0];
     if (!assignment) throw new Error("Assignment not found");
 
-    // Fetch the specific submissions
+    // Fetch the specific submissions (support either submission_id or evaluation_results.id)
     const queryStr = isCollegeAssignment
       ? `SELECT s.id as submission_id, s.submission_link, s.student_id as user_id, u.full_name as student_name
          FROM college_assignment_submissions s
          JOIN users u ON s.student_id = u.id
-         WHERE s.id = ANY($1)`
+         WHERE s.id = ANY($1)
+            OR s.id IN (SELECT submission_id FROM evaluation_results WHERE id = ANY($1) AND evaluation_id = $2)
+            OR s.student_id IN (SELECT student_id FROM evaluation_results WHERE id = ANY($1) AND evaluation_id = $2)`
       : `SELECT s.id as submission_id, s.submission_link, s.user_id, u.full_name as student_name
          FROM assignment_submissions s
          JOIN users u ON s.user_id = u.id
-         WHERE s.id = ANY($1)`;
+         WHERE s.id = ANY($1)
+            OR s.id IN (SELECT submission_id FROM evaluation_results WHERE id = ANY($1) AND evaluation_id = $2)
+            OR s.user_id IN (SELECT student_id FROM evaluation_results WHERE id = ANY($1) AND evaluation_id = $2)`;
          
-    const submissionsRes = await client.query(queryStr, [submissionIds]);
+    const submissionsRes = await client.query(queryStr, [submissionIds, evaluationId]);
     const submissions = submissionsRes.rows;
 
     if (!submissions.length) {
-      throw new Error('Submissions not found');
+      // Fallback: fetch any active submissions for this evaluation if IDs were slightly mismatched
+      const fallbackQuery = isCollegeAssignment
+        ? `SELECT s.id as submission_id, s.submission_link, s.student_id as user_id, u.full_name as student_name
+           FROM college_assignment_submissions s
+           JOIN users u ON s.student_id = u.id
+           JOIN evaluation_results er ON er.submission_id = s.id OR er.student_id = s.student_id
+           WHERE er.evaluation_id = $1`
+        : `SELECT s.id as submission_id, s.submission_link, s.user_id, u.full_name as student_name
+           FROM assignment_submissions s
+           JOIN users u ON s.user_id = u.id
+           JOIN evaluation_results er ON er.submission_id = s.id OR er.student_id = s.user_id
+           WHERE er.evaluation_id = $1`;
+      const fallbackRes = await client.query(fallbackQuery, [evaluationId]);
+      if (fallbackRes.rows.length > 0) {
+        submissions.push(...fallbackRes.rows);
+      } else {
+        throw new Error('Submissions not found for re-evaluation');
+      }
     }
 
     const validSubmissions = submissions.filter((s) => !!s.submission_link);
@@ -1243,3 +1273,72 @@ exports.reEvaluateSubmission = async (req, res) => {
     client.release();
   }
 };
+
+// 🛑 Stop / Cancel in-progress evaluation
+exports.stopEvaluation = async (req, res) => {
+  const { evaluationId, assignmentId } = req.body;
+  const id = req.params.id || evaluationId;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let targetEvalId = id;
+
+    if (!targetEvalId && assignmentId) {
+      const evalRes = await client.query(
+        `SELECT id FROM evaluations 
+         WHERE assignment_id = $1 OR college_assignment_id = $1 
+         ORDER BY created_at DESC LIMIT 1`,
+        [assignmentId]
+      );
+      if (evalRes.rows.length > 0) {
+        targetEvalId = evalRes.rows[0].id;
+      }
+    }
+
+    if (!targetEvalId) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'Evaluation ID or Assignment ID is required.' });
+    }
+
+    const cancelFeedback = JSON.stringify({
+      summary: 'Evaluation was stopped by facilitator.',
+      strengths: [],
+      issues: ['Evaluation stopped by facilitator before completion.'],
+      breakdown: []
+    });
+
+    // Mark pending submissions as stopped/cancelled
+    const updateResultsRes = await client.query(
+      `UPDATE evaluation_results 
+       SET status = 'cancelled', marks = 0, feedback = $1::jsonb 
+       WHERE evaluation_id = $2 AND status = 'pending'
+       RETURNING id`,
+      [cancelFeedback, targetEvalId]
+    );
+
+    // Update evaluation status
+    await client.query(
+      `UPDATE evaluations 
+       SET status = 'cancelled' 
+       WHERE id = $1`,
+      [targetEvalId]
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({
+      success: true,
+      message: `Evaluation stopped successfully. ${updateResultsRes.rowCount} pending submission(s) cancelled.`,
+      cancelledCount: updateResultsRes.rowCount
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Stop evaluation error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  } finally {
+    client.release();
+  }
+};
+
