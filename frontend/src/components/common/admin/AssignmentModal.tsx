@@ -28,6 +28,34 @@ interface AssignmentModalProps {
   loading?: boolean;
 }
 
+const utf8_to_b64 = (str: string) => {
+  return window.btoa(unescape(encodeURIComponent(str)));
+};
+
+const b64_to_utf8 = (str: string) => {
+  return decodeURIComponent(escape(window.atob(str)));
+};
+
+const getInitialTestCases = (testCasesData: any) => {
+  if (!testCasesData) return '';
+  let obj = testCasesData;
+  if (typeof obj === 'string') {
+    try {
+      obj = JSON.parse(obj);
+    } catch {
+      return obj;
+    }
+  }
+  if (obj && obj.specFile) {
+    try {
+      return b64_to_utf8(obj.specFile);
+    } catch {
+      return JSON.stringify(obj, null, 2);
+    }
+  }
+  return typeof obj === 'object' ? JSON.stringify(obj, null, 2) : obj;
+};
+
 const AssignmentModal: React.FC<AssignmentModalProps> = ({
   isOpen,
   onClose,
@@ -41,7 +69,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
   const [maxScore, setMaxScore] = useState(editData?.max_score ?? 100);
   const [evaluatorType, setEvaluatorType] = useState<string>(editData?.evaluator_type || '');
   const [testCases, setTestCases] = useState<string>(
-    editData?.test_cases ? (typeof editData.test_cases === 'string' ? editData.test_cases : JSON.stringify(editData.test_cases, null, 2)) : ''
+    editData?.test_cases ? getInitialTestCases(editData.test_cases) : ''
   );
   const [rubric, setRubric] = useState<string>(
     editData?.rubric ? (typeof editData.rubric === 'string' ? editData.rubric : JSON.stringify(editData.rubric, null, 2)) : ''
@@ -56,7 +84,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
       setInstructions(editData?.instructions ?? '');
       setMaxScore(editData?.max_score ?? 100);
       setEvaluatorType(editData?.evaluator_type || '');
-      setTestCases(editData?.test_cases ? (typeof editData.test_cases === 'string' ? editData.test_cases : JSON.stringify(editData.test_cases, null, 2)) : '');
+      setTestCases(editData?.test_cases ? getInitialTestCases(editData.test_cases) : '');
       setRubric(editData?.rubric ? (typeof editData.rubric === 'string' ? editData.rubric : JSON.stringify(editData.rubric, null, 2)) : '');
     }
   }, [isOpen, editData]);
@@ -120,11 +148,27 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
       toast.error('Max score must be greater than 0');
       return;
     }
-    if (testCases.trim()) {
+
+    let finalTestCases = testCases.trim();
+    const upperType = (evaluatorType || '').toUpperCase();
+    if (upperType === 'REACT' || upperType === 'AI' || upperType === 'FULLSTACK' || upperType === 'BACKEND') {
+      const isJs = !finalTestCases.startsWith('{') && !finalTestCases.startsWith('[');
+      if (isJs && finalTestCases) {
+        try {
+          const specFileB64 = utf8_to_b64(finalTestCases);
+          finalTestCases = JSON.stringify({ specFile: specFileB64, testCases: [] }, null, 2);
+        } catch (e) {
+          toast.error('Failed to encode test spec file');
+          return;
+        }
+      }
+    }
+
+    if (finalTestCases) {
       try {
-        JSON.parse(testCases);
+        JSON.parse(finalTestCases);
       } catch (e) {
-        toast.error('Test Cases must be valid JSON');
+        toast.error('Test Cases must be valid JSON or JavaScript Spec');
         return;
       }
     }
@@ -141,7 +185,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({
       instructions: instructions.trim(),
       max_score: maxScore,
       evaluator_type: evaluatorType || null,
-      test_cases: testCases.trim() || null,
+      test_cases: finalTestCases || null,
       rubric: rubric.trim() || null
     });
     setTitle('');

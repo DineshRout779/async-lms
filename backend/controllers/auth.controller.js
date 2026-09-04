@@ -854,7 +854,7 @@ exports.getMe = async (req, res) => {
 
   try {
     const userRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified,
+      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified, u.must_change_password,
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified,
               c.name AS college_name,
@@ -867,7 +867,7 @@ exports.getMe = async (req, res) => {
        LEFT JOIN user_streaks us ON us.user_id = u.id
        LEFT JOIN points_log pl ON pl.user_id = u.id
        WHERE u.id = $1
-       GROUP BY u.id, u.full_name, u.email, r.role_key, u.onboarding_step, u.is_verified,
+       GROUP BY u.id, u.full_name, u.email, r.role_key, u.onboarding_step, u.is_verified, u.must_change_password,
                 sp.college_id, sp.degree, sp.year, c.is_verified, c.name, us.current_streak`,
       [userID],
     );
@@ -1342,12 +1342,37 @@ exports.resetPassword = async (req, res) => {
 };
 
 exports.changePassword = async (req, res) => {
-  const { password } = req.body;
-  if (!password) {
-    return res.status(400).json({ message: 'New password is required' });
+  const { password, current_password } = req.body;
+  if (!password || typeof password !== 'string' || password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters long' });
   }
   try {
     const userId = req.user.id;
+
+    // Verify user exists and check if this is a forced reset or standard password change
+    const userCheck = await pool.query(
+      'SELECT id, password_hash, must_change_password FROM users WHERE id = $1 AND deleted_at IS NULL',
+      [userId]
+    );
+
+    if (userCheck.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const dbUser = userCheck.rows[0];
+    const isForcedReset = dbUser.must_change_password === true || req.user.scope === 'password_reset_only';
+
+    // Normal users must verify their current password
+    if (!isForcedReset) {
+      if (!current_password) {
+        return res.status(400).json({ message: 'Current password is required' });
+      }
+      const isMatch = await bcrypt.compare(current_password, dbUser.password_hash);
+      if (!isMatch) {
+        return res.status(400).json({ message: 'Incorrect current password' });
+      }
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     
     // Update password, remove flag, increment token version

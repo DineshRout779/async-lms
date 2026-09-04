@@ -1,4 +1,4 @@
-import { LayoutDashboard, Sparkles, X } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router';
 import Logo from '../Logo';
@@ -6,11 +6,10 @@ import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 
 const menuItems = [
-  { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/curriculum-developer' },
   {
     name: 'AI Curriculum',
     icon: Sparkles,
-    path: '/dashboard/curriculum-developer/ai-curriculum',
+    path: '/dashboard/curriculum-developer',
   },
 ];
 

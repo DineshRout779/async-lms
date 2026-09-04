@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, Fragment } from 'react';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
+import { Search, ChevronLeft, ChevronRight, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import apiClient from '@/services/api';
@@ -9,7 +9,7 @@ type Result = {
   id?: string;
   student_name: string;
   marks: number;
-  feedback: string;
+  feedback: string | Record<string, any> | null;
   submission_link?: string;
   submission_file_url?: string;
   status?: string;
@@ -23,21 +23,48 @@ type Props = {
 };
 
 // Evaluator feedback comes back in different shapes depending on evaluator
-// type: a plain string (Python), or a JSON string with a `summary`/`feedback`
-// field plus optional `strengths`/`issues`/`breakdown` arrays (JS/Visual).
+// type: a plain string (Python), or a JSON string/object with `summary`/`feedback`
+// field plus optional `strengths`/`issues`/`breakdown` arrays (JS/Visual/React).
 // Parse it defensively and render something readable either way.
-const FeedbackCell = ({ feedback }: { feedback: string }) => {
+const FeedbackCell = ({ feedback }: { feedback: string | object | null }) => {
   if (!feedback) return <span className="text-slate-400">—</span>;
 
   let parsed: any = null;
-  try {
-    parsed = JSON.parse(feedback);
-  } catch {
-    // not JSON — plain string feedback, render as-is
+
+  if (typeof feedback === 'object') {
+    // pg already deserialized JSONB
+    parsed = feedback;
+  } else {
+    try {
+      parsed = JSON.parse(feedback as string);
+    } catch {
+      // not JSON — plain string feedback, render as-is
+    }
   }
 
   if (!parsed || typeof parsed !== 'object') {
-    return <span>{feedback}</span>;
+    return <span>{feedback as string}</span>;
+  }
+
+  // If summary is itself a stringified JSON (from legacy DB records), safely unwrap it
+  if (typeof parsed.summary === 'string' && parsed.summary.trim().startsWith('{')) {
+    try {
+      const inner = JSON.parse(parsed.summary);
+      if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+        parsed = {
+          ...parsed,
+          ...inner,
+          summary: inner.summary || inner.feedback || parsed.summary,
+          strengths: (Array.isArray(inner.strengths) && inner.strengths.length > 0) ? inner.strengths : parsed.strengths,
+          issues: (Array.isArray(inner.issues) && inner.issues.length > 0) ? inner.issues : parsed.issues,
+          breakdown: (Array.isArray(inner.breakdown) && inner.breakdown.length > 0)
+            ? inner.breakdown
+            : (Array.isArray(inner.rubric_breakdown) && inner.rubric_breakdown.length > 0 ? inner.rubric_breakdown : parsed.breakdown),
+        };
+      }
+    } catch {
+      // not valid JSON, keep as is
+    }
   }
 
   // Handle arrays (e.g. syntax or validation errors from the evaluator)
@@ -51,30 +78,49 @@ const FeedbackCell = ({ feedback }: { feedback: string }) => {
     );
   }
 
+  const breakdownData = Array.isArray(parsed.breakdown) && parsed.breakdown.length > 0
+    ? parsed.breakdown
+    : (Array.isArray(parsed.rubric_breakdown) && parsed.rubric_breakdown.length > 0 ? parsed.rubric_breakdown : []);
+
   const summary: string | undefined = parsed.summary || parsed.feedback;
-  const lists: { label: string; items: string[] }[] = [
-    { label: 'Strengths', items: parsed.strengths || [] },
-    { label: 'Issues', items: parsed.issues || [] },
+  const lists: { label: string; items: string[]; color?: string }[] = [
     {
-      label: 'Breakdown',
-      items: Array.isArray(parsed.breakdown)
-        ? parsed.breakdown.map((b: any) => `${b.item}: ${b.awarded}/${b.max} — ${b.reason}`)
-        : [],
+      label: '✅ Strengths',
+      items: Array.isArray(parsed.strengths) ? parsed.strengths : [],
+      color: 'text-emerald-600',
+    },
+    {
+      label: '⚠️ Issues',
+      items: Array.isArray(parsed.issues) ? parsed.issues : [],
+      color: 'text-red-500',
+    },
+    {
+      label: '📊 Score Breakdown',
+      items: breakdownData.map(
+        (b: any) => `${b.item || b.criterion || b.name || 'Criterion'}: ${b.awarded ?? b.points_awarded ?? b.score ?? 0}/${b.max ?? b.max_points ?? b.weight ?? ''} pts — ${b.reason || b.feedback || ''}`
+      ),
+      color: 'text-slate-600',
     },
   ].filter((l) => l.items.length > 0);
 
   return (
     <div className="max-w-xs">
-      {summary && <p>{summary}</p>}
+      {summary && <p className="text-sm text-slate-700 leading-snug">{summary}</p>}
       {lists.length > 0 && (
-        <details className="mt-1 text-xs text-slate-500">
-          <summary className="cursor-pointer select-none">Details</summary>
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer select-none font-medium text-slate-500 hover:text-slate-700">
+            View Details
+          </summary>
           {lists.map((l) => (
-            <div key={l.label} className="mt-1">
-              <span className="font-medium">{l.label}:</span>
-              <ul className="list-disc list-inside">
+            <div key={l.label} className="mt-2">
+              <span className={`font-semibold ${l.color || 'text-slate-600'}`}>
+                {l.label}:
+              </span>
+              <ul className="list-disc list-inside mt-0.5 space-y-0.5">
                 {l.items.map((item, i) => (
-                  <li key={i}>{item}</li>
+                  <li key={i} className={l.color || 'text-slate-500'}>
+                    {item}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -88,30 +134,66 @@ const FeedbackCell = ({ feedback }: { feedback: string }) => {
   );
 };
 
+
 const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) => {
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
   const [bulkEvaluatorType, setBulkEvaluatorType] = useState<string>('');
   const [bulkReEvaluating, setBulkReEvaluating] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 5;
 
-  // Poll for updates if any row is pending
+  // Keep refs to latest values so setInterval callbacks are never stale
+  const onRefreshRef = useRef(onRefresh);
+  const resultsRef = useRef(results);
+  useEffect(() => { onRefreshRef.current = onRefresh; }, [onRefresh]);
+  useEffect(() => { resultsRef.current = results; }, [results]);
+
+  const hasPending = results.some((r) => r.status === 'pending' && r.id);
+  const hasActiveEvaluation = hasPending || bulkReEvaluating || evaluation?.status === 'running';
+
+  // Poll for updates if any row is pending — interval is only created once per evaluation
   useEffect(() => {
-    const hasPending = results.some((r) => r.status === 'pending');
-    if (!hasPending || !evaluation?.id || !onRefresh) return;
+    if (!evaluation?.id) return;
+
+    let retries = 0;
+    const MAX_RETRIES = 200; // ~10 minutes at 3s interval (defense against large class queue delays)
+    let lastCompletedCount = -1; // Track progress — only refresh when count increases
 
     const interval = setInterval(async () => {
+      // Only poll for REAL pending rows (those with an `id` in evaluation_results).
+      // Virtual rows (new submissions not yet queued) have no `id` — they need
+      // manual 'Evaluate Selected', not automatic polling.
+      const isStillPending = resultsRef.current.some((r) => r.status === 'pending' && r.id);
+      if (!isStillPending || retries >= MAX_RETRIES) {
+        clearInterval(interval);
+        return;
+      }
+      retries++;
       try {
-        await apiClient.get(`/evaluations/sync/${evaluation.id}`);
-        onRefresh();
+        const { data } = await apiClient.get(`/evaluations/sync/${evaluation.id}`);
+        const newCount = data?.progress?.completed ?? 0;
+        const isFinished = data?.progress?.isFinished ?? false;
+        if (isFinished) {
+          // Evaluation done — refresh once and stop polling entirely
+          onRefreshRef.current?.();
+          clearInterval(interval);
+          return;
+        }
+        // Only refresh when a new job just completed (count went up)
+        if (newCount > lastCompletedCount) {
+          lastCompletedCount = newCount;
+          onRefreshRef.current?.();
+        }
       } catch (err) {
         console.error('Failed to sync', err);
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [results, evaluation, onRefresh]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evaluation?.id]);
 
   const filteredResults = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -154,9 +236,27 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
     }
   };
 
+  const handleStopEvaluation = async () => {
+    if (!evaluation?.id && !assignmentId) return;
+    if (!window.confirm('Are you sure you want to stop the ongoing evaluation?')) return;
+
+    try {
+      setStopping(true);
+      await apiClient.post('/evaluations/stop', {
+        evaluationId: evaluation?.id,
+        assignmentId: assignmentId
+      });
+      onRefresh?.();
+    } catch (err: any) {
+      alert("Failed to stop evaluation: " + (err.response?.data?.message || err.message));
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedSubmissions(filteredResults.map(r => r.submission_id || r.id || ''));
+      setSelectedSubmissions(filteredResults.map(r => r.submission_id || r.id || '').filter(Boolean));
     } else {
       setSelectedSubmissions([]);
     }
@@ -203,10 +303,21 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
             <button 
               className="text-xs sm:text-sm font-semibold px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[36px] transition shadow-xs"
               onClick={handleBulkReevaluate}
-              disabled={bulkReEvaluating || selectedSubmissions.length === 0}
+              disabled={bulkReEvaluating || stopping || selectedSubmissions.length === 0}
             >
               {bulkReEvaluating ? 'Evaluating...' : (evaluation?.id ? 'Re-evaluate Selected' : 'Evaluate Selected')}
             </button>
+            {hasActiveEvaluation && (
+              <button 
+                className="text-xs sm:text-sm px-3.5 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors font-medium shadow-sm min-h-[36px]"
+                onClick={handleStopEvaluation}
+                disabled={stopping}
+                title="Stop ongoing evaluations"
+              >
+                <Square size={13} className="fill-current" />
+                {stopping ? 'Stopping...' : 'Stop Evaluation'}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -236,8 +347,12 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {item.status === 'pending' ? (
+                    {item.status === 'pending' && item.id ? (
                       <span className="text-yellow-600 text-[10px] font-bold bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-200">Pending...</span>
+                    ) : item.status === 'pending' && !item.id ? (
+                      <span className="text-orange-600 text-[10px] font-bold bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200" title="Submitted after evaluation started — select and click Evaluate Selected">Not evaluated</span>
+                    ) : item.status === 'cancelled' ? (
+                      <span className="text-slate-500 text-[10px] font-bold bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">Stopped</span>
                     ) : item.status === 'failed' ? (
                       <span className="text-red-600 text-[10px] font-bold bg-red-50 px-2 py-0.5 rounded-full border border-red-200">Failed</span>
                     ) : (
@@ -319,12 +434,16 @@ const StudentTable = ({ results, evaluation, assignmentId, onRefresh }: Props) =
                   </td>
                   <td className="p-3 font-medium text-slate-900">{item.student_name}</td>
                   <td className="p-3 text-center">
-                    {item.status === 'pending' ? (
-                      <span className="text-yellow-600 text-xs font-semibold bg-yellow-50 px-2 py-0.5 rounded-full">Pending...</span>
+                    {item.status === 'pending' && item.id ? (
+                      <span className="text-yellow-600 text-xs font-semibold bg-yellow-50 px-2.5 py-0.5 rounded-full border border-yellow-200">Pending...</span>
+                    ) : item.status === 'pending' && !item.id ? (
+                      <span className="text-orange-600 text-xs font-semibold bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-200" title="Submitted after evaluation started — select and click Evaluate Selected">Not evaluated</span>
+                    ) : item.status === 'cancelled' ? (
+                      <span className="text-slate-600 text-xs font-semibold bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">Stopped</span>
                     ) : item.status === 'failed' ? (
-                      <span className="text-red-600 text-xs font-semibold bg-red-50 px-2 py-0.5 rounded-full">Failed</span>
+                      <span className="text-red-600 text-xs font-semibold bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200">Failed</span>
                     ) : (
-                      <span className="text-green-600 text-xs font-semibold bg-green-50 px-2 py-0.5 rounded-full">Evaluated</span>
+                      <span className="text-green-700 text-xs font-semibold bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">Evaluated</span>
                     )}
                   </td>
                   <td className="p-3 text-center font-bold text-slate-900">{item.marks}</td>
