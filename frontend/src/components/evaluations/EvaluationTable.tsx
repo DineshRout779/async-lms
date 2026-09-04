@@ -112,7 +112,98 @@ const EvaluationTable = ({
 
   return (
     <div className='mt-4 sm:mt-6 bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden min-w-0'>
-      <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+      {/* Mobile View (< md): Clean Responsive Cards with NO horizontal scroll */}
+      <div className='md:hidden divide-y divide-slate-100'>
+        {assignments.length === 0 ? (
+          <div className='py-12 text-center text-slate-500 text-xs sm:text-sm'>
+            No assignments found matching filters.
+          </div>
+        ) : (
+          assignments.map((item, index) => (
+            <div
+              key={`${item.id}-${item.evaluation_id ?? 'none'}-${index}`}
+              className='p-3.5 space-y-2.5 bg-white'
+            >
+              {/* Header: #, Title, Type & Status */}
+              <div className='flex items-start justify-between gap-2'>
+                <div className='min-w-0 flex-1 flex items-start gap-2'>
+                  <span className='text-[11px] font-extrabold text-slate-400 mt-0.5 shrink-0'>
+                    #{(page - 1) * PAGE_SIZE + index + 1}
+                  </span>
+                  <div className='min-w-0 flex-1'>
+                    <p className='font-bold text-xs sm:text-sm text-slate-900 line-clamp-2 leading-snug'>
+                      {item.title}
+                    </p>
+                  </div>
+                </div>
+                <div className='flex items-center gap-1.5 shrink-0'>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
+                      item.type === 'unit'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {item.type === 'unit' ? 'Curriculum' : 'College'}
+                  </span>
+                  <StatusBadge status={item.status} />
+                </div>
+              </div>
+
+              {/* Details Sub-box */}
+              <div className='text-[11px] bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 space-y-1'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='font-semibold text-slate-800 truncate'>
+                    {item.course || 'General Domain'}
+                  </span>
+                  {item.college_name && (
+                    <span className='text-slate-500 font-medium shrink-0 max-w-[140px] truncate' title={item.college_name}>
+                      {item.college_name}
+                    </span>
+                  )}
+                </div>
+                <div className='flex items-center justify-between gap-2 pt-1 border-t border-slate-200/50 text-slate-500'>
+                  <span className='font-medium text-slate-700'>
+                    <span className='font-bold text-slate-900'>{item.submissions_count ?? 0}</span> Submissions
+                  </span>
+                  {item.batches_count !== undefined && item.batches_count > 0 && (
+                    <span className='text-slate-400'>
+                      {item.batches_count} Batches
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Bar */}
+              <div className='flex items-center justify-end gap-2 pt-1 border-t border-slate-50'>
+                <button
+                  onClick={() => {
+                    setSubmissionsAssignment({
+                      id: item.id,
+                      title: item.title,
+                    });
+                    setSubmissionsOpen(true);
+                  }}
+                  className='inline-flex items-center gap-1 text-xs text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg font-medium transition'
+                  title='View student submissions'
+                >
+                  <Eye size={13} /> Submissions
+                </button>
+                <Link
+                  to={`/dashboard/facilitator/results/${item.id}`}
+                  className='inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 font-semibold px-2.5 py-1.5 rounded-lg transition'
+                  title='View Evaluation Results'
+                >
+                  <FileText size={14} /> View Results
+                </Link>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Table View (>= md) */}
+      <div className='hidden md:block overflow-x-auto custom-scrollbar w-full min-w-0'>
         <table className='w-full min-w-[780px] text-xs sm:text-sm border-separate border-spacing-0'>
           <thead className='text-slate-500 text-[11px] sm:text-[12px] uppercase bg-slate-50/60'>
             <tr>

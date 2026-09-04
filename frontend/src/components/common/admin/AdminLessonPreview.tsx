@@ -2,13 +2,7 @@ import { X, Loader2, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-
-const getYouTubeEmbedUrl = (url: string): string | null => {
-  const match = url.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([^&?/\s]+)/,
-  );
-  return match ? `https://www.youtube.com/embed/${match[1]}?rel=0` : null;
-};
+import { getYouTubeEmbedUrl } from '@/utils/youtube';
 
 const AdminLessonPreviewModal = ({
   isOpen,

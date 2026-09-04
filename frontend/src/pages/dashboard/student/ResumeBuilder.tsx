@@ -155,9 +155,12 @@ function ActionBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className='flex items-center gap-1.5 text-sm text-slate-600 border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
+      title={label}
+      aria-label={label}
+      className='flex items-center gap-1.5 text-xs sm:text-sm text-slate-600 border border-slate-200 bg-white hover:bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0 shadow-2xs'
     >
-      {icon} {label}
+      {icon}
+      <span className='hidden sm:inline font-medium'>{label}</span>
     </button>
   );
 }
@@ -311,49 +314,63 @@ export default function ResumeBuilder() {
     <div className='flex flex-col h-full bg-[#f7f8fc]'>
       {/* Header */}
       <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 bg-white border-b border-slate-100 shrink-0'>
-        <div>
-          <h1 className='text-base sm:text-lg font-bold text-[#1e2653]'>Resume Workspace</h1>
-          <p className='text-[11px] sm:text-xs text-slate-400 mt-0.5'>
-            ATS-optimized resume builder with AI assistance
-          </p>
+        <div className='flex items-center justify-between gap-2'>
+          <div>
+            <h1 className='text-base sm:text-lg font-bold text-[#1e2653]'>Resume Workspace</h1>
+            <p className='text-[11px] sm:text-xs text-slate-400 mt-0.5'>
+              ATS-optimized resume builder with AI assistance
+            </p>
+          </div>
+
+          {/* Quick Primary Button on Mobile */}
+          <div className='sm:hidden shrink-0'>
+            <button
+              onClick={() => setShowForm(true)}
+              className='flex items-center gap-1.5 bg-[#333d7c] hover:bg-[#1e2653] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-xs'
+            >
+              <Send size={12} />
+              {resumeData ? 'Regenerate' : 'Build Resume'}
+            </button>
+          </div>
         </div>
+
+        {/* Action Toolbar */}
         <div className='flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 [&::-webkit-scrollbar]:hidden'>
           <button
-            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            className='lg:hidden flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg shrink-0 transition-colors'
-          >
-            <SlidersHorizontal size={13} />
-            ATS & Tools
-          </button>
-          <ActionBtn
-            icon={<Maximize2 size={14} />}
-            label='Full Preview'
-            onClick={() => setShowFullPreview(true)}
-            disabled={!resumeData}
-          />
-          <ActionBtn
-            icon={<CheckSquare size={14} />}
-            label='ATS Score'
-            onClick={() =>
-              resumeData
-                ? setAtsResult(calcLocalATS(resumeData))
-                : toast.error('Generate resume first.')
-            }
-            disabled={!resumeData}
-          />
-          <ActionBtn
-            icon={<Download size={14} />}
-            label='Download PDF'
-            onClick={handleExportPDF}
-            disabled={!resumeData}
-          />
-          <button
             onClick={() => setShowForm(true)}
-            className='flex items-center gap-1.5 sm:gap-2 bg-[#333d7c] hover:bg-[#1e2653] text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shrink-0 transition-colors'
+            className='hidden sm:flex items-center gap-1.5 sm:gap-2 bg-[#333d7c] hover:bg-[#1e2653] text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shrink-0 transition-colors shadow-xs'
           >
             <Send size={13} />
             {resumeData ? 'Regenerate' : 'Build Resume'}
           </button>
+
+          <button
+            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            className='lg:hidden flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg shrink-0 transition-colors'
+          >
+            <SlidersHorizontal size={13} />
+            ATS & Tools
+          </button>
+
+          {resumeData && (
+            <>
+              <ActionBtn
+                icon={<Maximize2 size={14} />}
+                label='Full Preview'
+                onClick={() => setShowFullPreview(true)}
+              />
+              <ActionBtn
+                icon={<CheckSquare size={14} />}
+                label='ATS Score'
+                onClick={() => setAtsResult(calcLocalATS(resumeData))}
+              />
+              <ActionBtn
+                icon={<Download size={14} />}
+                label='Download PDF'
+                onClick={handleExportPDF}
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -551,48 +568,48 @@ export default function ResumeBuilder() {
               />
             </div>
           ) : (
-            <div className='max-w-3xl mx-auto h-full min-h-120 sm:min-h-150 flex flex-col items-center justify-center p-4'>
-              <div className='w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#eef0fb] flex items-center justify-center mb-4 sm:mb-5'>
-                <FileText size={32} className='text-[#333d7c]' />
+            <div className='max-w-3xl mx-auto flex flex-col items-center justify-center p-2 sm:p-4 my-auto py-4 sm:py-8'>
+              <div className='w-12 h-12 sm:w-20 sm:h-20 rounded-full bg-[#eef0fb] flex items-center justify-center mb-3 sm:mb-5'>
+                <FileText size={24} className='text-[#333d7c] sm:w-8 sm:h-8' />
               </div>
-              <h2 className='text-lg sm:text-xl font-bold text-[#1e2653] mb-2 text-center'>
+              <h2 className='text-base sm:text-xl font-bold text-[#1e2653] mb-1.5 sm:mb-2 text-center'>
                 Start building your resume
               </h2>
-              <p className='text-xs sm:text-sm text-slate-400 text-center max-w-sm mb-6 sm:mb-8'>
+              <p className='text-xs sm:text-sm text-slate-400 text-center max-w-sm mb-4 sm:mb-8 leading-relaxed'>
                 Your profile, course completions, and earned badges will be
                 auto-fetched. Add a few extra details and let AI do the rest.
               </p>
-              <div className='grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8 w-full max-w-lg'>
+              <div className='grid grid-cols-3 gap-2 sm:gap-4 mb-5 sm:mb-8 w-full max-w-lg'>
                 {[
                   {
-                    icon: <User size={18} className='text-[#333d7c]' />,
+                    icon: <User size={16} className='text-[#333d7c] sm:w-[18px] sm:h-[18px]' />,
                     text: 'Profile auto-fetched',
                   },
                   {
                     icon: (
-                      <GraduationCap size={18} className='text-[#333d7c]' />
+                      <GraduationCap size={16} className='text-[#333d7c] sm:w-[18px] sm:h-[18px]' />
                     ),
                     text: 'Courses & skills detected',
                   },
                   {
-                    icon: <Award size={18} className='text-[#333d7c]' />,
+                    icon: <Award size={16} className='text-[#333d7c] sm:w-[18px] sm:h-[18px]' />,
                     text: 'Badges included',
                   },
                 ].map((item, i) => (
                   <div
                     key={i}
-                    className='bg-white rounded-xl p-3.5 sm:p-4 shadow-sm flex flex-col items-center gap-1.5 sm:gap-2 text-center'
+                    className='bg-white rounded-xl p-2.5 sm:p-4 shadow-sm flex flex-col items-center gap-1.5 sm:gap-2 text-center border border-slate-100'
                   >
-                    <div className='w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#eef0fb] flex items-center justify-center'>
+                    <div className='w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-[#eef0fb] flex items-center justify-center'>
                       {item.icon}
                     </div>
-                    <span className='text-[11px] sm:text-xs text-slate-500'>{item.text}</span>
+                    <span className='text-[10px] sm:text-xs text-slate-500 font-medium leading-tight'>{item.text}</span>
                   </div>
                 ))}
               </div>
               <button
                 onClick={() => setShowForm(true)}
-                className='flex items-center gap-2 bg-[#333d7c] hover:bg-[#1e2653] text-white font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-colors'
+                className='flex items-center justify-center gap-2 bg-[#333d7c] hover:bg-[#1e2653] text-white font-semibold px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm transition-colors shadow-sm w-full sm:w-auto'
               >
                 <Wand2 size={16} /> Build My Resume
               </button>

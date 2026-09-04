@@ -58,18 +58,18 @@ export default function AdminHome() {
   if (loading) {
     return (
       <div className='space-y-4 sm:space-y-6 min-w-0'>
-        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4'>
+        <div className='grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4'>
           {[...Array(4)].map((_, i) => (
             <Card key={i} className='border border-slate-200/80 shadow-xs rounded-2xl bg-white'>
-              <CardContent className='p-4 sm:p-5 flex flex-col justify-between h-28 sm:h-32'>
+              <CardContent className='p-3 sm:p-5 flex flex-col justify-between h-24 sm:h-32'>
                 <div className='flex justify-between items-start'>
-                  <div className='space-y-2'>
-                    <Skeleton className='h-3 w-20 sm:w-24' />
-                    <Skeleton className='h-6 sm:h-7 w-16' />
+                  <div className='space-y-1.5 sm:space-y-2'>
+                    <Skeleton className='h-3 w-16 sm:w-24' />
+                    <Skeleton className='h-5 sm:h-7 w-12 sm:w-16' />
                   </div>
-                  <Skeleton className='h-9 w-9 sm:h-10 sm:w-10 rounded-xl' />
+                  <Skeleton className='h-7 w-7 sm:h-10 sm:w-10 rounded-xl' />
                 </div>
-                <Skeleton className='h-3 w-28 mt-2' />
+                <Skeleton className='h-2.5 sm:h-3 w-20 sm:w-28 mt-1 sm:mt-2' />
               </CardContent>
             </Card>
           ))}
@@ -140,25 +140,25 @@ export default function AdminHome() {
 
   return (
     <div className='space-y-4 sm:space-y-6 min-w-0 animate-in fade-in duration-300'>
-      {/* Statistics Grid */}
-      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4'>
+      {/* Statistics Grid: 2x2 on mobile, 4 across on lg */}
+      <div className='grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4'>
         {statsConfig.map((stat) => (
           <Card key={stat.label} className='border border-slate-200/80 shadow-xs rounded-2xl bg-white'>
-            <CardContent className='p-4 sm:p-5 flex flex-col justify-between h-28 sm:h-32'>
-              <div className='flex justify-between items-start'>
-                <div className='min-w-0 pr-2'>
-                  <p className='text-xs sm:text-sm font-semibold text-slate-500 truncate'>
+            <CardContent className='p-3 sm:p-5 flex flex-col justify-between h-24 sm:h-32'>
+              <div className='flex justify-between items-start gap-1'>
+                <div className='min-w-0 flex-1 pr-1'>
+                  <p className='text-[11px] sm:text-xs font-semibold text-slate-500 truncate'>
                     {stat.label}
                   </p>
-                  <h3 className='text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight truncate'>
+                  <h3 className='text-lg sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1 tracking-tight truncate'>
                     {stat.value}
                   </h3>
                 </div>
-                <div className={`${stat.bg} p-2 sm:p-2.5 rounded-xl shrink-0`}>
-                  <stat.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${stat.color}`} />
+                <div className={`${stat.bg} p-1.5 sm:p-2.5 rounded-xl shrink-0`}>
+                  <stat.icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${stat.color}`} />
                 </div>
               </div>
-              <p className='text-[11px] sm:text-xs font-semibold text-emerald-600 truncate mt-1'>
+              <p className='text-[10px] sm:text-xs font-semibold text-emerald-600 truncate mt-1'>
                 {stat.trend}
               </p>
             </CardContent>

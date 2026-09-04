@@ -97,23 +97,12 @@ function formatAiText(text: any): string {
   return formatted;
 }
 
+import { getYouTubeEmbedUrl } from '@/utils/youtube';
+
 // ─── Lesson preview row ────────────────────────────────────────────────────────
 
 const getEmbedUrl = (url: string) => {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes('youtube.com')) {
-      const v = u.searchParams.get('v');
-      if (v) return `https://www.youtube.com/embed/${v}`;
-    }
-    if (u.hostname === 'youtu.be') {
-      const id = u.pathname.replace('/', '');
-      if (id) return `https://www.youtube.com/embed/${id}`;
-    }
-  } catch {
-    //
-  }
-  return url;
+  return getYouTubeEmbedUrl(url) || url;
 };
 
 function LessonPreview({ lesson }: { lesson: AiLesson }) {
@@ -122,19 +111,41 @@ function LessonPreview({ lesson }: { lesson: AiLesson }) {
   const hasExercise = !!lesson.exercise_data;
 
   return (
-    <div className='border border-slate-100 rounded-xl overflow-hidden'>
+    <div className='border border-slate-100 rounded-xl overflow-hidden bg-white shadow-2xs'>
       <button
+        type='button'
         onClick={() => setOpen((v) => !v)}
-        className='w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left'
+        className='w-full flex items-center justify-between gap-2 sm:gap-3 px-2.5 sm:px-4 py-2.5 sm:py-3 hover:bg-slate-50/80 transition-colors text-left'
       >
-        <MonitorPlay className='w-4 h-4 text-blue-400 shrink-0' />
-        <span className='flex-1 text-[13px] font-medium text-slate-700'>{lesson.title}</span>
-        <div className='flex items-center gap-2 shrink-0'>
-          {lesson.video_url && <span className='text-[10px] bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full font-semibold'>Video</span>}
-          {quizCount > 0 && <span className='text-[10px] bg-orange-50 text-orange-600 border border-orange-100 px-2 py-0.5 rounded-full font-semibold'>{quizCount} Quiz</span>}
-          {hasExercise && <span className='text-[10px] bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-0.5 rounded-full font-semibold'>Exercise</span>}
-          <span className='text-[11px] text-slate-400'>{lesson.duration_mins ?? 20}m</span>
-          {open ? <ChevronDown className='w-4 h-4 text-slate-300' /> : <ChevronRight className='w-4 h-4 text-slate-300' />}
+        <div className='flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1'>
+          <MonitorPlay className='w-4 h-4 text-blue-500 shrink-0' />
+          <span className='text-[12px] sm:text-[13px] font-medium text-slate-800 truncate'>
+            {lesson.title}
+          </span>
+        </div>
+
+        <div className='flex items-center gap-1 sm:gap-2 shrink-0 ml-1'>
+          {lesson.video_url && (
+            <span className='text-[9px] sm:text-[10px] bg-red-50 text-red-600 border border-red-100 px-1.5 sm:px-2 py-0.5 rounded-full font-bold shrink-0'>
+              Video
+            </span>
+          )}
+          {quizCount > 0 && (
+            <span className='text-[9px] sm:text-[10px] bg-orange-50 text-orange-600 border border-orange-100 px-1.5 sm:px-2 py-0.5 rounded-full font-bold shrink-0'>
+              {quizCount} Quiz
+            </span>
+          )}
+          {hasExercise && (
+            <span className='text-[9px] sm:text-[10px] bg-indigo-50 text-indigo-600 border border-indigo-100 px-1.5 sm:px-2 py-0.5 rounded-full font-bold shrink-0'>
+              Exercise
+            </span>
+          )}
+          <span className='text-[10px] sm:text-[11px] text-slate-400 font-medium shrink-0'>
+            {lesson.duration_mins ?? 20}m
+          </span>
+          <span className='text-slate-400 shrink-0 p-0.5'>
+            {open ? <ChevronDown className='w-3.5 sm:w-4 h-3.5 sm:h-4' /> : <ChevronRight className='w-3.5 sm:w-4 h-3.5 sm:h-4' />}
+          </span>
         </div>
       </button>
 
@@ -332,31 +343,39 @@ function TopicPreview({ topic }: { topic: AiTopic }) {
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
 
   return (
-    <div className='border border-slate-200 rounded-xl overflow-hidden mb-3'>
+    <div className='border border-slate-200 rounded-xl overflow-hidden mb-3 bg-white shadow-2xs'>
       <button
+        type='button'
         onClick={() => setOpen((v) => !v)}
-        className='w-full flex items-center gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left'
+        className='w-full flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50/80 hover:bg-slate-100 transition-colors text-left'
       >
-        {open ? <ChevronDown className='w-4 h-4 text-slate-400' /> : <ChevronRight className='w-4 h-4 text-slate-400' />}
-        <span className='flex-1 text-[13px] font-semibold text-slate-700'>{topic.title}</span>
-        <span className='text-[12px] text-slate-400'>{topic.lessons.length} subtopics</span>
-        {(() => {
-          const totalQs = topic.lessons.reduce((sum, l) => sum + (Array.isArray(l.quiz_questions) ? l.quiz_questions.length : 0), 0);
-          return totalQs > 0 ? (
-            <span className='text-[10px] bg-orange-50 text-orange-600 border border-orange-200 px-2 py-0.5 rounded-full font-semibold ml-2'>
-              Quiz · {totalQs}Q
-            </span>
-          ) : null;
-        })()}
-        {topic.assignment && (
-          <span className='text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full font-semibold ml-2'>
-            Assignment
+        <div className='flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1'>
+          <span className='text-slate-400 shrink-0 p-0.5'>
+            {open ? <ChevronDown className='w-4 h-4' /> : <ChevronRight className='w-4 h-4' />}
           </span>
-        )}
+          <span className='text-[12px] sm:text-[13px] font-bold text-slate-800 truncate'>{topic.title}</span>
+        </div>
+
+        <div className='flex items-center gap-1.5 sm:gap-2 shrink-0 ml-1'>
+          <span className='text-[10px] sm:text-[12px] text-slate-400 font-medium shrink-0'>{topic.lessons.length} subtopics</span>
+          {(() => {
+            const totalQs = topic.lessons.reduce((sum, l) => sum + (Array.isArray(l.quiz_questions) ? l.quiz_questions.length : 0), 0);
+            return totalQs > 0 ? (
+              <span className='text-[9px] sm:text-[10px] bg-orange-50 text-orange-600 border border-orange-200 px-1.5 sm:px-2 py-0.5 rounded-full font-bold shrink-0'>
+                Quiz · {totalQs}Q
+              </span>
+            ) : null;
+          })()}
+          {topic.assignment && (
+            <span className='text-[9px] sm:text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 sm:px-2 py-0.5 rounded-full font-bold shrink-0'>
+              Assignment
+            </span>
+          )}
+        </div>
       </button>
 
       {open && (
-        <div className='p-4 space-y-2'>
+        <div className='p-2.5 sm:p-4 space-y-2'>
           {topic.lessons.map((lesson) => (
             <LessonPreview key={lesson.id} lesson={lesson} />
           ))}
@@ -467,8 +486,8 @@ export default function AiCurriculumPreview() {
   return (
     <div className='min-h-screen bg-slate-50 min-w-0'>
       {/* Header */}
-      <div className='bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-5 min-w-0'>
-        <div className='flex items-center gap-3 mb-3 sm:mb-4'>
+      <div className='bg-white border-b border-slate-200 px-3 sm:px-8 py-3.5 sm:py-5 min-w-0'>
+        <div className='flex items-center gap-3 mb-2.5 sm:mb-4'>
           <button onClick={() => navigate(`${base}/ai-curriculum/${id}/edit`)}
             className='p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center'>
             <ArrowLeft className='w-4 h-4' />
@@ -478,9 +497,9 @@ export default function AiCurriculumPreview() {
 
         <div className='flex items-start justify-between'>
           <div className='min-w-0 flex-1'>
-            <h1 className='text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight'>{course.title}</h1>
+            <h1 className='text-lg sm:text-2xl font-extrabold text-slate-900 tracking-tight'>{course.title}</h1>
             <p className='text-xs sm:text-sm text-slate-500 mt-1'>{course.learning_goal}</p>
-            <div className='flex flex-wrap items-center gap-2 sm:gap-4 mt-3'>
+            <div className='flex flex-wrap items-center gap-2 sm:gap-4 mt-2.5 sm:mt-3'>
               <span className='flex items-center gap-1.5 text-xs sm:text-[13px] text-slate-600 font-medium'>
                 <BookOpen className='w-3.5 sm:w-4 h-3.5 sm:h-4 text-indigo-500' /> {modules.length} Topics · {totalTopics} Units · {totalLessons} Lessons
               </span>
@@ -500,12 +519,12 @@ export default function AiCurriculumPreview() {
         </div>
 
         {/* Tabs */}
-        <div className='flex gap-1 mt-4 sm:mt-5 border-b border-slate-100 overflow-x-auto no-scrollbar'>
+        <div className='flex gap-1 mt-3.5 sm:mt-5 border-b border-slate-100 overflow-x-auto no-scrollbar'>
           {(['curriculum', 'schedule'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3.5 sm:px-4 py-2 text-xs sm:text-[13px] font-semibold capitalize whitespace-nowrap transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 sm:px-4 py-2 text-xs sm:text-[13px] font-semibold capitalize whitespace-nowrap transition-colors border-b-2 -mb-px ${activeTab === tab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
               {tab === 'curriculum' ? 'Curriculum' : 'Week/Day Schedule'}
             </button>
@@ -513,9 +532,9 @@ export default function AiCurriculumPreview() {
         </div>
       </div>
 
-      <div className='max-w-4xl mx-auto px-3.5 sm:px-6 py-6 sm:py-8 min-w-0'>
+      <div className='w-full max-w-5xl mx-auto px-2.5 sm:px-6 py-4 sm:py-8 min-w-0'>
         {activeTab === 'curriculum' && (
-          <div className='space-y-4 sm:space-y-6 min-w-0'>
+          <div className='space-y-3 sm:space-y-6 min-w-0'>
             {modules.map((mod, mi) => {
               const isOpen = openModules.has(mod.id);
               return (
@@ -526,20 +545,24 @@ export default function AiCurriculumPreview() {
                       if (next.has(mod.id)) next.delete(mod.id); else next.add(mod.id);
                       return next;
                     })}
-                    className='w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4 hover:bg-slate-50 transition-colors text-left'
+                    className='w-full flex items-center justify-between gap-2.5 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4 hover:bg-slate-50 transition-colors text-left'
                   >
-                    <span className='w-7 sm:w-8 h-7 sm:h-8 rounded-full bg-indigo-100 text-indigo-700 text-xs sm:text-[13px] font-bold flex items-center justify-center shrink-0'>
-                      {mi + 1}
-                    </span>
-                    <div className='flex-1 min-w-0'>
-                      <p className='text-sm sm:text-base font-bold text-slate-800 truncate'>{mod.title}</p>
-                      <p className='text-[11px] sm:text-[12px] text-slate-400 mt-0.5'>{mod.topics.length} units · {mod.topics.reduce((s, t) => s + t.lessons.length, 0)} subtopics</p>
+                    <div className='flex items-center gap-2.5 sm:gap-4 min-w-0 flex-1'>
+                      <span className='w-6 sm:w-8 h-6 sm:h-8 rounded-full bg-indigo-100 text-indigo-700 text-xs sm:text-[13px] font-bold flex items-center justify-center shrink-0'>
+                        {mi + 1}
+                      </span>
+                      <div className='flex-1 min-w-0'>
+                        <p className='text-[13px] sm:text-base font-bold text-slate-800 truncate'>{mod.title}</p>
+                        <p className='text-[10px] sm:text-[12px] text-slate-400 mt-0.5 truncate'>{mod.topics.length} units · {mod.topics.reduce((s, t) => s + t.lessons.length, 0)} subtopics</p>
+                      </div>
                     </div>
-                    {isOpen ? <ChevronDown className='w-4 sm:w-5 h-4 sm:h-5 text-slate-300 shrink-0' /> : <ChevronRight className='w-4 sm:w-5 h-4 sm:h-5 text-slate-300 shrink-0' />}
+                    <span className='text-slate-400 shrink-0 p-0.5'>
+                      {isOpen ? <ChevronDown className='w-4 sm:w-5 h-4 sm:h-5' /> : <ChevronRight className='w-4 sm:w-5 h-4 sm:h-5' />}
+                    </span>
                   </button>
 
                   {isOpen && (
-                    <div className='border-t border-slate-100 p-4 sm:p-6 space-y-4'>
+                    <div className='border-t border-slate-100 p-2.5 sm:p-6 space-y-3 sm:space-y-4'>
                       {mod.description && (
                         <p className='text-xs sm:text-[13px] text-slate-500 mb-2'>{mod.description}</p>
                       )}

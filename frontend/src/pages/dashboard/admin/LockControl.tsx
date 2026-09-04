@@ -273,54 +273,54 @@ const LockControl = () => {
   return (
     <div className='space-y-4 sm:space-y-6 min-w-0 animate-in fade-in duration-300'>
       {/* Stats */}
-      <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4'>
+      <div className='grid grid-cols-3 gap-2 sm:gap-4'>
         <Card className='border border-slate-200/80 shadow-xs rounded-2xl bg-white'>
-          <CardContent className='p-4 sm:p-5 flex items-center justify-between'>
+          <CardContent className='p-2.5 sm:p-5 flex flex-col sm:flex-row items-center sm:justify-between text-center sm:text-left gap-1 sm:gap-3'>
             <div className='min-w-0'>
-              <p className='text-xs sm:text-sm font-semibold text-slate-500 truncate'>
-                Batch Progress
+              <p className='text-[10px] sm:text-sm font-semibold text-slate-500 truncate'>
+                Progress
               </p>
-              <h3 className='text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight'>
+              <h3 className='text-base sm:text-2xl font-bold text-slate-900 tracking-tight'>
                 {stats.completionRate}%
               </h3>
-              <p className='text-[11px] sm:text-xs text-slate-400 mt-1'>Completion Rate</p>
+              <p className='text-[9px] sm:text-xs text-slate-400 hidden sm:block mt-0.5'>Completion Rate</p>
             </div>
-            <div className='bg-blue-50 p-2.5 sm:p-3 rounded-2xl shrink-0'>
-              <GraduationCap className='w-5 h-5 text-blue-600' />
+            <div className='bg-blue-50 p-2 sm:p-3 rounded-xl sm:rounded-2xl shrink-0'>
+              <GraduationCap className='w-4 h-4 sm:w-5 sm:h-5 text-blue-600' />
             </div>
           </CardContent>
         </Card>
+
         <Card className='border border-slate-200/80 shadow-xs rounded-2xl bg-white'>
-          <CardContent className='p-4 sm:p-5 flex items-center justify-between'>
+          <CardContent className='p-2.5 sm:p-5 flex flex-col sm:flex-row items-center sm:justify-between text-center sm:text-left gap-1 sm:gap-3'>
             <div className='min-w-0'>
-              <p className='text-xs sm:text-sm font-semibold text-red-500 truncate'>Locked Topics</p>
-              <h3 className='text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight'>
+              <p className='text-[10px] sm:text-sm font-semibold text-red-500 truncate'>
+                Locked
+              </p>
+              <h3 className='text-base sm:text-2xl font-bold text-slate-900 tracking-tight'>
                 {stats.lockedTopics}
               </h3>
-              <p className='text-[11px] sm:text-xs text-slate-400 mt-1'>
-                Students cannot access
-              </p>
+              <p className='text-[9px] sm:text-xs text-slate-400 hidden sm:block mt-0.5'>Cannot access</p>
             </div>
-            <div className='bg-red-50 p-2.5 sm:p-3 rounded-2xl shrink-0'>
-              <Lock className='w-5 h-5 text-red-500' />
+            <div className='bg-red-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shrink-0'>
+              <Lock className='w-4 h-4 sm:w-5 sm:h-5 text-red-500' />
             </div>
           </CardContent>
         </Card>
-        <Card className='border border-slate-200/80 shadow-xs rounded-2xl bg-white sm:col-span-2 xl:col-span-1'>
-          <CardContent className='p-4 sm:p-5 flex items-center justify-between'>
+
+        <Card className='border border-slate-200/80 shadow-xs rounded-2xl bg-white'>
+          <CardContent className='p-2.5 sm:p-5 flex flex-col sm:flex-row items-center sm:justify-between text-center sm:text-left gap-1 sm:gap-3'>
             <div className='min-w-0'>
-              <p className='text-xs sm:text-sm font-semibold text-emerald-600 truncate'>
-                Unlocked Topics
+              <p className='text-[10px] sm:text-sm font-semibold text-emerald-600 truncate'>
+                Unlocked
               </p>
-              <h3 className='text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight'>
+              <h3 className='text-base sm:text-2xl font-bold text-slate-900 tracking-tight'>
                 {stats.unlockedTopics}
               </h3>
-              <p className='text-[11px] sm:text-xs text-slate-400 mt-1'>
-                Available to students
-              </p>
+              <p className='text-[9px] sm:text-xs text-slate-400 hidden sm:block mt-0.5'>Available</p>
             </div>
-            <div className='bg-emerald-50 p-2.5 sm:p-3 rounded-2xl shrink-0'>
-              <Unlock className='w-5 h-5 text-emerald-600' />
+            <div className='bg-emerald-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shrink-0'>
+              <Unlock className='w-4 h-4 sm:w-5 sm:h-5 text-emerald-600' />
             </div>
           </CardContent>
         </Card>
@@ -328,21 +328,21 @@ const LockControl = () => {
 
       {/* Filters */}
       <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white min-w-0'>
-        <div className='flex items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-slate-100 bg-slate-50/60'>
-          <div className='bg-indigo-50 text-indigo-600 p-2 rounded-xl shrink-0 border border-indigo-100'>
-            <ShieldCheck className='w-4 h-4' />
+        <div className='flex items-center gap-2.5 sm:gap-3 px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 bg-slate-50/60'>
+          <div className='bg-indigo-50 text-indigo-600 p-1.5 sm:p-2 rounded-xl shrink-0 border border-indigo-100'>
+            <ShieldCheck className='w-3.5 h-3.5 sm:w-4 sm:h-4' />
           </div>
           <div className='min-w-0'>
             <h3 className='text-xs sm:text-sm font-bold text-slate-900 tracking-tight'>Cohort Class Controls</h3>
-            <p className='text-[11px] text-slate-400 truncate'>Manage topic access and schedule by cohort</p>
+            <p className='text-[10px] sm:text-[11px] text-slate-400 truncate'>Manage topic access and schedule by cohort</p>
           </div>
         </div>
 
-        <CardContent className='p-4 sm:p-5'>
-          <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3'>
-            <div className='flex flex-col gap-1.5'>
-              <label className='flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider'>
-                <Building2 className='w-3 h-3' />
+        <CardContent className='p-3.5 sm:p-5'>
+          <div className='grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3'>
+            <div className='flex flex-col gap-1 sm:gap-1.5'>
+              <label className='flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider truncate'>
+                <Building2 className='w-3 h-3 shrink-0' />
                 College
               </label>
               <Select
@@ -350,10 +350,10 @@ const LockControl = () => {
                 onValueChange={setSelectedCollegeId}
                 disabled={loadingFilters}
               >
-                <SelectTrigger className='w-full bg-white border-slate-200 shadow-xs h-10 rounded-xl text-xs sm:text-sm'>
+                <SelectTrigger className='w-full bg-white border-slate-200 shadow-xs h-9 sm:h-10 rounded-xl text-xs sm:text-sm'>
                   <SelectValue placeholder='Select college' />
                 </SelectTrigger>
-                <SelectContent className='rounded-xl shadow-lg border-slate-200'>
+                <SelectContent className='rounded-xl shadow-lg border-slate-200 max-h-60'>
                   <SelectItem value='all'>All Colleges</SelectItem>
                   {colleges.map((college) => (
                     <SelectItem key={college.id} value={college.id}>
@@ -364,9 +364,9 @@ const LockControl = () => {
               </Select>
             </div>
 
-            <div className='flex flex-col gap-1.5'>
-              <label className='flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider'>
-                <Users2 className='w-3 h-3' />
+            <div className='flex flex-col gap-1 sm:gap-1.5'>
+              <label className='flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider truncate'>
+                <Users2 className='w-3 h-3 shrink-0' />
                 Batch
               </label>
               <Select
@@ -374,10 +374,10 @@ const LockControl = () => {
                 onValueChange={setSelectedBatch}
                 disabled={loadingFilters}
               >
-                <SelectTrigger className='w-full bg-white border-slate-200 shadow-xs h-10 rounded-xl text-xs sm:text-sm'>
+                <SelectTrigger className='w-full bg-white border-slate-200 shadow-xs h-9 sm:h-10 rounded-xl text-xs sm:text-sm'>
                   <SelectValue placeholder='Select batch' />
                 </SelectTrigger>
-                <SelectContent className='rounded-xl shadow-lg border-slate-200'>
+                <SelectContent className='rounded-xl shadow-lg border-slate-200 max-h-60'>
                   <SelectItem value='all'>All Batches</SelectItem>
                   {batches.map((batch) => (
                     <SelectItem key={batch} value={String(batch)}>
@@ -388,9 +388,9 @@ const LockControl = () => {
               </Select>
             </div>
 
-            <div className='flex flex-col gap-1.5'>
-              <label className='flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider'>
-                <BookOpen className='w-3 h-3' />
+            <div className='flex flex-col gap-1 sm:gap-1.5'>
+              <label className='flex items-center gap-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider truncate'>
+                <BookOpen className='w-3 h-3 shrink-0' />
                 Subject
               </label>
               <Select
@@ -398,10 +398,10 @@ const LockControl = () => {
                 onValueChange={setSelectedSubjectId}
                 disabled={loadingFilters}
               >
-                <SelectTrigger className='w-full bg-white border-slate-200 shadow-xs h-10 rounded-xl text-xs sm:text-sm'>
+                <SelectTrigger className='w-full bg-white border-slate-200 shadow-xs h-9 sm:h-10 rounded-xl text-xs sm:text-sm'>
                   <SelectValue placeholder='Select subject' />
                 </SelectTrigger>
-                <SelectContent className='rounded-xl shadow-lg border-slate-200'>
+                <SelectContent className='rounded-xl shadow-lg border-slate-200 max-h-60'>
                   {subjects.map((subject) => (
                     <SelectItem key={subject.id} value={subject.id}>
                       {subject.name}
@@ -411,16 +411,16 @@ const LockControl = () => {
               </Select>
             </div>
 
-            <div className='flex flex-col gap-1.5'>
-              <label className='flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider'>
-                <Search className='w-3 h-3' />
+            <div className='flex flex-col gap-1 sm:gap-1.5'>
+              <label className='flex items-center gap-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider truncate'>
+                <Search className='w-3 h-3 shrink-0' />
                 Search
               </label>
               <div className='relative'>
-                <Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400' />
+                <Search className='absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400' />
                 <Input
                   placeholder='Find topic...'
-                  className='pl-9 bg-white border-slate-200 shadow-xs h-10 rounded-xl text-xs sm:text-sm'
+                  className='pl-8 sm:pl-9 bg-white border-slate-200 shadow-xs h-9 sm:h-10 rounded-xl text-xs sm:text-sm'
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -442,7 +442,7 @@ const LockControl = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className='space-y-3.5 sm:space-y-4'>
+        <div className='space-y-3 sm:space-y-4'>
           {filteredTopics.map((topic) => {
             const isExpanded = expandedTopics.includes(topic.id);
             const topicSubtopics = Array.isArray(topic.subtopics)
@@ -463,11 +463,11 @@ const LockControl = () => {
             return (
               <Card key={topic.id} className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white'>
                 <CardContent className='p-0'>
-                  <div className='p-4 sm:p-5 border-b border-slate-100'>
-                    <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4'>
-                      <div className='flex items-center gap-3 min-w-0'>
+                  <div className='p-3.5 sm:p-5 border-b border-slate-100'>
+                    <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4'>
+                      <div className='flex items-center gap-2 sm:gap-3 min-w-0'>
                         <button
-                          className='p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center'
+                          className='p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition shrink-0 min-h-[30px] min-w-[30px] flex items-center justify-center'
                           onClick={() =>
                             setExpandedTopics((prev) =>
                               prev.includes(topic.id)
@@ -483,19 +483,18 @@ const LockControl = () => {
                             <ChevronRight className='w-4 h-4' />
                           )}
                         </button>
-                        <div className='min-w-0'>
-                          <p className='text-xs font-bold text-slate-800 tracking-tight truncate'>
+                        <div className='min-w-0 flex-1'>
+                          <p className='text-xs sm:text-sm font-bold text-slate-800 tracking-tight truncate'>
                             {topic.title}
                           </p>
-                          <p className='text-[11px] sm:text-xs text-slate-500 font-medium'>
-                            {unlockedSubtopics}/{topicSubtopics.length}{' '}
-                            Subtopics Unlocked
+                          <p className='text-[10px] sm:text-xs text-slate-500 font-medium'>
+                            {unlockedSubtopics}/{topicSubtopics.length} Subtopics Unlocked
                           </p>
                         </div>
                       </div>
 
-                      <div className='flex items-center gap-3 justify-between sm:justify-end pl-9 sm:pl-0'>
-                        <div className='w-28 sm:w-36 bg-slate-100 rounded-full h-2 overflow-hidden shrink-0'>
+                      <div className='flex items-center gap-2.5 sm:gap-3 justify-between sm:justify-end pl-8 sm:pl-0'>
+                        <div className='w-24 sm:w-36 bg-slate-100 rounded-full h-2 overflow-hidden shrink-0'>
                           <div
                             className='h-full bg-emerald-500 transition-all duration-500'
                             style={{ width: `${progress}%` }}
@@ -504,7 +503,7 @@ const LockControl = () => {
                         <button
                           disabled={topicLoading}
                           onClick={() => handleTopicToggle(topic.id, !fullyUnlocked)}
-                          className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none shrink-0 min-h-[34px] ${
+                          className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none shrink-0 min-h-[30px] sm:min-h-[34px] ${
                             fullyUnlocked
                               ? 'border-red-200 text-red-600 bg-red-50/50 hover:bg-red-50 hover:border-red-300'
                               : 'border-emerald-200 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-300'
@@ -533,11 +532,11 @@ const LockControl = () => {
                         return (
                           <div
                             key={subtopic.id}
-                            className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5'
+                            className='flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3.5 sm:p-5'
                           >
-                            <div className='flex items-center gap-3 sm:gap-4 min-w-0'>
-                              <div className='bg-emerald-50 text-emerald-600 p-2 rounded-xl shrink-0 border border-emerald-100'>
-                                <BookOpen className='w-4 h-4' />
+                            <div className='flex items-center gap-2.5 sm:gap-4 min-w-0'>
+                              <div className='bg-emerald-50 text-emerald-600 p-1.5 sm:p-2 rounded-xl shrink-0 border border-emerald-100'>
+                                <BookOpen className='w-3.5 h-3.5 sm:w-4 sm:h-4' />
                               </div>
                               <div className='min-w-0'>
                                 <p className='font-semibold text-slate-800 text-xs sm:text-sm truncate'>
@@ -555,17 +554,17 @@ const LockControl = () => {
                               </div>
                             </div>
 
-                            <div className='flex items-center gap-4 justify-between sm:justify-end pl-11 sm:pl-0'>
-                              <div className='flex items-center gap-1.5 text-slate-400 text-xs font-medium'>
-                                <Calendar className='w-3.5 h-3.5' />
+                            <div className='flex items-center gap-3 sm:gap-4 justify-between sm:justify-end pl-9 sm:pl-0'>
+                              <div className='flex items-center gap-1 text-slate-400 text-[11px] sm:text-xs font-medium'>
+                                <Calendar className='w-3 h-3 sm:w-3.5 sm:h-3.5' />
                                 <span>Schedule</span>
                               </div>
-                              <div className='flex items-center gap-2.5'>
+                              <div className='flex items-center gap-2'>
                                 <span
                                   className={
                                     isUnlocked
-                                      ? 'text-emerald-700 text-xs font-semibold'
-                                      : 'text-slate-400 text-xs font-semibold'
+                                      ? 'text-emerald-700 text-[11px] sm:text-xs font-semibold'
+                                      : 'text-slate-400 text-[11px] sm:text-xs font-semibold'
                                   }
                                 >
                                   {isUnlocked ? 'Unlocked' : 'Locked'}

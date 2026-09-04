@@ -85,16 +85,16 @@ const ResultsPage = () => {
         {loading ? (
           <div className='mt-4 sm:mt-6 space-y-4 sm:space-y-6'>
             {/* Stat cards skeleton */}
-            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4'>
+            <div className='grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4'>
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className='bg-white border rounded-xl px-4 py-3 flex items-center gap-3'
+                  className='bg-white border rounded-xl p-3 sm:px-4 sm:py-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-3'
                 >
-                  <Skeleton className='w-9 h-9 rounded-lg' />
-                  <div className='flex-1 space-y-2'>
-                    <Skeleton className='h-3 w-20' />
-                    <Skeleton className='h-5 w-12' />
+                  <Skeleton className='w-8 h-8 sm:w-9 sm:h-9 rounded-xl' />
+                  <div className='flex-1 space-y-1.5 w-full flex flex-col items-center sm:items-start'>
+                    <Skeleton className='h-3 w-16 sm:w-20' />
+                    <Skeleton className='h-4 sm:h-5 w-10 sm:w-12' />
                   </div>
                 </div>
               ))}

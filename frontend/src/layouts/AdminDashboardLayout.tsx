@@ -52,7 +52,7 @@ const AdminDashboardLayout = () => {
           toggleMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
         />
 
-        <main className='flex-1 overflow-y-auto p-3.5 sm:p-6 md:p-8 custom-scrollbar min-w-0'>
+        <main className='flex-1 overflow-y-auto p-2.5 sm:p-6 md:p-8 custom-scrollbar min-w-0'>
           <div className='max-w-400 mx-auto min-w-0'>
             <Outlet />
           </div>

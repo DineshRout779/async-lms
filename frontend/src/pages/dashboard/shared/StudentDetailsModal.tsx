@@ -205,6 +205,158 @@ function TopicRowView({ topic }: { topic: TopicRow }) {
   );
 }
 
+function TopicMobileCard({ topic }: { topic: TopicRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasItems = topic.assignments_list.length > 0 || topic.projects_list.length > 0 || topic.quizzes_list.length > 0;
+
+  const asgTotal = topic.assignments_list.length;
+  const asgSubmitted = topic.assignments_list.filter(a => ['Submitted', 'Approved', 'Passed'].includes(a.status)).length;
+  const asgStatus = asgTotal === 0 ? 'Not Started' 
+                    : asgSubmitted >= asgTotal ? 'Completed' 
+                    : asgSubmitted > 0 ? 'In Progress' 
+                    : 'Not Started';
+
+  const projTotal = topic.projects_list.length;
+  const projSubmitted = topic.projects_list.filter(p => ['Submitted', 'Approved', 'Passed'].includes(p.status)).length;
+  const projStatus = projTotal === 0 ? 'Not Started' 
+                     : projSubmitted >= projTotal ? 'Completed' 
+                     : projSubmitted > 0 ? 'In Progress' 
+                     : 'Not Started';
+
+  return (
+    <div className={`p-3.5 sm:p-4 space-y-3 transition-colors ${expanded ? 'bg-indigo-50/20' : 'hover:bg-slate-50/60'}`}>
+      <div 
+        onClick={() => hasItems && setExpanded(!expanded)}
+        className={`flex items-start justify-between gap-2 ${hasItems ? 'cursor-pointer' : ''}`}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {hasItems ? (
+            <div className={`p-1 rounded-lg transition-colors shrink-0 ${expanded ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400'}`}>
+              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          ) : (
+            <div className="w-4" />
+          )}
+          <span className="font-bold text-slate-800 text-xs sm:text-sm leading-snug">
+            {topic.topic_title}
+          </span>
+        </div>
+        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100/80 px-2 py-0.5 rounded-full shrink-0">
+          {topic.progress}%
+        </span>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+        <div
+          className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
+          style={{ width: `${topic.progress}%` }}
+        />
+      </div>
+
+      {/* 3 Metric Chips */}
+      <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+        {/* Quiz */}
+        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Quiz</span>
+          {topic.quiz_max > 0 ? (
+            <span className="font-bold text-slate-700">{topic.quiz_score}/{topic.quiz_max}</span>
+          ) : (
+            <span className="text-slate-400 italic text-[10px]">None</span>
+          )}
+        </div>
+
+        {/* Assignment */}
+        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Assignment</span>
+          {asgTotal > 0 ? (
+            <div className="flex flex-col items-center gap-0.5">
+              <StatusBadge status={asgStatus} />
+              <span className="text-[10px] text-slate-400 font-semibold">{asgSubmitted}/{asgTotal}</span>
+            </div>
+          ) : (
+            <span className="text-slate-400 italic text-[10px]">None</span>
+          )}
+        </div>
+
+        {/* Project */}
+        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Project</span>
+          {projTotal > 0 ? (
+            <div className="flex flex-col items-center gap-0.5">
+              <StatusBadge status={projStatus} />
+              <span className="text-[10px] text-slate-400 font-semibold">{projSubmitted}/{projTotal}</span>
+            </div>
+          ) : (
+            <span className="text-slate-400 italic text-[10px]">None</span>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded Sub-items on mobile */}
+      {expanded && hasItems && (
+        <div className="pt-2 space-y-3 border-t border-slate-100 animate-in fade-in duration-200">
+          {/* Quizzes */}
+          {topic.quizzes_list.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <CheckSquare className="w-3 h-3 text-indigo-500" /> Quizzes
+              </h5>
+              <div className="space-y-1.5">
+                {topic.quizzes_list.map(q => (
+                  <div key={q.id} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2">
+                    <span className="font-semibold text-xs text-slate-800 truncate">{q.title}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] text-slate-500 font-semibold px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100">
+                        {q.score}/{q.max_score}
+                      </span>
+                      <StatusBadge status={q.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Assignments */}
+          {topic.assignments_list.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <BookOpen className="w-3 h-3 text-indigo-500" /> Assignments
+              </h5>
+              <div className="space-y-1.5">
+                {topic.assignments_list.map(a => (
+                  <div key={a.id} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2">
+                    <span className="font-semibold text-xs text-slate-800 truncate">{a.title}</span>
+                    <StatusBadge status={a.status} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Projects */}
+          {topic.projects_list.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <FileCode className="w-3 h-3 text-indigo-500" /> Projects
+              </h5>
+              <div className="space-y-1.5">
+                {topic.projects_list.map(p => (
+                  <div key={p.id} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2">
+                    <span className="font-semibold text-xs text-slate-800 truncate">{p.title}</span>
+                    <StatusBadge status={p.status} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StudentDetailsModal({
   isOpen,
   onClose,
@@ -263,7 +415,7 @@ export function StudentDetailsModal({
         </div>
 
         {/* Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 custom-scrollbar space-y-4 sm:space-y-6">
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 no-scrollbar space-y-4 sm:space-y-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
@@ -283,8 +435,17 @@ export function StudentDetailsModal({
                     <span>{subject.subject_name}</span>
                   </CardTitle>
                 </CardHeader>
-                <div className="overflow-x-auto custom-scrollbar bg-white w-full min-w-0">
-                  <table className="w-full min-w-[650px] text-xs sm:text-[13px]">
+
+                {/* Mobile Card List */}
+                <div className="divide-y divide-slate-100 md:hidden">
+                  {subject.topics.map((topic) => (
+                    <TopicMobileCard key={topic.topic_id} topic={topic} />
+                  ))}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto no-scrollbar bg-white w-full min-w-0">
+                  <table className="w-full text-xs sm:text-[13px]">
                     <thead className="bg-slate-50 border-b border-slate-100 text-[11px] text-slate-500 uppercase font-semibold">
                       <tr>
                         <th className="text-left px-4 sm:px-5 py-3 whitespace-nowrap w-2/5">Module</th>

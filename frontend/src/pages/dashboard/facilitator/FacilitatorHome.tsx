@@ -11,18 +11,25 @@ function FacilitatorHomeSkeleton() {
         <Skeleton className='h-8 w-48 sm:w-56' />
         <Skeleton className='h-4 w-64 sm:w-80' />
       </div>
-      <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-6'>
+      <div className='grid grid-cols-3 gap-2 sm:gap-4 md:gap-6'>
         {[...Array(3)].map((_, i) => (
           <Card key={i} className='border-none shadow-sm'>
-            <CardContent className='p-4 sm:p-6 flex flex-col justify-between h-32 sm:h-36'>
-              <div className='flex justify-between items-start'>
-                <div className='space-y-2'>
-                  <Skeleton className='h-4 w-24' />
-                  <Skeleton className='h-8 w-16' />
-                </div>
-                <Skeleton className='h-10 w-10 sm:h-12 sm:w-12 rounded-xl' />
+            <CardContent className='p-2.5 sm:p-6 flex flex-col justify-between h-auto min-h-[92px] sm:min-h-0 sm:h-36'>
+              <div className='sm:hidden flex flex-col items-center justify-center h-full space-y-1.5 py-1'>
+                <Skeleton className='h-7 w-7 rounded-lg' />
+                <Skeleton className='h-5 w-10' />
+                <Skeleton className='h-3 w-14' />
               </div>
-              <Skeleton className='h-3 w-32 mt-2' />
+              <div className='hidden sm:flex flex-col justify-between h-full'>
+                <div className='flex justify-between items-start'>
+                  <div className='space-y-2'>
+                    <Skeleton className='h-4 w-24' />
+                    <Skeleton className='h-8 w-16' />
+                  </div>
+                  <Skeleton className='h-12 w-12 rounded-xl shrink-0' />
+                </div>
+                <Skeleton className='h-3 w-32 mt-2' />
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -129,6 +136,7 @@ export default function FacilitatorHome() {
   const statsConfig = [
     {
       label: 'My Colleges',
+      shortLabel: 'Colleges',
       value: stats.totalColleges,
       trend: 'Assigned Scope',
       icon: Building2,
@@ -137,6 +145,7 @@ export default function FacilitatorHome() {
     },
     {
       label: 'Total Students',
+      shortLabel: 'Students',
       value: stats.totalStudents.toLocaleString(),
       trend: 'Enrolled in your colleges',
       icon: Users,
@@ -145,6 +154,7 @@ export default function FacilitatorHome() {
     },
     {
       label: 'Active Subjects',
+      shortLabel: 'Subjects',
       value: stats.totalSubjects,
       trend: 'Content Scope',
       icon: BookOpen,
@@ -154,9 +164,9 @@ export default function FacilitatorHome() {
   ];
 
   return (
-    <div className='p-1 sm:p-2 space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0'>
-      <div className='flex flex-col gap-1 sm:gap-2'>
-        <h1 className='text-xl sm:text-2xl font-bold text-[#1e2653] tracking-tight'>
+    <div className='p-1 sm:p-2 space-y-5 sm:space-y-8 animate-in fade-in duration-500 min-w-0'>
+      <div className='flex flex-col gap-0.5 sm:gap-2'>
+        <h1 className='text-lg sm:text-2xl font-bold text-[#1e2653] tracking-tight'>
           Facilitator Dashboard
         </h1>
         <p className='text-slate-500 text-xs sm:text-sm'>
@@ -164,27 +174,43 @@ export default function FacilitatorHome() {
         </p>
       </div>
 
-      {/* Statistics Grid */}
-      <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-6'>
+      {/* Statistics Grid - 3 cards side-by-side across all screens */}
+      <div className='grid grid-cols-3 gap-2 sm:gap-4 md:gap-6'>
         {statsConfig.map((stat) => (
-          <Card key={stat.label} className='border-none shadow-sm'>
-            <CardContent className='p-4 sm:p-6 flex flex-col justify-between h-32 sm:h-36'>
-              <div className='flex justify-between items-start'>
-                <div>
-                  <p className='text-xs sm:text-sm font-medium text-slate-500'>
-                    {stat.label}
-                  </p>
-                  <h3 className='text-2xl sm:text-3xl font-bold text-slate-900 mt-1'>
-                    {stat.value}
-                  </h3>
+          <Card key={stat.label} className='border-none shadow-sm overflow-hidden'>
+            <CardContent className='p-2.5 sm:p-6 flex flex-col justify-between h-auto min-h-[92px] sm:min-h-0 sm:h-36'>
+              {/* Mobile View (< sm): Centered Icon -> Value -> Label */}
+              <div className='sm:hidden flex flex-col items-center text-center justify-center h-full space-y-1 py-1'>
+                <div className={`${stat.bg} p-1.5 rounded-lg shrink-0 mb-0.5`}>
+                  <stat.icon className={`w-4 h-4 ${stat.color}`} />
                 </div>
-                <div className={`${stat.bg} p-2.5 sm:p-3 rounded-xl shrink-0`}>
-                  <stat.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.color}`} />
-                </div>
+                <h3 className='text-lg font-black text-slate-900 leading-none'>
+                  {stat.value}
+                </h3>
+                <p className='text-[11px] font-bold text-slate-500 leading-tight'>
+                  {stat.shortLabel}
+                </p>
               </div>
-              <p className='text-[11px] sm:text-xs font-medium text-slate-400 mt-2'>
-                {stat.trend}
-              </p>
+
+              {/* Desktop / Tablet View (>= sm): Full layout with trend */}
+              <div className='hidden sm:flex flex-col justify-between h-full'>
+                <div className='flex justify-between items-start'>
+                  <div>
+                    <p className='text-sm font-medium text-slate-500'>
+                      {stat.label}
+                    </p>
+                    <h3 className='text-3xl font-bold text-slate-900 mt-1'>
+                      {stat.value}
+                    </h3>
+                  </div>
+                  <div className={`${stat.bg} p-3 rounded-xl shrink-0`}>
+                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                  </div>
+                </div>
+                <p className='text-xs font-medium text-slate-400 mt-2'>
+                  {stat.trend}
+                </p>
+              </div>
             </CardContent>
           </Card>
         ))}

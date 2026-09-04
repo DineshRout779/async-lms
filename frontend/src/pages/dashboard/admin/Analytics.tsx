@@ -538,21 +538,21 @@ export default function Analytics() {
         <p className='text-xs sm:text-sm text-slate-500 mt-0.5'>Platform-wide activity and engagement overview</p>
       </div>
 
-      <div className='overflow-x-auto no-scrollbar w-full'>
-        <div className='flex gap-1 bg-slate-100 p-1 rounded-2xl w-full sm:w-fit'>
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 whitespace-nowrap min-h-[38px] ${
-                activeTab === tab.id ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <div className='grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-2xl w-full'>
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all min-h-[38px] ${
+              activeTab === tab.id
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+            }`}
+          >
+            {tab.icon}
+            <span className='truncate'>{tab.label}</span>
+          </button>
+        ))}
       </div>
 
       <div className='min-w-0'>

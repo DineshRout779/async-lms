@@ -28,6 +28,7 @@ import {
 import type { Quiz, Topic, SubjectDetailResponse } from '@/utils/types';
 import apiClient from '@/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getYouTubeEmbedUrl } from '@/utils/youtube';
 
 /* =======================
    Types
@@ -107,20 +108,7 @@ const Lesson = () => {
 
   const getEmbedUrl = (url?: string | null) => {
     if (!url) return '';
-    try {
-      const u = new URL(url);
-      if (u.hostname.includes('youtube.com')) {
-        const v = u.searchParams.get('v');
-        if (v) return `https://www.youtube.com/embed/${v}`;
-      }
-      if (u.hostname === 'youtu.be') {
-        const id = u.pathname.replace('/', '');
-        if (id) return `https://www.youtube.com/embed/${id}`;
-      }
-    } catch {
-      // Invalid URL — fall through and return as-is
-    }
-    return url;
+    return getYouTubeEmbedUrl(url) || url;
   };
 
   /* =======================

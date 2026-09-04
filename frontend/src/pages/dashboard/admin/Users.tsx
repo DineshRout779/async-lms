@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Eye, EyeOff, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive, UserPlus } from 'lucide-react';
+import { Pencil, Eye, EyeOff, Search, Loader2, ChevronLeft, ChevronRight, Trash2, Archive, UserPlus, Building2 } from 'lucide-react';
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import FacilitatorProfileDialog from '@/components/common/FacilitatorProfileDialog';
 import RecycleBinModal from '@/components/common/RecycleBinModal';
@@ -411,14 +411,14 @@ const Users = () => {
         }}
         className='space-y-4'
       >
-        <div className='overflow-x-auto no-scrollbar w-full'>
-          <TabsList className='bg-slate-100 p-1 rounded-2xl flex gap-1 w-full sm:w-fit'>
-            <TabsTrigger value='student' className='rounded-xl text-xs sm:text-sm font-semibold shrink-0 py-2 px-3 sm:px-4'>Students ({studentCount})</TabsTrigger>
-            <TabsTrigger value='facilitator' className='rounded-xl text-xs sm:text-sm font-semibold shrink-0 py-2 px-3 sm:px-4'>
+        <div className='w-full'>
+          <TabsList className='bg-slate-100 p-1 rounded-2xl grid grid-cols-3 sm:flex sm:w-fit gap-1 w-full'>
+            <TabsTrigger value='student' className='rounded-xl text-[11px] sm:text-sm font-semibold py-2 px-1 sm:px-4 truncate'>Students ({studentCount})</TabsTrigger>
+            <TabsTrigger value='facilitator' className='rounded-xl text-[11px] sm:text-sm font-semibold py-2 px-1 sm:px-4 truncate'>
               Facilitators ({facilitatorCount})
             </TabsTrigger>
-            <TabsTrigger value='curriculum_developer' className='rounded-xl text-xs sm:text-sm font-semibold shrink-0 py-2 px-3 sm:px-4'>
-              AI Curriculum ({curriculumDevCount})
+            <TabsTrigger value='curriculum_developer' className='rounded-xl text-[11px] sm:text-sm font-semibold py-2 px-1 sm:px-4 truncate'>
+              Curriculum ({curriculumDevCount})
             </TabsTrigger>
           </TabsList>
         </div>
@@ -426,8 +426,98 @@ const Users = () => {
         {/* Student Tab */}
         <TabsContent value='student'>
           <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white min-w-0'>
-            <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
-              <Table className='min-w-[780px] text-xs sm:text-sm'>
+            {/* Mobile Card View (No horizontal scrollbar) */}
+            <div className='divide-y divide-slate-100 md:hidden'>
+              {paginatedUsers.map((user) => (
+                <div key={user.id} className='p-3.5 sm:p-4 space-y-2.5 bg-white hover:bg-slate-50/50 transition-colors'>
+                  {/* Top: Name, Email & Verification */}
+                  <div className='flex items-start justify-between gap-2'>
+                    <div className='min-w-0 flex-1'>
+                      <p className='font-bold text-slate-900 text-xs sm:text-sm truncate'>{user.full_name}</p>
+                      <p className='text-[11px] text-slate-500 truncate'>{user.email}</p>
+                    </div>
+                    <div className='flex items-center gap-1.5 shrink-0'>
+                      <Badge
+                        className={
+                          user.is_verified
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-[10px] px-2 py-0.5'
+                            : 'bg-yellow-50 text-yellow-700 border-yellow-200 font-semibold text-[10px] px-2 py-0.5'
+                        }
+                      >
+                        {user.is_verified ? 'Verified' : 'Unverified'}
+                      </Badge>
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        className='h-6 px-1.5 text-[10px] rounded-md font-semibold'
+                        onClick={() => handleVerify(user.id, user.is_verified)}
+                      >
+                        {user.is_verified ? 'Unverify' : 'Verify'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* College & Details */}
+                  <div className='text-[11px] bg-slate-50/80 p-2.5 rounded-xl border border-slate-100 space-y-1.5'>
+                    <div className='flex items-center gap-1.5 text-slate-800 font-semibold'>
+                      <Building2 className='w-3.5 h-3.5 text-indigo-500 shrink-0' />
+                      <span className='truncate'>{user.college_name || 'No College Assigned'}</span>
+                    </div>
+                    <div className='flex flex-wrap items-center gap-1.5 text-slate-500 pt-1 border-t border-slate-200/50'>
+                      <Badge className='bg-slate-100 text-slate-700 font-semibold text-[10px] border border-slate-200/60'>
+                        {user.enrolled_courses || 0} enrolled
+                      </Badge>
+                      {user.year ? (
+                        <Badge className='bg-blue-50 text-blue-700 border-blue-200 font-semibold text-[10px]'>
+                          Year {user.year}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className='space-y-1 pt-0.5'>
+                    <div className='flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500'>
+                      <span>{user.completed_subtopics || 0}/{user.total_subtopics || 0} Subtopics</span>
+                      <span className='text-indigo-600 font-extrabold'>{user.progress_percent || 0}%</span>
+                    </div>
+                    <Progress value={user.progress_percent || 0} className='h-1.5' />
+                  </div>
+
+                  {/* Actions */}
+                  <div className='flex items-center justify-end gap-1 pt-1 border-t border-slate-50'>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 px-2 text-xs text-slate-600 hover:text-indigo-600 rounded-lg gap-1'
+                      onClick={() => setProfileId(user.id)}
+                    >
+                      <Eye className='h-3.5 w-3.5' /> Profile
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 px-2 text-xs text-slate-600 hover:text-indigo-600 rounded-lg gap-1'
+                      onClick={() => openEditModal(user)}
+                    >
+                      <Pencil className='h-3.5 w-3.5' /> Edit
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 px-2 text-xs text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg gap-1'
+                      onClick={() => setUserToDelete(user)}
+                    >
+                      <Trash2 className='h-3.5 w-3.5' /> Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className='hidden md:block overflow-x-auto no-scrollbar w-full min-w-0'>
+              <Table className='w-full text-xs sm:text-sm'>
                 <TableHeader className='bg-slate-50 border-b border-slate-100'>
                   <TableRow>
                     <TableHead className='font-bold uppercase text-[11px] py-3.5 pl-4 sm:pl-6'>Student</TableHead>
@@ -588,8 +678,92 @@ const Users = () => {
         {/* Facilitator Tab */}
         <TabsContent value='facilitator'>
           <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white min-w-0'>
-            <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
-              <Table className='min-w-[780px] text-xs sm:text-sm'>
+            {/* Mobile Card View (No horizontal scrollbar) */}
+            <div className='divide-y divide-slate-100 md:hidden'>
+              {paginatedUsers.map((user) => (
+                <div key={user.id} className='p-3.5 sm:p-4 space-y-2.5 bg-white hover:bg-slate-50/50 transition-colors'>
+                  {/* Top: Name, Email & Verification */}
+                  <div className='flex items-start justify-between gap-2'>
+                    <div className='min-w-0 flex-1'>
+                      <p className='font-bold text-slate-900 text-xs sm:text-sm truncate'>{user.full_name}</p>
+                      <p className='text-[11px] text-slate-500 truncate'>{user.email}</p>
+                    </div>
+                    <div className='flex items-center gap-1.5 shrink-0'>
+                      <Badge
+                        className={
+                          user.is_verified
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-[10px] px-2 py-0.5'
+                            : 'bg-yellow-50 text-yellow-700 border-yellow-200 font-semibold text-[10px] px-2 py-0.5'
+                        }
+                      >
+                        {user.is_verified ? 'Verified' : 'Pending'}
+                      </Badge>
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        className='h-6 px-1.5 text-[10px] rounded-md font-semibold'
+                        onClick={() => handleVerify(user.id, user.is_verified)}
+                      >
+                        {user.is_verified ? 'Unverify' : 'Verify'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Assigned Colleges */}
+                  <div className='text-[11px] bg-slate-50/80 p-2.5 rounded-xl border border-slate-100 space-y-1.5'>
+                    <span className='text-[10px] font-bold uppercase text-slate-400 block'>Assigned Colleges</span>
+                    <div className='flex flex-wrap gap-1'>
+                      {user.facilitator_college_names && user.facilitator_college_names.length > 0 ? (
+                        user.facilitator_college_names.map((name) => (
+                          <Badge key={`${user.id}-${name}`} className='bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-[10px]'>
+                            {name}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className='text-xs text-slate-400 italic'>No colleges assigned</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Joined Date & Actions */}
+                  <div className='flex items-center justify-between pt-1 border-t border-slate-50'>
+                    <p className='text-[10px] text-slate-400 font-medium'>
+                      Joined {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                    <div className='flex items-center gap-1'>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='h-7 px-2 text-xs text-slate-600 hover:text-indigo-600 rounded-lg gap-1'
+                        onClick={() => setFacilitatorProfileId(user.id)}
+                      >
+                        <Eye className='h-3.5 w-3.5' /> Profile
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='h-7 px-2 text-xs text-slate-600 hover:text-indigo-600 rounded-lg gap-1'
+                        onClick={() => openEditModal(user)}
+                      >
+                        <Pencil className='h-3.5 w-3.5' /> Edit
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='h-7 px-2 text-xs text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg gap-1'
+                        onClick={() => setUserToDelete(user)}
+                      >
+                        <Trash2 className='h-3.5 w-3.5' /> Delete
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className='hidden md:block overflow-x-auto no-scrollbar w-full min-w-0'>
+              <Table className='w-full text-xs sm:text-sm'>
                 <TableHeader className='bg-slate-50 border-b border-slate-100'>
                   <TableRow>
                     <TableHead className='font-bold uppercase text-[11px] py-3.5 pl-4 sm:pl-6'>Facilitator</TableHead>
@@ -742,8 +916,68 @@ const Users = () => {
         {/* Curriculum Developer Tab */}
         <TabsContent value='curriculum_developer'>
           <Card className='border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white min-w-0'>
-            <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
-              <Table className='min-w-[700px] text-xs sm:text-sm'>
+            {/* Mobile Card View (No horizontal scrollbar) */}
+            <div className='divide-y divide-slate-100 md:hidden'>
+              {paginatedUsers.map((user) => (
+                <div key={user.id} className='p-3.5 sm:p-4 space-y-2.5 bg-white hover:bg-slate-50/50 transition-colors'>
+                  {/* Top: Name, Email & Verification */}
+                  <div className='flex items-start justify-between gap-2'>
+                    <div className='min-w-0 flex-1'>
+                      <p className='font-bold text-slate-900 text-xs sm:text-sm truncate'>{user.full_name}</p>
+                      <p className='text-[11px] text-slate-500 truncate'>{user.email}</p>
+                    </div>
+                    <div className='flex items-center gap-1.5 shrink-0'>
+                      <Badge
+                        className={
+                          user.is_verified
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-[10px] px-2 py-0.5'
+                            : 'bg-yellow-50 text-yellow-700 border-yellow-200 font-semibold text-[10px] px-2 py-0.5'
+                        }
+                      >
+                        {user.is_verified ? 'Verified' : 'Pending'}
+                      </Badge>
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        className='h-6 px-1.5 text-[10px] rounded-md font-semibold'
+                        onClick={() => handleVerify(user.id, user.is_verified)}
+                      >
+                        {user.is_verified ? 'Unverify' : 'Verify'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Joined Date & Actions */}
+                  <div className='flex items-center justify-between pt-1 border-t border-slate-50'>
+                    <p className='text-[10px] text-slate-400 font-medium'>
+                      Joined {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                    <div className='flex items-center gap-1'>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='h-7 px-2 text-xs text-slate-600 hover:text-indigo-600 rounded-lg gap-1'
+                        onClick={() => openEditModal(user)}
+                      >
+                        <Pencil className='h-3.5 w-3.5' /> Edit
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='h-7 px-2 text-xs text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg gap-1'
+                        onClick={() => setUserToDelete(user)}
+                      >
+                        <Trash2 className='h-3.5 w-3.5' /> Delete
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className='hidden md:block overflow-x-auto no-scrollbar w-full min-w-0'>
+              <Table className='w-full text-xs sm:text-sm'>
                 <TableHeader className='bg-slate-50 border-b border-slate-100'>
                   <TableRow>
                     <TableHead className='font-bold uppercase text-[11px] py-3.5 pl-4 sm:pl-6'>Developer</TableHead>

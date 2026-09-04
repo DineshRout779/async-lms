@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import {
   ArrowLeft,
@@ -37,11 +37,26 @@ export default function AiCurriculumEditor() {
   const [publishing, setPublishing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<AiLesson | null>(null);
+  const contentPreviewRef = useRef<HTMLDivElement>(null);
   const [addingModule, setAddingModule] = useState(false);
   const [savingModule, setSavingModule] = useState(false);
   const [meta, setMeta] = useState({ title: '', domain: '', duration: '' });
   const [dragModuleIdx, setDragModuleIdx] = useState<number | null>(null);
   const [dragModuleOver, setDragModuleOver] = useState<number | null>(null);
+
+  const handleSelectLesson = (lesson: AiLesson | null) => {
+    setSelectedLesson(lesson);
+    if (lesson) {
+      setTimeout(() => {
+        if (contentPreviewRef.current) {
+          contentPreviewRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+        }
+      }, 60);
+    }
+  };
 
   const base = isAdmin
     ? '/dashboard/admin'
@@ -678,7 +693,7 @@ export default function AiCurriculumEditor() {
                 index={i}
                 selectedLessonId={selectedLesson?.id ?? null}
                 canEdit={canEdit}
-                onSelectLesson={setSelectedLesson}
+                onSelectLesson={handleSelectLesson}
                 onDeleteLesson={handleDeleteLesson}
                 onDeleteTopic={handleDeleteTopic}
                 onDeleteModule={handleDeleteModule}
@@ -742,7 +757,11 @@ export default function AiCurriculumEditor() {
           {/* end tree column */}
 
           {/* Right sidebar */}
-          <div className='w-full lg:basis-5/12 shrink-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-6rem)] overflow-y-auto min-w-0'>
+          <div
+            ref={contentPreviewRef}
+            id='content-preview-panel'
+            className='w-full lg:basis-5/12 shrink-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-6rem)] overflow-y-auto min-w-0 scroll-mt-6'
+          >
             <h3 className='text-sm sm:text-base font-bold text-slate-800 mb-2'>Content Preview</h3>
             <RightSidebar
               selectedLesson={selectedLesson}

@@ -979,7 +979,7 @@ const LearningFlow: React.FC = () => {
         {/* Main Builder Content */}
         <div className='flex-1 space-y-4 sm:space-y-6 min-w-0'>
           {/* Top Banner: Learning Flow Builder */}
-          <div className='rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs min-w-0'>
+          <div className='rounded-2xl border border-slate-200/80 bg-white p-3.5 sm:p-6 shadow-xs min-w-0'>
             <div className='flex items-center gap-3'>
               <div className='h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0'>
                 <Layout className='h-5 w-5' />
@@ -996,7 +996,7 @@ const LearningFlow: React.FC = () => {
           </div>
 
           {/* Active Course Card */}
-          <div className='rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs min-w-0'>
+          <div className='rounded-2xl border border-slate-200/80 bg-white p-3.5 sm:p-6 shadow-xs min-w-0'>
             <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
               <div className='min-w-0 flex-1'>
                 <h2 className='text-lg sm:text-xl font-bold text-slate-900 truncate'>
@@ -1058,7 +1058,7 @@ const LearningFlow: React.FC = () => {
             </div>
           ) : (
             selectedSubject && (
-              <div className='rounded-2xl border border-slate-200/80 bg-white p-3.5 sm:p-6 shadow-xs min-w-0'>
+              <div className='rounded-2xl border border-slate-200/80 bg-white p-2 sm:p-5 md:p-6 shadow-xs min-w-0'>
                 {/* Topics List */}
                 <div className='space-y-3.5 sm:space-y-5 min-w-0'>
                   {structure.length === 0 ? (
@@ -1077,7 +1077,7 @@ const LearningFlow: React.FC = () => {
                         key={topic.id}
                         className='overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xs'
                       >
-                        <div className='flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-3.5 sm:p-4 gap-2.5'>
+                        <div className='flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-2.5 sm:p-4 gap-2'>
                           <div
                             onClick={() => toggleTopic(topic.id)}
                             className='flex items-center gap-2.5 sm:gap-3 hover:cursor-pointer flex-1 min-w-0'
@@ -1181,7 +1181,7 @@ const LearningFlow: React.FC = () => {
 
                         {/* Units - only show when expanded */}
                         {expandedTopics.includes(topic.id) && (
-                          <div className='space-y-4 p-4'>
+                          <div className='space-y-3 p-2 sm:p-4'>
                             {topic.units?.length === 0 ? (
                               <div className='rounded-lg border-2 border-dashed border-slate-200 bg-white py-8 text-center'>
                                 <FolderOpen className='mx-auto h-8 w-8 text-slate-300' />
@@ -1209,7 +1209,7 @@ const LearningFlow: React.FC = () => {
                                       className='overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-xs'
                                     >
                                       {/* Unit Header */}
-                                      <div className='flex items-center justify-between bg-slate-50/40 px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-slate-100 gap-2 hover:bg-slate-50 transition-colors'>
+                                      <div className='flex items-center justify-between bg-slate-50/40 px-2.5 sm:px-4 py-2 sm:py-3 border-b border-slate-100 gap-1.5 hover:bg-slate-50 transition-colors'>
                                         <div
                                           onClick={() => toggleUnit(unit.id)}
                                           className='flex cursor-pointer items-center gap-2.5 sm:gap-3 flex-1 min-w-0'
@@ -1483,7 +1483,7 @@ const LearningFlow: React.FC = () => {
                                                      key={sub.id}
                                                      className='group'
                                                    >
-                                                     <div className='flex items-start sm:items-center justify-between p-3 sm:px-4 sm:py-2.5 hover:bg-slate-50 transition-colors gap-2'>
+                                                     <div className='flex items-start sm:items-center justify-between p-2.5 sm:px-4 sm:py-2.5 hover:bg-slate-50 transition-colors gap-2'>
                                                        <div
                                                          onClick={() =>
                                                            toggleSubtopic(
@@ -1576,7 +1576,7 @@ const LearningFlow: React.FC = () => {
                                                      {expandedSubtopics.includes(
                                                        sub.id,
                                                      ) && (
-                                                       <div className='m-2 sm:mx-4 sm:mb-3 space-y-2.5 rounded-xl border border-slate-200/90 bg-slate-50/80 p-3'>
+                                                       <div className='m-1.5 sm:mx-4 sm:mb-3 space-y-2.5 rounded-xl border border-slate-200/90 bg-slate-50/80 p-3'>
                                                          <div className='flex items-center gap-2 flex-wrap mb-2'>
                                                            {!sub.lesson_content
                                                              ?.length && (

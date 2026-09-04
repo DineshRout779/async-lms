@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Search, Eye, ShieldCheck, ShieldX, Pencil, Trash2, Archive } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Search, Eye, ShieldCheck, ShieldX, Pencil, Trash2, Archive, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { cn, getErrorMessage } from '@/lib/utils';
 import RecycleBinModal from '@/components/common/RecycleBinModal';
 import {
   AlertDialog,
@@ -49,7 +51,6 @@ function FacilitatorUsersSkeleton() {
 }
 import StudentProfileDialog from '@/components/common/StudentProfileDialog';
 import toast from 'react-hot-toast';
-import { getErrorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -107,6 +108,8 @@ const FacilitatorStudents = () => {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [tab, setTab] = useState<'all' | 'pending'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
   const [editStudent, setEditStudent] = useState<StudentRow | null>(null);
   const [editForm, setEditForm] = useState({ degree: '', current_academic_year: '', expected_graduation_year: '' });
   const [saving, setSaving] = useState(false);
@@ -197,6 +200,17 @@ const FacilitatorStudents = () => {
     );
   }, [students, searchQuery, selectedCollege, tab]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCollege, tab]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredStudents.slice(start, start + pageSize);
+  }, [filteredStudents, currentPage, pageSize]);
+
   const pendingCount = useMemo(
     () => students.filter((s) => !s.is_verified).length,
     [students],
@@ -235,30 +249,35 @@ const FacilitatorStudents = () => {
             )}
           </button>
         </div>
-        <button
-          onClick={() => setIsBinOpen(true)}
-          className='flex items-center justify-center gap-2 px-4 py-2 sm:py-1.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-xs w-full sm:w-auto min-h-[38px]'
-        >
-          <Archive className="h-4 w-4 text-slate-500 shrink-0" />
-          <span>Recycle Bin</span>
-        </button>
       </div>
 
       <div className='flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between'>
-        <div className='flex flex-col gap-2.5 sm:gap-3 sm:flex-row sm:items-center w-full md:w-auto flex-1'>
-          <div className='relative w-full sm:w-80'>
-            <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400' />
-            <Input
-              placeholder='Search students by name or email...'
-              className='border-slate-200 bg-white pl-10 text-xs sm:text-sm h-10'
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full md:w-auto flex-1'>
+          {/* Search bar + Recycle Bin in a single line */}
+          <div className='flex items-center gap-2 w-full sm:w-auto flex-1'>
+            <div className='relative flex-1 min-w-0'>
+              <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400' />
+              <Input
+                placeholder='Search students by name or email...'
+                className='border-slate-200 bg-white pl-9 sm:pl-10 text-xs sm:text-sm h-10 w-full'
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={() => setIsBinOpen(true)}
+              className='flex items-center justify-center gap-1.5 px-3 sm:px-4 h-10 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs shrink-0'
+              title='Recycle Bin'
+            >
+              <Archive className='h-4 w-4 text-slate-500 shrink-0' />
+              <span className='hidden xs:inline sm:inline'>Recycle Bin</span>
+              <span className='xs:hidden sm:hidden'>Bin</span>
+            </button>
           </div>
 
           {colleges.length > 1 && (
             <Select value={selectedCollege} onValueChange={setSelectedCollege}>
-              <SelectTrigger className='w-full sm:w-56 border-slate-200 bg-white text-xs sm:text-sm h-10'>
+              <SelectTrigger className='w-full sm:w-56 border-slate-200 bg-white text-xs sm:text-sm h-10 shrink-0'>
                 <SelectValue placeholder='All Colleges' />
               </SelectTrigger>
               <SelectContent>
@@ -280,7 +299,117 @@ const FacilitatorStudents = () => {
       </div>
 
       <Card className='overflow-hidden border-none shadow-sm min-w-0'>
-        <div className='overflow-x-auto custom-scrollbar w-full min-w-0'>
+        {/* Mobile View (< md): Clean Student Cards with NO horizontal scroll */}
+        <div className='md:hidden divide-y divide-slate-100'>
+          {paginatedStudents.map((student) => (
+            <div key={student.id} className='p-3.5 space-y-2.5 bg-white'>
+              {/* Header: Name, Email & Status Badge */}
+              <div className='flex items-start justify-between gap-2'>
+                <div className='min-w-0 flex-1'>
+                  <p className='font-bold text-xs sm:text-sm text-slate-900 truncate'>
+                    {student.full_name}
+                  </p>
+                  <p className='text-[11px] text-slate-500 truncate mt-0.5'>{student.email}</p>
+                </div>
+                {student.is_verified ? (
+                  <Badge className='bg-green-50 text-green-700 border-green-100 border text-[10px] shrink-0 font-semibold px-2 py-0.5'>
+                    Verified
+                  </Badge>
+                ) : (
+                  <Badge className='bg-yellow-50 text-yellow-700 border-yellow-100 border text-[10px] shrink-0 font-semibold px-2 py-0.5'>
+                    Pending
+                  </Badge>
+                )}
+              </div>
+
+              {/* College & Degree/Batch */}
+              <div className='text-[11px] bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 space-y-1.5'>
+                <div className='flex items-center gap-1.5 text-slate-800 font-semibold'>
+                  <Building2 className='w-3.5 h-3.5 text-indigo-500 shrink-0' />
+                  <span className='line-clamp-1 break-words leading-tight' title={student.college_name || undefined}>
+                    {student.college_name || 'No College Assigned'}
+                  </span>
+                </div>
+                <div className='flex flex-wrap items-center gap-1.5 text-slate-500 pt-1 border-t border-slate-200/50'>
+                  <span className='font-medium text-slate-700'>{student.degree || 'Degree N/A'}</span>
+                  {student.batch && (
+                    <Badge
+                      variant='outline'
+                      className='text-[9px] h-4.5 bg-blue-50/60 text-blue-600 border-blue-100 px-1.5'
+                    >
+                      Batch {student.batch}
+                    </Badge>
+                  )}
+                  <span className='text-slate-300'>•</span>
+                  <Badge className='bg-indigo-50 text-indigo-700 border-none text-[10px] px-1.5 py-0'>
+                    {student.enrolled_courses || 0} subjects
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Progress Bar (if verified) */}
+              {student.is_verified && (
+                <div className='space-y-1 pt-0.5'>
+                  <div className='flex items-center justify-between text-[10px] font-bold uppercase tracking-wider'>
+                    <span className='text-slate-400'>Overall Progress</span>
+                    <span className='text-indigo-600 font-extrabold'>
+                      {student.progress_percent || 0}%
+                    </span>
+                  </div>
+                  <Progress
+                    value={student.progress_percent || 0}
+                    className='h-1.5 bg-indigo-50'
+                  />
+                </div>
+              )}
+
+              {/* Action Buttons Bar */}
+              <div className='flex items-center justify-between pt-1 border-t border-slate-50'>
+                <p className='text-[10px] text-slate-400 font-medium'>
+                  Joined {new Date(student.joined_date).toLocaleDateString('en-GB')}
+                </p>
+                <div className='flex items-center gap-1'>
+                  <button
+                    onClick={() => setProfileId(student.id)}
+                    className='p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors flex items-center justify-center'
+                    title='View details'
+                  >
+                    <Eye className='w-3.5 h-3.5' />
+                  </button>
+                  <button
+                    onClick={() => openEdit(student)}
+                    className='p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-amber-600 transition-colors flex items-center justify-center'
+                    title='Edit student'
+                  >
+                    <Pencil className='w-3.5 h-3.5' />
+                  </button>
+                  <button
+                    disabled={verifyingId === student.id}
+                    onClick={() => handleVerify(student.id, !student.is_verified)}
+                    className='p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors disabled:opacity-50 flex items-center justify-center'
+                    title={student.is_verified ? 'Unverify student' : 'Verify student'}
+                  >
+                    {student.is_verified ? (
+                      <ShieldX className='w-3.5 h-3.5' />
+                    ) : (
+                      <ShieldCheck className='w-3.5 h-3.5' />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setUserToDelete(student)}
+                    className='p-1.5 rounded-lg bg-red-50/60 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors flex items-center justify-center'
+                    title='Move to recycle bin'
+                  >
+                    <Trash2 className='w-3.5 h-3.5' />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop View (>= md): Full 8-column Table */}
+        <div className='hidden md:block overflow-x-auto custom-scrollbar w-full min-w-0'>
           <Table className='min-w-[760px]'>
             <TableHeader className='bg-slate-50/50'>
               <TableRow>
@@ -311,7 +440,7 @@ const FacilitatorStudents = () => {
               </TableRow>
             </TableHeader>
             <TableBody className='bg-white'>
-              {filteredStudents.map((student) => (
+              {paginatedStudents.map((student) => (
                 <TableRow
                   key={student.id}
                   className='hover:bg-slate-50/60 transition-colors'
@@ -325,7 +454,7 @@ const FacilitatorStudents = () => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className='text-xs sm:text-sm text-slate-700 truncate block max-w-44'>
+                    <span className='text-xs sm:text-sm text-slate-700 truncate block max-w-64' title={student.college_name || undefined}>
                       {student.college_name || 'N/A'}
                     </span>
                   </TableCell>
@@ -434,6 +563,65 @@ const FacilitatorStudents = () => {
             <p className='text-slate-500 font-medium text-xs sm:text-sm'>
               No students found matching your search.
             </p>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {filteredStudents.length > 0 && totalPages > 1 && (
+          <div className='flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-50/70 border-t border-slate-100'>
+            <p className='text-[11px] sm:text-xs text-slate-500 font-medium'>
+              Showing <span className='font-bold text-slate-800'>{(currentPage - 1) * pageSize + 1}</span> to{' '}
+              <span className='font-bold text-slate-800'>{Math.min(currentPage * pageSize, filteredStudents.length)}</span> of{' '}
+              <span className='font-bold text-slate-800'>{filteredStudents.length}</span> students
+            </p>
+
+            <div className='flex items-center gap-1.5'>
+              <Button
+                variant='outline'
+                size='sm'
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className='rounded-xl h-8 px-2.5 text-xs text-slate-700 bg-white shadow-2xs hover:bg-slate-50'
+              >
+                <ChevronLeft className='h-3.5 w-3.5 mr-1' />
+                Prev
+              </Button>
+
+              {/* Page Number Buttons */}
+              <div className='flex items-center gap-1 mx-0.5'>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((p, idx, arr) => (
+                    <Fragment key={p}>
+                      {idx > 0 && arr[idx - 1] !== p - 1 && (
+                        <span className='text-slate-300 text-xs px-0.5 select-none'>...</span>
+                      )}
+                      <button
+                        onClick={() => setCurrentPage(p)}
+                        className={cn(
+                          'w-7 h-7 rounded-lg text-xs font-bold transition-all flex items-center justify-center',
+                          currentPage === p
+                            ? 'bg-[#1e2653] text-white shadow-xs'
+                            : 'text-slate-600 bg-white border border-slate-200 hover:bg-slate-100',
+                        )}
+                      >
+                        {p}
+                      </button>
+                    </Fragment>
+                  ))}
+              </div>
+
+              <Button
+                variant='outline'
+                size='sm'
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className='rounded-xl h-8 px-2.5 text-xs text-slate-700 bg-white shadow-2xs hover:bg-slate-50'
+              >
+                Next
+                <ChevronRight className='h-3.5 w-3.5 ml-1' />
+              </Button>
+            </div>
           </div>
         )}
       </Card>
