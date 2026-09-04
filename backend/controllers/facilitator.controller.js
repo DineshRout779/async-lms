@@ -915,7 +915,13 @@ exports.getQuizAnalytics = async (req, res) => {
     rows.forEach(r => {
       if (r.max_score) {
         if (!studentScores.has(r.user_id)) studentScores.set(r.user_id, []);
-        studentScores.get(r.user_id).push((r.score / r.max_score) * 100);
+        let pct = (r.score / r.max_score) * 100;
+        // If score was already stored as a percentage (e.g., 100 on a 15-pt quiz)
+        if (r.score > r.max_score && r.score <= 100) {
+          pct = r.score;
+        }
+        pct = Math.min(100, Math.max(0, pct));
+        studentScores.get(r.user_id).push(pct);
       }
     });
 
