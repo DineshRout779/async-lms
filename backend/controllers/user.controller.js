@@ -43,7 +43,7 @@ exports.getUserProfile = async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.created_at,
+         u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.domain, u.role_focus, u.created_at,
          sp.degree, sp.year, sp.current_academic_year,
          COALESCE(c.id, fc_c.id) AS college_id,
          COALESCE(c.name, fc_c.name) AS college_name,
@@ -59,7 +59,7 @@ exports.getUserProfile = async (req, res) => {
        LEFT JOIN public.colleges fc_c ON fc_c.id = fc.college_id
        LEFT JOIN public.user_streaks us ON us.user_id = u.id
        WHERE u.id = $1
-       GROUP BY u.id, u.full_name, u.email, r.role_key, u.created_at,
+       GROUP BY u.id, u.full_name, u.email, r.role_key, u.domain, u.role_focus, u.created_at,
          sp.degree, sp.year, sp.current_academic_year, c.id, c.name, fc_c.id, fc_c.name,
          us.current_streak, us.longest_streak`,
       [userId],
@@ -198,6 +198,8 @@ exports.getAllUsers = async (req, res) => {
         u.full_name,
         u.email,
         LOWER(r.role_key) AS role,
+        u.domain,
+        u.role_focus,
         u.is_verified,
         sp.degree,
         sp.year,
@@ -344,7 +346,7 @@ exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params; // Must be a valid UUID string
     const result = await pool.query(
-      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.is_verified, u.onboarding_step, u.created_at,
+      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.domain, u.role_focus, u.is_verified, u.onboarding_step, u.created_at,
               sp.college_id, sp.degree, sp.year,
               c.name as college_name
        FROM public.users u
@@ -371,7 +373,7 @@ exports.getUserById = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, degree, year, college_id, is_verified, facilitator_college_ids } = req.body;
+    const { full_name, degree, year, college_id, is_verified, facilitator_college_ids, domain, role_focus } = req.body;
 
     const client = await pool.connect();
     try {
@@ -383,18 +385,22 @@ exports.updateUser = async (req, res) => {
           UPDATE public.users
           SET full_name = COALESCE($1, full_name),
               is_verified = COALESCE($2, is_verified),
+              domain = COALESCE($3, domain),
+              role_focus = COALESCE($4, role_focus),
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = $3
-          RETURNING id, full_name, email, role_id, is_verified, updated_at
+          WHERE id = $5
+          RETURNING id, full_name, email, role_id, domain, role_focus, is_verified, updated_at
         )
         SELECT updated.id, updated.full_name, updated.email,
-               LOWER(r.role_key) AS role, updated.is_verified, updated.updated_at
+               LOWER(r.role_key) AS role, updated.domain, updated.role_focus, updated.is_verified, updated.updated_at
         FROM updated
         LEFT JOIN public.roles r ON r.id = updated.role_id
       `;
       const trimmedName = full_name !== undefined && full_name !== null && String(full_name).trim() !== '' ? String(full_name).trim() : null;
       const verifiedVal = typeof is_verified === 'boolean' ? is_verified : null;
-      const userResult = await client.query(userUpdateQuery, [trimmedName, verifiedVal, id]);
+      const domainVal = domain !== undefined && domain !== null && String(domain).trim() !== '' ? String(domain).trim() : null;
+      const roleFocusVal = role_focus !== undefined && role_focus !== null && String(role_focus).trim() !== '' ? String(role_focus).trim() : null;
+      const userResult = await client.query(userUpdateQuery, [trimmedName, verifiedVal, domainVal, roleFocusVal, id]);
 
       if (userResult.rowCount === 0) {
         await client.query('ROLLBACK');
@@ -438,7 +444,7 @@ exports.updateUser = async (req, res) => {
       }
 
       await client.query('COMMIT');
-      logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { full_name, degree, year, college_id, is_verified, facilitator_college_ids } });
+      logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { full_name, degree, year, college_id, is_verified, facilitator_college_ids, domain, role_focus } });
       res.json(user);
     } catch (error) {
       await client.query('ROLLBACK');

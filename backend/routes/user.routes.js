@@ -14,6 +14,7 @@ router.put('/password', verifyToken, userController.changePassword);
 router.use(verifyToken, isAdmin);
 
 router.get('/', userController.getAllUsers);
+router.post('/curriculum-developer', require('../controllers/admin.controller').createCurriculumDeveloper);
 router.get('/bin', userController.getRecycleBin);
 router.get('/:id', userController.getUserById);
 router.put('/:id', userController.updateUser);

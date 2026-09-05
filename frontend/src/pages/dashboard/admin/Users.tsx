@@ -67,6 +67,8 @@ interface UserRow {
   progress_percent?: number;
   facilitator_college_ids?: string[];
   facilitator_college_names?: string[];
+  domain?: string | null;
+  role_focus?: string | null;
   is_verified: boolean;
   created_at: string;
 }
@@ -82,6 +84,8 @@ interface EditForm {
   year: string;
   college_id: string;
   facilitator_college_ids: string[];
+  domain?: string;
+  role_focus?: string;
 }
 
 const Users = () => {
@@ -106,6 +110,8 @@ const Users = () => {
     email: '',
     password: '',
     confirm_password: '',
+    domain: '',
+    role_focus: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -116,6 +122,8 @@ const Users = () => {
     year: '',
     college_id: '',
     facilitator_college_ids: [],
+    domain: '',
+    role_focus: '',
   });
 
   const fetchUsers = async () => {
@@ -187,6 +195,8 @@ const Users = () => {
       year: user.year ? String(user.year) : '',
       college_id: user.college_id || '',
       facilitator_college_ids: user.facilitator_college_ids || [],
+      domain: user.domain || '',
+      role_focus: user.role_focus || '',
     });
     setEditOpen(true);
   };
@@ -228,6 +238,10 @@ const Users = () => {
           editingUser.role === 'facilitator'
             ? form.facilitator_college_ids
             : undefined,
+        domain:
+          editingUser.role === 'curriculum_developer' ? form.domain || null : undefined,
+        role_focus:
+          editingUser.role === 'curriculum_developer' ? form.role_focus?.trim() || null : undefined,
       });
 
       toast.success('User updated successfully');
@@ -253,8 +267,14 @@ const Users = () => {
   };
 
   const handleCreateCurriculumDeveloper = async () => {
-    if (!createForm.full_name.trim() || !createForm.email.trim() || !createForm.password) {
-      toast.error('Please fill in all required fields');
+    if (
+      !createForm.full_name.trim() ||
+      !createForm.email.trim() ||
+      !createForm.password ||
+      !createForm.domain ||
+      !createForm.role_focus.trim()
+    ) {
+      toast.error('Please fill in all required fields (including domain and role)');
       return;
     }
     if (createForm.password !== createForm.confirm_password) {
@@ -268,6 +288,8 @@ const Users = () => {
         full_name: createForm.full_name.trim(),
         email: createForm.email.trim(),
         password: createForm.password,
+        domain: createForm.domain,
+        role_focus: createForm.role_focus.trim(),
       });
       toast.success('Curriculum developer created successfully');
       setCreateOpen(false);
@@ -276,6 +298,8 @@ const Users = () => {
         email: '',
         password: '',
         confirm_password: '',
+        domain: '',
+        role_focus: '',
       });
       await fetchUsers();
     } catch (error) {
@@ -947,6 +971,25 @@ const Users = () => {
                     </div>
                   </div>
 
+                  {/* Domain & Role Tags */}
+                  <div className='flex flex-wrap items-center gap-1.5 pt-0.5'>
+                    {user.domain && (
+                      <span className='inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200'>
+                        {user.domain}
+                      </span>
+                    )}
+                    {user.role_focus && (
+                      <span className='inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200'>
+                        {user.role_focus}
+                      </span>
+                    )}
+                    {!user.domain && !user.role_focus && (
+                      <span className='text-[10px] text-slate-400 italic'>
+                        No domain / role assigned
+                      </span>
+                    )}
+                  </div>
+
                   {/* Joined Date & Actions */}
                   <div className='flex items-center justify-between pt-1 border-t border-slate-50'>
                     <p className='text-[10px] text-slate-400 font-medium'>
@@ -981,6 +1024,7 @@ const Users = () => {
                 <TableHeader className='bg-slate-50 border-b border-slate-100'>
                   <TableRow>
                     <TableHead className='font-bold uppercase text-[11px] py-3.5 pl-4 sm:pl-6'>Developer</TableHead>
+                    <TableHead className='font-bold uppercase text-[11px] py-3.5'>Domain & Role</TableHead>
                     <TableHead className='font-bold uppercase text-[11px] py-3.5'>Joined</TableHead>
                     <TableHead className='font-bold uppercase text-[11px] py-3.5'>Status</TableHead>
                     <TableHead className='text-right font-bold uppercase text-[11px] py-3.5 pr-4 sm:pr-6'>Actions</TableHead>
@@ -992,6 +1036,24 @@ const Users = () => {
                       <TableCell className='pl-4 sm:pl-6 py-3.5'>
                         <p className='font-bold text-slate-900 truncate'>{user.full_name}</p>
                         <p className='text-xs text-slate-500 truncate'>{user.email}</p>
+                      </TableCell>
+                      <TableCell className='py-3.5 whitespace-nowrap'>
+                        {user.domain || user.role_focus ? (
+                          <div className='flex flex-wrap items-center gap-1.5'>
+                            {user.domain && (
+                              <span className='inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200'>
+                                {user.domain}
+                              </span>
+                            )}
+                            {user.role_focus && (
+                              <span className='inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200'>
+                                {user.role_focus}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className='text-xs text-slate-400'>—</span>
+                        )}
                       </TableCell>
                       <TableCell className='text-xs sm:text-sm text-slate-500 py-3.5 whitespace-nowrap'>
                         {new Date(user.created_at).toLocaleDateString('en-GB', {
@@ -1113,7 +1175,7 @@ const Users = () => {
           </DialogHeader>
           <div className='space-y-3.5 py-3'>
             <div className='space-y-1.5'>
-              <Label htmlFor='create-name' className='text-xs font-semibold text-slate-600'>Full Name</Label>
+              <Label htmlFor='create-name' className='text-xs font-semibold text-slate-600'>Full Name <span className='text-red-500'>*</span></Label>
               <Input
                 id='create-name'
                 placeholder='Enter full name'
@@ -1125,7 +1187,7 @@ const Users = () => {
               />
             </div>
             <div className='space-y-1.5'>
-              <Label htmlFor='create-email' className='text-xs font-semibold text-slate-600'>Email</Label>
+              <Label htmlFor='create-email' className='text-xs font-semibold text-slate-600'>Email <span className='text-red-500'>*</span></Label>
               <Input
                 id='create-email'
                 type='email'
@@ -1137,8 +1199,42 @@ const Users = () => {
                 }
               />
             </div>
+
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+              <div className='space-y-1.5'>
+                <Label htmlFor='create-domain' className='text-xs font-semibold text-slate-600'>Domain <span className='text-red-500'>*</span></Label>
+                <select
+                  id='create-domain'
+                  className='h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm text-slate-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-300'
+                  value={createForm.domain}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, domain: e.target.value }))
+                  }
+                >
+                  <option value=''>Select Domain</option>
+                  <option value='Tech'>Tech</option>
+                  <option value='Business'>Business</option>
+                  <option value='Creative'>Creative</option>
+                  <option value='Non-IT'>Non-IT</option>
+                  <option value='Data'>Data</option>
+                </select>
+              </div>
+              <div className='space-y-1.5'>
+                <Label htmlFor='create-role-focus' className='text-xs font-semibold text-slate-600'>Role <span className='text-red-500'>*</span></Label>
+                <Input
+                  id='create-role-focus'
+                  placeholder='e.g. Full Stack Developer'
+                  className='h-10 rounded-xl border-slate-200'
+                  value={createForm.role_focus}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, role_focus: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
             <div className='space-y-1.5'>
-              <Label htmlFor='create-password' className='text-xs font-semibold text-slate-600'>Password</Label>
+              <Label htmlFor='create-password' className='text-xs font-semibold text-slate-600'>Password <span className='text-red-500'>*</span></Label>
               <div className='relative'>
                 <Input
                   id='create-password'
@@ -1160,7 +1256,7 @@ const Users = () => {
               </div>
             </div>
             <div className='space-y-1.5'>
-              <Label htmlFor='create-confirm-password' className='text-xs font-semibold text-slate-600'>Confirm Password</Label>
+              <Label htmlFor='create-confirm-password' className='text-xs font-semibold text-slate-600'>Confirm Password <span className='text-red-500'>*</span></Label>
               <div className='relative'>
                 <Input
                   id='create-confirm-password'
@@ -1204,9 +1300,9 @@ const Users = () => {
           {editingUser && (
             <div className='space-y-4 py-2'>
               <div className='space-y-1.5'>
-                <Label htmlFor='full-name' className='text-xs font-semibold text-slate-600'>Full Name</Label>
+                <Label htmlFor='full_name' className='text-xs font-semibold text-slate-600'>Full Name</Label>
                 <Input
-                  id='full-name'
+                  id='full_name'
                   className='h-10 rounded-xl border-slate-200'
                   value={form.full_name}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -1219,6 +1315,47 @@ const Users = () => {
                 <Label className='text-xs font-semibold text-slate-600'>Email</Label>
                 <Input value={editingUser.email} disabled className='h-10 rounded-xl bg-slate-50 border-slate-200 text-slate-500' />
               </div>
+
+              {editingUser.role === 'curriculum_developer' && (
+                <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                  <div className='space-y-1.5'>
+                    <Label htmlFor='edit-domain' className='text-xs font-semibold text-slate-600'>Domain</Label>
+                    <select
+                      id='edit-domain'
+                      className='h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm text-slate-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-300'
+                      value={form.domain || ''}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          domain: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value=''>Select Domain</option>
+                      <option value='Tech'>Tech</option>
+                      <option value='Business'>Business</option>
+                      <option value='Creative'>Creative</option>
+                      <option value='Non-IT'>Non-IT</option>
+                      <option value='Data'>Data</option>
+                    </select>
+                  </div>
+                  <div className='space-y-1.5'>
+                    <Label htmlFor='edit-role-focus' className='text-xs font-semibold text-slate-600'>Role Focus</Label>
+                    <Input
+                      id='edit-role-focus'
+                      placeholder='e.g. Full Stack Developer, Data Analyst'
+                      className='h-10 rounded-xl border-slate-200'
+                      value={form.role_focus || ''}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          role_focus: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              )}
 
               {editingUser.role === 'student' && (
                 <>

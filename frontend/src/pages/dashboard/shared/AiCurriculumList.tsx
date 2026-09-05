@@ -246,11 +246,29 @@ export default function AiCurriculumList() {
       {/* Header Row */}
       <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6'>
         <div>
-          <h1 className='text-xl sm:text-[26px] font-extrabold text-slate-800 tracking-tight'>
-            Courses
-          </h1>
+          <div className='flex items-center gap-2.5 flex-wrap'>
+            <h1 className='text-xl sm:text-[26px] font-extrabold text-slate-800 tracking-tight'>
+              Courses
+            </h1>
+            {user?.role === 'curriculum_developer' && (user.domain || user.role_focus) && (
+              <div className='flex items-center gap-1.5'>
+                {user.domain && (
+                  <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200'>
+                    Domain: {user.domain}
+                  </span>
+                )}
+                {user.role_focus && (
+                  <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200'>
+                    Role: {user.role_focus}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           <p className='text-xs sm:text-[14px] text-slate-500 mt-0.5 sm:mt-1'>
-            Manage course curriculum and access
+            {user?.role === 'curriculum_developer' && (user.domain || user.role_focus)
+              ? `Curriculum Developer workspace for ${[user.domain, user.role_focus].filter(Boolean).join(' • ')}`
+              : 'Manage course curriculum and access'}
           </p>
         </div>
         <button

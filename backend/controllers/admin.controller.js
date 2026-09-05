@@ -4017,11 +4017,14 @@ exports.getCollegeDetail = async (req, res) => {
 // ============================================
 
 exports.createCurriculumDeveloper = async (req, res) => {
-  const { full_name, email, password } = req.body;
+  const { full_name, email, password, domain, role_focus, role: typedRole } = req.body;
 
   if (!full_name || !email || !password) {
     return res.status(400).json({ message: 'Full name, email, and password are required' });
   }
+
+  const assignedRoleFocus = (role_focus || typedRole || '').trim();
+  const assignedDomain = (domain || '').trim();
 
   const normalizedEmail = email.toLowerCase().trim();
 
@@ -4053,11 +4056,11 @@ exports.createCurriculumDeveloper = async (req, res) => {
     // 4. Create user
     const insertRes = await pool.query(
       `
-      INSERT INTO users (full_name, email, password_hash, role_id, onboarding_step, is_verified, is_email_verified, must_change_password)
-      VALUES ($1, $2, $3, $4, 'done', true, true, true)
-      RETURNING id, full_name, email
+      INSERT INTO users (full_name, email, password_hash, role_id, domain, role_focus, onboarding_step, is_verified, is_email_verified, must_change_password)
+      VALUES ($1, $2, $3, $4, $5, $6, 'done', true, true, true)
+      RETURNING id, full_name, email, domain, role_focus
       `,
-      [full_name.trim(), normalizedEmail, passwordHash, role_id]
+      [full_name.trim(), normalizedEmail, passwordHash, role_id, assignedDomain || null, assignedRoleFocus || null]
     );
 
     logAction({
@@ -4065,7 +4068,7 @@ exports.createCurriculumDeveloper = async (req, res) => {
       action: 'CREATE',
       entityType: 'user',
       entityId: insertRes.rows[0].id,
-      details: { email: normalizedEmail, role: 'CURRICULUM_DEVELOPER' }
+      details: { email: normalizedEmail, role: 'CURRICULUM_DEVELOPER', domain: assignedDomain, role_focus: assignedRoleFocus }
     });
 
     res.json({

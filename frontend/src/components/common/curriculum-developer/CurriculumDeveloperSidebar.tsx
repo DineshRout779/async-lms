@@ -121,6 +121,20 @@ export default function CurriculumDeveloperSidebar({
               <p className='text-[11px] text-yellow-400 font-medium truncate leading-tight'>
                 {currentUser?.email}
               </p>
+              {(currentUser?.domain || currentUser?.role_focus) && (
+                <div className='flex flex-wrap items-center gap-1 mt-1'>
+                  {currentUser.domain && (
+                    <span className='inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'>
+                      {currentUser.domain}
+                    </span>
+                  )}
+                  {currentUser.role_focus && (
+                    <span className='inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-slate-700/50 text-slate-300 border border-slate-600/40 truncate max-w-[120px]'>
+                      {currentUser.role_focus}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

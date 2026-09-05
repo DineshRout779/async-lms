@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Sparkles, Loader2, Plus, Trash2, GripVertical, Check } from 'lucide-react';
 import { aiCurriculumApi } from '@/features/aiCurriculum/aiCurriculumApi';
@@ -443,6 +443,16 @@ export default function AiCurriculumBuilder() {
   const [generatingTopics, setGeneratingTopics] = useState(false);
   const [creating, setCreating] = useState(false);
   const [topicSuggestions, setTopicSuggestions] = useState<TopicSuggestion[]>([]);
+
+  useEffect(() => {
+    if (user?.role === 'curriculum_developer' || user?.domain || user?.role_focus) {
+      setForm((prev) => ({
+        ...prev,
+        domain: prev.domain || (user?.domain ? user.domain.toLowerCase() : ''),
+        role_focus: (prev.role_focus === 'student' || !prev.role_focus) && user?.role_focus ? user.role_focus : prev.role_focus,
+      }));
+    }
+  }, [user]);
 
   const set = (partial: Partial<CourseFormData>) => setForm((f) => ({ ...f, ...partial }));
 
