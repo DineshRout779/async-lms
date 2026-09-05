@@ -17,6 +17,7 @@ router.get('/', userController.getAllUsers);
 router.get('/bin', userController.getRecycleBin);
 router.get('/:id', userController.getUserById);
 router.put('/:id', userController.updateUser);
+router.patch('/:id/verify', userController.verifyUser);
 router.patch('/:id/role', userController.changeUserRole);
 router.delete('/:id', userController.deleteUser);
 router.post('/:id/restore', userController.restoreUser);

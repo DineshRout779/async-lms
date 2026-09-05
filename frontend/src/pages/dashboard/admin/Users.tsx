@@ -242,7 +242,7 @@ const Users = () => {
 
   const handleVerify = async (userId: string, currentStatus: boolean) => {
     try {
-      await apiClient.put(`/users/${userId}`, {
+      await apiClient.patch(`/users/${userId}/verify`, {
         is_verified: !currentStatus,
       });
       toast.success(`User ${!currentStatus ? 'verified' : 'unverified'} successfully`);

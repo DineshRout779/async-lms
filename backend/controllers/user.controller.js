@@ -371,7 +371,7 @@ exports.getUserById = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, degree, year, college_id } = req.body;
+    const { full_name, degree, year, college_id, is_verified, facilitator_college_ids } = req.body;
 
     const client = await pool.connect();
     try {
@@ -381,17 +381,20 @@ exports.updateUser = async (req, res) => {
       const userUpdateQuery = `
         WITH updated AS (
           UPDATE public.users
-          SET full_name = $1,
+          SET full_name = COALESCE($1, full_name),
+              is_verified = COALESCE($2, is_verified),
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-          RETURNING id, full_name, email, role_id, updated_at
+          WHERE id = $3
+          RETURNING id, full_name, email, role_id, is_verified, updated_at
         )
         SELECT updated.id, updated.full_name, updated.email,
-               LOWER(r.role_key) AS role, updated.updated_at
+               LOWER(r.role_key) AS role, updated.is_verified, updated.updated_at
         FROM updated
         LEFT JOIN public.roles r ON r.id = updated.role_id
       `;
-      const userResult = await client.query(userUpdateQuery, [full_name, id]);
+      const trimmedName = full_name !== undefined && full_name !== null && String(full_name).trim() !== '' ? String(full_name).trim() : null;
+      const verifiedVal = typeof is_verified === 'boolean' ? is_verified : null;
+      const userResult = await client.query(userUpdateQuery, [trimmedName, verifiedVal, id]);
 
       if (userResult.rowCount === 0) {
         await client.query('ROLLBACK');
@@ -401,7 +404,7 @@ exports.updateUser = async (req, res) => {
       const user = userResult.rows[0];
 
       // 2. Update Student Profile if applicable
-      if (user.role === 'student') {
+      if (user.role === 'student' && (degree !== undefined || year !== undefined || college_id !== undefined)) {
         const profileUpdateQuery = `
           INSERT INTO public.student_profiles (user_id, degree, year, college_id)
           VALUES ($1, $2, $3, $4)
@@ -412,14 +415,30 @@ exports.updateUser = async (req, res) => {
         `;
         await client.query(profileUpdateQuery, [
           id,
-          degree || null,
-          year || null,
-          college_id || null,
+          degree !== undefined ? (degree || null) : null,
+          year !== undefined ? (year || null) : null,
+          college_id !== undefined ? (college_id || null) : null,
         ]);
       }
 
+      // 3. Update Facilitator Colleges if applicable
+      if (user.role === 'facilitator' && Array.isArray(facilitator_college_ids)) {
+        await client.query(
+          'UPDATE public.facilitator_colleges SET is_deleted = true WHERE facilitator_id = $1 AND is_deleted = false',
+          [id]
+        );
+        if (facilitator_college_ids.length > 0) {
+          await client.query(
+            `INSERT INTO public.facilitator_colleges (facilitator_id, college_id)
+             SELECT $1, unnest($2::uuid[])
+             ON CONFLICT (facilitator_id, college_id) DO UPDATE SET is_deleted = false`,
+            [id, facilitator_college_ids]
+          );
+        }
+      }
+
       await client.query('COMMIT');
-      logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { full_name, degree, year, college_id } });
+      logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { full_name, degree, year, college_id, is_verified, facilitator_college_ids } });
       res.json(user);
     } catch (error) {
       await client.query('ROLLBACK');
@@ -430,6 +449,46 @@ exports.updateUser = async (req, res) => {
   } catch (err) {
     console.error('Update User Error:', err.message);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Verify or unverify user (Admin only)
+exports.verifyUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_verified } = req.body;
+
+    if (is_verified === undefined) {
+      return res.status(400).json({ success: false, message: 'is_verified status is required' });
+    }
+
+    const query = `
+      WITH updated AS (
+        UPDATE public.users
+        SET is_verified = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING id, full_name, role_id, is_verified
+      )
+      SELECT updated.id, updated.full_name, LOWER(r.role_key) AS role, updated.is_verified
+      FROM updated
+      LEFT JOIN public.roles r ON r.id = updated.role_id;
+    `;
+
+    const result = await pool.query(query, [Boolean(is_verified), id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    logAction({ req, action: 'UPDATE', entityType: 'user', entityId: id, details: { is_verified } });
+    res.json({
+      success: true,
+      message: `User ${is_verified ? 'verified' : 'unverified'} successfully`,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error verifying user:', error);
+    res.status(500).json({ success: false, message: 'Failed to update user verification status' });
   }
 };
 
