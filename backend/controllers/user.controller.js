@@ -499,18 +499,60 @@ exports.deleteUser = async (req, res) => {
 exports.restoreUser = async (req, res) => {
   try {
     const { id } = req.params;
-        
+
+    const userCheck = await pool.query(
+      `SELECT id, email, full_name, deleted_at FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (userCheck.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found in recycle bin' });
+    }
+
+    const user = userCheck.rows[0];
+
+    if (!user.deleted_at) {
+      return res.status(400).json({ message: 'User is already active and not in the recycle bin' });
+    }
+
+    // Check if another active user is currently using the same email address
+    if (user.email) {
+      const conflict = await pool.query(
+        `SELECT id, full_name, email FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) AND deleted_at IS NULL AND id != $2`,
+        [user.email, id]
+      );
+      if (conflict.rowCount > 0) {
+        const existing = conflict.rows[0];
+        return res.status(400).json({
+          message: `Cannot restore "${user.full_name || user.email}" because another active account (${existing.full_name || existing.email}) is already using this email address.`
+        });
+      }
+    }
+
     const result = await pool.query(
       `UPDATE users SET deleted_at = NULL, deleted_by = NULL WHERE id = $1 RETURNING id`,
       [id]
     );
+
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'User not found in recycle bin' });
     }
+
+    // Reactivate any facilitator college mappings if applicable
+    await pool.query(
+      `UPDATE facilitator_colleges SET is_deleted = false WHERE facilitator_id = $1`,
+      [id]
+    ).catch(() => {});
+
     res.json({ success: true, message: 'User restored successfully' });
   } catch (err) {
-    console.error('Restore User Error:', err.message);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Restore User Error:', err);
+    if (err.code === '23505') {
+      return res.status(400).json({
+        message: 'Cannot restore this user because another active account is already using this email address.'
+      });
+    }
+    res.status(500).json({ message: err.message || 'Server error' });
   }
 };
 
