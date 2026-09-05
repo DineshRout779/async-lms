@@ -466,11 +466,11 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
                 <button
                   type='button'
                   onClick={() => setShowSolution(v => !v)}
-                  className='flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900'
+                  className='flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-indigo-600 transition-colors flex-wrap text-left'
                 >
-                  {showSolution ? <ChevronDown className='w-3.5 h-3.5' /> : <ChevronRight className='w-3.5 h-3.5' />}
-                  Reference solution
-                  <span className='font-normal text-slate-400'>used to verify your tests — never shown to students</span>
+                  {showSolution ? <ChevronDown className='w-3.5 h-3.5 text-indigo-600 shrink-0' /> : <ChevronRight className='w-3.5 h-3.5 shrink-0' />}
+                  <span>Reference solution</span>
+                  <span className='font-normal text-slate-400 text-[11px]'>(used to verify tests — never shown to students)</span>
                 </button>
                 {showSolution && (
                   <div className='mt-2 space-y-2'>
@@ -513,35 +513,43 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
 
               {/* Test cases */}
               <div>
-                <div className='flex items-center justify-between mb-1.5 gap-2 flex-wrap'>
+                <div className='flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-2'>
                   <label className='text-xs font-medium text-slate-600'>
                     Test cases
                     <span className='ml-1 font-normal text-slate-400'>
                       {isData ? 'inputs and the result they must produce' : 'each one is graded'}
                     </span>
                   </label>
-                  <div className='flex items-center gap-1.5'>
+                  <div className='flex items-center gap-1.5 flex-wrap'>
                     <Button
+                      type='button'
                       onClick={generateTests}
                       disabled={generating}
                       size='sm'
                       variant='outline'
-                      className='text-xs h-7 border-indigo-300 text-indigo-600 hover:bg-indigo-600 hover:text-white hover:border-indigo-600'
+                      className='text-xs h-7.5 px-2.5 border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors shrink-0'
                     >
-                      {generating ? <Loader2 className='w-3 h-3 mr-1 animate-spin' /> : <Sparkles className='w-3 h-3 mr-1' />}
+                      {generating ? <Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' /> : <Sparkles className='w-3.5 h-3.5 mr-1.5' />}
                       AI generate
                     </Button>
-                    <Button onClick={addTestCase} size='sm' variant='outline' className='text-xs h-7'>
-                      <Plus className='w-3 h-3 mr-1' /> Add test
+                    <Button
+                      type='button'
+                      onClick={addTestCase}
+                      size='sm'
+                      variant='outline'
+                      className='text-xs h-7.5 px-2.5 shrink-0'
+                    >
+                      <Plus className='w-3.5 h-3.5 mr-1.5' /> Add test
                     </Button>
                     <Button
+                      type='button'
                       onClick={verifyTests}
                       disabled={verifying}
                       size='sm'
                       variant='outline'
-                      className='text-xs h-7 border-emerald-300 text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600'
+                      className='text-xs h-7.5 px-2.5 border-emerald-300 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-colors shrink-0'
                     >
-                      {verifying ? <Loader2 className='w-3 h-3 mr-1 animate-spin' /> : <ShieldCheck className='w-3 h-3 mr-1' />}
+                      {verifying ? <Loader2 className='w-3.5 h-3.5 mr-1.5 animate-spin' /> : <ShieldCheck className='w-3.5 h-3.5 mr-1.5' />}
                       Verify
                     </Button>
                   </div>
@@ -602,7 +610,7 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
                           </div>
 
                           {isData ? (
-                            <div className='grid grid-cols-2 gap-px bg-slate-200'>
+                            <div className='grid grid-cols-1 sm:grid-cols-2 gap-px bg-slate-200'>
                               <label className='bg-white px-3 py-2 flex flex-col gap-1'>
                                 <span className='text-[10px] uppercase tracking-wide text-slate-400 font-medium'>
                                   Arguments · JSON array
@@ -678,23 +686,23 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
                   </div>
                 )}
 
-                <div className='mt-2 flex items-start justify-between gap-3 flex-wrap'>
-                  <p className='text-xs text-slate-400 flex-1 min-w-[15rem]'>
+                <div className='mt-2.5 flex items-start justify-between gap-2.5 flex-wrap'>
+                  <p className='text-[11px] sm:text-xs text-slate-500 flex-1 min-w-0 leading-relaxed'>
                     {isData ? (
                       <>
                         Each case calls{' '}
-                        <code className='bg-slate-100 px-1 rounded'>
+                        <code className='bg-slate-100 px-1 py-0.5 rounded font-mono text-[11px] text-slate-800'>
                           {task.entry_function || 'solution'}(…arguments)
                         </code>{' '}
                         and compares the result. Values are JSON, so{' '}
-                        <code className='bg-slate-100 px-1 rounded'>"text"</code> needs quotes.
+                        <code className='bg-slate-100 px-1 py-0.5 rounded font-mono text-[11px] text-slate-800'>"text"</code> needs quotes.
                         Sample cases run on “Run tests”; the rest are held back for Submit.
                       </>
                     ) : (
                       <>
-                        Use <code className='bg-slate-100 px-1 rounded'>test(name, fn)</code> and{' '}
-                        <code className='bg-slate-100 px-1 rounded'>{env.assertHint}</code>. Tests run
-                        server-side against <code className='bg-slate-100 px-1 rounded'>{env.entryFile}</code>.
+                        Use <code className='bg-slate-100 px-1 py-0.5 rounded font-mono text-[11px] text-slate-800'>test(name, fn)</code> and{' '}
+                        <code className='bg-slate-100 px-1 py-0.5 rounded font-mono text-[11px] text-slate-800'>{env.assertHint}</code>. Tests run
+                        server-side against <code className='bg-slate-100 px-1 py-0.5 rounded font-mono text-[11px] text-slate-800'>{env.entryFile}</code>.
                       </>
                     )}
                   </p>
@@ -702,7 +710,7 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
                     <button
                       type='button'
                       onClick={() => switchMode(isData ? 'code' : 'data')}
-                      className='text-xs text-slate-500 underline underline-offset-2 hover:text-slate-800 shrink-0'
+                      className='text-xs font-semibold text-indigo-600 hover:text-indigo-700 underline underline-offset-2 shrink-0'
                     >
                       {isData ? 'Write test code instead' : 'Use the inputs table instead'}
                     </button>
@@ -919,24 +927,24 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className='fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto'>
-      <div className='w-full max-w-3xl rounded-xl bg-white shadow-xl my-4 flex flex-col max-h-[92vh]'>
+    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 backdrop-blur-xs'>
+      <div className='w-[96vw] sm:max-w-3xl rounded-2xl bg-white shadow-2xl my-auto flex flex-col max-h-[92vh] overflow-hidden'>
 
         {/* Header */}
-        <div className='flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0'>
-          <div>
-            <h3 className='text-lg font-bold text-slate-900'>
+        <div className='flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 shrink-0'>
+          <div className='min-w-0 flex-1 pr-2'>
+            <h3 className='text-base sm:text-lg font-bold text-slate-900 truncate'>
               {editData ? 'Edit exercise' : 'Create exercise'}
             </h3>
-            <p className='text-xs text-slate-500 mt-0.5'>{subtopicTitle}</p>
+            <p className='text-xs text-slate-500 mt-0.5 truncate max-w-xs sm:max-w-md'>{subtopicTitle}</p>
           </div>
-          <button onClick={onClose} className='text-slate-400 hover:text-slate-600'>
+          <button onClick={onClose} className='p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors shrink-0'>
             <X className='h-5 w-5' />
           </button>
         </div>
 
         {/* Body */}
-        <div className='flex-1 overflow-y-auto px-6 py-5 space-y-7'>
+        <div className='flex-1 overflow-y-auto p-4 sm:p-6 space-y-6'>
 
           <Section title='Basics'>
             <div className='space-y-3'>
@@ -1041,7 +1049,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className='flex gap-3 px-6 py-4 border-t border-slate-200 shrink-0'>
+        <div className='flex gap-3 px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 shrink-0'>
           <Button onClick={onClose} className='flex-1 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'>
             Cancel
           </Button>

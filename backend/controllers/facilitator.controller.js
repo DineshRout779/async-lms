@@ -913,9 +913,10 @@ exports.getQuizAnalytics = async (req, res) => {
     // Calculate one average score per student
     const studentScores = new Map();
     rows.forEach(r => {
-      if (r.max_score) {
+      if (r.max_score && r.max_score > 0) {
         if (!studentScores.has(r.user_id)) studentScores.set(r.user_id, []);
-        studentScores.get(r.user_id).push((r.score / r.max_score) * 100);
+        const pct = Math.min(100, Math.max(0, (r.score / r.max_score) * 100));
+        studentScores.get(r.user_id).push(pct);
       }
     });
 
@@ -1629,12 +1630,29 @@ exports.restoreStudent = async (req, res) => {
     const colRes = await pool.query('SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false', [facilitatorId]);
     const collegeIds = colRes.rows.map(r => r.college_id);
     const accessCheck = await pool.query(
-      `SELECT 1 FROM student_profiles sp WHERE sp.user_id = $1 AND sp.college_id = ANY($2::uuid[])`,
+      `SELECT u.email, u.full_name FROM users u
+       JOIN student_profiles sp ON sp.user_id = u.id
+       WHERE u.id = $1 AND sp.college_id = ANY($2::uuid[])`,
       [id, collegeIds]
     );
     if (accessCheck.rowCount === 0) {
-      return res.status(403).json({ message: 'Access denied' });
+      return res.status(403).json({ message: 'Access denied or student not found in your assigned colleges' });
     }
+
+    const student = accessCheck.rows[0];
+    if (student.email) {
+      const conflict = await pool.query(
+        `SELECT id, full_name, email FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) AND deleted_at IS NULL AND id != $2`,
+        [student.email, id]
+      );
+      if (conflict.rowCount > 0) {
+        const existing = conflict.rows[0];
+        return res.status(400).json({
+          message: `Cannot restore "${student.full_name || student.email}" because another active account (${existing.full_name || existing.email}) is already using this email address.`
+        });
+      }
+    }
+
     await pool.query(`UPDATE users SET deleted_at = NULL, deleted_by = NULL WHERE id = $1`, [id]);
     res.json({ success: true, message: 'Student restored successfully' });
   } catch (err) {

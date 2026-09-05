@@ -3330,9 +3330,17 @@ exports.getLockControlOverview = async (req, res) => {
 exports.setLockControlTopic = async (req, res) => {
   try {
     const { topicId, action } = req.params;
-    const { collegeId, batch } = req.query;
+    const collegeId = req.query.collegeId || req.body.collegeId;
+    const batch = req.query.batch || req.body.batch;
 
-    if (!['lock', 'unlock'].includes(action)) {
+    let isUnlocked;
+    if (action === 'unlock') {
+      isUnlocked = true;
+    } else if (action === 'lock') {
+      isUnlocked = false;
+    } else if (action === 'toggle' || action === 'set') {
+      isUnlocked = req.body.unlock !== undefined ? !!req.body.unlock : !!req.body.is_unlocked;
+    } else {
       return res.status(400).json({
         success: false,
         message: 'Invalid action',
@@ -3341,7 +3349,6 @@ exports.setLockControlTopic = async (req, res) => {
 
     const collegeParam = collegeId || null;
     const batchParam = batch ? parseInt(batch, 10) : null;
-    const isUnlocked = action === 'unlock';
     const isLocked = !isUnlocked;
 
     // 1. Update existing students' progress rows
@@ -3401,7 +3408,7 @@ exports.setLockControlTopic = async (req, res) => {
     });
     res.json({
       success: true,
-      message: `Topic ${action}ed successfully`,
+      message: `Topic ${isUnlocked ? 'unlocked' : 'locked'} successfully`,
     });
   } catch (error) {
     console.error('Error updating topic lock:', error.message, error.stack);
@@ -3419,9 +3426,17 @@ exports.setLockControlTopic = async (req, res) => {
 exports.setLockControlSubtopic = async (req, res) => {
   try {
     const { subtopicId, action } = req.params;
-    const { collegeId, batch } = req.query;
+    const collegeId = req.query.collegeId || req.body.collegeId;
+    const batch = req.query.batch || req.body.batch;
 
-    if (!['lock', 'unlock'].includes(action)) {
+    let isUnlocked;
+    if (action === 'unlock') {
+      isUnlocked = true;
+    } else if (action === 'lock') {
+      isUnlocked = false;
+    } else if (action === 'toggle' || action === 'set') {
+      isUnlocked = req.body.unlock !== undefined ? !!req.body.unlock : !!req.body.is_unlocked;
+    } else {
       return res.status(400).json({
         success: false,
         message: 'Invalid action',
@@ -3430,7 +3445,6 @@ exports.setLockControlSubtopic = async (req, res) => {
 
     const collegeParam = collegeId || null;
     const batchParam = batch ? parseInt(batch, 10) : null;
-    const isUnlocked = action === 'unlock';
     const isLocked = !isUnlocked;
 
     // 1. Update existing students' progress rows
@@ -4003,11 +4017,14 @@ exports.getCollegeDetail = async (req, res) => {
 // ============================================
 
 exports.createCurriculumDeveloper = async (req, res) => {
-  const { full_name, email, password } = req.body;
+  const { full_name, email, password, domain, role_focus, role: typedRole } = req.body;
 
   if (!full_name || !email || !password) {
     return res.status(400).json({ message: 'Full name, email, and password are required' });
   }
+
+  const assignedRoleFocus = (role_focus || typedRole || '').trim();
+  const assignedDomain = (domain || '').trim();
 
   const normalizedEmail = email.toLowerCase().trim();
 
@@ -4039,11 +4056,11 @@ exports.createCurriculumDeveloper = async (req, res) => {
     // 4. Create user
     const insertRes = await pool.query(
       `
-      INSERT INTO users (full_name, email, password_hash, role_id, onboarding_step, is_verified, is_email_verified, must_change_password)
-      VALUES ($1, $2, $3, $4, 'done', true, true, true)
-      RETURNING id, full_name, email
+      INSERT INTO users (full_name, email, password_hash, role_id, domain, role_focus, onboarding_step, is_verified, is_email_verified, must_change_password)
+      VALUES ($1, $2, $3, $4, $5, $6, 'done', true, true, true)
+      RETURNING id, full_name, email, domain, role_focus
       `,
-      [full_name.trim(), normalizedEmail, passwordHash, role_id]
+      [full_name.trim(), normalizedEmail, passwordHash, role_id, assignedDomain || null, assignedRoleFocus || null]
     );
 
     logAction({
@@ -4051,7 +4068,7 @@ exports.createCurriculumDeveloper = async (req, res) => {
       action: 'CREATE',
       entityType: 'user',
       entityId: insertRes.rows[0].id,
-      details: { email: normalizedEmail, role: 'CURRICULUM_DEVELOPER' }
+      details: { email: normalizedEmail, role: 'CURRICULUM_DEVELOPER', domain: assignedDomain, role_focus: assignedRoleFocus }
     });
 
     res.json({

@@ -625,17 +625,17 @@ export function ModuleItem({
 
   return (
     <div
-      className={`transition-all ${isDragOver ? 'opacity-60' : ''}`}
+      className={`transition-all space-y-2 ${isDragOver ? 'opacity-60' : ''}`}
       {...dragHandlers}
     >
       {/* Topic header row */}
-      <div className='flex items-center gap-2 px-2 py-2 rounded-lg group/mod hover:bg-slate-100/60 transition-colors'>
+      <div className='flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100/80 hover:bg-slate-200/70 border border-slate-200/70 transition-colors group/mod'>
         {canEdit && (
           <GripVertical className='w-4 h-4 text-slate-300 cursor-grab shrink-0' />
         )}
         <button
           onClick={() => setOpen((v) => !v)}
-          className='shrink-0 text-slate-400 hover:text-slate-600 transition-colors'
+          className='shrink-0 text-slate-400 hover:text-slate-600 transition-colors p-0.5'
         >
           {open ? (
             <ChevronDown className='w-4 h-4' />
@@ -648,7 +648,7 @@ export function ModuleItem({
           disabled={!canEdit}
           editing={renaming}
           onStopEditing={() => setRenaming(false)}
-          className='flex-1 text-[14px] font-bold text-slate-800 min-w-0'
+          className='flex-1 text-[13px] sm:text-[14px] font-bold text-slate-800 min-w-0'
           onSave={async (v) => {
             await aiCurriculumApi.updateModule(mod.id, { title: v });
             onRenameModule(mod.id, v);
@@ -662,7 +662,7 @@ export function ModuleItem({
               <button
                 onClick={handleGenerateUnits}
                 title='Generate Units with AI'
-                className='p-1.5 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-all'
+                className='p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-all'
               >
                 <Sparkles className='w-3.5 h-3.5' />
               </button>
@@ -672,14 +672,14 @@ export function ModuleItem({
                 e.stopPropagation();
                 setRenaming(true);
               }}
-              className='p-1.5 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-all'
+              className='p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-all'
             >
               <Pencil className='w-3.5 h-3.5' />
             </button>
             <button
               onClick={handleDeleteModule}
               disabled={deleting}
-              className='p-1.5 text-slate-300 hover:text-red-400 rounded-lg hover:bg-red-50 transition-all'
+              className='p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-50 transition-all'
             >
               {deleting ? (
                 <Loader2 className='w-3.5 h-3.5 animate-spin' />
@@ -693,7 +693,7 @@ export function ModuleItem({
 
       {/* Unit cards */}
       {open && (
-        <div className='ml-6 mt-1 space-y-2'>
+        <div className='mt-2 space-y-2.5'>
           {mod.topics.length === 0 && (
             <p className='text-[13px] text-slate-300 italic px-2 py-1'>
               No units yet.

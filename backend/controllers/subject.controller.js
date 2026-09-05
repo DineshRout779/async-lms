@@ -1038,8 +1038,50 @@ exports.getQuizContent = async (req, res) => {
 exports.getMarkdownContent = async (req, res) => {
   try {
     const { markdownPathURL } = req.body;
-    const fetchUrl = await presignIfS3(markdownPathURL);
-    const content = await fetchTextFromUrl(fetchUrl);
+    if (!markdownPathURL) {
+      return res.status(400).json({ success: false, message: 'No markdown path provided' });
+    }
+
+    let content = '';
+    if (markdownPathURL.startsWith('ai-generated:')) {
+      content = markdownPathURL.slice('ai-generated:'.length);
+    } else if (markdownPathURL.startsWith('http://') || markdownPathURL.startsWith('https://')) {
+      try {
+        const fetchUrl = await presignIfS3(markdownPathURL);
+        content = await fetchTextFromUrl(fetchUrl);
+      } catch (fetchErr) {
+        console.warn('Could not fetch remote markdown from URL:', markdownPathURL, fetchErr.message);
+        content = `# Lesson Content\n\n> **Note:** The remote content file at \`${markdownPathURL.split('/').pop()}\` could not be fetched from remote storage (${fetchErr.message}).\n\nPlease check that AWS S3 credentials or internet connectivity are properly configured.`;
+      }
+    } else {
+      const relativePath = markdownPathURL.replace(/^\/+/, '');
+      const allowedBaseDirs = [
+        path.resolve(__dirname, '..', 'data'),
+        path.resolve(__dirname, '..', 'uploads'),
+      ];
+      let found = false;
+      for (const baseDir of allowedBaseDirs) {
+        const resolvedPath = path.resolve(baseDir, relativePath);
+        // Ensure the path is strictly within the allowed base directory
+        if (resolvedPath === baseDir || resolvedPath.startsWith(baseDir + path.sep)) {
+          try {
+            content = await fs.readFile(resolvedPath, 'utf8');
+            found = true;
+            break;
+          } catch {
+            // continue searching other allowed dirs
+          }
+        }
+      }
+      if (!found) {
+        if (markdownPathURL.includes('\n') || !markdownPathURL.endsWith('.md')) {
+          content = markdownPathURL;
+        } else {
+          content = `# Lesson Content\n\n> Local file \`${markdownPathURL}\` was not found on the server.`;
+        }
+      }
+    }
+
     res.json({ success: true, data: content });
   } catch (err) {
     console.error('Error | getMarkdownContent:', err);

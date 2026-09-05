@@ -1,6 +1,6 @@
 import { useEffect, useState, Fragment } from 'react';
-import { Loader2, ChevronDown, ChevronUp, FileCode, CheckSquare, BookOpen } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Loader2, ChevronDown, ChevronUp, FileCode, CheckSquare, BookOpen, X, Sparkles } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import apiClient from '@/services/api';
 
@@ -24,19 +24,19 @@ type SubjectGroup = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  Submitted: 'bg-emerald-50 text-emerald-700',
-  Approved: 'bg-blue-50 text-blue-700',
-  Passed: 'bg-emerald-50 text-emerald-700',
-  Failed: 'bg-red-50 text-red-700',
-  Pending: 'bg-amber-50 text-amber-700',
-  'Not Started': 'bg-slate-100 text-slate-500',
-  Completed: 'bg-emerald-50 text-emerald-700',
-  'In Progress': 'bg-purple-50 text-purple-700',
+  Submitted: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+  Approved: 'bg-blue-50 text-blue-700 border-blue-200/60',
+  Passed: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+  Failed: 'bg-red-50 text-red-700 border-red-200/60',
+  Pending: 'bg-amber-50 text-amber-700 border-amber-200/60',
+  'Not Started': 'bg-slate-100 text-slate-600 border-slate-200/70',
+  Completed: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+  'In Progress': 'bg-purple-50 text-purple-700 border-purple-200/60',
 };
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-slate-100 text-slate-500'}`}>
+    <span className={`px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-semibold whitespace-nowrap inline-flex items-center shrink-0 border ${STATUS_COLORS[status] ?? 'bg-slate-100 text-slate-500 border-slate-200/60'}`}>
       {status}
     </span>
   );
@@ -63,60 +63,65 @@ function TopicRowView({ topic }: { topic: TopicRow }) {
 
   return (
     <Fragment>
-      <tr className={`hover:bg-slate-50 transition-colors ${expanded ? 'bg-slate-50' : ''}`}>
-        <td className="px-4 py-3">
-          <div className="flex items-center gap-2">
+      <tr className={`hover:bg-slate-50/80 transition-colors ${expanded ? 'bg-indigo-50/20' : ''}`}>
+        <td className="px-4 sm:px-5 py-3.5 whitespace-nowrap">
+          <div className="flex items-center gap-2.5">
             {hasItems ? (
               <button 
                 onClick={() => setExpanded(!expanded)}
-                className="p-1 hover:bg-slate-200 rounded text-slate-500 transition-colors"
+                className={`p-1 rounded-lg transition-colors min-h-[28px] min-w-[28px] flex items-center justify-center ${
+                  expanded ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'
+                }`}
+                title={expanded ? 'Collapse details' : 'Expand details'}
               >
-                {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
-            ) : <div className="w-6" />}
-            <span className="font-semibold text-slate-800">{topic.topic_title}</span>
+            ) : <div className="w-7" />}
+            <span className="font-semibold text-slate-800 text-xs sm:text-sm">{topic.topic_title}</span>
           </div>
         </td>
-        <td className="px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="w-full bg-slate-100 rounded-full h-2 min-w-[80px] overflow-hidden flex">
+        <td className="px-4 sm:px-5 py-3.5 whitespace-nowrap">
+          <div className="flex items-center gap-2.5">
+            <div className="w-24 sm:w-28 bg-slate-100 rounded-full h-2 overflow-hidden flex shrink-0">
               <div
-                className="bg-indigo-500 h-2 rounded-full transition-all duration-1000"
+                className="bg-indigo-500 h-2 rounded-full transition-all duration-700"
                 style={{ width: `${topic.progress}%` }}
               />
             </div>
-            <span className="text-[13px] font-semibold text-slate-700 min-w-[32px]">
+            <span className="text-xs font-bold text-slate-700 min-w-[32px]">
               {topic.progress}%
             </span>
           </div>
         </td>
-        <td className="px-4 py-3 text-slate-600">
+        <td className="px-4 sm:px-5 py-3.5 text-slate-600 whitespace-nowrap">
           {topic.quiz_max > 0 ? (
-            `${topic.quiz_score}/${topic.quiz_max}`
+            <span className="text-[11px] font-semibold text-slate-600 px-2 py-0.5 bg-slate-100/90 border border-slate-200/70 rounded-md whitespace-nowrap">
+              {topic.quiz_score}/{topic.quiz_max}
+            </span>
           ) : (
-            <span className="text-slate-400 text-xs">No quiz</span>
+            <span className="text-slate-400 text-xs italic">No quiz</span>
           )}
         </td>
-        <td className="px-4 py-3">
+        <td className="px-4 sm:px-5 py-3.5 whitespace-nowrap">
           {asgTotal === 0 ? (
-            <span className="text-slate-400 text-xs">No assignment</span>
+            <span className="text-slate-400 text-xs italic">No assignment</span>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-2 whitespace-nowrap">
               <StatusBadge status={asgStatus} />
-              <span className="text-xs text-slate-500 font-medium">
-                ({asgSubmitted} / {asgTotal})
+              <span className="text-[11px] text-slate-500 font-semibold px-2 py-0.5 bg-slate-100/90 border border-slate-200/70 rounded-md whitespace-nowrap">
+                {asgSubmitted}/{asgTotal}
               </span>
             </div>
           )}
         </td>
-        <td className="px-4 py-3">
+        <td className="px-4 sm:px-5 py-3.5 whitespace-nowrap">
           {projTotal === 0 ? (
-            <span className="text-slate-400 text-xs">No project</span>
+            <span className="text-slate-400 text-xs italic">No project</span>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-2 whitespace-nowrap">
               <StatusBadge status={projStatus} />
-              <span className="text-xs text-slate-500 font-medium">
-                ({projSubmitted} / {projTotal})
+              <span className="text-[11px] text-slate-500 font-semibold px-2 py-0.5 bg-slate-100/90 border border-slate-200/70 rounded-md whitespace-nowrap">
+                {projSubmitted}/{projTotal}
               </span>
             </div>
           )}
@@ -125,41 +130,41 @@ function TopicRowView({ topic }: { topic: TopicRow }) {
       
       {expanded && hasItems && (
         <tr>
-          <td colSpan={5} className="bg-slate-50/80 p-0 border-b border-slate-200">
-            <div className="px-8 py-6 grid grid-cols-1 md:grid-cols-3 gap-6 shadow-inner">
+          <td colSpan={5} className="bg-slate-50/90 p-0 border-b border-slate-200">
+            <div className="px-4 sm:px-8 py-4 sm:py-6 grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 shadow-inner">
               
               {/* Quizzes */}
               <div>
-                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <CheckSquare className="w-3.5 h-3.5" /> Quizzes
+                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5 sm:mb-3 flex items-center gap-1.5">
+                  <CheckSquare className="w-3.5 h-3.5 text-indigo-500" /> Quizzes
                 </h4>
                 {topic.quizzes_list.length > 0 ? (
                   <ul className="space-y-2">
                     {topic.quizzes_list.map(q => (
-                      <li key={q.id} className="flex flex-col gap-2 bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                        <span className="font-semibold text-slate-800 leading-tight">{q.title}</span>
+                      <li key={q.id} className="flex flex-col gap-1.5 bg-white p-3 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
+                        <span className="font-semibold text-xs sm:text-[13px] text-slate-800 leading-tight">{q.title}</span>
                         <div className="flex items-center justify-between mt-1">
-                          <span className="text-slate-500 text-xs font-medium">Score: {q.score}/{q.max_score}</span>
+                          <span className="text-slate-500 text-[11px] sm:text-xs font-semibold px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100">Score: {q.score}/{q.max_score}</span>
                           <StatusBadge status={q.status} />
                         </div>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <div className="text-xs text-slate-400 italic bg-white/50 p-3 rounded-lg border border-slate-100 border-dashed">No quizzes for this module.</div>
+                  <div className="text-xs text-slate-400 italic bg-white/70 p-3 rounded-xl border border-slate-200/60 border-dashed">No quizzes for this module.</div>
                 )}
               </div>
               
               {/* Assignments */}
               <div>
-                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5" /> Assignments
+                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5 sm:mb-3 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-500" /> Assignments
                 </h4>
                 {topic.assignments_list.length > 0 ? (
                   <ul className="space-y-2">
                     {topic.assignments_list.map(a => (
-                      <li key={a.id} className="flex flex-col gap-2 bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                        <span className="font-semibold text-slate-800 leading-tight">{a.title}</span>
+                      <li key={a.id} className="flex flex-col gap-1.5 bg-white p-3 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
+                        <span className="font-semibold text-xs sm:text-[13px] text-slate-800 leading-tight">{a.title}</span>
                         <div className="flex justify-end mt-1">
                           <StatusBadge status={a.status} />
                         </div>
@@ -167,20 +172,20 @@ function TopicRowView({ topic }: { topic: TopicRow }) {
                     ))}
                   </ul>
                 ) : (
-                  <div className="text-xs text-slate-400 italic bg-white/50 p-3 rounded-lg border border-slate-100 border-dashed">No assignments for this module.</div>
+                  <div className="text-xs text-slate-400 italic bg-white/70 p-3 rounded-xl border border-slate-200/60 border-dashed">No assignments for this module.</div>
                 )}
               </div>
               
               {/* Projects */}
               <div>
-                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <FileCode className="w-3.5 h-3.5" /> Projects
+                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5 sm:mb-3 flex items-center gap-1.5">
+                  <FileCode className="w-3.5 h-3.5 text-indigo-500" /> Projects
                 </h4>
                 {topic.projects_list.length > 0 ? (
                   <ul className="space-y-2">
                     {topic.projects_list.map(p => (
-                      <li key={p.id} className="flex flex-col gap-2 bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                        <span className="font-semibold text-slate-800 leading-tight">{p.title}</span>
+                      <li key={p.id} className="flex flex-col gap-1.5 bg-white p-3 rounded-xl border border-slate-200 shadow-xs hover:shadow-sm transition-shadow">
+                        <span className="font-semibold text-xs sm:text-[13px] text-slate-800 leading-tight">{p.title}</span>
                         <div className="flex justify-end mt-1">
                           <StatusBadge status={p.status} />
                         </div>
@@ -188,7 +193,7 @@ function TopicRowView({ topic }: { topic: TopicRow }) {
                     ))}
                   </ul>
                 ) : (
-                  <div className="text-xs text-slate-400 italic bg-white/50 p-3 rounded-lg border border-slate-100 border-dashed">No projects for this module.</div>
+                  <div className="text-xs text-slate-400 italic bg-white/70 p-3 rounded-xl border border-slate-200/60 border-dashed">No projects for this module.</div>
                 )}
               </div>
 
@@ -197,6 +202,158 @@ function TopicRowView({ topic }: { topic: TopicRow }) {
         </tr>
       )}
     </Fragment>
+  );
+}
+
+function TopicMobileCard({ topic }: { topic: TopicRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasItems = topic.assignments_list.length > 0 || topic.projects_list.length > 0 || topic.quizzes_list.length > 0;
+
+  const asgTotal = topic.assignments_list.length;
+  const asgSubmitted = topic.assignments_list.filter(a => ['Submitted', 'Approved', 'Passed'].includes(a.status)).length;
+  const asgStatus = asgTotal === 0 ? 'Not Started' 
+                    : asgSubmitted >= asgTotal ? 'Completed' 
+                    : asgSubmitted > 0 ? 'In Progress' 
+                    : 'Not Started';
+
+  const projTotal = topic.projects_list.length;
+  const projSubmitted = topic.projects_list.filter(p => ['Submitted', 'Approved', 'Passed'].includes(p.status)).length;
+  const projStatus = projTotal === 0 ? 'Not Started' 
+                     : projSubmitted >= projTotal ? 'Completed' 
+                     : projSubmitted > 0 ? 'In Progress' 
+                     : 'Not Started';
+
+  return (
+    <div className={`p-3.5 sm:p-4 space-y-3 transition-colors ${expanded ? 'bg-indigo-50/20' : 'hover:bg-slate-50/60'}`}>
+      <div 
+        onClick={() => hasItems && setExpanded(!expanded)}
+        className={`flex items-start justify-between gap-2 ${hasItems ? 'cursor-pointer' : ''}`}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {hasItems ? (
+            <div className={`p-1 rounded-lg transition-colors shrink-0 ${expanded ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400'}`}>
+              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          ) : (
+            <div className="w-4" />
+          )}
+          <span className="font-bold text-slate-800 text-xs sm:text-sm leading-snug">
+            {topic.topic_title}
+          </span>
+        </div>
+        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100/80 px-2 py-0.5 rounded-full shrink-0">
+          {topic.progress}%
+        </span>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+        <div
+          className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
+          style={{ width: `${topic.progress}%` }}
+        />
+      </div>
+
+      {/* 3 Metric Chips */}
+      <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+        {/* Quiz */}
+        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Quiz</span>
+          {topic.quiz_max > 0 ? (
+            <span className="font-bold text-slate-700">{topic.quiz_score}/{topic.quiz_max}</span>
+          ) : (
+            <span className="text-slate-400 italic text-[10px]">None</span>
+          )}
+        </div>
+
+        {/* Assignment */}
+        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Assignment</span>
+          {asgTotal > 0 ? (
+            <div className="flex flex-col items-center gap-0.5">
+              <StatusBadge status={asgStatus} />
+              <span className="text-[10px] text-slate-400 font-semibold">{asgSubmitted}/{asgTotal}</span>
+            </div>
+          ) : (
+            <span className="text-slate-400 italic text-[10px]">None</span>
+          )}
+        </div>
+
+        {/* Project */}
+        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">Project</span>
+          {projTotal > 0 ? (
+            <div className="flex flex-col items-center gap-0.5">
+              <StatusBadge status={projStatus} />
+              <span className="text-[10px] text-slate-400 font-semibold">{projSubmitted}/{projTotal}</span>
+            </div>
+          ) : (
+            <span className="text-slate-400 italic text-[10px]">None</span>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded Sub-items on mobile */}
+      {expanded && hasItems && (
+        <div className="pt-2 space-y-3 border-t border-slate-100 animate-in fade-in duration-200">
+          {/* Quizzes */}
+          {topic.quizzes_list.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <CheckSquare className="w-3 h-3 text-indigo-500" /> Quizzes
+              </h5>
+              <div className="space-y-1.5">
+                {topic.quizzes_list.map(q => (
+                  <div key={q.id} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2">
+                    <span className="font-semibold text-xs text-slate-800 truncate">{q.title}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] text-slate-500 font-semibold px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100">
+                        {q.score}/{q.max_score}
+                      </span>
+                      <StatusBadge status={q.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Assignments */}
+          {topic.assignments_list.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <BookOpen className="w-3 h-3 text-indigo-500" /> Assignments
+              </h5>
+              <div className="space-y-1.5">
+                {topic.assignments_list.map(a => (
+                  <div key={a.id} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2">
+                    <span className="font-semibold text-xs text-slate-800 truncate">{a.title}</span>
+                    <StatusBadge status={a.status} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Projects */}
+          {topic.projects_list.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <FileCode className="w-3 h-3 text-indigo-500" /> Projects
+              </h5>
+              <div className="space-y-1.5">
+                {topic.projects_list.map(p => (
+                  <div key={p.id} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2">
+                    <span className="font-semibold text-xs text-slate-800 truncate">{p.title}</span>
+                    <StatusBadge status={p.status} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -231,40 +388,71 @@ export function StudentDetailsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[90vw] lg:max-w-6xl max-h-[90vh] overflow-y-auto bg-slate-50 p-6">
-        <DialogHeader className="mb-2">
-          <DialogTitle className="text-2xl font-bold text-slate-900">
-            {studentName}'s Progress Details
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent 
+        showCloseButton={false}
+        className="w-[95vw] sm:max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-slate-50 rounded-2xl shadow-2xl border border-slate-200/80"
+      >
+        {/* Fixed Header with anchored close button */}
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-b border-slate-200/80 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0 pr-3">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-sm sm:text-base md:text-lg font-bold text-slate-900 truncate tracking-tight">
+                {studentName}'s Progress Details
+              </DialogTitle>
+              <p className="text-[11px] text-slate-400 truncate">Course, module & assessment performance breakdown</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 sm:p-2 hover:bg-slate-100 active:bg-slate-200 text-slate-400 hover:text-slate-700 rounded-xl transition-colors shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
+            title="Close modal"
+          >
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-          </div>
-        ) : subjects.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-slate-500">
-            No module data available.
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {subjects.map((subject) => (
-              <Card key={subject.subject_id} className="border border-slate-200 shadow-sm overflow-hidden">
-                <CardHeader className="border-b border-slate-100 bg-white px-6 py-4">
-                  <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-indigo-500" />
-                    {subject.subject_name}
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 no-scrollbar space-y-4 sm:space-y-6">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
+              <p className="text-xs text-slate-400">Loading student details...</p>
+            </div>
+          ) : subjects.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400 text-xs sm:text-sm">
+              <BookOpen className="w-8 h-8 text-slate-300 mb-2" />
+              <span>No module data available for this student.</span>
+            </div>
+          ) : (
+            subjects.map((subject) => (
+              <Card key={subject.subject_id} className="border border-slate-200/80 shadow-xs rounded-2xl overflow-hidden bg-white">
+                <CardHeader className="border-b border-slate-100 bg-slate-50/50 px-4 sm:px-6 py-3 sm:py-3.5">
+                  <CardTitle className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-indigo-500" />
+                    <span>{subject.subject_name}</span>
                   </CardTitle>
                 </CardHeader>
-                <div className="overflow-x-auto bg-white">
-                  <table className="w-full text-[13px]">
-                    <thead className="bg-slate-50 text-xs text-slate-500 uppercase font-semibold">
+
+                {/* Mobile Card List */}
+                <div className="divide-y divide-slate-100 md:hidden">
+                  {subject.topics.map((topic) => (
+                    <TopicMobileCard key={topic.topic_id} topic={topic} />
+                  ))}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto no-scrollbar bg-white w-full min-w-0">
+                  <table className="w-full text-xs sm:text-[13px]">
+                    <thead className="bg-slate-50 border-b border-slate-100 text-[11px] text-slate-500 uppercase font-semibold">
                       <tr>
-                        <th className="text-left px-4 py-3 w-1/3">Module</th>
-                        <th className="text-left px-4 py-3">Progress</th>
-                        <th className="text-left px-4 py-3">Quiz Score</th>
-                        <th className="text-left px-4 py-3">Assignment</th>
-                        <th className="text-left px-4 py-3">Project</th>
+                        <th className="text-left px-4 sm:px-5 py-3 whitespace-nowrap w-2/5">Module</th>
+                        <th className="text-left px-4 sm:px-5 py-3 whitespace-nowrap">Progress</th>
+                        <th className="text-left px-4 sm:px-5 py-3 whitespace-nowrap">Quiz Score</th>
+                        <th className="text-left px-4 sm:px-5 py-3 whitespace-nowrap">Assignment</th>
+                        <th className="text-left px-4 sm:px-5 py-3 whitespace-nowrap">Project</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -275,9 +463,9 @@ export function StudentDetailsModal({
                   </table>
                 </div>
               </Card>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

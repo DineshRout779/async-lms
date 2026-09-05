@@ -58,6 +58,8 @@ pool.on('error', (err, client) => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 1;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS domain TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS role_focus TEXT;
       
       CREATE TABLE IF NOT EXISTS otp_codes (
         id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -470,6 +472,14 @@ pool.on('error', (err, client) => {
         `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false`,
       );
     }
+
+    // ── Curriculum Developer domain & role_focus on users table ──
+    await client.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS domain TEXT`,
+    );
+    await client.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS role_focus TEXT`,
+    );
 
     // ... rest of the tables
     // Dump lessons for debugging
