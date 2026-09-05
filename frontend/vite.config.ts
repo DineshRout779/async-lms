@@ -41,7 +41,6 @@ export default defineConfig({
     exclude: ['@webcontainer/api'],
   },
   server: {
-    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

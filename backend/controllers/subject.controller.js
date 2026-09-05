@@ -1055,19 +1055,22 @@ exports.getMarkdownContent = async (req, res) => {
       }
     } else {
       const relativePath = markdownPathURL.replace(/^\/+/, '');
-      const candidates = [
-        path.join(__dirname, '..', 'data', relativePath),
-        path.join(__dirname, '..', 'uploads', relativePath),
-        path.join(__dirname, '..', relativePath),
+      const allowedBaseDirs = [
+        path.resolve(__dirname, '..', 'data'),
+        path.resolve(__dirname, '..', 'uploads'),
       ];
       let found = false;
-      for (const filePath of candidates) {
-        try {
-          content = await fs.readFile(filePath, 'utf8');
-          found = true;
-          break;
-        } catch {
-          // continue
+      for (const baseDir of allowedBaseDirs) {
+        const resolvedPath = path.resolve(baseDir, relativePath);
+        // Ensure the path is strictly within the allowed base directory
+        if (resolvedPath === baseDir || resolvedPath.startsWith(baseDir + path.sep)) {
+          try {
+            content = await fs.readFile(resolvedPath, 'utf8');
+            found = true;
+            break;
+          } catch {
+            // continue searching other allowed dirs
+          }
         }
       }
       if (!found) {

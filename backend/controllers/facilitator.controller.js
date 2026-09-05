@@ -913,14 +913,9 @@ exports.getQuizAnalytics = async (req, res) => {
     // Calculate one average score per student
     const studentScores = new Map();
     rows.forEach(r => {
-      if (r.max_score) {
+      if (r.max_score && r.max_score > 0) {
         if (!studentScores.has(r.user_id)) studentScores.set(r.user_id, []);
-        let pct = (r.score / r.max_score) * 100;
-        // If score was already stored as a percentage (e.g., 100 on a 15-pt quiz)
-        if (r.score > r.max_score && r.score <= 100) {
-          pct = r.score;
-        }
-        pct = Math.min(100, Math.max(0, pct));
+        const pct = Math.min(100, Math.max(0, (r.score / r.max_score) * 100));
         studentScores.get(r.user_id).push(pct);
       }
     });
