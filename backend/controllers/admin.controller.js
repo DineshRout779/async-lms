@@ -1,8 +1,8 @@
 const serverError = require('../utils/serverError');
 const pool = require('../config/pg');
 const path = require('path');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const { withS3Prefix } = require('../utils/s3');
+const { PutObjectCommand } = require('@aws-sdk/client-s3');
+const { withS3Prefix, s3 } = require('../utils/s3');
 const slugify = require('../utils/slugify');
 const { logAction } = require('../utils/auditLogger');
 const moment = require('moment-timezone');
@@ -2804,15 +2804,13 @@ exports.uploadLessonMarkdown = async (req, res) => {
       });
     }
 
-    const originalExt = path.extname(req.file.originalname) || '.md';
-    const safeExt = originalExt.toLowerCase() === '.md' ? '.md' : '.md';
+    const safeExt = '.md';
     const key = withS3Prefix(
       `${prefix}${Date.now()}-${req.file.originalname
         .replace(/\s+/g, '-')
         .replace(/[^a-zA-Z0-9._-]/g, '')}${safeExt}`,
     );
 
-    const s3 = new S3Client({ region });
     await s3.send(
       new PutObjectCommand({
         Bucket: bucket,
@@ -2883,7 +2881,6 @@ exports.uploadFile = async (req, res) => {
       `${prefix}${Date.now()}-${baseName}${originalExt}`,
     );
 
-    const s3 = new S3Client({ region });
     await s3.send(
       new PutObjectCommand({
         Bucket: bucket,
