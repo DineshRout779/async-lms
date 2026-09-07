@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Loader2, KeyRound, User } from 'lucide-react';
+import { Loader2, KeyRound, User, Eye, EyeOff } from 'lucide-react';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -36,6 +36,10 @@ export default function StudentSettings() {
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
   const [changingPw, setChangingPw] = useState(false);
+
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   useEffect(() => {
     apiClient
@@ -141,33 +145,66 @@ export default function StudentSettings() {
         <div className='p-4 sm:p-6 space-y-3.5 sm:space-y-4'>
           <div className='space-y-1.5'>
             <label className='text-xs sm:text-sm font-medium text-slate-700'>Current Password</label>
-            <Input
-              type='password'
-              placeholder='Enter current password'
-              value={currentPw}
-              onChange={(e) => setCurrentPw(e.target.value)}
-              className='h-11 text-sm'
-            />
+            <div className='relative'>
+              <Input
+                type={showCurrentPw ? 'text' : 'password'}
+                placeholder='Enter current password'
+                value={currentPw}
+                onChange={(e) => setCurrentPw(e.target.value)}
+                className='h-11 text-sm pr-10'
+              />
+              <button
+                type='button'
+                onClick={() => setShowCurrentPw((v) => !v)}
+                className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors'
+                tabIndex={-1}
+                aria-label={showCurrentPw ? 'Hide password' : 'Show password'}
+              >
+                {showCurrentPw ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+              </button>
+            </div>
           </div>
           <div className='space-y-1.5'>
             <label className='text-xs sm:text-sm font-medium text-slate-700'>New Password</label>
-            <Input
-              type='password'
-              placeholder='Min. 6 characters'
-              value={newPw}
-              onChange={(e) => setNewPw(e.target.value)}
-              className='h-11 text-sm'
-            />
+            <div className='relative'>
+              <Input
+                type={showNewPw ? 'text' : 'password'}
+                placeholder='Min. 6 characters'
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                className='h-11 text-sm pr-10'
+              />
+              <button
+                type='button'
+                onClick={() => setShowNewPw((v) => !v)}
+                className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors'
+                tabIndex={-1}
+                aria-label={showNewPw ? 'Hide password' : 'Show password'}
+              >
+                {showNewPw ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+              </button>
+            </div>
           </div>
           <div className='space-y-1.5'>
             <label className='text-xs sm:text-sm font-medium text-slate-700'>Confirm New Password</label>
-            <Input
-              type='password'
-              placeholder='Repeat new password'
-              value={confirmPw}
-              onChange={(e) => setConfirmPw(e.target.value)}
-              className='h-11 text-sm'
-            />
+            <div className='relative'>
+              <Input
+                type={showConfirmPw ? 'text' : 'password'}
+                placeholder='Repeat new password'
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                className='h-11 text-sm pr-10'
+              />
+              <button
+                type='button'
+                onClick={() => setShowConfirmPw((v) => !v)}
+                className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors'
+                tabIndex={-1}
+                aria-label={showConfirmPw ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPw ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+              </button>
+            </div>
           </div>
           <Button
             onClick={handleChangePassword}

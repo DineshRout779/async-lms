@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserCircle, Lock, Loader2 } from 'lucide-react';
+import { UserCircle, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,6 +26,10 @@ const AdminProfile = () => {
     confirm_password: '',
   });
   const [savingPw, setSavingPw] = useState(false);
+
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   const handleSaveName = async () => {
     if (!nameForm.full_name.trim()) {
@@ -140,33 +144,66 @@ const AdminProfile = () => {
         <CardContent className='p-4 sm:p-6 pt-2 sm:pt-3 space-y-3.5'>
           <div className='space-y-1.5'>
             <Label htmlFor='current-pw' className='text-xs font-semibold text-slate-600'>Current Password</Label>
-            <Input
-              id='current-pw'
-              type='password'
-              className='h-10 rounded-xl border-slate-200 text-xs sm:text-sm'
-              value={pwForm.current_password}
-              onChange={(e) => setPwForm((p) => ({ ...p, current_password: e.target.value }))}
-            />
+            <div className='relative'>
+              <Input
+                id='current-pw'
+                type={showCurrentPw ? 'text' : 'password'}
+                className='h-10 rounded-xl border-slate-200 text-xs sm:text-sm pr-10'
+                value={pwForm.current_password}
+                onChange={(e) => setPwForm((p) => ({ ...p, current_password: e.target.value }))}
+              />
+              <button
+                type='button'
+                onClick={() => setShowCurrentPw((v) => !v)}
+                className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors'
+                tabIndex={-1}
+                aria-label={showCurrentPw ? 'Hide password' : 'Show password'}
+              >
+                {showCurrentPw ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+              </button>
+            </div>
           </div>
           <div className='space-y-1.5'>
             <Label htmlFor='new-pw' className='text-xs font-semibold text-slate-600'>New Password</Label>
-            <Input
-              id='new-pw'
-              type='password'
-              className='h-10 rounded-xl border-slate-200 text-xs sm:text-sm'
-              value={pwForm.new_password}
-              onChange={(e) => setPwForm((p) => ({ ...p, new_password: e.target.value }))}
-            />
+            <div className='relative'>
+              <Input
+                id='new-pw'
+                type={showNewPw ? 'text' : 'password'}
+                className='h-10 rounded-xl border-slate-200 text-xs sm:text-sm pr-10'
+                value={pwForm.new_password}
+                onChange={(e) => setPwForm((p) => ({ ...p, new_password: e.target.value }))}
+              />
+              <button
+                type='button'
+                onClick={() => setShowNewPw((v) => !v)}
+                className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors'
+                tabIndex={-1}
+                aria-label={showNewPw ? 'Hide password' : 'Show password'}
+              >
+                {showNewPw ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+              </button>
+            </div>
           </div>
           <div className='space-y-1.5'>
             <Label htmlFor='confirm-pw' className='text-xs font-semibold text-slate-600'>Confirm New Password</Label>
-            <Input
-              id='confirm-pw'
-              type='password'
-              className='h-10 rounded-xl border-slate-200 text-xs sm:text-sm'
-              value={pwForm.confirm_password}
-              onChange={(e) => setPwForm((p) => ({ ...p, confirm_password: e.target.value }))}
-            />
+            <div className='relative'>
+              <Input
+                id='confirm-pw'
+                type={showConfirmPw ? 'text' : 'password'}
+                className='h-10 rounded-xl border-slate-200 text-xs sm:text-sm pr-10'
+                value={pwForm.confirm_password}
+                onChange={(e) => setPwForm((p) => ({ ...p, confirm_password: e.target.value }))}
+              />
+              <button
+                type='button'
+                onClick={() => setShowConfirmPw((v) => !v)}
+                className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors'
+                tabIndex={-1}
+                aria-label={showConfirmPw ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPw ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+              </button>
+            </div>
           </div>
           <Button onClick={handleChangePassword} disabled={savingPw} variant='outline' className='rounded-xl min-h-[40px] font-semibold text-xs sm:text-sm border-slate-200 w-full sm:w-auto'>
             {savingPw ? <><Loader2 className='mr-2 h-4 w-4 animate-spin' />Updating...</> : 'Update Password'}

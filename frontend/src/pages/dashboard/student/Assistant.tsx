@@ -34,16 +34,16 @@ function CodeBlock({ language, value }: { language?: string; value: string }) {
   };
 
   return (
-    <div className='not-prose my-3 rounded-xl overflow-hidden border border-slate-800 shadow-md bg-[#0d1117] text-slate-100 font-mono'>
+    <div className='not-prose my-2.5 w-full max-w-full min-w-0 rounded-xl overflow-hidden border border-slate-800 shadow-sm bg-[#0d1117] text-slate-100 font-mono'>
       {/* ChatGPT-style Code Header Bar */}
-      <div className='flex items-center justify-between px-3.5 py-1.5 bg-[#161b22] border-b border-slate-800/80 text-xs text-slate-400 select-none'>
-        <span className='font-mono text-[11px] font-medium tracking-wide lowercase text-slate-300'>
+      <div className='flex items-center justify-between px-3 py-1.5 bg-[#161b22] border-b border-slate-800 text-xs text-slate-400 select-none min-w-0'>
+        <span className='font-mono text-[11px] font-medium tracking-wide lowercase text-slate-300 truncate max-w-[120px]'>
           {language || 'code'}
         </span>
         <button
           type='button'
           onClick={handleCopy}
-          className='flex items-center gap-1.5 px-2 py-1 rounded hover:bg-slate-700/60 text-slate-300 hover:text-white transition-all text-[11px] font-sans'
+          className='flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-slate-700/60 text-slate-300 hover:text-white transition-all text-[11px] font-sans shrink-0'
         >
           {isCopied ? (
             <>
@@ -53,13 +53,13 @@ function CodeBlock({ language, value }: { language?: string; value: string }) {
           ) : (
             <>
               <Copy className='h-3.5 w-3.5' />
-              <span>Copy code</span>
+              <span>Copy</span>
             </>
           )}
         </button>
       </div>
       {/* Code Area */}
-      <div className='p-3.5 sm:p-4 overflow-x-auto text-[12px] sm:text-[13px] leading-relaxed text-slate-100 selection:bg-indigo-500/40'>
+      <div className='p-3 sm:p-3.5 overflow-x-auto w-full max-w-full text-[11px] sm:text-xs leading-relaxed text-slate-100 selection:bg-indigo-500/40 custom-scrollbar'>
         <pre className='!bg-transparent !p-0 !m-0 font-mono whitespace-pre'>
           <code>{value}</code>
         </pre>
@@ -192,12 +192,19 @@ export default function AIAssistant() {
                 }`}
               >
                 {msg.role === 'assistant' ? (
-                  <div className='prose prose-sm max-w-full w-full min-w-0 break-words leading-relaxed prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0'>
+                  <div className='prose prose-sm max-w-full w-full min-w-0 break-words [word-break:break-word] overflow-hidden leading-relaxed prose-p:leading-relaxed prose-p:my-1.5 prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0'>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
                         pre({ children }: any) {
                           return <>{children}</>;
+                        },
+                        table({ ...props }: any) {
+                          return (
+                            <div className='w-full max-w-full overflow-x-auto my-2.5 rounded-lg border border-slate-200 min-w-0 custom-scrollbar'>
+                              <table className='w-full text-xs text-left' {...props} />
+                            </div>
+                          );
                         },
                         code({ node, inline, className, children, ...props }: any) {
                           const match = /language-(\w+)/.exec(className || '');
