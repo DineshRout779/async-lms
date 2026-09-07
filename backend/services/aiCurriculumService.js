@@ -130,7 +130,7 @@ Rules:
 - Avoid generic filler — every subtopic must teach something directly employable for ${roleFocus}`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.7,
     max_tokens: 32000,
@@ -174,7 +174,7 @@ Rewrite this lesson following the instruction. Return ONLY a valid JSON object:
 }`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.7,
     max_tokens: 1500,
@@ -206,7 +206,7 @@ Categories must be exactly: "technical", "tools", or "soft".
 Extract 8–20 skills. Focus on what's directly required, not implied.`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.3,
     max_tokens: 1000,
@@ -250,7 +250,7 @@ Rules:
 - Order them from foundational to advanced`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.6,
     max_tokens: 1500,
@@ -287,7 +287,7 @@ Rules:
 - Progress logically from foundational concepts to more complex ones within the topic`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.6,
     max_tokens: 1000,
@@ -331,7 +331,7 @@ Rules:
 - Each must be granular enough to have its own 10–15 minute video`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.6,
     max_tokens: 600,
@@ -435,7 +435,7 @@ Return ONLY a valid JSON object:
 
     try {
       const response = await openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'deepseek-chat',
+        model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
         response_format: { type: 'json_object' }
@@ -508,7 +508,7 @@ Rules:
   }
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.7,
     max_tokens: maxTokens,
@@ -565,7 +565,7 @@ Rules:
 - Focus on what a ${roleFocus} must know`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.5,
     max_tokens: 2000,
@@ -613,7 +613,7 @@ Rules:
 - Covers the key skills from the entire unit`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.6,
     max_tokens: 800,
@@ -655,7 +655,7 @@ Rules:
 - Instructions must be clear and self-contained`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.7,
     max_tokens: 1000,
@@ -781,7 +781,7 @@ Before returning JSON, confirm:
 8. Return only raw JSON.`;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.1,
     max_tokens: 2000,
@@ -816,7 +816,7 @@ ${fileText.substring(0, 15000)}
 `;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.5,
     max_tokens: 1500,
@@ -847,7 +847,7 @@ ${fileText.substring(0, 15000)}
 `;
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
+    model: process.env.OPENAI_MODEL || 'deepseek-v4-flash',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.5,
     max_tokens: 2500,

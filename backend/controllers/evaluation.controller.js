@@ -868,7 +868,7 @@ Evaluation Rubric:
 ${rubric ? JSON.stringify(rubric, null, 2) : 'No rubric provided'}`;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "deepseek-chat",
+      model: process.env.OPENAI_MODEL || "deepseek-v4-flash",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -970,7 +970,7 @@ Instructions:
 ${instructions}`;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "deepseek-chat",
+      model: process.env.OPENAI_MODEL || "deepseek-v4-flash",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
