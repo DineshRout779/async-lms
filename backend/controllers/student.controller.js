@@ -243,9 +243,12 @@ const checkAndCompleteSubtopic = async (userId, subtopicId) => {
 
   const updateResult = await pool.query(
     `
-      UPDATE user_subtopic_progress
-      SET is_completed = true, completed_at = CURRENT_TIMESTAMP
-      WHERE user_id = $1 AND subtopic_id = $2 AND is_unlocked = true
+      INSERT INTO user_subtopic_progress (user_id, subtopic_id, is_unlocked, is_completed, completed_at)
+      VALUES ($1, $2, true, true, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id, subtopic_id)
+      DO UPDATE SET
+        is_completed = true,
+        completed_at = CURRENT_TIMESTAMP
       RETURNING *;
     `,
     [userId, subtopicId],
@@ -2875,14 +2878,19 @@ exports.getStudentAnalytics = async (req, res) => {
     // Fetch data sequentially to prevent Neon connection pool exhaustion/timeouts
     const metricsRes = await pool.query(
       `SELECT
-         (SELECT COUNT(*)::int FROM quiz_attempts WHERE user_id = $1)         AS quizzes_attempted,
+         (SELECT COUNT(DISTINCT quiz_id)::int FROM quiz_attempts WHERE user_id = $1)         AS quizzes_attempted,
          COALESCE((
-           SELECT ROUND(AVG(LEAST(100, qa.score::numeric / NULLIF(q.max_score,0) * 100)))::int
-           FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id
-           WHERE qa.user_id = $1 AND q.max_score > 0
+           SELECT ROUND(AVG(best_score_pct))::int
+           FROM (
+             SELECT MAX(qa.score)::numeric / NULLIF(q.max_score, 0) * 100 AS best_score_pct
+             FROM quiz_attempts qa
+             JOIN quizzes q ON q.id = qa.quiz_id
+             WHERE qa.user_id = $1 AND q.max_score > 0
+             GROUP BY qa.quiz_id, q.max_score
+           ) best_scores
          ), 0)                                                                 AS avg_quiz_score,
-         (SELECT COUNT(*)::int FROM assignment_submissions WHERE user_id = $1) AS assignments_submitted,
-         (SELECT COUNT(*)::int FROM project_submissions WHERE user_id = $1 AND is_approved = true)
+         (SELECT COUNT(DISTINCT assignment_id)::int FROM assignment_submissions WHERE user_id = $1) AS assignments_submitted,
+         (SELECT COUNT(DISTINCT project_id)::int FROM project_submissions WHERE user_id = $1 AND is_approved = true)
                                                                                AS projects_completed,
          (SELECT current_streak FROM user_streaks WHERE user_id = $1)          AS current_streak,
          (SELECT last_activity FROM user_streaks WHERE user_id = $1)           AS last_activity,

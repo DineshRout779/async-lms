@@ -219,7 +219,31 @@ exports.getCourseStructure = async (req, res) => {
         st.slug AS subtopic_slug,
         st.description AS subtopic_description,
         st.order_index AS subtopic_order,
-        COALESCE(usp.is_completed, false) AS subtopic_is_completed,
+        CASE WHEN
+          -- Fast path: user_subtopic_progress explicitly marks it done
+          COALESCE(usp.is_completed, false) = true
+          OR (
+            -- Fallback: all published lessons in this subtopic are completed by the user
+            EXISTS (
+              SELECT 1 FROM lesson_content lc2
+              WHERE lc2.subtopic_id = st.id
+                AND lc2.is_published = true
+                AND lc2.is_deleted = false
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM lesson_content lc2
+              WHERE lc2.subtopic_id = st.id
+                AND lc2.is_published = true
+                AND lc2.is_deleted = false
+                AND NOT EXISTS (
+                  SELECT 1 FROM user_lesson_progress ulp2
+                  WHERE ulp2.lesson_content_id = lc2.id
+                    AND ulp2.user_id = $2
+                    AND ulp2.is_completed = true
+                )
+            )
+          )
+        THEN true ELSE false END AS subtopic_is_completed,
 
         -- Lesson Content (published only)
         lc.id AS lesson_id,
