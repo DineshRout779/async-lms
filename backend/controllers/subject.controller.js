@@ -6,8 +6,7 @@ const fs = require('fs').promises;
 const https = require('https');
 const http = require('http');
 const slugify = require('../utils/slugify');
-const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { presignS3Url } = require('../utils/s3');
 
 /**
  * Strip executable test code before sending an exercise to a student.
@@ -32,27 +31,6 @@ const publicTasks = (tasks) =>
         test_cases: publicTestCases(t.test_cases),
       }))
     : tasks;
-
-const s3 = new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
-async function presignIfS3(url) {
-  if (!url || !url.includes('.amazonaws.com/')) return url;
-  try {
-    const { hostname, pathname } = new URL(url);
-    const bucket = hostname.split('.')[0];
-    const key = decodeURIComponent(pathname.slice(1));
-    const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
-    return await getSignedUrl(s3, cmd, { expiresIn: 3600 });
-  } catch {
-    return url;
-  }
-}
 
 const fetchTextFromUrl = (url) =>
   new Promise((resolve, reject) => {
@@ -576,7 +554,7 @@ exports.getSubtopicContent = async (req, res) => {
         if (markdownRow.markdown_path.startsWith('ai-generated:')) {
           markdownContent = markdownRow.markdown_path.slice('ai-generated:'.length);
         } else if (markdownRow.markdown_path.startsWith('http')) {
-          const fetchUrl = await presignIfS3(markdownRow.markdown_path);
+          const fetchUrl = await presignS3Url(markdownRow.markdown_path);
           markdownContent = await fetchTextFromUrl(fetchUrl);
         } else {
           const relativePath = markdownRow.markdown_path.replace(/^\/+/, '');
