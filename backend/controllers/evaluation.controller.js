@@ -447,10 +447,12 @@ exports.syncEvaluationStatus = async (req, res) => {
                 if (parsedFb && typeof parsedFb === 'object') {
                   feedback = parsedFb;
                 } else {
-                  feedback = { summary: feedback, strengths: [], issues: [], breakdown: [] };
+                  const s = String(feedback || '').trim();
+                  feedback = { summary: s && s !== '""' && s !== "''" ? s : 'Evaluation completed.', strengths: [], issues: [], breakdown: [] };
                 }
               } catch {
-                feedback = { summary: feedback, strengths: [], issues: [], breakdown: [] };
+                const s = String(feedback || '').trim();
+                feedback = { summary: s && s !== '""' && s !== "''" ? s : 'Evaluation completed.', strengths: [], issues: [], breakdown: [] };
               }
             }
           } else if (jobState === 'failed') {

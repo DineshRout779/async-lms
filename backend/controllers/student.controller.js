@@ -1246,6 +1246,12 @@ exports.submitExercise = async (req, res) => {
         try {
           const statusResponse = await axios.get(
             `${CENTRAL_URL}/jobs/${evaluatorType}/${jobId}`,
+            {
+              headers: {
+                'x-api-key':
+                  process.env.CENTRAL_EVALUATOR_API_KEY || 'test-key-123',
+              },
+            },
           );
           if (statusResponse.data.state === 'completed') {
             evalResult =
