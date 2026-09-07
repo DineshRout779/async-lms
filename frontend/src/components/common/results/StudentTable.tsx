@@ -35,15 +35,28 @@ const FeedbackCell = ({ feedback }: { feedback: string | object | null }) => {
     // pg already deserialized JSONB
     parsed = feedback;
   } else {
+    const str = String(feedback).trim();
+    if (!str || str === '""' || str === "''" || str === '"{}"' || str === '{}') {
+      return <span className="text-slate-400">—</span>;
+    }
     try {
-      parsed = JSON.parse(feedback as string);
+      parsed = JSON.parse(str);
     } catch {
       // not JSON — plain string feedback, render as-is
+      return <span className="text-sm text-slate-700 leading-snug">{str}</span>;
     }
   }
 
+  if (typeof parsed === 'string') {
+    const clean = parsed.trim();
+    if (!clean || clean === '""' || clean === "''") {
+      return <span className="text-slate-400">—</span>;
+    }
+    return <span className="text-sm text-slate-700 leading-snug">{clean}</span>;
+  }
+
   if (!parsed || typeof parsed !== 'object') {
-    return <span>{feedback as string}</span>;
+    return <span className="text-slate-400">—</span>;
   }
 
   // If summary is itself a stringified JSON (from legacy DB records), safely unwrap it
