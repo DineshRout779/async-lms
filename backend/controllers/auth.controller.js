@@ -320,7 +320,7 @@ exports.login = async (req, res) => {
 
     try {
     const userRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email, u.password_hash, u.google_id, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified,
+      `SELECT u.id, u.full_name, u.email, u.password_hash, u.google_id, LOWER(r.role_key) AS role, u.domain, u.role_focus, u.onboarding_step, u.is_verified,
               u.is_email_verified, u.token_version, u.must_change_password,
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified
@@ -437,6 +437,8 @@ exports.login = async (req, res) => {
         is_verified: user.is_verified,
         is_email_verified: user.is_email_verified,
         must_change_password: user.must_change_password,
+        domain: user.domain,
+        role_focus: user.role_focus,
         college_id: user.college_id,
         college_ids: collegeIds,
         college_is_verified: user.college_is_verified,
@@ -854,7 +856,7 @@ exports.getMe = async (req, res) => {
 
   try {
     const userRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified, u.must_change_password,
+      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.domain, u.role_focus, u.onboarding_step, u.is_verified, u.must_change_password,
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified,
               c.name AS college_name,
@@ -867,7 +869,7 @@ exports.getMe = async (req, res) => {
        LEFT JOIN user_streaks us ON us.user_id = u.id
        LEFT JOIN points_log pl ON pl.user_id = u.id
        WHERE u.id = $1
-       GROUP BY u.id, u.full_name, u.email, r.role_key, u.onboarding_step, u.is_verified, u.must_change_password,
+       GROUP BY u.id, u.full_name, u.email, r.role_key, u.domain, u.role_focus, u.onboarding_step, u.is_verified, u.must_change_password,
                 sp.college_id, sp.degree, sp.year, c.is_verified, c.name, us.current_streak`,
       [userID],
     );
@@ -1385,7 +1387,7 @@ exports.changePassword = async (req, res) => {
 
     // Fetch user to generate new token
     const userRes = await pool.query(
-      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.onboarding_step, u.is_verified,
+      `SELECT u.id, u.full_name, u.email, LOWER(r.role_key) AS role, u.domain, u.role_focus, u.onboarding_step, u.is_verified,
               u.is_email_verified, u.token_version, u.must_change_password,
               sp.college_id, sp.degree, sp.year,
               c.is_verified AS college_is_verified
@@ -1429,6 +1431,8 @@ exports.changePassword = async (req, res) => {
         full_name: user.full_name,
         email: user.email,
         role: user.role,
+        domain: user.domain,
+        role_focus: user.role_focus,
         onboarding_step: user.onboarding_step,
         is_verified: user.is_verified,
         is_email_verified: user.is_email_verified,
