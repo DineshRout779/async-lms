@@ -10,7 +10,10 @@ export interface User {
   college_name?: string;
   degree?: string;
   year?: number;
+  domain?: string | null;
+  role_focus?: string | null;
   onboarding_step: string;
+  must_change_password?: boolean;
   current_streak?: number;
   total_points?: number;
 }

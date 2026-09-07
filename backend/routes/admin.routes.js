@@ -46,6 +46,7 @@ const {
   updateProject,
   deleteProject,
   verifyUser,
+  createCurriculumDeveloper,
 } = require('../controllers/admin.controller');
 
 const {
@@ -80,6 +81,7 @@ router.get('/analytics/registrations', verifyToken, isAdmin, getStudentRegistrat
 router.get('/analytics/active-users', verifyToken, isAdmin, getActiveUsersTimeline);
 router.get('/all-students', verifyToken, isAdmin, getAllStudents);
 router.get('/project-submissions', verifyToken, isAdmin, getProjectSubmissions);
+router.post('/curriculum-developer', verifyToken, isAdmin, createCurriculumDeveloper);
 router.post(
   '/lesson-content/upload',
   verifyToken,

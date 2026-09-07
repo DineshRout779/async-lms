@@ -82,10 +82,10 @@ function StudentRegistrationsChart() {
     return result;
   };
 
-  const fetchRegistrations = (params: any) => {
+  const fetchRegistrations = (params: { days?: string; from?: string; to?: string }) => {
     setLoading(true);
     setError(null);
-    apiClient.get<{ success: boolean; data: { registrations: any[]; meta: any } }>('/admin/analytics/registrations', { params })
+    apiClient.get<{ success: boolean; data: { registrations: { label: string; count: number }[]; meta: { from: string; to: string; groupBy: 'day' | 'month' } } }>('/admin/analytics/registrations', { params })
       .then((res) => {
         const raw = res.data.data.registrations;
         const metaInfo = res.data.data.meta;
@@ -130,15 +130,15 @@ function StudentRegistrationsChart() {
   };
 
   return (
-    <Card className='border-none shadow-sm flex flex-col justify-between min-h-[280px]'>
-      <CardHeader className='pb-2 pt-5 px-5'>
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
-          <CardTitle className='text-sm font-semibold text-slate-700 flex items-center gap-2'>
-            <TrendingUp className='w-4 h-4 text-violet-500' />
-            New Students {meta ? `— ${formatDateLabel(meta.from)} to ${formatDateLabel(meta.to)}` : ''}
+    <Card className='border border-slate-200/80 shadow-xs rounded-2xl flex flex-col justify-between min-h-[280px] bg-white min-w-0'>
+      <CardHeader className='pb-2 pt-4 sm:pt-5 px-4 sm:px-5'>
+        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2.5'>
+          <CardTitle className='text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2 tracking-tight'>
+            <TrendingUp className='w-4 h-4 text-violet-600' />
+            <span>New Students {meta ? `— ${formatDateLabel(meta.from)} to ${formatDateLabel(meta.to)}` : ''}</span>
           </CardTitle>
           
-          <div className='flex flex-wrap gap-1 bg-slate-100 p-0.5 rounded-lg text-xs w-fit'>
+          <div className='flex overflow-x-auto no-scrollbar gap-1 bg-slate-100 p-0.5 rounded-xl text-xs w-full sm:w-fit'>
             {[
               { label: '7D', value: '7' },
               { label: '15D', value: '15' },
@@ -149,8 +149,8 @@ function StudentRegistrationsChart() {
               <button
                 key={p.value}
                 onClick={() => setRangeType(p.value)}
-                className={`px-2 py-1 rounded-md transition-all ${
-                  rangeType === p.value ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+                className={`px-2.5 py-1 rounded-lg transition-all font-medium text-xs shrink-0 ${
+                  rangeType === p.value ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 {p.label}
@@ -158,24 +158,24 @@ function StudentRegistrationsChart() {
             ))}
             <button
               onClick={handleCustomClick}
-              className={`px-2 py-1 rounded-md transition-all ${
-                rangeType === 'custom' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+              className={`px-2.5 py-1 rounded-lg transition-all font-medium text-xs shrink-0 ${
+                rangeType === 'custom' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              📅 Custom
+              Custom
             </button>
           </div>
         </div>
         
         {rangeType === 'custom' && (
-          <div className='flex items-center gap-2 mt-3 animate-in slide-in-from-top duration-200'>
+          <div className='flex flex-wrap items-center gap-2 mt-3 animate-in slide-in-from-top duration-200'>
             <div className='flex flex-col gap-0.5'>
               <span className='text-[10px] text-slate-400 font-semibold uppercase'>From</span>
               <input
                 type='date'
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className='text-xs px-2 py-1 border rounded bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500'
+                className='text-xs px-2.5 py-1 border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 shadow-xs'
               />
             </div>
             <div className='flex flex-col gap-0.5'>
@@ -184,14 +184,14 @@ function StudentRegistrationsChart() {
                 type='date'
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className='text-xs px-2 py-1 border rounded bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500'
+                className='text-xs px-2.5 py-1 border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 shadow-xs'
               />
             </div>
           </div>
         )}
       </CardHeader>
       
-      <CardContent className='px-5 pb-5 flex-1 flex flex-col justify-end min-h-[140px]'>
+      <CardContent className='px-4 sm:px-5 pb-4 sm:pb-5 flex-1 flex flex-col justify-end min-h-[140px] min-w-0'>
         {loading ? (
           <div className='flex h-32 items-center justify-center'>
             <Loader2 className='w-6 h-6 animate-spin text-violet-500' />
@@ -201,10 +201,10 @@ function StudentRegistrationsChart() {
         ) : registrations.length === 0 ? (
           <p className='text-xs text-slate-400 text-center py-8'>No registrations in this period.</p>
         ) : (
-          <div className='flex items-end gap-2 h-32 pt-4 overflow-x-auto pb-1 scrollbar-thin'>
+          <div className='flex items-end gap-2 h-32 pt-4 overflow-x-auto pb-1 custom-scrollbar w-full min-w-0'>
             {registrations.map((d) => (
-              <div key={d.label} className='flex flex-col items-center gap-1 flex-1 min-w-[20px] max-w-[60px]'>
-                <span className='text-[9px] font-semibold text-slate-700'>{d.count}</span>
+              <div key={d.label} className='flex flex-col items-center gap-1 flex-1 min-w-[24px] max-w-[60px]'>
+                <span className='text-[9px] font-bold text-slate-700'>{d.count}</span>
                 <div 
                   className='w-full rounded-t bg-violet-400 hover:bg-violet-500 transition-all duration-300' 
                   style={{ height: `${Math.max((d.count / maxDayCount) * 88, 4)}px` }}
@@ -272,10 +272,10 @@ function ActiveStudentsChart() {
     return result;
   };
 
-  const fetchActiveUsers = (params: any) => {
+  const fetchActiveUsers = (params: { days?: string; from?: string; to?: string }) => {
     setLoading(true);
     setError(null);
-    apiClient.get<{ success: boolean; data: { activeUsers: any[]; meta: any } }>('/admin/analytics/active-users', { params })
+    apiClient.get<{ success: boolean; data: { activeUsers: { label: string; count: number }[]; meta: { from: string; to: string; groupBy: 'day' | 'month' } } }>('/admin/analytics/active-users', { params })
       .then((res) => {
         const raw = res.data.data.activeUsers;
         const metaInfo = res.data.data.meta;
@@ -320,28 +320,27 @@ function ActiveStudentsChart() {
   };
 
   return (
-    <Card className='border-none shadow-sm flex flex-col justify-between min-h-[280px]'>
-      <CardHeader className='pb-2 pt-5 px-5'>
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
-          <CardTitle className='text-sm font-semibold text-slate-700 flex items-center gap-2'>
+    <Card className='border border-slate-200/80 shadow-xs rounded-2xl flex flex-col justify-between min-h-[280px] bg-white min-w-0'>
+      <CardHeader className='pb-2 pt-4 sm:pt-5 px-4 sm:px-5'>
+        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2.5'>
+          <CardTitle className='text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2 tracking-tight'>
             <Users className='w-4 h-4 text-rose-500' />
-            Active Students {meta ? `— ${formatDateLabel(meta.from)} to ${formatDateLabel(meta.to)}` : ''}
+            <span>Active Students {meta ? `— ${formatDateLabel(meta.from)} to ${formatDateLabel(meta.to)}` : ''}</span>
           </CardTitle>
           
-          <div className='flex flex-wrap gap-1 bg-slate-100 p-0.5 rounded-lg text-xs w-fit'>
+          <div className='flex overflow-x-auto no-scrollbar gap-1 bg-slate-100 p-0.5 rounded-xl text-xs w-full sm:w-fit'>
             {[
               { label: '7D', value: '7' },
               { label: '15D', value: '15' },
               { label: '1M', value: '30' },
               { label: '3M', value: '90' },
-              { label: '6M', value: '180' },
               { label: '1Y', value: '365' },
             ].map((p) => (
               <button
                 key={p.value}
                 onClick={() => setRangeType(p.value)}
-                className={`px-2 py-1 rounded-md transition-all ${
-                  rangeType === p.value ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+                className={`px-2.5 py-1 rounded-lg transition-all font-medium text-xs shrink-0 ${
+                  rangeType === p.value ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 {p.label}
@@ -349,24 +348,24 @@ function ActiveStudentsChart() {
             ))}
             <button
               onClick={handleCustomClick}
-              className={`px-2 py-1 rounded-md transition-all ${
-                rangeType === 'custom' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+              className={`px-2.5 py-1 rounded-lg transition-all font-medium text-xs shrink-0 ${
+                rangeType === 'custom' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              📅 Custom
+              Custom
             </button>
           </div>
         </div>
         
         {rangeType === 'custom' && (
-          <div className='flex items-center gap-2 mt-3 animate-in slide-in-from-top duration-200'>
+          <div className='flex flex-wrap items-center gap-2 mt-3 animate-in slide-in-from-top duration-200'>
             <div className='flex flex-col gap-0.5'>
               <span className='text-[10px] text-slate-400 font-semibold uppercase'>From</span>
               <input
                 type='date'
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className='text-xs px-2 py-1 border rounded bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500'
+                className='text-xs px-2.5 py-1 border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-xs'
               />
             </div>
             <div className='flex flex-col gap-0.5'>
@@ -375,14 +374,14 @@ function ActiveStudentsChart() {
                 type='date'
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className='text-xs px-2 py-1 border rounded bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500'
+                className='text-xs px-2.5 py-1 border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-xs'
               />
             </div>
           </div>
         )}
       </CardHeader>
       
-      <CardContent className='px-5 pb-5 flex-1 flex flex-col justify-end min-h-[140px]'>
+      <CardContent className='px-4 sm:px-5 pb-4 sm:pb-5 flex-1 flex flex-col justify-end min-h-[140px] min-w-0'>
         {loading ? (
           <div className='flex h-32 items-center justify-center'>
             <Loader2 className='w-6 h-6 animate-spin text-rose-500' />
@@ -392,10 +391,10 @@ function ActiveStudentsChart() {
         ) : activeUsers.length === 0 ? (
           <p className='text-xs text-slate-400 text-center py-8'>No active student activity in this period.</p>
         ) : (
-          <div className='flex items-end gap-2 h-32 pt-4 overflow-x-auto pb-1 scrollbar-thin'>
+          <div className='flex items-end gap-2 h-32 pt-4 overflow-x-auto pb-1 custom-scrollbar w-full min-w-0'>
             {activeUsers.map((d) => (
-              <div key={d.label} className='flex flex-col items-center gap-1 flex-1 min-w-[20px] max-w-[60px]'>
-                <span className='text-[9px] font-semibold text-slate-700'>{d.count}</span>
+              <div key={d.label} className='flex flex-col items-center gap-1 flex-1 min-w-[24px] max-w-[60px]'>
+                <span className='text-[9px] font-bold text-slate-700'>{d.count}</span>
                 <div 
                   className='w-full rounded-t bg-rose-400 hover:bg-rose-500 transition-all duration-300' 
                   style={{ height: `${Math.max((d.count / maxActiveCount) * 88, 4)}px` }}
@@ -427,11 +426,11 @@ function GeneralAnalytics() {
   }, []);
 
   if (loading) {
-    return <div className='flex h-64 items-center justify-center'><Loader2 className='w-8 h-8 animate-spin text-indigo-600' /></div>;
+    return <div className='flex h-64 items-center justify-center bg-white rounded-2xl border border-slate-200/80'><Loader2 className='w-8 h-8 animate-spin text-indigo-600' /></div>;
   }
 
   if (!data) {
-    return <div className='flex h-64 items-center justify-center text-slate-400 text-sm'>Failed to load analytics.</div>;
+    return <div className='flex h-64 items-center justify-center text-slate-400 text-xs sm:text-sm bg-white rounded-2xl border border-slate-200/80'>Failed to load analytics.</div>;
   }
 
   const { studentsPerCollege, subjectActivity } = data;
@@ -439,17 +438,28 @@ function GeneralAnalytics() {
   const maxAttempts = Math.max(...subjectActivity.map((s) => s.attempts), 1);
 
   return (
-    <div className='space-y-6'>
+    <div className='space-y-4 sm:space-y-6 min-w-0'>
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-        <Card className='border-none shadow-sm'>
-          <CardHeader className='pb-2 pt-5 px-5'><CardTitle className='text-sm font-semibold text-slate-700 flex items-center gap-2'><Users className='w-4 h-4 text-indigo-500' /> Students per College</CardTitle></CardHeader>
-          <CardContent className='px-5 pb-5 space-y-3'>
-            {studentsPerCollege.length === 0 ? <p className='text-xs text-slate-400'>No data yet.</p> : studentsPerCollege.map((c) => (
-              <div key={c.college} className='space-y-1'>
-                <div className='flex justify-between text-xs text-slate-600'><span className='truncate max-w-[70%]'>{c.college}</span><span className='font-semibold text-slate-800'>{c.count}</span></div>
-                <Bar pct={(c.count / maxCollegeCount) * 100} color='bg-indigo-400' />
-              </div>
-            ))}
+        <Card className='border border-slate-200/80 shadow-xs rounded-2xl bg-white min-w-0'>
+          <CardHeader className='pb-2 pt-4 sm:pt-5 px-4 sm:px-5'>
+            <CardTitle className='text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2 tracking-tight'>
+              <Users className='w-4 h-4 text-indigo-500' /> Students per College
+            </CardTitle>
+          </CardHeader>
+          <CardContent className='px-4 sm:px-5 pb-4 sm:pb-5 space-y-3'>
+            {studentsPerCollege.length === 0 ? (
+              <p className='text-xs text-slate-400'>No data yet.</p>
+            ) : (
+              studentsPerCollege.map((c) => (
+                <div key={c.college} className='space-y-1'>
+                  <div className='flex justify-between text-xs text-slate-600'>
+                    <span className='truncate max-w-[70%] font-medium'>{c.college}</span>
+                    <span className='font-bold text-slate-800'>{c.count}</span>
+                  </div>
+                  <Bar pct={(c.count / maxCollegeCount) * 100} color='bg-indigo-400' />
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
         
@@ -458,18 +468,23 @@ function GeneralAnalytics() {
 
       <ActiveStudentsChart />
 
-      <Card className='border-none shadow-sm'>
-        <CardHeader className='pb-2 pt-5 px-5'><CardTitle className='text-sm font-semibold text-slate-700'>Subject Activity</CardTitle></CardHeader>
-        <CardContent className='px-5 pb-5'>
-          {subjectActivity.length === 0 ? <p className='text-xs text-slate-400'>No quiz activity recorded yet.</p> : (
+      <Card className='border border-slate-200/80 shadow-xs rounded-2xl bg-white min-w-0'>
+        <CardHeader className='pb-2 pt-4 sm:pt-5 px-4 sm:px-5'>
+          <CardTitle className='text-xs sm:text-sm font-bold text-slate-800 tracking-tight'>Subject Activity</CardTitle>
+        </CardHeader>
+        <CardContent className='px-4 sm:px-5 pb-4 sm:pb-5'>
+          {subjectActivity.length === 0 ? (
+            <p className='text-xs text-slate-400'>No quiz activity recorded yet.</p>
+          ) : (
             <div className='space-y-4'>
               {subjectActivity.map((s) => (
-                <div key={s.subject} className='space-y-1'>
-                  <div className='flex items-center justify-between text-xs'>
-                    <span className='font-medium text-slate-700 truncate max-w-[50%]'>{s.subject}</span>
-                    <div className='flex items-center gap-4 text-slate-500 shrink-0'>
-                      <span>{s.attempts} attempts</span><span>{s.uniqueStudents} students</span>
-                      <span className='font-semibold text-slate-700'>avg {s.avgScore || '—'}</span>
+                <div key={s.subject} className='space-y-1.5'>
+                  <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs'>
+                    <span className='font-semibold text-slate-800 truncate max-w-full sm:max-w-[45%]'>{s.subject}</span>
+                    <div className='flex items-center gap-3 text-slate-500 text-[11px] shrink-0'>
+                      <span>{s.attempts} attempts</span>
+                      <span>{s.uniqueStudents} students</span>
+                      <span className='font-bold text-slate-800'>avg {s.avgScore || '—'}</span>
                     </div>
                   </div>
                   <Bar pct={(s.attempts / maxAttempts) * 100} color='bg-amber-400' />
@@ -517,28 +532,30 @@ export default function Analytics() {
   }, []);
 
   return (
-    <div className='p-6 space-y-6 animate-in fade-in duration-500'>
+    <div className='space-y-4 sm:space-y-6 min-w-0 animate-in fade-in duration-300'>
       <div>
-        <h2 className='text-xl font-bold text-slate-900'>Analytics</h2>
-        <p className='text-sm text-slate-500 mt-0.5'>Platform-wide activity overview</p>
+        <h2 className='text-lg sm:text-xl font-bold text-slate-900 tracking-tight'>Analytics</h2>
+        <p className='text-xs sm:text-sm text-slate-500 mt-0.5'>Platform-wide activity and engagement overview</p>
       </div>
 
-      <div className='flex gap-1 bg-slate-100 p-1 rounded-xl w-fit flex-wrap'>
+      <div className='grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-2xl w-full'>
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === tab.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all min-h-[38px] ${
+              activeTab === tab.id
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
             }`}
           >
             {tab.icon}
-            {tab.label}
+            <span className='truncate'>{tab.label}</span>
           </button>
         ))}
       </div>
 
-      <div>
+      <div className='min-w-0'>
         {activeTab === 'general' && <GeneralAnalytics />}
         {activeTab === 'quiz' && <QuizTab colleges={colleges} batches={batches} subjects={subjects} />}
         {activeTab === 'assignments' && <AssignmentsTab colleges={colleges} batches={batches} subjects={subjects} />}

@@ -217,6 +217,8 @@ exports.selectFacilitatorColleges = async (req, res) => {
       .status(400)
       .json({ message: 'At least one college must be selected' });
   }
+  // Deduplicate: ON CONFLICT DO UPDATE cannot affect the same row twice in one statement
+  const uniqueCollegeIds = [...new Set(college_ids)];
 
   const client = await pool.connect();
   try {
@@ -227,11 +229,15 @@ exports.selectFacilitatorColleges = async (req, res) => {
       [userId],
     );
 
+    // Upsert: reactivate any previously soft-deleted assignments instead of
+    // inserting a duplicate row (which would violate the unique constraint).
     const insertQuery = `
       INSERT INTO facilitator_colleges (facilitator_id, college_id)
       SELECT $1, unnest($2::uuid[])
+      ON CONFLICT (facilitator_id, college_id)
+      DO UPDATE SET is_deleted = false, updated_at = CURRENT_TIMESTAMP
     `;
-    await client.query(insertQuery, [userId, college_ids]);
+    await client.query(insertQuery, [userId, uniqueCollegeIds]);
 
     await client.query(
       "UPDATE users SET onboarding_step = 'done', updated_at = CURRENT_TIMESTAMP WHERE id = $1",

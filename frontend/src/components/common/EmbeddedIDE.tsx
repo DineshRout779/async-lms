@@ -53,6 +53,16 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
 
   // Layout states
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
+  const [mobileTab, setMobileTab] = useState<'instructions' | 'files' | 'editor' | 'output'>('instructions');
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Execution states
   const [isRunning, setIsRunning] = useState(false);
@@ -736,8 +746,8 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
     <div className={`flex w-full ${isDark ? 'bg-[#0b0f19] text-slate-300 border-slate-800' : 'bg-slate-50 text-slate-700 border-slate-200'} shadow-2xl overflow-hidden transition-all duration-200 ${
       isFullscreen
         ? 'fixed inset-0 z-50 rounded-none'
-        : 'h-[800px] border rounded-xl relative'
-    } ${tasks && tasks.length > 1 ? 'flex-col' : ''}`}>
+        : 'h-[620px] sm:h-[720px] lg:h-[800px] border rounded-xl relative'
+    } flex-col`}>
 
       {/* Task tabs (multi-task exercises only) */}
       {tasks && tasks.length > 1 && (
@@ -746,7 +756,7 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
             <button
               key={task.id}
               onClick={() => handleTaskSwitch(idx)}
-              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold whitespace-nowrap transition-colors border-r ${isDark ? 'border-slate-800' : 'border-slate-200'} ${
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-semibold whitespace-nowrap transition-colors border-r ${isDark ? 'border-slate-800' : 'border-slate-200'} ${
                 activeTaskIndex === idx
                   ? (isDark ? 'bg-indigo-600/20 text-white' : 'bg-indigo-50 text-indigo-700')
                   : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-550 hover:text-slate-800')
@@ -763,350 +773,644 @@ export default function EmbeddedIDE({ exercise, submitting, onSubmit }: Embedded
         </div>
       )}
 
-      <div className={`flex flex-1 min-h-0 w-full`}>
-      {/* Activity Bar */}
-      <div className={`w-12 flex flex-col items-center py-4 ${isDark ? 'bg-[#0f172a] border-r border-slate-800' : 'bg-slate-100 border-r border-slate-200'} shrink-0 gap-4`}>
-        <button 
-          onClick={() => {
-            if (!tabs.find(t => t.path === 'Instructions.md')) {
-              setTabs(prev => [{ path: 'Instructions.md', content: instructionsMarkdown, language: 'markdown' }, ...prev]);
-            }
-            setActiveTab('Instructions.md');
-          }}
-          className={`p-2 rounded-lg transition-all duration-150 hover:scale-105 ${activeTab === 'Instructions.md' ? (isDark ? 'text-white bg-indigo-600/20' : 'text-indigo-600 bg-indigo-50') : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-550 hover:text-slate-800')}`}
-          title="Instructions"
-        >
-          <BookOpen className='w-6 h-6' />
-        </button>
-        <button 
-          onClick={() => setActiveSidebar('explorer')}
-          className={`p-2 rounded-lg transition-all duration-150 hover:scale-105 ${activeSidebar === 'explorer' ? (isDark ? 'text-white bg-indigo-600/20' : 'text-indigo-600 bg-indigo-50') : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-550 hover:text-slate-800')}`}
-          title="Explorer"
-        >
-          <Files className='w-6 h-6' />
-        </button>
-        <button 
-          onClick={() => setActiveSidebar('search')}
-          className={`p-2 rounded-lg transition-all duration-150 hover:scale-105 ${activeSidebar === 'search' ? (isDark ? 'text-white bg-indigo-600/20' : 'text-indigo-600 bg-indigo-50') : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-550 hover:text-slate-800')}`}
-          title="Search"
-        >
-          <Search className='w-6 h-6' />
-        </button>
-      </div>
-
-      <PanelGroup direction='horizontal' className='flex-1 w-full overflow-hidden'>
-        {/* Sidebar Panel */}
-        <Panel defaultSize={18} minSize={15} maxSize={30} className={`flex flex-col h-full overflow-hidden ${isDark ? 'bg-[#0b0f19] border-r border-slate-800' : 'bg-slate-50 border-r border-slate-200'}`}>
-          {activeSidebar === 'explorer' && (
-            <div className='h-full flex flex-col'>
-              <div className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500 border-b border-slate-800 bg-[#0f172a]/40' : 'text-slate-600 border-b border-slate-200 bg-slate-100/50'}`}>
-                Explorer
-              </div>
-              <div className='flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden'>
-                <FileTreeExplorer
-                  nodes={tree}
-                  activePath={activeTab}
-                  onSelect={(path) => setActiveTab(path)}
-                  onCreate={handleCreate}
-                  onDelete={handleDelete}
-                  onRename={handleRename}
-                  onRefresh={() => {}}
-                  isDark={isDark}
-                />
-              </div>
-            </div>
-          )}
-          {activeSidebar === 'search' && (
-            <div className='p-4 h-full text-sm text-slate-550'>
-              Search panel coming soon...
-            </div>
-          )}
-        </Panel>
-
-        <PanelResizeHandle className={`w-1 transition-colors cursor-col-resize z-10 ${isDark ? 'bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600' : 'bg-slate-200 hover:bg-indigo-500 active:bg-indigo-600'}`} />
-
-        {/* Editor Panel (Middle) */}
-        <Panel defaultSize={50} minSize={30} className={`flex flex-col min-w-0 overflow-hidden border-r ${isDark ? 'bg-[#1e1e1e] border-slate-800' : 'bg-white border-slate-200'}`}>
-          {/* Header Bar: Title and Buttons */}
-          <div className={`flex items-center justify-between px-4 py-2 ${isDark ? 'bg-[#0f172a] border-b border-slate-800' : 'bg-slate-100 border-b border-slate-200'} shrink-0 select-none`}>
-            <div className='flex items-center gap-2'>
-              <Code2 className='w-4 h-4 text-indigo-400' />
-              <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{exercise.title}</span>
-            </div>
-            
-            {/* Editor Action Buttons */}
+      {/* ─────────────────────────────────────────────────────────────
+          MOBILE VIEW (< 1024px): Dedicated Tabbed Workspace
+      ───────────────────────────────────────────────────────────── */}
+      {isMobile ? (
+        <div className='flex flex-col flex-1 min-h-0 w-full'>
+          {/* Mobile Top Header Toolbar */}
+          <div className={`flex items-center justify-between px-3 py-2 ${isDark ? 'bg-[#0f172a] border-b border-slate-800' : 'bg-slate-100 border-b border-slate-200'} shrink-0 gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden`}>
             <div className='flex items-center gap-1.5 shrink-0'>
-              {/* Theme Toggle Button */}
+              <Code2 className='w-4 h-4 text-indigo-400' />
+              <span className={`text-xs font-semibold max-w-[140px] truncate ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                {exercise.title}
+              </span>
+            </div>
+
+            <div className='flex items-center gap-1.5 shrink-0'>
               <button
                 onClick={toggleTheme}
-                className={`p-1.5 rounded transition-all hover:scale-105 ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'}`}
-                title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                className={`p-1.5 rounded transition-all ${isDark ? 'text-slate-400 hover:text-white bg-slate-800/60' : 'text-slate-500 hover:text-slate-900 bg-slate-200/60'}`}
+                title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
               >
-                {isDark ? <Sun className='w-4 h-4 text-amber-400' /> : <Moon className='w-4 h-4 text-indigo-600' />}
+                {isDark ? <Sun className='w-3.5 h-3.5 text-amber-400' /> : <Moon className='w-3.5 h-3.5 text-indigo-600' />}
               </button>
 
               <button
                 onClick={() => setIsFullscreen(!isFullscreen)}
-                className={`p-1.5 rounded transition-colors ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'} mr-1`}
-                title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                className={`p-1.5 rounded transition-colors ${isDark ? 'text-slate-400 hover:text-white bg-slate-800/60' : 'text-slate-500 hover:text-slate-900 bg-slate-200/60'}`}
+                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
               >
-                {isFullscreen ? <Minimize className='w-4 h-4' /> : <Maximize className='w-4 h-4' />}
+                {isFullscreen ? <Minimize className='w-3.5 h-3.5' /> : <Maximize className='w-3.5 h-3.5' />}
               </button>
-              
-              <Button 
-                size='sm' 
+
+              <Button
+                size='sm'
                 variant={exercise.language === 'dom' ? 'outline' : 'secondary'}
-                className={`h-7 text-xs ${exercise.language === 'dom' ? (isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300') : 'bg-emerald-600 hover:bg-emerald-500 text-white border-none'}`}
-                onClick={handleRun}
+                className={`h-7 text-xs px-2.5 ${exercise.language === 'dom' ? (isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300') : 'bg-emerald-600 hover:bg-emerald-500 text-white border-none'}`}
+                onClick={() => {
+                  handleRun();
+                  setMobileTab('output');
+                }}
                 disabled={isRunning}
               >
-                <Play className={`w-3.5 h-3.5 mr-1 ${exercise.language === 'dom' ? 'text-emerald-400' : ''}`} /> Run
+                <Play className={`w-3 h-3 mr-1 ${exercise.language === 'dom' ? 'text-emerald-400' : ''}`} /> Run
               </Button>
-              
+
               {activeTask?.test_cases && activeTask.test_cases.length > 0 && exercise.language !== 'dom' && exercise.language !== 'sql' && (
-                <Button 
-                  size='sm' 
+                <Button
+                  size='sm'
                   variant='secondary'
-                  className='h-7 text-xs bg-amber-600 hover:bg-amber-500 text-white border-none'
-                  onClick={handleRunTests}
+                  className='h-7 text-xs px-2 bg-amber-600 hover:bg-amber-500 text-white border-none'
+                  onClick={() => {
+                    handleRunTests();
+                    setMobileTab('output');
+                  }}
                   disabled={isRunning}
                 >
-                  <CheckCircle2 className='w-3.5 h-3.5 mr-1' /> {isRunning ? 'Testing...' : 'Run Tests'}
+                  <CheckCircle2 className='w-3 h-3 mr-1' /> {isRunning ? 'Testing...' : 'Test'}
                 </Button>
               )}
-              
-              <Button 
-                size='sm' 
+
+              <Button
+                size='sm'
                 variant='outline'
-                className={`h-7 text-xs ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'}`}
+                className={`h-7 text-xs px-2 ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'}`}
                 onClick={handleSave}
                 disabled={saving}
               >
-                <Save className='w-3.5 h-3.5 mr-1 text-blue-400' /> {saving ? 'Saving...' : 'Save'}
+                <Save className='w-3 h-3 mr-1 text-blue-400' /> {saving ? '...' : 'Save'}
               </Button>
-              
-              <Button 
-                size='sm' 
-                className='h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white border-none'
+
+              <Button
+                size='sm'
+                className='h-7 text-xs px-2.5 bg-indigo-600 hover:bg-indigo-500 text-white border-none'
                 disabled={submitting}
-                onClick={handleSubmit}
+                onClick={() => {
+                  handleSubmit();
+                  setMobileTab('output');
+                }}
               >
-                <Send className='w-3.5 h-3.5 mr-1' /> {submitting ? 'Submitting...' : 'Submit'}
+                <Send className='w-3 h-3 mr-1' /> {submitting ? '...' : 'Submit'}
               </Button>
             </div>
           </div>
 
-          {/* File Tabs Bar */}
-          <div className={`flex border-b overflow-x-auto shrink-0 [&::-webkit-scrollbar]:hidden select-none ${isDark ? 'bg-[#0f172a]/60 border-slate-850' : 'bg-slate-100/50 border-slate-200'}`}>
-            {tabs.map(t => (
-              <button
-                key={t.path}
-                onClick={() => setActiveTab(t.path)}
-                className={`px-4 py-2 text-xs font-mono border-r transition-all ${
-                  activeTab === t.path 
-                    ? (isDark ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500 border-r-slate-800' : 'bg-white text-slate-900 border-t-2 border-t-indigo-600 border-r-slate-200') 
-                    : (isDark ? 'text-slate-400 hover:bg-[#181824] hover:text-slate-200 border-r-slate-800' : 'text-slate-500 hover:bg-slate-200/50 hover:text-slate-800 border-r-slate-200')
-                }`}
-              >
-                {t.path}
-              </button>
-            ))}
+          {/* Mobile Segmented View Tabs */}
+          <div className={`grid grid-cols-4 border-b text-xs font-semibold ${isDark ? 'bg-[#0b0f19] border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'} shrink-0`}>
+            <button
+              onClick={() => setMobileTab('instructions')}
+              className={`py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+                mobileTab === 'instructions'
+                  ? (isDark ? 'border-indigo-500 text-indigo-400 bg-indigo-950/20' : 'border-indigo-600 text-indigo-600 bg-indigo-50/50')
+                  : 'border-transparent hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <BookOpen className='w-3.5 h-3.5' />
+              <span>Guide</span>
+            </button>
+
+            <button
+              onClick={() => setMobileTab('files')}
+              className={`py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+                mobileTab === 'files'
+                  ? (isDark ? 'border-indigo-500 text-indigo-400 bg-indigo-950/20' : 'border-indigo-600 text-indigo-600 bg-indigo-50/50')
+                  : 'border-transparent hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Files className='w-3.5 h-3.5' />
+              <span>Files</span>
+            </button>
+
+            <button
+              onClick={() => setMobileTab('editor')}
+              className={`py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+                mobileTab === 'editor'
+                  ? (isDark ? 'border-indigo-500 text-indigo-400 bg-indigo-950/20' : 'border-indigo-600 text-indigo-600 bg-indigo-50/50')
+                  : 'border-transparent hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Code2 className='w-3.5 h-3.5' />
+              <span>Editor</span>
+            </button>
+
+            <button
+              onClick={() => setMobileTab('output')}
+              className={`py-2.5 flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+                mobileTab === 'output'
+                  ? (isDark ? 'border-indigo-500 text-indigo-400 bg-indigo-950/20' : 'border-indigo-600 text-indigo-600 bg-indigo-50/50')
+                  : 'border-transparent hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Play className='w-3.5 h-3.5' />
+              <span>Output</span>
+            </button>
           </div>
 
-          {/* Editor Content Area */}
-          <div className={`flex-1 relative ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
-            {activeTab ? (
-              activeTab === 'Instructions.md' ? (
-                <div className='absolute inset-0 p-8 overflow-y-auto [&::-webkit-scrollbar]:hidden'>
-                  <div className={`
-                    prose ${isDark ? 'prose-invert prose-slate' : 'prose-slate'} max-w-3xl mx-auto
-                    prose-headings:${isDark ? 'text-white' : 'text-slate-955'} prose-headings:font-bold
-                    prose-h1:text-2xl prose-h1:border-b ${isDark ? 'prose-h1:border-slate-800' : 'prose-h1:border-slate-200'} prose-h1:pb-3
-                    prose-h2:text-xl ${isDark ? 'prose-h2:text-indigo-300' : 'prose-h2:text-indigo-650'}
-                    prose-h3:text-base ${isDark ? 'prose-h3:text-slate-200' : 'prose-h3:text-slate-700'}
-                    prose-p:${isDark ? 'text-slate-300' : 'text-slate-600'} prose-p:leading-relaxed
-                    prose-code:${isDark ? 'bg-slate-800 text-emerald-400' : 'bg-slate-100 text-emerald-700'} prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
-                    prose-pre:${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'} prose-pre:border prose-pre:rounded-lg
-                    prose-strong:${isDark ? 'text-white' : 'text-slate-900'}
-                    prose-li:${isDark ? 'text-slate-300' : 'text-slate-600'}
-                    prose-hr:${isDark ? 'border-slate-800' : 'border-slate-200'}
-                  `}>
-                    <ReactMarkdown>
-                      {instructionsMarkdown}
-                    </ReactMarkdown>
-                  </div>
+          {/* Mobile Active Tab Content */}
+          <div className='flex-1 min-h-0 relative overflow-hidden'>
+            {mobileTab === 'instructions' && (
+              <div className='absolute inset-0 p-4 sm:p-6 overflow-y-auto'>
+                <div className={`prose ${isDark ? 'prose-invert prose-slate' : 'prose-slate'} max-w-full text-xs sm:text-sm`}>
+                  <ReactMarkdown>{instructionsMarkdown}</ReactMarkdown>
                 </div>
-              ) : (
-                <Editor
-                  height='100%'
-                  language={activeTabLanguage}
-                  theme={theme}
-                  value={activeTabContent}
-                  onChange={handleEditorChange}
-                  path={activeTab || undefined}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 14,
-                    lineNumbersMinChars: 3,
-                    wordWrap: 'on',
-                    scrollBeyondLastLine: false,
-                    padding: { top: 16 },
-                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                    renderLineHighlight: 'all',
-                    bracketPairColorization: { enabled: true },
-                    autoClosingBrackets: 'always',
-                    autoClosingQuotes: 'always',
-                  }}
-                />
-              )
-            ) : (
-              <div className={`flex items-center justify-center h-full ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
-                Select a file to edit
               </div>
             )}
-          </div>
-        </Panel>
 
-        <PanelResizeHandle className={`w-1 transition-colors cursor-col-resize z-10 ${isDark ? 'bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600' : 'bg-slate-200 hover:bg-indigo-500 active:bg-indigo-600'}`} />
-
-        {/* Output Panel (Right) */}
-        <Panel defaultSize={32} minSize={20} className={`flex flex-col min-w-0 overflow-hidden ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
-          {exercise.language === 'dom' ? (
-            <PanelGroup direction='vertical' className='h-full w-full'>
-              {/* Live Preview Panel (Top Half) */}
-              <Panel defaultSize={50} minSize={20} className={`flex flex-col border-b overflow-hidden ${isDark ? 'bg-[#1e1e1e] border-slate-800' : 'bg-white border-slate-200'}`}>
-                <div className={`flex items-center justify-between px-4 py-2 ${isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-slate-100 border-slate-200'} border-b shrink-0 select-none`}>
-                  <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Live Preview
-                  </span>
-                  {previewUrl && (
-                    <button 
-                      className={`flex items-center gap-1 text-xs transition-colors font-semibold ${isDark ? 'text-slate-500 hover:text-indigo-400' : 'text-slate-600 hover:text-indigo-600'}`}
-                      onClick={handleOpenNewTab}
-                      title="Open in new tab"
-                    >
-                      <ExternalLink className='w-3.5 h-3.5' />
-                      <span>Open in new tab</span>
-                    </button>
-                  )}
+            {mobileTab === 'files' && (
+              <div className={`h-full flex flex-col ${isDark ? 'bg-[#0b0f19]' : 'bg-slate-50'}`}>
+                <div className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500 border-b border-slate-800' : 'text-slate-600 border-b border-slate-200'}`}>
+                  File Explorer (Tap to Open)
                 </div>
-                <div className='flex-1 bg-white relative'>
-                  {previewUrl ? (
-                    <iframe src={previewUrl} className='w-full h-full border-none bg-white' sandbox="allow-scripts" title="Preview" />
+                <div className='flex-1 overflow-y-auto p-2'>
+                  <FileTreeExplorer
+                    nodes={tree}
+                    activePath={activeTab}
+                    onSelect={(path) => {
+                      setActiveTab(path);
+                      setMobileTab('editor');
+                    }}
+                    onCreate={handleCreate}
+                    onDelete={handleDelete}
+                    onRename={handleRename}
+                    onRefresh={() => {}}
+                    isDark={isDark}
+                  />
+                </div>
+              </div>
+            )}
+
+            {mobileTab === 'editor' && (
+              <div className={`h-full flex flex-col ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
+                {/* File Tabs */}
+                <div className={`flex border-b overflow-x-auto shrink-0 [&::-webkit-scrollbar]:hidden select-none ${isDark ? 'bg-[#0f172a]/60 border-slate-800' : 'bg-slate-100/50 border-slate-200'}`}>
+                  {tabs.map((t) => (
+                    <button
+                      key={t.path}
+                      onClick={() => setActiveTab(t.path)}
+                      className={`px-3 py-1.5 text-xs font-mono border-r transition-all shrink-0 ${
+                        activeTab === t.path
+                          ? (isDark ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500' : 'bg-white text-slate-900 border-t-2 border-t-indigo-600')
+                          : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800')
+                      }`}
+                    >
+                      {t.path}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Monaco Editor */}
+                <div className='flex-1 relative'>
+                  {activeTab ? (
+                    <Editor
+                      height='100%'
+                      language={activeTabLanguage}
+                      theme={theme}
+                      value={activeTabContent}
+                      onChange={handleEditorChange}
+                      path={activeTab || undefined}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 13,
+                        lineNumbersMinChars: 2,
+                        wordWrap: 'on',
+                        scrollBeyondLastLine: false,
+                        padding: { top: 12 },
+                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        glyphMargin: false,
+                        folding: false,
+                        bracketPairColorization: { enabled: true },
+                        autoClosingBrackets: 'always',
+                        autoClosingQuotes: 'always',
+                      }}
+                    />
                   ) : (
-                    <div className={`flex items-center justify-center h-full text-xs italic ${isDark ? 'bg-[#1e1e1e] text-slate-400' : 'bg-white text-slate-500'}`}>
-                      Click "Run" to update the preview
+                    <div className={`flex items-center justify-center h-full text-xs ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
+                      Select a file from the Files tab
                     </div>
                   )}
                 </div>
-              </Panel>
+              </div>
+            )}
 
-              <PanelResizeHandle className={`h-1 transition-colors cursor-row-resize z-10 ${isDark ? 'bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600' : 'bg-slate-200 hover:bg-indigo-500 active:bg-indigo-600'}`} />
-
-              {/* Terminal & Feedback Panel (Bottom Half) */}
-              <Panel defaultSize={50} minSize={20} className='flex flex-col overflow-hidden'>
-                <div className={`flex items-center justify-between px-4 py-1.5 ${isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-slate-100 border-slate-200'} border-b shrink-0 select-none`}>
-                  <div className='flex gap-4'>
-                    <button 
-                      className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
-                        bottomTab === 'terminal' 
-                          ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-650 pb-0.5') 
-                          : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-800')
-                      }`}
-                      onClick={() => setBottomTab('terminal')}
-                    >
-                      Terminal
-                    </button>
-                    <button 
-                      className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
-                        bottomTab === 'feedback' 
-                          ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-650 pb-0.5') 
-                          : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-800')
-                      }`}
-                      onClick={() => setBottomTab('feedback')}
-                    >
-                      Feedback
-                    </button>
+            {mobileTab === 'output' && (
+              <div className={`h-full flex flex-col ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
+                {exercise.language === 'dom' && (
+                  <div className={`h-1/2 flex flex-col border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+                    <div className={`flex items-center justify-between px-3 py-1.5 ${isDark ? 'bg-[#0f172a]' : 'bg-slate-100'} border-b shrink-0`}>
+                      <span className='text-xs font-semibold uppercase tracking-wider text-slate-400'>
+                        Live Preview
+                      </span>
+                      {previewUrl && (
+                        <button
+                          className='flex items-center gap-1 text-xs text-indigo-500 font-medium'
+                          onClick={handleOpenNewTab}
+                        >
+                          <ExternalLink className='w-3 h-3' />
+                          <span>New Tab</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className='flex-1 bg-white relative'>
+                      {previewUrl ? (
+                        <iframe src={previewUrl} className='w-full h-full border-none bg-white' sandbox='allow-scripts' title='Preview' />
+                      ) : (
+                        <div className='flex items-center justify-center h-full text-xs italic text-slate-400'>
+                          Tap "Run" to update the preview
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className='flex items-center gap-2'>
+                )}
+
+                <div className='flex-1 flex flex-col min-h-0'>
+                  <div className={`flex items-center justify-between px-3 py-1.5 ${isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-slate-100 border-slate-200'} border-b shrink-0`}>
+                    <div className='flex gap-3'>
+                      <button
+                        className={`text-xs font-semibold uppercase tracking-wider ${
+                          bottomTab === 'terminal'
+                            ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-600 pb-0.5')
+                            : 'text-slate-500'
+                        }`}
+                        onClick={() => setBottomTab('terminal')}
+                      >
+                        Terminal
+                      </button>
+                      <button
+                        className={`text-xs font-semibold uppercase tracking-wider ${
+                          bottomTab === 'feedback'
+                            ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-600 pb-0.5')
+                            : 'text-slate-500'
+                        }`}
+                        onClick={() => setBottomTab('feedback')}
+                      >
+                        Feedback
+                      </button>
+                    </div>
                     {bottomTab === 'terminal' && (
-                      <button 
-                        className={`transition-colors p-1 rounded ${isDark ? 'text-slate-500 hover:text-red-400 hover:bg-slate-800' : 'text-slate-500 hover:text-red-500 hover:bg-slate-200'}`} 
+                      <button
+                        className='p-1 text-slate-400 hover:text-red-500'
                         onClick={() => setTerminalOutput('')}
-                        title="Clear console"
+                        title='Clear console'
                       >
                         <Trash2 className='w-3.5 h-3.5' />
                       </button>
                     )}
                   </div>
-                </div>
-                <div className={`flex-1 overflow-y-auto font-mono text-sm [&::-webkit-scrollbar]:hidden ${isDark ? 'bg-[#1e1e1e] text-slate-300' : 'bg-white text-slate-800'}`}>
-                  {bottomTab === 'feedback' ? (
-                    <div className='p-4 whitespace-pre-wrap font-mono leading-relaxed text-xs'>
-                      {feedbackOutput}
-                    </div>
-                  ) : (
-                    <div className='p-3 whitespace-pre-wrap text-xs'>
-                      {terminalOutput}
-                    </div>
-                  )}
-                </div>
-              </Panel>
-            </PanelGroup>
-          ) : (
-            // Non-DOM Exercises - Full Height Output Console
-            <div className='flex flex-col h-full overflow-hidden'>
-              <div className={`flex items-center justify-between px-4 py-1.5 ${isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-slate-100 border-slate-200'} border-b shrink-0 select-none`}>
-                <div className='flex gap-4'>
-                  <button 
-                    className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
-                      bottomTab === 'terminal' 
-                        ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-650 pb-0.5') 
-                        : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-800')
-                    }`}
-                    onClick={() => setBottomTab('terminal')}
-                  >
-                    Terminal
-                  </button>
-                  <button 
-                    className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
-                      bottomTab === 'feedback' 
-                        ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-650 pb-0.5') 
-                        : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-800')
-                    }`}
-                    onClick={() => setBottomTab('feedback')}
-                  >
-                    Feedback
-                  </button>
-                </div>
-                <div className='flex items-center gap-2'>
-                  {bottomTab === 'terminal' && (
-                    <button 
-                      className={`transition-colors p-1 rounded ${isDark ? 'text-slate-500 hover:text-red-400 hover:bg-slate-800' : 'text-slate-500 hover:text-red-500 hover:bg-slate-200'}`} 
-                      onClick={() => setTerminalOutput('')}
-                      title="Clear console"
-                    >
-                      <Trash2 className='w-3.5 h-3.5' />
-                    </button>
-                  )}
+
+                  <div className={`flex-1 overflow-y-auto p-3 font-mono text-xs ${isDark ? 'bg-[#1e1e1e] text-slate-300' : 'bg-white text-slate-800'}`}>
+                    {bottomTab === 'feedback' ? feedbackOutput : terminalOutput}
+                  </div>
                 </div>
               </div>
-              <div className={`flex-1 overflow-y-auto font-mono text-sm [&::-webkit-scrollbar]:hidden ${isDark ? 'bg-[#1e1e1e] text-slate-300' : 'bg-white text-slate-800'}`}>
-                {bottomTab === 'feedback' ? (
-                  <div className='p-4 whitespace-pre-wrap font-mono leading-relaxed text-xs'>
-                    {feedbackOutput}
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ─────────────────────────────────────────────────────────────
+            DESKTOP VIEW (>= 1024px): 3-Column Resizable Panels
+        ───────────────────────────────────────────────────────────── */
+        <div className='flex flex-1 min-h-0 w-full'>
+          {/* Activity Bar */}
+          <div className={`w-12 flex flex-col items-center py-4 ${isDark ? 'bg-[#0f172a] border-r border-slate-800' : 'bg-slate-100 border-r border-slate-200'} shrink-0 gap-4`}>
+            <button
+              onClick={() => {
+                if (!tabs.find(t => t.path === 'Instructions.md')) {
+                  setTabs(prev => [{ path: 'Instructions.md', content: instructionsMarkdown, language: 'markdown' }, ...prev]);
+                }
+                setActiveTab('Instructions.md');
+              }}
+              className={`p-2 rounded-lg transition-all duration-150 hover:scale-105 ${activeTab === 'Instructions.md' ? (isDark ? 'text-white bg-indigo-600/20' : 'text-indigo-600 bg-indigo-50') : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-550 hover:text-slate-800')}`}
+              title='Instructions'
+            >
+              <BookOpen className='w-6 h-6' />
+            </button>
+            <button
+              onClick={() => setActiveSidebar('explorer')}
+              className={`p-2 rounded-lg transition-all duration-150 hover:scale-105 ${activeSidebar === 'explorer' ? (isDark ? 'text-white bg-indigo-600/20' : 'text-indigo-600 bg-indigo-50') : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-550 hover:text-slate-800')}`}
+              title='Explorer'
+            >
+              <Files className='w-6 h-6' />
+            </button>
+            <button
+              onClick={() => setActiveSidebar('search')}
+              className={`p-2 rounded-lg transition-all duration-150 hover:scale-105 ${activeSidebar === 'search' ? (isDark ? 'text-white bg-indigo-600/20' : 'text-indigo-600 bg-indigo-50') : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-550 hover:text-slate-800')}`}
+              title='Search'
+            >
+              <Search className='w-6 h-6' />
+            </button>
+          </div>
+
+          <PanelGroup direction='horizontal' className='flex-1 w-full overflow-hidden'>
+            {/* Sidebar Panel */}
+            <Panel defaultSize={18} minSize={15} maxSize={30} className={`flex flex-col h-full overflow-hidden ${isDark ? 'bg-[#0b0f19] border-r border-slate-800' : 'bg-slate-50 border-r border-slate-200'}`}>
+              {activeSidebar === 'explorer' && (
+                <div className='h-full flex flex-col'>
+                  <div className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500 border-b border-slate-800 bg-[#0f172a]/40' : 'text-slate-600 border-b border-slate-200 bg-slate-100/50'}`}>
+                    Explorer
                   </div>
+                  <div className='flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden'>
+                    <FileTreeExplorer
+                      nodes={tree}
+                      activePath={activeTab}
+                      onSelect={(path) => setActiveTab(path)}
+                      onCreate={handleCreate}
+                      onDelete={handleDelete}
+                      onRename={handleRename}
+                      onRefresh={() => {}}
+                      isDark={isDark}
+                    />
+                  </div>
+                </div>
+              )}
+              {activeSidebar === 'search' && (
+                <div className='p-4 h-full text-sm text-slate-550'>
+                  Search panel coming soon...
+                </div>
+              )}
+            </Panel>
+
+            <PanelResizeHandle className={`w-1 transition-colors cursor-col-resize z-10 ${isDark ? 'bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600' : 'bg-slate-200 hover:bg-indigo-500 active:bg-indigo-600'}`} />
+
+            {/* Editor Panel (Middle) */}
+            <Panel defaultSize={50} minSize={30} className={`flex flex-col min-w-0 overflow-hidden border-r ${isDark ? 'bg-[#1e1e1e] border-slate-800' : 'bg-white border-slate-200'}`}>
+              {/* Header Bar: Title and Buttons */}
+              <div className={`flex items-center justify-between px-4 py-2 ${isDark ? 'bg-[#0f172a] border-b border-slate-800' : 'bg-slate-100 border-b border-slate-200'} shrink-0 select-none`}>
+                <div className='flex items-center gap-2'>
+                  <Code2 className='w-4 h-4 text-indigo-400' />
+                  <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{exercise.title}</span>
+                </div>
+
+                <div className='flex items-center gap-1.5 shrink-0'>
+                  <button
+                    onClick={toggleTheme}
+                    className={`p-1.5 rounded transition-all hover:scale-105 ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'}`}
+                    title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                  >
+                    {isDark ? <Sun className='w-4 h-4 text-amber-400' /> : <Moon className='w-4 h-4 text-indigo-600' />}
+                  </button>
+
+                  <button
+                    onClick={() => setIsFullscreen(!isFullscreen)}
+                    className={`p-1.5 rounded transition-colors ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'} mr-1`}
+                    title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                  >
+                    {isFullscreen ? <Minimize className='w-4 h-4' /> : <Maximize className='w-4 h-4' />}
+                  </button>
+
+                  <Button
+                    size='sm'
+                    variant={exercise.language === 'dom' ? 'outline' : 'secondary'}
+                    className={`h-7 text-xs ${exercise.language === 'dom' ? (isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300') : 'bg-emerald-600 hover:bg-emerald-500 text-white border-none'}`}
+                    onClick={handleRun}
+                    disabled={isRunning}
+                  >
+                    <Play className={`w-3.5 h-3.5 mr-1 ${exercise.language === 'dom' ? 'text-emerald-400' : ''}`} /> Run
+                  </Button>
+
+                  {activeTask?.test_cases && activeTask.test_cases.length > 0 && exercise.language !== 'dom' && exercise.language !== 'sql' && (
+                    <Button
+                      size='sm'
+                      variant='secondary'
+                      className='h-7 text-xs bg-amber-600 hover:bg-amber-500 text-white border-none'
+                      onClick={handleRunTests}
+                      disabled={isRunning}
+                    >
+                      <CheckCircle2 className='w-3.5 h-3.5 mr-1' /> {isRunning ? 'Testing...' : 'Run Tests'}
+                    </Button>
+                  )}
+
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    className={`h-7 text-xs ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'}`}
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    <Save className='w-3.5 h-3.5 mr-1 text-blue-400' /> {saving ? 'Saving...' : 'Save'}
+                  </Button>
+
+                  <Button
+                    size='sm'
+                    className='h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white border-none'
+                    disabled={submitting}
+                    onClick={handleSubmit}
+                  >
+                    <Send className='w-3.5 h-3.5 mr-1' /> {submitting ? 'Submitting...' : 'Submit'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* File Tabs Bar */}
+              <div className={`flex border-b overflow-x-auto shrink-0 [&::-webkit-scrollbar]:hidden select-none ${isDark ? 'bg-[#0f172a]/60 border-slate-850' : 'bg-slate-100/50 border-slate-200'}`}>
+                {tabs.map((t) => (
+                  <button
+                    key={t.path}
+                    onClick={() => setActiveTab(t.path)}
+                    className={`px-4 py-2 text-xs font-mono border-r transition-all ${
+                      activeTab === t.path
+                        ? (isDark ? 'bg-[#1e1e1e] text-white border-t-2 border-t-indigo-500 border-r-slate-800' : 'bg-white text-slate-900 border-t-2 border-t-indigo-600 border-r-slate-200')
+                        : (isDark ? 'text-slate-400 hover:bg-[#181824] hover:text-slate-200 border-r-slate-800' : 'text-slate-500 hover:bg-slate-200/50 hover:text-slate-800 border-r-slate-200')
+                    }`}
+                  >
+                    {t.path}
+                  </button>
+                ))}
+              </div>
+
+              {/* Editor Content Area */}
+              <div className={`flex-1 relative ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
+                {activeTab ? (
+                  activeTab === 'Instructions.md' ? (
+                    <div className='absolute inset-0 p-8 overflow-y-auto [&::-webkit-scrollbar]:hidden'>
+                      <div className={`
+                        prose ${isDark ? 'prose-invert prose-slate' : 'prose-slate'} max-w-3xl mx-auto
+                        prose-headings:${isDark ? 'text-white' : 'text-slate-955'} prose-headings:font-bold
+                        prose-h1:text-2xl prose-h1:border-b ${isDark ? 'prose-h1:border-slate-800' : 'prose-h1:border-slate-200'} prose-h1:pb-3
+                        prose-h2:text-xl ${isDark ? 'prose-h2:text-indigo-300' : 'prose-h2:text-indigo-650'}
+                        prose-h3:text-base ${isDark ? 'prose-h3:text-slate-200' : 'prose-h3:text-slate-700'}
+                        prose-p:${isDark ? 'text-slate-300' : 'text-slate-600'} prose-p:leading-relaxed
+                        prose-code:${isDark ? 'bg-slate-800 text-emerald-400' : 'bg-slate-100 text-emerald-700'} prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
+                        prose-pre:${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'} prose-pre:border prose-pre:rounded-lg
+                        prose-strong:${isDark ? 'text-white' : 'text-slate-900'}
+                        prose-li:${isDark ? 'text-slate-300' : 'text-slate-600'}
+                        prose-hr:${isDark ? 'border-slate-800' : 'border-slate-200'}
+                      `}>
+                        <ReactMarkdown>{instructionsMarkdown}</ReactMarkdown>
+                      </div>
+                    </div>
+                  ) : (
+                    <Editor
+                      height='100%'
+                      language={activeTabLanguage}
+                      theme={theme}
+                      value={activeTabContent}
+                      onChange={handleEditorChange}
+                      path={activeTab || undefined}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 14,
+                        lineNumbersMinChars: 3,
+                        wordWrap: 'on',
+                        scrollBeyondLastLine: false,
+                        padding: { top: 16 },
+                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        renderLineHighlight: 'all',
+                        bracketPairColorization: { enabled: true },
+                        autoClosingBrackets: 'always',
+                        autoClosingQuotes: 'always',
+                      }}
+                    />
+                  )
                 ) : (
-                  <div className='p-3 whitespace-pre-wrap text-xs'>
-                    {terminalOutput}
+                  <div className={`flex items-center justify-center h-full ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
+                    Select a file to edit
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </Panel>
-      </PanelGroup>
-      </div>
+            </Panel>
+
+            <PanelResizeHandle className={`w-1 transition-colors cursor-col-resize z-10 ${isDark ? 'bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600' : 'bg-slate-200 hover:bg-indigo-500 active:bg-indigo-600'}`} />
+
+            {/* Output Panel (Right) */}
+            <Panel defaultSize={32} minSize={20} className={`flex flex-col min-w-0 overflow-hidden ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
+              {exercise.language === 'dom' ? (
+                <PanelGroup direction='vertical' className='h-full w-full'>
+                  {/* Live Preview Panel (Top Half) */}
+                  <Panel defaultSize={50} minSize={20} className={`flex flex-col border-b overflow-hidden ${isDark ? 'bg-[#1e1e1e] border-slate-800' : 'bg-white border-slate-200'}`}>
+                    <div className={`flex items-center justify-between px-4 py-2 ${isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-slate-100 border-slate-200'} border-b shrink-0 select-none`}>
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                        Live Preview
+                      </span>
+                      {previewUrl && (
+                        <button
+                          className={`flex items-center gap-1 text-xs transition-colors font-semibold ${isDark ? 'text-slate-500 hover:text-indigo-400' : 'text-slate-600 hover:text-indigo-600'}`}
+                          onClick={handleOpenNewTab}
+                          title='Open in new tab'
+                        >
+                          <ExternalLink className='w-3.5 h-3.5' />
+                          <span>Open in new tab</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className='flex-1 bg-white relative'>
+                      {previewUrl ? (
+                        <iframe src={previewUrl} className='w-full h-full border-none bg-white' sandbox='allow-scripts' title='Preview' />
+                      ) : (
+                        <div className={`flex items-center justify-center h-full text-xs italic ${isDark ? 'bg-[#1e1e1e] text-slate-400' : 'bg-white text-slate-500'}`}>
+                          Click "Run" to update the preview
+                        </div>
+                      )}
+                    </div>
+                  </Panel>
+
+                  <PanelResizeHandle className={`h-1 transition-colors cursor-row-resize z-10 ${isDark ? 'bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600' : 'bg-slate-200 hover:bg-indigo-500 active:bg-indigo-600'}`} />
+
+                  {/* Terminal & Feedback Panel (Bottom Half) */}
+                  <Panel defaultSize={50} minSize={20} className='flex flex-col overflow-hidden'>
+                    <div className={`flex items-center justify-between px-4 py-1.5 ${isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-slate-100 border-slate-200'} border-b shrink-0 select-none`}>
+                      <div className='flex gap-4'>
+                        <button
+                          className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
+                            bottomTab === 'terminal'
+                              ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-650 pb-0.5')
+                              : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-800')
+                          }`}
+                          onClick={() => setBottomTab('terminal')}
+                        >
+                          Terminal
+                        </button>
+                        <button
+                          className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
+                            bottomTab === 'feedback'
+                              ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-650 pb-0.5')
+                              : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-800')
+                          }`}
+                          onClick={() => setBottomTab('feedback')}
+                        >
+                          Feedback
+                        </button>
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        {bottomTab === 'terminal' && (
+                          <button
+                            className={`transition-colors p-1 rounded ${isDark ? 'text-slate-500 hover:text-red-400 hover:bg-slate-800' : 'text-slate-500 hover:text-red-500 hover:bg-slate-200'}`}
+                            onClick={() => setTerminalOutput('')}
+                            title='Clear console'
+                          >
+                            <Trash2 className='w-3.5 h-3.5' />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`flex-1 overflow-y-auto font-mono text-sm [&::-webkit-scrollbar]:hidden ${isDark ? 'bg-[#1e1e1e] text-slate-300' : 'bg-white text-slate-800'}`}>
+                      {bottomTab === 'feedback' ? (
+                        <div className='p-4 whitespace-pre-wrap font-mono leading-relaxed text-xs'>
+                          {feedbackOutput}
+                        </div>
+                      ) : (
+                        <div className='p-3 whitespace-pre-wrap text-xs'>
+                          {terminalOutput}
+                        </div>
+                      )}
+                    </div>
+                  </Panel>
+                </PanelGroup>
+              ) : (
+                /* Non-DOM Exercises - Full Height Output Console */
+                <div className='flex flex-col h-full overflow-hidden'>
+                  <div className={`flex items-center justify-between px-4 py-1.5 ${isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-slate-100 border-slate-200'} border-b shrink-0 select-none`}>
+                    <div className='flex gap-4'>
+                      <button
+                        className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
+                          bottomTab === 'terminal'
+                            ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-650 pb-0.5')
+                            : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-800')
+                        }`}
+                        onClick={() => setBottomTab('terminal')}
+                      >
+                        Terminal
+                      </button>
+                      <button
+                        className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
+                          bottomTab === 'feedback'
+                            ? (isDark ? 'text-indigo-400 border-b-2 border-indigo-500 pb-0.5' : 'text-indigo-600 border-b-2 border-indigo-650 pb-0.5')
+                            : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-800')
+                        }`}
+                        onClick={() => setBottomTab('feedback')}
+                      >
+                        Feedback
+                      </button>
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      {bottomTab === 'terminal' && (
+                        <button
+                          className={`transition-colors p-1 rounded ${isDark ? 'text-slate-500 hover:text-red-400 hover:bg-slate-800' : 'text-slate-500 hover:text-red-500 hover:bg-slate-200'}`}
+                          onClick={() => setTerminalOutput('')}
+                          title='Clear console'
+                        >
+                          <Trash2 className='w-3.5 h-3.5' />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`flex-1 overflow-y-auto font-mono text-sm [&::-webkit-scrollbar]:hidden ${isDark ? 'bg-[#1e1e1e] text-slate-300' : 'bg-white text-slate-800'}`}>
+                    {bottomTab === 'feedback' ? (
+                      <div className='p-4 whitespace-pre-wrap font-mono leading-relaxed text-xs'>
+                        {feedbackOutput}
+                      </div>
+                    ) : (
+                      <div className='p-3 whitespace-pre-wrap text-xs'>
+                        {terminalOutput}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </Panel>
+          </PanelGroup>
+        </div>
+      )}
     </div>
   );
 }

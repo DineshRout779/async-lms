@@ -35,12 +35,40 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ message: 'Access Denied: Session expired due to password change' });
     }
 
-    // 4. Attach the user payload to the request object
+    // 4. For facilitators, always fetch live assigned college IDs from DB so changes take effect immediately
+    let collegeIds = verified.college_ids || [];
+    if (verified.role === 'facilitator') {
+      const fcRes = await pool.query(
+        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
+        [verified.id]
+      );
+      collegeIds = fcRes.rows.map((r) => r.college_id);
+    }
+
+    // Attach the user payload to the request object
     req.user = {
       ...verified,
+      college_ids: collegeIds,
       email: userDb.email,
       full_name: userDb.full_name,
     };
+
+    // 5. Check if the token is restricted to password reset
+    if (verified.scope === 'password_reset_only') {
+      const normalizedPath = (req.baseUrl ? req.baseUrl + req.path : req.path).split('?')[0];
+      const isAllowedRoute = 
+        normalizedPath === '/api/v1/auth/change-password' || 
+        normalizedPath === '/api/v1/auth/me' ||
+        req.path === '/change-password' ||
+        req.path === '/me';
+
+      if (!isAllowedRoute) {
+        return res.status(403).json({ 
+          message: 'Access Denied: You must change your password before accessing this resource.',
+          requiresPasswordReset: true
+        });
+      }
+    }
 
     const { markUserActive } = require('../services/presenceService');
     markUserActive(req.user.id);

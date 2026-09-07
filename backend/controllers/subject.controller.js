@@ -6,8 +6,7 @@ const fs = require('fs').promises;
 const https = require('https');
 const http = require('http');
 const slugify = require('../utils/slugify');
-const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { presignS3Url } = require('../utils/s3');
 
 /**
  * Strip executable test code before sending an exercise to a student.
@@ -32,27 +31,6 @@ const publicTasks = (tasks) =>
         test_cases: publicTestCases(t.test_cases),
       }))
     : tasks;
-
-const s3 = new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
-async function presignIfS3(url) {
-  if (!url || !url.includes('.amazonaws.com/')) return url;
-  try {
-    const { hostname, pathname } = new URL(url);
-    const bucket = hostname.split('.')[0];
-    const key = decodeURIComponent(pathname.slice(1));
-    const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
-    return await getSignedUrl(s3, cmd, { expiresIn: 3600 });
-  } catch {
-    return url;
-  }
-}
 
 const fetchTextFromUrl = (url) =>
   new Promise((resolve, reject) => {
@@ -241,6 +219,31 @@ exports.getCourseStructure = async (req, res) => {
         st.slug AS subtopic_slug,
         st.description AS subtopic_description,
         st.order_index AS subtopic_order,
+        CASE WHEN
+          -- Fast path: user_subtopic_progress explicitly marks it done
+          COALESCE(usp.is_completed, false) = true
+          OR (
+            -- Fallback: all published lessons in this subtopic are completed by the user
+            EXISTS (
+              SELECT 1 FROM lesson_content lc2
+              WHERE lc2.subtopic_id = st.id
+                AND lc2.is_published = true
+                AND lc2.is_deleted = false
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM lesson_content lc2
+              WHERE lc2.subtopic_id = st.id
+                AND lc2.is_published = true
+                AND lc2.is_deleted = false
+                AND NOT EXISTS (
+                  SELECT 1 FROM user_lesson_progress ulp2
+                  WHERE ulp2.lesson_content_id = lc2.id
+                    AND ulp2.user_id = $2
+                    AND ulp2.is_completed = true
+                )
+            )
+          )
+        THEN true ELSE false END AS subtopic_is_completed,
 
         -- Lesson Content (published only)
         lc.id AS lesson_id,
@@ -290,6 +293,7 @@ exports.getCourseStructure = async (req, res) => {
       LEFT JOIN projects p ON t.id = p.topic_id AND p.is_deleted = false
       LEFT JOIN units u ON t.id = u.topic_id AND u.is_deleted = false
       LEFT JOIN subtopics st ON u.id = st.unit_id AND st.is_deleted = false
+      LEFT JOIN user_subtopic_progress usp ON usp.subtopic_id = st.id AND usp.user_id = $2
       LEFT JOIN lesson_content lc
         ON st.id = lc.subtopic_id AND lc.is_published = true AND lc.is_deleted = false
       LEFT JOIN user_lesson_progress ulp
@@ -351,7 +355,7 @@ exports.getCourseStructure = async (req, res) => {
           slug: row.subtopic_slug,
           description: row.subtopic_description,
           order_index: row.subtopic_order,
-          is_completed: false,
+          is_completed: !!row.subtopic_is_completed,
           lesson_content: [],
           exercises: [],
         });
@@ -370,9 +374,6 @@ exports.getCourseStructure = async (req, res) => {
             version: row.lesson_version,
             video_url: row.lesson_video_url,
           });
-        }
-        if (row.lesson_is_completed) {
-          subtopic.is_completed = true;
         }
       }
 
@@ -577,7 +578,7 @@ exports.getSubtopicContent = async (req, res) => {
         if (markdownRow.markdown_path.startsWith('ai-generated:')) {
           markdownContent = markdownRow.markdown_path.slice('ai-generated:'.length);
         } else if (markdownRow.markdown_path.startsWith('http')) {
-          const fetchUrl = await presignIfS3(markdownRow.markdown_path);
+          const fetchUrl = await presignS3Url(markdownRow.markdown_path);
           markdownContent = await fetchTextFromUrl(fetchUrl);
         } else {
           const relativePath = markdownRow.markdown_path.replace(/^\/+/, '');
@@ -1039,8 +1040,50 @@ exports.getQuizContent = async (req, res) => {
 exports.getMarkdownContent = async (req, res) => {
   try {
     const { markdownPathURL } = req.body;
-    const fetchUrl = await presignIfS3(markdownPathURL);
-    const content = await fetchTextFromUrl(fetchUrl);
+    if (!markdownPathURL) {
+      return res.status(400).json({ success: false, message: 'No markdown path provided' });
+    }
+
+    let content = '';
+    if (markdownPathURL.startsWith('ai-generated:')) {
+      content = markdownPathURL.slice('ai-generated:'.length);
+    } else if (markdownPathURL.startsWith('http://') || markdownPathURL.startsWith('https://')) {
+      try {
+        const fetchUrl = await presignS3Url(markdownPathURL);
+        content = await fetchTextFromUrl(fetchUrl);
+      } catch (fetchErr) {
+        console.warn('Could not fetch remote markdown from URL:', markdownPathURL, fetchErr.message);
+        content = `# Lesson Content\n\n> **Note:** The remote content file at \`${markdownPathURL.split('/').pop()}\` could not be fetched from remote storage (${fetchErr.message}).\n\nPlease check that AWS S3 credentials or internet connectivity are properly configured.`;
+      }
+    } else {
+      const relativePath = markdownPathURL.replace(/^\/+/, '');
+      const allowedBaseDirs = [
+        path.resolve(__dirname, '..', 'data'),
+        path.resolve(__dirname, '..', 'uploads'),
+      ];
+      let found = false;
+      for (const baseDir of allowedBaseDirs) {
+        const resolvedPath = path.resolve(baseDir, relativePath);
+        // Ensure the path is strictly within the allowed base directory
+        if (resolvedPath === baseDir || resolvedPath.startsWith(baseDir + path.sep)) {
+          try {
+            content = await fs.readFile(resolvedPath, 'utf8');
+            found = true;
+            break;
+          } catch {
+            // continue searching other allowed dirs
+          }
+        }
+      }
+      if (!found) {
+        if (markdownPathURL.includes('\n') || !markdownPathURL.endsWith('.md')) {
+          content = markdownPathURL;
+        } else {
+          content = `# Lesson Content\n\n> Local file \`${markdownPathURL}\` was not found on the server.`;
+        }
+      }
+    }
+
     res.json({ success: true, data: content });
   } catch (err) {
     console.error('Error | getMarkdownContent:', err);
