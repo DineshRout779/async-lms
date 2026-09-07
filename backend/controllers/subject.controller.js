@@ -1049,7 +1049,7 @@ exports.getMarkdownContent = async (req, res) => {
       content = markdownPathURL.slice('ai-generated:'.length);
     } else if (markdownPathURL.startsWith('http://') || markdownPathURL.startsWith('https://')) {
       try {
-        const fetchUrl = await presignIfS3(markdownPathURL);
+        const fetchUrl = await presignS3Url(markdownPathURL);
         content = await fetchTextFromUrl(fetchUrl);
       } catch (fetchErr) {
         console.warn('Could not fetch remote markdown from URL:', markdownPathURL, fetchErr.message);

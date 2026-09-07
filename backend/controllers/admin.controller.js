@@ -2804,12 +2804,14 @@ exports.uploadLessonMarkdown = async (req, res) => {
       });
     }
 
-    const safeExt = '.md';
-    const key = withS3Prefix(
-      `${prefix}${Date.now()}-${req.file.originalname
-        .replace(/\s+/g, '-')
-        .replace(/[^a-zA-Z0-9._-]/g, '')}${safeExt}`,
-    );
+    // Every lesson upload is stored as markdown regardless of the source
+    // filename's extension — strip whatever extension it had before adding
+    // ours, so a "notes.md" upload doesn't end up keyed as "notes.md.md".
+    const baseName = path
+      .basename(req.file.originalname, path.extname(req.file.originalname))
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9._-]/g, '');
+    const key = withS3Prefix(`${prefix}${Date.now()}-${baseName}.md`);
 
     await s3.send(
       new PutObjectCommand({

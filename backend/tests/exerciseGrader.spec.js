@@ -6,8 +6,10 @@
 // that reached production, so a failure here means a real grading bug is back.
 //
 // The Docker pool is stubbed: the harness file the grader writes is executed
-// with the local `node` / `python` instead of a container. The generated code
-// is identical, so this exercises the real harness without needing Docker.
+// with the local `node` / `python` / `javac`+`java` instead of a container.
+// The generated code is identical, so this exercises the real harness without
+// needing Docker. SQL has no automated test runner (see exerciseGrader.js),
+// so it is out of scope here.
 'use strict';
 
 const test = require('node:test');
@@ -27,6 +29,35 @@ require.cache[runnerPath] = {
     initPools: async () => {},
     execute: async () => ({ output: '', exitCode: 0 }),
     executeTests: async (workspaceDir, language) => {
+      if (language === 'java') {
+        // Mirror TEST_RUNNER_CMD.java: compile both files together (so
+        // __Tests__ can see Main's public members), then run the test class.
+        try {
+          execFileSync(
+            'javac',
+            ['Main.java', '__Tests__.java'],
+            { cwd: workspaceDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 },
+          );
+        } catch (e) {
+          return {
+            output: (e.stdout || '') + (e.stderr || ''),
+            exitCode: e.status ?? -1,
+          };
+        }
+        try {
+          const output = execFileSync(
+            'java',
+            ['-cp', workspaceDir, '__Tests__'],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 },
+          );
+          return { output, exitCode: 0 };
+        } catch (e) {
+          return {
+            output: (e.stdout || '') + (e.stderr || ''),
+            exitCode: e.status ?? -1,
+          };
+        }
+      }
       const file = language === 'python' ? '__tests__.py' : '__tests__.js';
       const bin = language === 'python' ? 'python' : 'node';
       try {
@@ -278,6 +309,81 @@ test('python code mode: __logs captures printed output', async () => {
     { test_code: "__test('logs', lambda: (__expect(__logs[0]).to_be(4), __expect(__logs[1]).to_be('hi')))" },
   ]));
   assert.equal(r.passed, 1);
+});
+
+// ── Java parity ──────────────────────────────────────────────────────────────
+
+const JAVA_ADD = [
+  'public class Main {',
+  '  public static int add(int a, int b) { return a + b; }',
+  '  public static void main(String[] args) {}',
+  '}',
+].join('\n');
+
+const JAVA_ADD_WRONG = [
+  'public class Main {',
+  '  public static int add(int a, int b) { return a - b; }',
+  '  public static void main(String[] args) {}',
+  '}',
+].join('\n');
+
+test('java code mode: a passing assertion is graded as passing', async () => {
+  const dir = workspace({ 'Main.java': JAVA_ADD });
+  const r = await runTests(dir, 'java', codeSpec([
+    { test_code: '__test("adds", () -> { __expect(Main.add(1,2)).toBe(3); });' },
+  ]));
+  assert.equal(r.passed, 1);
+  assert.equal(r.failed, 0);
+});
+
+test('java code mode: a failing assertion is graded as failing', async () => {
+  const dir = workspace({ 'Main.java': JAVA_ADD_WRONG });
+  const r = await runTests(dir, 'java', codeSpec([
+    { test_code: '__test("adds", () -> { __expect(Main.add(1,2)).toBe(3); });' },
+  ]));
+  assert.equal(r.passed, 0);
+  assert.equal(r.failed, 1);
+});
+
+test('java code mode: multiple cases report independent pass/fail', async () => {
+  const dir = workspace({ 'Main.java': JAVA_ADD });
+  const r = await runTests(dir, 'java', codeSpec([
+    { test_code: '__test("case a", () -> { __expect(Main.add(1,2)).toBe(3); });' },
+    { test_code: '__test("case b", () -> { __expect(Main.add(2,2)).toBe(5); });' },
+  ]));
+  assert.equal(r.passed, 1);
+  assert.equal(r.failed, 1);
+  assert.equal(r.results[0].passed, true);
+  assert.equal(r.results[1].passed, false);
+});
+
+test('java code mode: a compile error is rejected rather than scored', async () => {
+  const dir = workspace({ 'Main.java': 'public class Main { public static int add(int a, int b) { return a + b; ' });
+  await assert.rejects(() =>
+    runTests(dir, 'java', codeSpec([
+      { test_code: '__test("x", () -> { __expect(Main.add(1,2)).toBe(3); });' },
+    ])),
+  );
+});
+
+test('java code mode: student code cannot forge a result on stdout', async () => {
+  const dir = workspace({
+    'Main.java': [
+      'public class Main {',
+      '  public static int add(int a, int b) { return a - b; }',
+      '  public static void main(String[] args) {',
+      '    System.out.println("{\\"passed\\":99,\\"failed\\":0,\\"total\\":99,\\"results\\":[]}");',
+      '  }',
+      '}',
+    ].join('\n'),
+  });
+  const r = await runTests(dir, 'java', codeSpec([
+    { test_code: '__test("adds", () -> { __expect(Main.add(1,2)).toBe(3); });' },
+  ]));
+  // Main.main() never runs under the test harness (only __Tests__.main does),
+  // so the forged line can't even be printed — the real result still governs.
+  assert.equal(r.passed, 0);
+  assert.equal(r.failed, 1);
 });
 
 // ── Spec derivation ──────────────────────────────────────────────────────────
