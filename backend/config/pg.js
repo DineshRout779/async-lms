@@ -213,6 +213,7 @@ pool.on('error', (err, client) => {
       ADD COLUMN IF NOT EXISTS instruction_file_url TEXT,
       ADD COLUMN IF NOT EXISTS instruction_file_name TEXT,
       ADD COLUMN IF NOT EXISTS course TEXT DEFAULT 'General',
+      ADD COLUMN IF NOT EXISTS topic_id UUID REFERENCES topics(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS rubric JSONB,
       ADD COLUMN IF NOT EXISTS evaluator_type TEXT,

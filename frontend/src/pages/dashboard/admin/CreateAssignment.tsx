@@ -96,9 +96,12 @@ export default function CreateAssignment() {
   const [selectedColleges, setSelectedColleges] = useState<string[]>(
     editData.collegeId ? [editData.collegeId] : []
   );
-  const [domain, setDomain] = useState(editData.domain || '');
-  const [type, setType] = useState(editData.type || '');
+  const [topicId, setTopicId] = useState(editData.topicId || editData.domain || '');
   const [deadline, setDeadline] = useState(editData.deadline || '');
+
+  // Dynamic subjects (courses) and topics
+  const [availableCourses, setAvailableCourses] = useState<{value: string, label: string, slug: string}[]>([]);
+  const [availableTopics, setAvailableTopics] = useState<{value: string, label: string}[]>([]);
 
   // ── Colleges & Evaluators from API ──
   const [colleges, setColleges] = useState<College[]>([]);
@@ -150,7 +153,23 @@ export default function CreateAssignment() {
       .get<{ data: { id: string; name: string }[] }>('/evaluations/evaluators')
       .then((res) => setEvaluators(res.data.data || (res.data as any) || []))
       .catch((error) => toast.error(getErrorMessage(error, 'Failed to load evaluators')));
+
+    apiClient
+      .get<{ data: any[] }>('/college-assignments/courses')
+      .then((res) => setAvailableCourses(res.data.data || []))
+      .catch((error) => console.error('Failed to load courses', error));
   }, []);
+
+  useEffect(() => {
+    if (!course) {
+      setAvailableTopics([]);
+      return;
+    }
+    apiClient
+      .get<{ data: any[] }>(`/college-assignments/courses/${course}/topics`)
+      .then((res) => setAvailableTopics(res.data.data || []))
+      .catch((error) => console.error('Failed to load topics', error));
+  }, [course]);
 
   // ── Evaluation Setup ──
   const [assignmentDescription, setAssignmentDescription] = useState(editData.assignmentDescription || '');
@@ -168,9 +187,7 @@ export default function CreateAssignment() {
   const [testCases, setTestCases] = useState<{ id: number; input: string; output: string; score: number }[]>(editData.testCasesList || []);
 
   // ── Submission Settings ──
-  const [allowFileUpload, setAllowFileUpload] = useState(editData.allowFileUpload ?? true);
   const [allowGithubLink, setAllowGithubLink] = useState(editData.allowGithubLink ?? true);
-  const [allowCodeEditor, setAllowCodeEditor] = useState(editData.allowCodeEditor ?? false);
 
   // ── Rubrics helpers ──
   const totalScore = rubrics.reduce((sum, r) => sum + r.maxScore, 0);
@@ -221,8 +238,7 @@ export default function CreateAssignment() {
     if (!title.trim()) missing.push('Assignment Title');
     if (!course) missing.push('Course');
     if (editId ? !college : selectedColleges.length === 0) missing.push('College');
-    if (!domain) missing.push('Domain');
-    if (!type) missing.push('Type');
+    if (!topicId) missing.push('Subject');
     if (!deadline) missing.push('Deadline');
 
     if (missing.length > 0) {
@@ -247,6 +263,7 @@ export default function CreateAssignment() {
           description: description.trim() || null,
           due_date: deadline || null,
           course: course || null,
+          topic_id: topicId || null,
           instruction_file_url: instructionUrl || null,
           instruction_file_name: instructionName || null,
           test_cases: testCases.map((t) => ({ input: t.input, output: t.output, score: t.score })),
@@ -262,6 +279,7 @@ export default function CreateAssignment() {
           description: description.trim() || null,
           due_date: deadline || null,
           course: course || null,
+          topic_id: topicId || null,
           instruction_file_url: instructionUrl || null,
           instruction_file_name: instructionName || null,
           test_cases: testCases.map((t) => ({ input: t.input, output: t.output, score: t.score })),
@@ -278,7 +296,7 @@ export default function CreateAssignment() {
           editId: resId,
           title,
           description,
-          course,
+          course: availableCourses.find(c => c.value === course)?.label || course,
           college: editId
             ? (colleges.find((c) => String(c.id) === college)?.name || college)
             : (selectedColleges.length === colleges.length
@@ -288,16 +306,13 @@ export default function CreateAssignment() {
                   .filter(Boolean)
                   .join(', ')),
           collegeId: editId ? college : selectedColleges[0],
-          domain,
-          type,
+          topicId: availableTopics.find(t => t.value === topicId)?.label || topicId,
           deadline,
           assignmentDescription,
           aiEvaluationType,
           weightage,
           enablePlagiarism,
-          allowFileUpload,
           allowGithubLink,
-          allowCodeEditor,
           totalMarks: isCodeEvaluator ? totalTestCaseScore : totalScore,
           rubricsList: rubrics,
           testCasesList: testCases,
@@ -382,18 +397,14 @@ export default function CreateAssignment() {
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4'>
               <div className='space-y-1.5'>
                 <Label className='text-xs sm:text-sm text-slate-600'>Course</Label>
-                <Select value={course} onValueChange={setCourse}>
+                <Select value={course} onValueChange={(val) => { setCourse(val); setTopicId(''); }}>
                   <SelectTrigger className='w-full text-xs sm:text-sm h-10'>
                     <SelectValue placeholder='Select Course' />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='js-fundamentals'>Java Script Fundamentals</SelectItem>
-                    <SelectItem value='html-css'>HTML & CSS</SelectItem>
-                    <SelectItem value='js-dom'>JS DOM</SelectItem>
-                    <SelectItem value='react'>React</SelectItem>
-                    <SelectItem value='node'>Node.js</SelectItem>
-                    <SelectItem value='python'>Python</SelectItem>
-                    <SelectItem value='java'>Java</SelectItem>
+                    {availableCourses.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -473,33 +484,18 @@ export default function CreateAssignment() {
               </div>
             </div>
 
-            {/* Domain, Type, Deadline */}
-            <div className='grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4'>
+            {/* Subject, Deadline */}
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4'>
               <div className='space-y-1.5'>
-                <Label className='text-xs sm:text-sm text-slate-600'>Domain</Label>
-                <Select value={domain} onValueChange={setDomain}>
+                <Label className='text-xs sm:text-sm text-slate-600'>Subject</Label>
+                <Select value={topicId} onValueChange={setTopicId} disabled={!course}>
                   <SelectTrigger className='w-full text-xs sm:text-sm h-10'>
-                    <SelectValue placeholder='Select' />
+                    <SelectValue placeholder={course ? 'Select Subject' : 'Select a course first'} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='frontend'>Frontend</SelectItem>
-                    <SelectItem value='backend'>Backend</SelectItem>
-                    <SelectItem value='fullstack'>Full Stack</SelectItem>
-                    <SelectItem value='mobile'>Mobile</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className='space-y-1.5'>
-                <Label className='text-xs sm:text-sm text-slate-600'>Type</Label>
-                <Select value={type} onValueChange={setType}>
-                  <SelectTrigger className='w-full text-xs sm:text-sm h-10'>
-                    <SelectValue placeholder='Select' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value='individual'>Individual</SelectItem>
-                    <SelectItem value='group'>Group</SelectItem>
-                    <SelectItem value='lab'>Lab</SelectItem>
+                    {availableTopics.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -791,15 +787,6 @@ export default function CreateAssignment() {
           </CardHeader>
 
           <CardContent className='space-y-1 px-4 sm:px-6 pb-4 sm:pb-6'>
-            {/* Allow File Upload */}
-            <div className='flex items-center justify-between py-2.5 sm:py-3 gap-3'>
-              <div className='min-w-0 flex-1'>
-                <p className='text-xs sm:text-sm font-medium text-slate-900'>Allow File Upload</p>
-                <p className='text-[10px] sm:text-xs text-slate-500'>Students can upload files</p>
-              </div>
-              <Switch checked={allowFileUpload} onCheckedChange={setAllowFileUpload} />
-            </div>
-
             {/* Allow GitHub Link */}
             <div className='flex items-center justify-between py-2.5 sm:py-3 gap-3'>
               <div className='min-w-0 flex-1'>
@@ -807,15 +794,6 @@ export default function CreateAssignment() {
                 <p className='text-[10px] sm:text-xs text-slate-500'>Students can submit a GitHub repository URL</p>
               </div>
               <Switch checked={allowGithubLink} onCheckedChange={setAllowGithubLink} />
-            </div>
-
-            {/* Allow Code Editor Submission */}
-            <div className='flex items-center justify-between py-2.5 sm:py-3 gap-3'>
-              <div className='min-w-0 flex-1'>
-                <p className='text-xs sm:text-sm font-medium text-slate-900'>Allow Code Editor Submission</p>
-                <p className='text-[10px] sm:text-xs text-slate-500'>Students can write code in the built-in editor</p>
-              </div>
-              <Switch checked={allowCodeEditor} onCheckedChange={setAllowCodeEditor} />
             </div>
           </CardContent>
         </Card>

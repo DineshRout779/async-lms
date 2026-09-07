@@ -102,6 +102,64 @@ async function storeFile(file, { s3KeyPrefix, localSubPath }) {
   return { url, name: file.originalname };
 }
 
+// ─── Get Dynamic Courses for Assignment Creation ─────────────────────────────
+// GET /api/v1/college-assignments/courses
+exports.getCoursesForAssignment = async (req, res) => {
+  try {
+    const role = req.user.role;
+    let query = '';
+    let params = [];
+
+    if (role === 'admin') {
+      // Admin sees all subjects
+      query = `
+        SELECT id as value, name as label, slug
+        FROM subjects
+        WHERE is_published = true AND is_deleted = false
+        ORDER BY name ASC
+      `;
+    } else {
+      // Facilitator sees enrolled subjects of their students
+      const facilitatorId = req.user.id;
+      query = `
+        SELECT DISTINCT s.id as value, s.name as label, s.slug
+        FROM subjects s
+        JOIN user_subjects us ON us.subject_id = s.id
+        JOIN student_profiles sp ON sp.user_id = us.user_id
+        JOIN facilitator_colleges fc ON fc.college_id = sp.college_id
+        WHERE fc.facilitator_id = $1 AND fc.is_deleted = false 
+          AND s.is_published = true AND s.is_deleted = false
+        ORDER BY s.name ASC
+      `;
+      params = [facilitatorId];
+    }
+
+    const result = await pool.query(query, params);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('getCoursesForAssignment error:', error);
+    serverError(res, error);
+  }
+};
+
+// GET /api/v1/college-assignments/courses/:courseId/topics
+exports.getTopicsForCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const query = `
+      SELECT id as value, title as label
+      FROM topics
+      WHERE subject_id = $1 AND is_deleted = false
+      ORDER BY order_index ASC
+    `;
+    const result = await pool.query(query, [courseId]);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('getTopicsForCourse error:', error);
+    serverError(res, error);
+  }
+};
+
 // ─── Upload Instruction Document ─────────────────────────────────────────────
 
 // POST /api/v1/college-assignments/upload-instruction
@@ -288,8 +346,8 @@ exports.createAssignment = async (req, res) => {
 
     for (const cid of targetCollegeIds) {
       const { rows } = await client.query(
-        `INSERT INTO college_assignments (college_id, created_by, title, description, due_date, course, instruction_file_url, instruction_file_name, test_cases, rubric, evaluator_type, assignment_description)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `INSERT INTO college_assignments (college_id, created_by, title, description, due_date, course, topic_id, instruction_file_url, instruction_file_name, test_cases, rubric, evaluator_type, assignment_description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING *`,
         [
           cid,
@@ -298,6 +356,7 @@ exports.createAssignment = async (req, res) => {
           description || null,
           due_date || null,
           course || 'General',
+          req.body.topic_id || null,
           req.body.instruction_file_url || null,
           req.body.instruction_file_name || null,
           test_cases ? JSON.stringify(test_cases) : '[]',
@@ -388,20 +447,22 @@ exports.updateAssignment = async (req, res) => {
            description           = COALESCE($2, description),
            due_date              = COALESCE($3, due_date),
            course                = COALESCE($4, course),
-           instruction_file_url  = COALESCE($5, instruction_file_url),
-           instruction_file_name = COALESCE($6, instruction_file_name),
-           test_cases            = COALESCE($7, test_cases),
-           rubric                = COALESCE($8, rubric),
-           evaluator_type        = COALESCE($9, evaluator_type),
-           assignment_description= COALESCE($10, assignment_description),
+           topic_id              = COALESCE($5, topic_id),
+           instruction_file_url  = COALESCE($6, instruction_file_url),
+           instruction_file_name = COALESCE($7, instruction_file_name),
+           test_cases            = COALESCE($8, test_cases),
+           rubric                = COALESCE($9, rubric),
+           evaluator_type        = COALESCE($10, evaluator_type),
+           assignment_description= COALESCE($11, assignment_description),
            updated_at  = NOW()
-       WHERE id = $11
+       WHERE id = $12
        RETURNING *`,
       [
         title || null,
         description || null,
         due_date || null,
         course || null,
+        req.body.topic_id || null,
         req.body.instruction_file_url || null,
         req.body.instruction_file_name || null,
         test_cases ? JSON.stringify(test_cases) : null,

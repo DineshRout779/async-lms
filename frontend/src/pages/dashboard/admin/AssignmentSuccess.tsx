@@ -12,7 +12,7 @@ interface AssignmentData {
   title: string;
   course: string;
   college: string;
-  domain: string;
+  topicId: string;
   deadline: string;
   totalMarks: number;
   rubrics: { name: string; score: number }[];
@@ -110,13 +110,13 @@ export default function AssignmentSuccess() {
               </p>
             </div>
 
-            {/* Domain */}
+            {/* Subject */}
             <div className='space-y-1'>
               <p className='text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider'>
-                Domain
+                Subject
               </p>
               <p className='text-xs sm:text-sm font-medium text-slate-800'>
-                {assignment.domain || '—'}
+                {assignment.topicId || '—'}
               </p>
             </div>
 
