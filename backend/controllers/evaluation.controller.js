@@ -815,8 +815,10 @@ exports.getAvailableEvaluators = (req, res) => {
   }
 };
 
-const OpenAI = require('openai');
-const openai = new OpenAI({ apiKey: process.env.CHATGPT_API_KEY });
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY || process.env.CHATGPT_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL || 'https://api.deepseek.com' 
+});
 
 exports.generateTestCases = async (req, res) => {
   try {
@@ -866,7 +868,7 @@ Evaluation Rubric:
 ${rubric ? JSON.stringify(rubric, null, 2) : 'No rubric provided'}`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: process.env.OPENAI_MODEL || "deepseek-chat",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -968,7 +970,7 @@ Instructions:
 ${instructions}`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: process.env.OPENAI_MODEL || "deepseek-chat",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
