@@ -3,6 +3,7 @@ const pool = require('../config/pg');
 const axios = require('axios');
 const { notify } = require('../services/notificationService');
 const { presignS3Url } = require('../utils/s3');
+const OpenAI = require('openai');
 
 const EVALUATOR_APIS = {
   JS: 'JavaScript Evaluator',
