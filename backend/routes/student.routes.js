@@ -20,6 +20,7 @@ const {
 
   runExerciseTests,
   getStudentAssignments,
+  getStudentAssignmentsOverview,
   getAssignmentById,
   submitAssignment,
   getCapstone,
@@ -84,6 +85,12 @@ router.post(
 );
 
 // ===== ASSIGNMENTS =====
+router.get(
+  '/assignments/overview',
+  verifyToken,
+  isStudent,
+  getStudentAssignmentsOverview,
+);
 router.get('/assignments', verifyToken, isStudent, getStudentAssignments);
 router.get('/assignments/:id', verifyToken, isStudent, getAssignmentById);
 router.post(

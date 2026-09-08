@@ -1,15 +1,15 @@
-import React, { useMemo } from 'react';
+import { useMemo, type FC } from 'react';
 import {
   Play,
   FileText,
   ChevronRight,
-  Trophy,
   Activity,
   BookOpen,
+  CheckCircle2,
   type LucideIcon,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -19,10 +19,10 @@ import { useAppSelector } from '@/app/hooks';
 import { selectUser } from '@/features/auth/authSelectors';
 import {
   useMySubjects,
-  useMyAssignments,
-  useMyOverallRank,
+  useStudentAssignmentsOverview,
 } from '@/hooks/queries/useStudentDashboard';
-import type { Assignment, Subject } from '@/utils/types';
+import { StudentAssignmentsTable } from '@/components/common/student/StudentAssignmentsTable';
+import type { Subject } from '@/utils/types';
 
 interface StatCardProps {
   label: string;
@@ -32,7 +32,7 @@ interface StatCardProps {
   bgColor: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({
+const StatCard: FC<StatCardProps> = ({
   label,
   value,
   icon: Icon,
@@ -54,25 +54,36 @@ const StatCard: React.FC<StatCardProps> = ({
   </Card>
 );
 
-const StudentDashboardHome: React.FC = () => {
+const StudentDashboardHome: FC = () => {
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
 
   const { data: courses = [], isLoading: loadingCourses } = useMySubjects();
-  const { data: assignments = [], isLoading: loadingAssignments } = useMyAssignments();
-  const { data: myRank } = useMyOverallRank();
+  const { data: overview, isLoading: loadingOverview } =
+    useStudentAssignmentsOverview();
+
+  const assignmentsList = overview?.data ?? [];
+  const counts = overview?.counts ?? {
+    total: 0,
+    pending: 0,
+    pending_evaluation: 0,
+    evaluated: 0,
+  };
 
   const avgProgress = useMemo(() => {
     if (!courses.length) return null;
-    const sum = courses.reduce((s, c: Subject) => s + (c.progress_percent || 0), 0);
+    const sum = courses.reduce(
+      (s, c: Subject) => s + (c.progress_percent || 0),
+      0,
+    );
     return Math.round(sum / courses.length);
   }, [courses]);
 
   const currentCourse = courses[0];
-  const pendingCount = assignments.length;
+  const pendingCount = counts.pending;
 
   return (
-    <main className='flex-1 space-y-6 sm:space-y-8 p-3.5 sm:p-6 md:p-8 pt-4 sm:pt-6 max-w-7xl mx-auto overflow-hidden'>
+    <div className='flex-1 space-y-6 sm:space-y-8 p-3.5 sm:p-6 md:p-8 pt-4 sm:pt-6 max-w-7xl mx-auto min-w-0'>
       {/* 1. Hero Section */}
       <section className='relative overflow-hidden rounded-2xl sm:rounded-[2rem] bg-[#1e293b] text-white p-5 sm:p-8 md:p-12 shadow-xl'>
         <div className='relative z-10 max-w-2xl'>
@@ -86,11 +97,11 @@ const StudentDashboardHome: React.FC = () => {
             </span>
           </h1>
           <p className='text-slate-400 text-sm sm:text-lg mb-6 sm:mb-8 max-w-md leading-relaxed'>
-            {loadingAssignments
+            {loadingOverview
               ? 'Loading your progress...'
               : pendingCount > 0
                 ? `You have ${pendingCount} pending assignment${pendingCount !== 1 ? 's' : ''}. Keep up the momentum!`
-                : 'All caught up! Keep learning and growing.'}
+                : 'All caught up on assignments! Keep learning and growing.'}
           </p>
           <div className='flex flex-col sm:flex-row gap-3 sm:gap-4'>
             <Button
@@ -103,7 +114,14 @@ const StudentDashboardHome: React.FC = () => {
             <Button
               size='lg'
               variant='secondary'
-              onClick={() => navigate('/dashboard/student/assignments')}
+              onClick={() => {
+                const el = document.getElementById('student-assignments-section');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  navigate('/dashboard/student/assignments');
+                }
+              }}
               className='bg-slate-700 hover:bg-slate-600 text-white border-none rounded-xl px-6 sm:px-8 h-11 sm:h-12 font-semibold w-full sm:w-auto min-h-[44px]'
             >
               View Assignments
@@ -117,44 +135,46 @@ const StudentDashboardHome: React.FC = () => {
       {/* 2. Stats Grid */}
       <section className='grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4'>
         <StatCard
-          label='Courses'
+          label='Enrolled Courses'
           value={loadingCourses ? '—' : courses.length}
           icon={BookOpen}
           iconColor='text-indigo-500'
           bgColor='bg-indigo-50'
         />
         <StatCard
-          label='Assignments'
-          value={loadingAssignments ? '—' : pendingCount}
+          label='Pending Tasks'
+          value={loadingOverview ? '—' : counts.pending}
           icon={FileText}
           iconColor='text-orange-500'
           bgColor='bg-orange-50'
         />
         <StatCard
+          label='Evaluated'
+          value={loadingOverview ? '—' : counts.evaluated}
+          icon={CheckCircle2}
+          iconColor='text-emerald-500'
+          bgColor='bg-emerald-50'
+        />
+        <StatCard
           label='Avg. Progress'
-          value={loadingCourses || avgProgress === null ? '—' : `${avgProgress}%`}
+          value={
+            loadingCourses || avgProgress === null ? '—' : `${avgProgress}%`
+          }
           icon={Activity}
           iconColor='text-purple-500'
           bgColor='bg-purple-50'
-        />
-        <StatCard
-          label='My Rank'
-          value={myRank ? `#${myRank}` : '—'}
-          icon={Trophy}
-          iconColor='text-emerald-500'
-          bgColor='bg-emerald-50'
         />
       </section>
 
       {/* 3. Continue Learning Card */}
       <section className='space-y-4'>
         <div className='flex items-center justify-between px-1'>
-          <h2 className='text-xl font-bold tracking-tight text-slate-900'>
+          <h2 className='text-lg sm:text-xl font-bold tracking-tight text-slate-900'>
             Continue Learning
           </h2>
           <Button
             variant='link'
-            className='text-indigo-600 font-bold p-0 hover:no-underline'
+            className='text-indigo-600 font-bold p-0 hover:no-underline text-xs sm:text-sm'
             onClick={() => navigate('/dashboard/student/courses')}
           >
             View All Courses
@@ -187,8 +207,8 @@ const StudentDashboardHome: React.FC = () => {
               navigate(`/dashboard/student/courses/${currentCourse.slug}`)
             }
           >
-            <CardContent className='p-6'>
-              <div className='flex flex-col lg:flex-row gap-8 items-center'>
+            <CardContent className='p-4 sm:p-6'>
+              <div className='flex flex-col lg:flex-row gap-6 sm:gap-8 items-center'>
                 <div className='w-full lg:w-80 aspect-video bg-indigo-950 rounded-2xl flex items-center justify-center group relative overflow-hidden shrink-0'>
                   <div className='absolute inset-0 bg-indigo-600/10 group-hover:bg-indigo-600/20 transition-colors' />
                   <div className='z-10 bg-white/10 backdrop-blur-md p-4 rounded-full group-hover:scale-110 transition-transform'>
@@ -196,7 +216,7 @@ const StudentDashboardHome: React.FC = () => {
                   </div>
                 </div>
 
-                <div className='flex-1 w-full space-y-5'>
+                <div className='flex-1 w-full space-y-4 sm:space-y-5'>
                   <div className='flex items-center gap-2'>
                     <Badge
                       variant='outline'
@@ -206,14 +226,14 @@ const StudentDashboardHome: React.FC = () => {
                     </Badge>
                   </div>
                   <div>
-                    <h3 className='text-2xl font-bold mb-2 text-slate-900'>
+                    <h3 className='text-xl sm:text-2xl font-bold mb-1.5 text-slate-900'>
                       {currentCourse.name}
                     </h3>
-                    <p className='text-muted-foreground text-sm leading-relaxed'>
+                    <p className='text-muted-foreground text-xs sm:text-sm leading-relaxed'>
                       {currentCourse.total_lessons} lessons
                     </p>
                   </div>
-                  <div className='space-y-3'>
+                  <div className='space-y-2.5'>
                     <Progress
                       value={Math.round(currentCourse.progress_percent || 0)}
                       className='h-2 bg-slate-100'
@@ -233,7 +253,7 @@ const StudentDashboardHome: React.FC = () => {
           <Card className='border-none shadow-sm'>
             <CardContent className='p-6 flex flex-col items-center justify-center h-40 gap-3 text-center'>
               <BookOpen className='w-8 h-8 text-slate-300' />
-              <p className='text-slate-500 font-medium'>
+              <p className='text-slate-500 font-medium text-sm'>
                 No courses yet. Enroll in a course to get started!
               </p>
             </CardContent>
@@ -241,132 +261,68 @@ const StudentDashboardHome: React.FC = () => {
         )}
       </section>
 
-      {/* 4. Bottom Grid */}
-      <section className='grid gap-4 sm:gap-6 md:grid-cols-2'>
-        {/* Assignments */}
-        <Card className='border-none shadow-sm overflow-hidden'>
-          <CardHeader className='p-4 sm:p-6 pb-2 sm:pb-3'>
-            <CardTitle className='text-base sm:text-lg font-bold'>
-              Pending Assignments
-            </CardTitle>
-          </CardHeader>
-          <CardContent className='p-4 sm:p-6 pt-0 space-y-2.5 sm:space-y-3'>
-            {loadingAssignments ? (
-              <div className='space-y-2.5 sm:space-y-3'>
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className='flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 min-w-0'>
-                    <div className='flex items-center gap-3 sm:gap-4 min-w-0 flex-1'>
-                      <Skeleton className='h-9 w-9 sm:h-10 sm:w-10 rounded-xl shrink-0' />
-                      <div className='space-y-1.5 min-w-0 flex-1'>
-                        <Skeleton className='h-3.5 w-3/4' />
-                        <Skeleton className='h-3 w-1/2' />
-                      </div>
-                    </div>
-                    <Skeleton className='h-4 w-4 shrink-0 ml-2' />
-                  </div>
-                ))}
-              </div>
-            ) : assignments.length === 0 ? (
-              <p className='py-4 text-center text-sm text-slate-400'>
-                No pending assignments.
-              </p>
-            ) : (
-              (assignments as Assignment[]).slice(0, 3).map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => navigate('/dashboard/student/assignments')}
-                  className='flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all cursor-pointer group min-w-0'
-                >
-                  <div className='flex items-center gap-3 sm:gap-4 min-w-0 flex-1 mr-2'>
-                    <div className='p-2 sm:p-2.5 bg-orange-50 rounded-xl text-orange-600 shrink-0'>
-                      <FileText size={18} className='sm:w-5 sm:h-5' />
-                    </div>
-                    <div className='min-w-0 flex-1'>
-                      <p className='text-xs sm:text-sm font-bold text-slate-900 truncate' title={item.title}>
-                        {item.title}
-                      </p>
-                      <p className='text-[10px] sm:text-[11px] text-muted-foreground font-medium mt-0.5 truncate' title={item.subject_title}>
-                        {item.subject_title}
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className='w-4 h-4 text-slate-300 shrink-0 group-hover:translate-x-1 transition-transform group-hover:text-indigo-600' />
-                </div>
-              ))
-            )}
-            <Button
-              variant='outline'
-              onClick={() => navigate('/dashboard/student/assignments')}
-              className='w-full mt-2 border-dashed border-slate-200 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors text-xs sm:text-sm min-h-[40px]'
-            >
-              View All Assignments
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* My Courses */}
-        <Card className='border-none shadow-sm overflow-hidden'>
-          <CardHeader className='p-4 sm:p-6 pb-2 sm:pb-3'>
-            <CardTitle className='text-base sm:text-lg font-bold'>My Courses</CardTitle>
-          </CardHeader>
-          <CardContent className='p-4 sm:p-6 pt-0 space-y-2.5 sm:space-y-3'>
-            {loadingCourses ? (
-              <div className='space-y-2.5 sm:space-y-3'>
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className='flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 min-w-0'>
-                    <div className='flex items-center gap-3 sm:gap-4 min-w-0 flex-1'>
-                      <Skeleton className='h-9 w-9 sm:h-10 sm:w-10 rounded-xl shrink-0' />
-                      <div className='space-y-1.5 min-w-0 flex-1'>
-                        <Skeleton className='h-3.5 w-3/4' />
-                        <Skeleton className='h-3 w-1/2' />
-                      </div>
-                    </div>
-                    <Skeleton className='h-4 w-4 shrink-0 ml-2' />
-                  </div>
-                ))}
-              </div>
-            ) : courses.length === 0 ? (
-              <p className='py-4 text-center text-sm text-slate-400'>
-                No enrolled courses yet.
-              </p>
-            ) : (
-              (courses as Subject[]).slice(0, 3).map((course) => (
-                <div
-                  key={course.id}
-                  onClick={() =>
-                    navigate(`/dashboard/student/courses/${course.slug}`)
-                  }
-                  className='flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all cursor-pointer group min-w-0'
-                >
-                  <div className='flex items-center gap-3 sm:gap-4 min-w-0 flex-1 mr-2'>
-                    <div className='p-2 sm:p-2.5 bg-indigo-50 rounded-xl text-indigo-600 shrink-0'>
-                      <BookOpen size={18} className='sm:w-5 sm:h-5' />
-                    </div>
-                    <div className='min-w-0 flex-1'>
-                      <p className='text-xs sm:text-sm font-bold text-slate-900 truncate' title={course.name}>
-                        {course.name}
-                      </p>
-                      <p className='text-[10px] sm:text-[11px] text-muted-foreground font-medium mt-0.5 truncate'>
-                        {Math.round(course.progress_percent || 0)}% complete
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className='w-4 h-4 text-slate-300 shrink-0 group-hover:translate-x-1 transition-transform group-hover:text-indigo-600' />
-                </div>
-              ))
-            )}
-            <Button
-              variant='outline'
-              onClick={() => navigate('/dashboard/student/courses')}
-              className='w-full mt-2 border-dashed border-slate-200 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors text-xs sm:text-sm min-h-[40px]'
-            >
-              View All Courses
-            </Button>
-          </CardContent>
-        </Card>
+      {/* 4. Full-Featured Unified Assignments & Evaluations Table */}
+      <section id='student-assignments-section' className='space-y-4'>
+        <StudentAssignmentsTable
+          assignments={assignmentsList}
+          isLoading={loadingOverview}
+        />
       </section>
-    </main>
+
+      {/* 5. My Courses Grid */}
+      {courses.length > 1 && (
+        <section className='space-y-3.5'>
+          <div className='flex items-center justify-between px-1'>
+            <h3 className='text-base sm:text-lg font-bold text-slate-900 tracking-tight'>
+              Other Enrolled Courses
+            </h3>
+            <Button
+              variant='link'
+              className='text-indigo-600 font-semibold p-0 hover:no-underline text-xs'
+              onClick={() => navigate('/dashboard/student/courses')}
+            >
+              All Courses ({courses.length})
+            </Button>
+          </div>
+
+          <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5'>
+            {courses.slice(1, 4).map((course: Subject) => (
+              <div
+                key={course.id}
+                onClick={() =>
+                  navigate(`/dashboard/student/courses/${course.slug}`)
+                }
+                className='p-4 rounded-2xl border border-slate-200/80 bg-white hover:border-indigo-200 hover:shadow-xs transition-all cursor-pointer group space-y-3'
+              >
+                <div className='flex items-center gap-3 min-w-0'>
+                  <div className='p-2.5 bg-indigo-50 rounded-xl text-indigo-600 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors'>
+                    <BookOpen size={18} />
+                  </div>
+                  <div className='min-w-0 flex-1'>
+                    <h4
+                      className='text-xs sm:text-sm font-bold text-slate-900 truncate group-hover:text-indigo-600 transition-colors'
+                      title={course.name}
+                    >
+                      {course.name}
+                    </h4>
+                    <p className='text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate'>
+                      {Math.round(course.progress_percent || 0)}% completed
+                    </p>
+                  </div>
+                  <ChevronRight className='w-4 h-4 text-slate-300 shrink-0 group-hover:translate-x-0.5 transition-transform' />
+                </div>
+                <Progress
+                  value={Math.round(course.progress_percent || 0)}
+                  className='h-1.5 bg-slate-100'
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
   );
 };
 
 export default StudentDashboardHome;
+
