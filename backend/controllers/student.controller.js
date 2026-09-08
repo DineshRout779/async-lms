@@ -2328,7 +2328,7 @@ exports.getStudentAssignmentsOverview = async (req, res) => {
       INNER JOIN units u ON a.unit_id = u.id
       INNER JOIN topics t ON u.topic_id = t.id
       INNER JOIN subjects s ON t.subject_id = s.id
-      INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+      LEFT JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
       LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.user_id = $1
       LEFT JOIN LATERAL (
         SELECT er_inner.id, er_inner.status, er_inner.marks, er_inner.feedback
@@ -2338,6 +2338,7 @@ exports.getStudentAssignmentsOverview = async (req, res) => {
         ORDER BY er_inner.created_at DESC
         LIMIT 1
       ) er ON true
+      WHERE (us.user_id IS NOT NULL OR sub.id IS NOT NULL OR er.id IS NOT NULL)
       ORDER BY s.name, t.order_index, u.order_index, a.id
     `;
     const curriculumRes = await pool.query(curriculumQuery, [userId]);
@@ -2428,12 +2429,10 @@ exports.getStudentAssignmentsOverview = async (req, res) => {
     for (const row of curriculumRes.rows) {
       const isSubmitted = Boolean(row.submission_link || row.submitted_at);
       let status = 'pending';
-      if (isSubmitted) {
-        if (row.evaluation_status === 'completed') {
-          status = 'evaluated';
-        } else {
-          status = 'pending_evaluation';
-        }
+      if (row.evaluation_status === 'completed') {
+        status = 'evaluated';
+      } else if (isSubmitted || row.evaluation_status === 'pending') {
+        status = 'pending_evaluation';
       }
 
       const feedback = parseFeedback(row.feedback);
@@ -2454,7 +2453,7 @@ exports.getStudentAssignmentsOverview = async (req, res) => {
         submitted_at: row.submitted_at,
         submission_link: submissionLink,
         submission_file_url: null,
-        marks: status === 'evaluated' && row.marks !== null ? Number(row.marks) : null,
+        marks: (status === 'evaluated' || row.evaluation_status === 'completed') && row.marks !== null ? Number(row.marks) : null,
         feedback,
         navigation_url: `/dashboard/student/courses/${row.subject_slug}/assignment/${row.id}`,
       });
@@ -2464,12 +2463,10 @@ exports.getStudentAssignmentsOverview = async (req, res) => {
     for (const row of collegeRows) {
       const isSubmitted = Boolean(row.submission_link || row.submission_file_url || row.submitted_at);
       let status = 'pending';
-      if (isSubmitted) {
-        if (row.evaluation_status === 'completed') {
-          status = 'evaluated';
-        } else {
-          status = 'pending_evaluation';
-        }
+      if (row.evaluation_status === 'completed') {
+        status = 'evaluated';
+      } else if (isSubmitted || row.evaluation_status === 'pending') {
+        status = 'pending_evaluation';
       }
 
       const maxScore = getRubricMaxScore(row.rubric, 100);
@@ -2492,7 +2489,7 @@ exports.getStudentAssignmentsOverview = async (req, res) => {
         submitted_at: row.submitted_at,
         submission_link: submissionLink,
         submission_file_url: submissionFileUrl,
-        marks: status === 'evaluated' && row.marks !== null ? Number(row.marks) : null,
+        marks: (status === 'evaluated' || row.evaluation_status === 'completed') && row.marks !== null ? Number(row.marks) : null,
         feedback,
         navigation_url: `/dashboard/student/assignments/${row.id}`,
       });

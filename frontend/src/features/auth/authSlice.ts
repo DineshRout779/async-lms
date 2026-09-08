@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { AuthState } from './authTypes';
 import { loginUser, signupUser, loadUser, completeGoogleSignup } from './authThunks';
+import { queryClient } from '@/lib/queryClient';
 
 const token = localStorage.getItem('token');
 
@@ -21,6 +22,9 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       localStorage.removeItem('token');
+      try {
+        queryClient.clear();
+      } catch {}
     },
     clearAuthError(state) {
       state.error = null;
@@ -30,8 +34,16 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.status = 'loading';
       localStorage.setItem('token', action.payload);
+      try {
+        queryClient.clear();
+      } catch {}
     },
     setCredentials(state, action: PayloadAction<{ token: string; user: any }>) {
+      if (state.user?.id && state.user.id !== action.payload.user?.id) {
+        try {
+          queryClient.clear();
+        } catch {}
+      }
       state.token = action.payload.token;
       state.user = action.payload.user;
       state.isAuthenticated = true;
