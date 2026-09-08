@@ -6,6 +6,7 @@ const { logAction } = require('../utils/auditLogger');
 const { notify } = require('../services/notificationService');
 const { getTotalXP } = require('../services/xpService');
 const { calculateSubjectProgress, syncUserSubjectProgress } = require('../utils/progress');
+const { presignS3Url } = require('../utils/s3');
 // ============================================
 // HELPERS
 // ============================================
@@ -2279,6 +2280,245 @@ exports.getStudentAssignments = async (req, res) => {
     res.json({ success: true, data: result.rows });
   } catch (error) {
     console.error('Error fetching student assignments:', error);
+    serverError(res, error);
+  }
+};
+
+/**
+ * Get comprehensive overview of all assignments (Curriculum + College) for the student
+ * with 3-state evaluation tracking (pending, pending_evaluation, evaluated) and rubric feedback.
+ * GET /api/students/assignments/overview
+ */
+exports.getStudentAssignmentsOverview = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Fetch student's college_id
+    let collegeId = req.user.college_id;
+    if (!collegeId) {
+      const profileRes = await pool.query(
+        'SELECT college_id FROM student_profiles WHERE user_id = $1 LIMIT 1',
+        [userId]
+      );
+      collegeId = profileRes.rows[0]?.college_id;
+    }
+
+    // 2. Query Curriculum Assignments
+    const curriculumQuery = `
+      SELECT
+        a.id,
+        a.title,
+        'CURRICULUM' AS type,
+        s.name AS course_name,
+        s.slug AS subject_slug,
+        t.title AS topic_title,
+        u.title AS unit_title,
+        COALESCE(a.max_score, 100) AS max_score,
+        NULL::timestamp AS due_date,
+        a.created_at,
+        sub.id AS submission_id,
+        sub.submission_link,
+        NULL::text AS submission_file_url,
+        sub.submitted_at,
+        er.id AS evaluation_result_id,
+        er.status AS evaluation_status,
+        er.marks,
+        er.feedback
+      FROM assignments a
+      INNER JOIN units u ON a.unit_id = u.id
+      INNER JOIN topics t ON u.topic_id = t.id
+      INNER JOIN subjects s ON t.subject_id = s.id
+      INNER JOIN user_subjects us ON us.subject_id = s.id AND us.user_id = $1
+      LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.user_id = $1
+      LEFT JOIN LATERAL (
+        SELECT er_inner.id, er_inner.status, er_inner.marks, er_inner.feedback
+        FROM evaluation_results er_inner
+        JOIN evaluations e ON er_inner.evaluation_id = e.id
+        WHERE (er_inner.submission_id = sub.id OR (er_inner.student_id = $1 AND e.assignment_id = a.id))
+        ORDER BY er_inner.created_at DESC
+        LIMIT 1
+      ) er ON true
+      ORDER BY s.name, t.order_index, u.order_index, a.id
+    `;
+    const curriculumRes = await pool.query(curriculumQuery, [userId]);
+
+    // 3. Query College Assignments (if student has a college)
+    let collegeRows = [];
+    if (collegeId) {
+      const collegeQuery = `
+        SELECT
+          ca.id,
+          ca.title,
+          'COLLEGE' AS type,
+          CASE
+            WHEN ca.course ILIKE '%python%' THEN 'Python Basics'
+            WHEN ca.course ILIKE '%js%' OR ca.course ILIKE '%react%' OR ca.course ILIKE '%web%' OR ca.course ILIKE '%node%' OR ca.course ILIKE '%html%' OR ca.course ILIKE '%css%' OR ca.course ILIKE '%frontend%' OR ca.course ILIKE '%backend%' THEN 'Full Stack Web Development'
+            WHEN s.name IS NOT NULL THEN s.name
+            ELSE 'Full Stack Web Development'
+          END AS course_name,
+          s.slug AS subject_slug,
+          COALESCE(t.title, ca.course, 'General') AS topic_title,
+          COALESCE(t.title, ca.course, 'General') AS unit_title,
+          100 AS max_score,
+          ca.due_date,
+          ca.created_at,
+          ca.rubric,
+          cas.id AS submission_id,
+          cas.submission_link,
+          cas.submission_file_url,
+          cas.submitted_at,
+          er.id AS evaluation_result_id,
+          er.status AS evaluation_status,
+          er.marks,
+          er.feedback
+        FROM college_assignments ca
+        LEFT JOIN subjects s ON (s.id::text = ca.course OR s.slug = ca.course OR s.name = ca.course)
+        LEFT JOIN topics t ON ca.topic_id = t.id
+        LEFT JOIN college_assignment_submissions cas ON cas.assignment_id = ca.id AND cas.student_id = $1
+        LEFT JOIN LATERAL (
+          SELECT er_inner.id, er_inner.status, er_inner.marks, er_inner.feedback
+          FROM evaluation_results er_inner
+          JOIN evaluations e ON er_inner.evaluation_id = e.id
+          WHERE (er_inner.submission_id = cas.id OR (er_inner.student_id = $1 AND e.college_assignment_id = ca.id))
+          ORDER BY er_inner.created_at DESC
+          LIMIT 1
+        ) er ON true
+        WHERE ca.college_id = $2 AND ca.is_deleted = false
+        ORDER BY ca.due_date ASC NULLS LAST, ca.created_at DESC
+      `;
+      const collegeRes = await pool.query(collegeQuery, [userId, collegeId]);
+      collegeRows = collegeRes.rows;
+    }
+
+    // 4. Process and normalize items
+    const allAssignments = [];
+
+    const getRubricMaxScore = (rubric, fallback = 100) => {
+      if (!rubric) return fallback;
+      try {
+        const parsed = typeof rubric === 'string' ? JSON.parse(rubric) : rubric;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const sum = parsed.reduce((acc, curr) => acc + (Number(curr.max_points || curr.weight || curr.max) || 0), 0);
+          if (sum > 0) return sum;
+        }
+      } catch {}
+      return fallback;
+    };
+
+    const parseFeedback = (feedback) => {
+      if (!feedback) return null;
+      if (typeof feedback === 'object') return feedback;
+      try {
+        const parsed = JSON.parse(feedback);
+        if (typeof parsed.summary === 'string' && parsed.summary.trim().startsWith('{')) {
+          try {
+            const inner = JSON.parse(parsed.summary);
+            if (inner && typeof inner === 'object') {
+              return { ...parsed, ...inner };
+            }
+          } catch {}
+        }
+        return parsed;
+      } catch {
+        return { summary: String(feedback) };
+      }
+    };
+
+    // Process curriculum assignments
+    for (const row of curriculumRes.rows) {
+      const isSubmitted = Boolean(row.submission_link || row.submitted_at);
+      let status = 'pending';
+      if (isSubmitted) {
+        if (row.evaluation_status === 'completed') {
+          status = 'evaluated';
+        } else {
+          status = 'pending_evaluation';
+        }
+      }
+
+      const feedback = parseFeedback(row.feedback);
+      const submissionLink = row.submission_link ? await presignS3Url(row.submission_link) : null;
+
+      allAssignments.push({
+        id: row.id,
+        title: row.title,
+        type: 'CURRICULUM',
+        course_name: row.course_name,
+        subject_slug: row.subject_slug,
+        topic_title: row.topic_title || null,
+        unit_title: row.unit_title,
+        max_score: Number(row.max_score) || 100,
+        due_date: row.due_date,
+        created_at: row.created_at,
+        status,
+        submitted_at: row.submitted_at,
+        submission_link: submissionLink,
+        submission_file_url: null,
+        marks: status === 'evaluated' && row.marks !== null ? Number(row.marks) : null,
+        feedback,
+        navigation_url: `/dashboard/student/courses/${row.subject_slug}/assignment/${row.id}`,
+      });
+    }
+
+    // Process college assignments
+    for (const row of collegeRows) {
+      const isSubmitted = Boolean(row.submission_link || row.submission_file_url || row.submitted_at);
+      let status = 'pending';
+      if (isSubmitted) {
+        if (row.evaluation_status === 'completed') {
+          status = 'evaluated';
+        } else {
+          status = 'pending_evaluation';
+        }
+      }
+
+      const maxScore = getRubricMaxScore(row.rubric, 100);
+      const feedback = parseFeedback(row.feedback);
+      const submissionLink = row.submission_link ? await presignS3Url(row.submission_link) : null;
+      const submissionFileUrl = row.submission_file_url ? await presignS3Url(row.submission_file_url) : null;
+
+      allAssignments.push({
+        id: row.id,
+        title: row.title,
+        type: 'COLLEGE',
+        course_name: row.course_name,
+        subject_slug: row.subject_slug || null,
+        topic_title: row.topic_title || null,
+        unit_title: row.unit_title || null,
+        max_score: maxScore,
+        due_date: row.due_date,
+        created_at: row.created_at,
+        status,
+        submitted_at: row.submitted_at,
+        submission_link: submissionLink,
+        submission_file_url: submissionFileUrl,
+        marks: status === 'evaluated' && row.marks !== null ? Number(row.marks) : null,
+        feedback,
+        navigation_url: `/dashboard/student/assignments/${row.id}`,
+      });
+    }
+
+    // Sort: Pending first, then Pending Evaluation, then Evaluated
+    const statusOrder = { pending: 0, pending_evaluation: 1, evaluated: 2 };
+    allAssignments.sort((a, b) => {
+      if (statusOrder[a.status] !== statusOrder[b.status]) {
+        return statusOrder[a.status] - statusOrder[b.status];
+      }
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+
+    res.json({
+      success: true,
+      data: allAssignments,
+      counts: {
+        total: allAssignments.length,
+        pending: allAssignments.filter((a) => a.status === 'pending').length,
+        pending_evaluation: allAssignments.filter((a) => a.status === 'pending_evaluation').length,
+        evaluated: allAssignments.filter((a) => a.status === 'evaluated').length,
+      },
+    });
+  } catch (error) {
+    console.error('Error in getStudentAssignmentsOverview:', error);
     serverError(res, error);
   }
 };

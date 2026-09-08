@@ -25,11 +25,33 @@ exports.getUserSubjects = async (req, res) => {
       FROM public.subjects s
       INNER JOIN public.user_subjects us ON s.id = us.subject_id 
       WHERE us.user_id = $1 AND s.is_published = true AND s.is_deleted = false
-      ORDER BY us.started_at DESC;
+      ORDER BY us.progress_percent DESC, us.started_at DESC NULLS LAST, s.id ASC;
     `;
 
     const { rows } = await pool.query(query, [userId]);
-    res.json({ success: true, data: rows });
+
+    // Ensure progress is freshly accurate and synchronized
+    const enriched = await Promise.all(
+      rows.map(async (row) => {
+        try {
+          const { percent } = await calculateSubjectProgress(userId, row.id);
+          if (row.progress_percent !== percent) {
+            pool
+              .query(
+                'UPDATE public.user_subjects SET progress_percent = $1 WHERE user_id = $2 AND subject_id = $3',
+                [percent, userId, row.id],
+              )
+              .catch(() => {});
+            row.progress_percent = percent;
+          }
+        } catch {
+          // Fallback to row.progress_percent
+        }
+        return row;
+      }),
+    );
+
+    res.json({ success: true, data: enriched });
   } catch (err) {
     console.error('Error fetching student subjects:', err);
     res.status(500).json({ success: false, message: 'Server error' });

@@ -301,3 +301,60 @@ export interface ExerciseModalProps {
   subtopicTitle: string;
   loading?: boolean;
 }
+
+export interface RubricBreakdownItem {
+  item?: string;
+  criterion?: string;
+  name?: string;
+  awarded?: number;
+  points_awarded?: number;
+  score?: number;
+  max?: number;
+  max_points?: number;
+  weight?: number;
+  reason?: string;
+  feedback?: string;
+}
+
+export interface EvaluationFeedback {
+  summary?: string;
+  feedback?: string;
+  strengths?: string[];
+  issues?: string[];
+  breakdown?: RubricBreakdownItem[];
+  rubric_breakdown?: RubricBreakdownItem[];
+  [key: string]: any;
+}
+
+export type AssignmentLifecycleStatus = 'pending' | 'pending_evaluation' | 'evaluated';
+
+export interface StudentAssignmentOverviewItem {
+  id: string;
+  title: string;
+  type: 'CURRICULUM' | 'COLLEGE';
+  course_name: string;
+  subject_slug?: string | null;
+  topic_title?: string | null;
+  unit_title?: string | null;
+  max_score: number;
+  due_date?: string | null;
+  created_at?: string;
+  status: AssignmentLifecycleStatus;
+  submitted_at?: string | null;
+  submission_link?: string | null;
+  submission_file_url?: string | null;
+  marks?: number | null;
+  feedback?: EvaluationFeedback | null;
+  navigation_url: string;
+}
+
+export interface StudentAssignmentsOverviewResponse {
+  success: boolean;
+  data: StudentAssignmentOverviewItem[];
+  counts: {
+    total: number;
+    pending: number;
+    pending_evaluation: number;
+    evaluated: number;
+  };
+}

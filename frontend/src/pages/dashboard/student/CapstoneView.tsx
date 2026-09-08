@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
 import { fireConfetti } from '@/lib/confetti';
+import { notifyCourseProgressUpdated } from '@/utils/progressEvents';
 
 /* =======================
    Course-wide "next item" navigation
@@ -159,7 +160,7 @@ export default function CapstoneView() {
       });
       setCapstone((prev) => (prev ? { ...prev, ...res.data.data } : prev));
       toast.success('Capstone submitted! +20 XP');
-      window.dispatchEvent(new Event('course-progress-updated'));
+      notifyCourseProgressUpdated();
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit capstone'));
     } finally {
