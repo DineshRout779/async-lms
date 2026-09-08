@@ -22,6 +22,13 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import apiClient from '@/services/api';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -205,6 +212,22 @@ const LearningFlow: React.FC = () => {
   const refreshStructure = async () => {
     if (selectedSubject) {
       await dispatch(fetchCourseStructure(selectedSubject.slug));
+    }
+  };
+
+  const handleSubjectChange = (slug: string) => {
+    const subject = subjects.find((s) => s.slug === slug);
+    if (subject) {
+      dispatch(setActiveSubject(subject.slug));
+      dispatch(fetchCourseStructure(subject.slug));
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('subject', subject.slug);
+          return next;
+        },
+        { replace: true },
+      );
     }
   };
 
@@ -1007,36 +1030,35 @@ const LearningFlow: React.FC = () => {
                 </p>
               </div>
 
-              <div className='flex items-center gap-2.5 flex-wrap'>
+              <div className='flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto min-w-0'>
                 {/* Mobile course selector */}
-                <div className='lg:hidden'>
-                  <select
-                    className='rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-400 shadow-2xs'
+                <div className='lg:hidden w-full sm:w-auto min-w-0'>
+                  <Select
                     value={selectedSubject?.slug || ''}
-                    onChange={(e) => {
-                      const subject = subjects.find(
-                        (s) => s.slug === e.target.value,
-                      );
-                      if (subject) {
-                        dispatch(setActiveSubject(subject.slug));
-                        dispatch(fetchCourseStructure(subject.slug));
-                        setSearchParams(
-                          (prev) => {
-                            const next = new URLSearchParams(prev);
-                            next.set('subject', subject.slug);
-                            return next;
-                          },
-                          { replace: true },
-                        );
-                      }
-                    }}
+                    onValueChange={handleSubjectChange}
                   >
-                    {subjects.map((s: Subject) => (
-                      <option key={s.id} value={s.slug}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className='w-full sm:w-64 min-w-0 max-w-full bg-white border-slate-200 shadow-2xs h-9.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus-visible:ring-indigo-400'>
+                      <SelectValue placeholder='Select Course' />
+                    </SelectTrigger>
+                    <SelectContent
+                      position='popper'
+                      align='start'
+                      sideOffset={4}
+                      className='w-(--radix-select-trigger-width) min-w-[240px] max-w-[calc(100vw-2.5rem)] rounded-xl shadow-lg border-slate-200 z-50 bg-white'
+                    >
+                      {subjects.map((s: Subject) => (
+                        <SelectItem
+                          key={s.id}
+                          value={s.slug}
+                          className='cursor-pointer py-2 text-xs sm:text-sm font-medium focus:bg-indigo-50 focus:text-indigo-600'
+                        >
+                          <span className='truncate block max-w-[220px] sm:max-w-none'>
+                            {s.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <Button
@@ -1948,33 +1970,30 @@ const LearningFlow: React.FC = () => {
                 <label className='text-[10px] font-bold uppercase tracking-widest text-slate-400'>
                   Editing Course
                 </label>
-                <select
-                  className='mt-2 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500'
+                <Select
                   value={selectedSubject?.slug || ''}
-                  onChange={(e) => {
-                    const subject = subjects.find(
-                      (s) => s.slug === e.target.value,
-                    );
-                    if (subject) {
-                      dispatch(setActiveSubject(subject.slug));
-                      dispatch(fetchCourseStructure(subject.slug));
-                      setSearchParams(
-                        (prev) => {
-                          const next = new URLSearchParams(prev);
-                          next.set('subject', subject.slug);
-                          return next;
-                        },
-                        { replace: true },
-                      );
-                    }
-                  }}
+                  onValueChange={handleSubjectChange}
                 >
-                  {subjects.map((s: Subject) => (
-                    <option key={s.id} value={s.slug}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className='mt-2 w-full bg-white border-slate-200 shadow-xs h-10 rounded-xl text-sm font-medium text-slate-800 focus-visible:ring-indigo-500'>
+                    <SelectValue placeholder='Select Course' />
+                  </SelectTrigger>
+                  <SelectContent
+                    position='popper'
+                    align='start'
+                    sideOffset={4}
+                    className='w-(--radix-select-trigger-width) max-w-[300px] rounded-xl shadow-lg border-slate-200 z-50 bg-white'
+                  >
+                    {subjects.map((s: Subject) => (
+                      <SelectItem
+                        key={s.id}
+                        value={s.slug}
+                        className='cursor-pointer py-2 text-sm font-medium focus:bg-indigo-50 focus:text-indigo-600'
+                      >
+                        <span className='truncate block'>{s.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Stats */}
