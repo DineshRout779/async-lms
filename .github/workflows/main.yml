@@ -90,6 +90,11 @@ jobs:
             echo "SMTP_USER=${{ secrets.SMTP_USER }}" >> .env
             echo "SMTP_PASS=${{ secrets.SMTP_PASS }}" >> .env
             echo "SMTP_FROM=${{ secrets.SMTP_FROM }}" >> .env
+            echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+            echo "OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }}" >> .env
+            echo "OPENAI_MODEL=${{ secrets.OPENAI_MODEL }}" >> .env
+            echo "CENTRAL_EVALUATOR_URL=${{ secrets.CENTRAL_EVALUATOR_URL }}" >> .env
+            echo "CENTRAL_EVALUATOR_API_KEY=${{ secrets.CENTRAL_EVALUATOR_API_KEY }}" >> .env
             echo "PORT=3001" >> .env
 
             # Runner pool sizing. This box is memory-constrained and also serves
