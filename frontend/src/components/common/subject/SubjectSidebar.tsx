@@ -40,11 +40,19 @@ export const SubjectSidebar = ({ isMobile, onCloseMobile }: SubjectSidebarProps)
 
     const handleProgressUpdate = () => fetchStructure(false);
     window.addEventListener('course-progress-updated', handleProgressUpdate);
-    return () =>
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'codeguru-progress-updated') {
+        fetchStructure(false);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => {
       window.removeEventListener(
         'course-progress-updated',
         handleProgressUpdate,
       );
+      window.removeEventListener('storage', handleStorage);
+    };
   }, [slug]);
 
   // Auto-expand topic when a lesson/content within it is active

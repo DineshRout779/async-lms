@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/utils';
 import { fireConfetti } from '@/lib/confetti';
+import { notifyCourseProgressUpdated } from '@/utils/progressEvents';
 
 import LessonAssistant from '@/components/common/LessonAssistant';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -212,7 +213,7 @@ const Lesson = () => {
     try {
       await dispatch(completeLesson(lessonId)).unwrap();
       toast.success('Lesson completed! +10 points 🎉');
-      window.dispatchEvent(new Event('course-progress-updated'));
+      notifyCourseProgressUpdated();
       setIsNavigating(true);
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to mark lesson complete'));
@@ -266,7 +267,7 @@ const Lesson = () => {
       const result = await dispatch(
         submitQuiz({ quizId: quiz.id, answers: quizAnswers }),
       ).unwrap();
-      window.dispatchEvent(new Event('course-progress-updated'));
+      notifyCourseProgressUpdated();
       if (result.attempt.is_passed) {
         toast.success(`Quiz passed! 🎉`);
       } else {
@@ -298,6 +299,7 @@ const Lesson = () => {
     try {
       const result = await dispatch(submitExercise({ exerciseId, files, taskId })).unwrap();
       toast.success('Exercise submitted! 🎉');
+      notifyCourseProgressUpdated();
       return result;
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to submit exercise'));
