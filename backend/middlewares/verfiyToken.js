@@ -35,20 +35,29 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ message: 'Access Denied: Session expired due to password change' });
     }
 
-    // 4. For facilitators, always fetch live assigned college IDs from DB so changes take effect immediately
+    // 4. For facilitators, always fetch live assigned college IDs and subject IDs from DB so changes take effect immediately
     let collegeIds = verified.college_ids || [];
+    let subjectIds = [];
     if (verified.role === 'facilitator') {
-      const fcRes = await pool.query(
-        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
-        [verified.id]
-      );
+      const [fcRes, fsRes] = await Promise.all([
+        pool.query(
+          'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
+          [verified.id],
+        ),
+        pool.query(
+          'SELECT subject_id FROM facilitator_subjects WHERE facilitator_id = $1 AND is_deleted = false',
+          [verified.id],
+        ),
+      ]);
       collegeIds = fcRes.rows.map((r) => r.college_id);
+      subjectIds = fsRes.rows.map((r) => r.subject_id);
     }
 
     // Attach the user payload to the request object
     req.user = {
       ...verified,
       college_ids: collegeIds,
+      subject_ids: subjectIds,
       email: userDb.email,
       full_name: userDb.full_name,
     };

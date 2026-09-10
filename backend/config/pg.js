@@ -459,6 +459,48 @@ pool.on('error', (err, client) => {
       )
     `);
 
+    // ── Facilitator Subjects: Subject-level scoping ─────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS facilitator_subjects (
+        id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        facilitator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        subject_id     UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        is_deleted     BOOLEAN NOT NULL DEFAULT false,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'facilitator_subjects'::regclass
+            AND conname = 'uq_facilitator_subject'
+        ) THEN
+          ALTER TABLE facilitator_subjects
+            ADD CONSTRAINT uq_facilitator_subject UNIQUE (facilitator_id, subject_id);
+        END IF;
+      END $$;
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_fac_subj_fac_id ON facilitator_subjects(facilitator_id) WHERE is_deleted = false;
+      CREATE INDEX IF NOT EXISTS idx_fac_subj_subj_id ON facilitator_subjects(subject_id) WHERE is_deleted = false;
+    `);
+
+    // Backfill existing active facilitators so their existing dashboard is preserved
+    await client.query(`
+      INSERT INTO facilitator_subjects (facilitator_id, subject_id)
+      SELECT DISTINCT fc.facilitator_id, us.subject_id
+      FROM facilitator_colleges fc
+      JOIN student_profiles sp ON sp.college_id = fc.college_id
+      JOIN user_subjects us ON us.user_id = sp.user_id
+      WHERE fc.is_deleted = false
+      ON CONFLICT (facilitator_id, subject_id) DO NOTHING;
+    `);
+
     // ── Soft delete: is_deleted flag on every table that previously used hard DELETE ──
     const softDeleteTables = [
       'topics', 'units', 'subtopics', 'lesson_content', 'quizzes',
@@ -466,7 +508,7 @@ pool.on('error', (err, client) => {
       'projects', 'colleges', 'facilitator_colleges', 'ai_courses',
       'ai_course_modules', 'ai_course_topics', 'ai_course_lessons',
       'college_assignments', 'notifications', 'channel_whitelist',
-      'student_projects', 'subjects',
+      'student_projects', 'subjects', 'facilitator_subjects',
     ];
     for (const table of softDeleteTables) {
       await client.query(
@@ -481,6 +523,7 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS role_focus TEXT`,
     );
+
 
     // ... rest of the tables
     // Dump lessons for debugging

@@ -107,10 +107,26 @@ async function attachLastAttempts(quizzes, userId, userRole) {
 }
 
 // Get subjects for the dropdown switcher — drafts included only for admin/facilitator,
-// students only ever see published subjects.
+// Get subjects for the dropdown switcher — drafts included only for admin/facilitator,
+// students only ever see published subjects. Facilitators only see assigned subjects.
 exports.getSubjectsDropdown = async (req, res) => {
   try {
-    const canSeeDrafts = req.user?.role === 'admin' || req.user?.role === 'facilitator';
+    const isFacilitator = req.user?.role === 'facilitator';
+    const isAdmin = req.user?.role === 'admin';
+    const canSeeDrafts = isAdmin || isFacilitator;
+    const facilitatorSubjectIds = req.user?.subject_ids || [];
+
+    if (isFacilitator && facilitatorSubjectIds.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const params = [];
+    let facilitatorClause = '';
+    if (isFacilitator) {
+      params.push(facilitatorSubjectIds);
+      facilitatorClause = `AND s.id = ANY($${params.length}::uuid[])`;
+    }
+
     const { rows } = await pool.query(`
       SELECT s.*,
              COUNT(DISTINCT t.id)::int as topics_count,
@@ -119,10 +135,10 @@ exports.getSubjectsDropdown = async (req, res) => {
       LEFT JOIN topics t ON s.id = t.subject_id
       LEFT JOIN units u ON t.id = u.topic_id
       LEFT JOIN subtopics st ON u.id = st.unit_id
-      WHERE s.is_deleted = false ${canSeeDrafts ? '' : 'AND s.is_published = true'}
+      WHERE s.is_deleted = false ${facilitatorClause} ${canSeeDrafts ? '' : 'AND s.is_published = true'}
       GROUP BY s.id
       ORDER BY s.order_index ASC
-    `);
+    `, params);
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('Error | getSubjectsDropdown:', err);
@@ -196,6 +212,14 @@ exports.getCourseStructure = async (req, res) => {
     }
 
     const subject = subjectResult.rows[0];
+
+    // Facilitator isolation: Facilitator can only access subjects assigned to them
+    if (req.user?.role === 'facilitator') {
+      const subjectIds = req.user.subject_ids || [];
+      if (!subjectIds.includes(subject.id)) {
+        return res.status(403).json({ message: 'Access denied: You are not assigned to this subject' });
+      }
+    }
 
     // 2. Fetch full structure
     const query = `
@@ -467,6 +491,20 @@ exports.getSubtopicContent = async (req, res) => {
     }
 
     const subtopicId = subtopicResult.rows[0].id;
+
+    if (userRole === 'facilitator') {
+      const subjectIds = req.user.subject_ids || [];
+      const subCheck = await pool.query(
+        `SELECT t.subject_id FROM subtopics st
+         JOIN units u ON st.unit_id = u.id
+         JOIN topics t ON u.topic_id = t.id
+         WHERE st.id = $1`,
+        [subtopicId],
+      );
+      if (subCheck.rows.length === 0 || !subjectIds.includes(subCheck.rows[0].subject_id)) {
+        return res.status(403).json({ message: 'Access denied: You are not assigned to this subject' });
+      }
+    }
 
     if (userRole === 'student') {
       const lockCheck = await pool.query(
@@ -909,6 +947,21 @@ exports.getExerciseContent = async (req, res) => {
 
     const row = rows[0];
 
+    if (req.user?.role === 'facilitator') {
+      const subjectIds = req.user.subject_ids || [];
+      const exCheck = await pool.query(
+        `SELECT t.subject_id FROM exercises e
+         LEFT JOIN subtopics st ON e.subtopic_id = st.id
+         LEFT JOIN units u ON (e.unit_id = u.id OR st.unit_id = u.id)
+         LEFT JOIN topics t ON u.topic_id = t.id
+         WHERE e.id = $1`,
+        [exerciseId],
+      );
+      if (exCheck.rows.length === 0 || !subjectIds.includes(exCheck.rows[0].subject_id)) {
+        return res.status(403).json({ message: 'Access denied: You are not assigned to this subject' });
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -976,6 +1029,20 @@ exports.getQuizContent = async (req, res) => {
 
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    if (userRole === 'facilitator') {
+      const subjectIds = req.user?.subject_ids || [];
+      const quizCheck = await pool.query(
+        `SELECT t.subject_id FROM quizzes q
+         JOIN units u ON q.unit_id = u.id
+         JOIN topics t ON u.topic_id = t.id
+         WHERE q.id = $1`,
+        [quizId],
+      );
+      if (quizCheck.rows.length === 0 || !subjectIds.includes(quizCheck.rows[0].subject_id)) {
+        return res.status(403).json({ message: 'Access denied: You are not assigned to this subject' });
+      }
     }
 
     const base = rows[0];

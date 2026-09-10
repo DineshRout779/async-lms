@@ -42,9 +42,11 @@ exports.runEvaluation = async (req, res) => {
 
     // 1. Try fetching from curriculum assignments first
     let assignmentRes = await client.query(
-      `SELECT id, title, evaluator_type, test_cases, rubric, 'unit' as type
-       FROM assignments
-       WHERE id = $1`,
+      `SELECT a.id, a.title, a.evaluator_type, a.test_cases, a.rubric, 'unit' as type, t.subject_id
+       FROM assignments a
+       JOIN units u ON a.unit_id = u.id
+       JOIN topics t ON u.topic_id = t.id
+       WHERE a.id = $1`,
       [assignmentId],
     );
 
@@ -54,7 +56,7 @@ exports.runEvaluation = async (req, res) => {
     // 2. If not found, try facilitator-created college assignments
     if (!assignment) {
       assignmentRes = await client.query(
-        `SELECT id, title, evaluator_type, test_cases, rubric, 'college' as type
+        `SELECT id, title, evaluator_type, test_cases, rubric, 'college' as type, college_id, created_by, course
          FROM college_assignments
          WHERE id = $1`,
         [assignmentId],
@@ -65,6 +67,21 @@ exports.runEvaluation = async (req, res) => {
 
     if (!assignment) {
       throw new Error('Assignment not found');
+    }
+
+    // Guard facilitator access
+    if (req.user.role === 'facilitator') {
+      const subjectIds = req.user.subject_ids || [];
+      const collegeIds = req.user.college_ids || [];
+      if (!isCollegeAssignment) {
+        if (!subjectIds.includes(assignment.subject_id)) {
+          throw new Error('Access denied: Assignment does not belong to your assigned subjects');
+        }
+      } else {
+        if (!collegeIds.includes(assignment.college_id)) {
+          throw new Error('Access denied: Assignment belongs to a college not assigned to you');
+        }
+      }
     }
 
     // 3. Get submissions from the correct table.
@@ -79,6 +96,13 @@ exports.runEvaluation = async (req, res) => {
             )`
         : '';
 
+    const subParams = [assignmentId];
+    let facSubFilter = '';
+    if (req.user.role === 'facilitator') {
+      subParams.push(req.user.college_ids || []);
+      facSubFilter = ` AND sp.college_id = ANY($${subParams.length}::uuid[])`;
+    }
+
     const queryStr = isCollegeAssignment
       ? `SELECT
           s.id as submission_id,
@@ -87,7 +111,8 @@ exports.runEvaluation = async (req, res) => {
           u.full_name as student_name
          FROM college_assignment_submissions s
          JOIN users u ON s.student_id = u.id
-         WHERE s.assignment_id = $1${scopeFilter}`
+         JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE s.assignment_id = $1${scopeFilter}${facSubFilter}`
       : `SELECT
           s.id as submission_id,
           s.submission_link,
@@ -95,9 +120,10 @@ exports.runEvaluation = async (req, res) => {
           u.full_name as student_name
          FROM assignment_submissions s
          JOIN users u ON s.user_id = u.id
-         WHERE s.assignment_id = $1${scopeFilter}`;
+         JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE s.assignment_id = $1${scopeFilter}${facSubFilter}`;
 
-    const submissionsRes = await client.query(queryStr, [assignmentId]);
+    const submissionsRes = await client.query(queryStr, subParams);
     const submissions = submissionsRes.rows;
 
     if (!submissions.length) {
@@ -536,6 +562,41 @@ exports.getLatestEvaluationByAssignment = async (req, res) => {
 exports.getResultsByAssignment = async (req, res) => {
   try {
     const { assignmentId } = req.params;
+    const isFacilitator = req.user.role !== 'admin';
+    const facilitatorCollegeIds = req.user.college_ids || [];
+    const facilitatorSubjectIds = req.user.subject_ids || [];
+
+    if (isFacilitator) {
+      if (facilitatorCollegeIds.length === 0 || facilitatorSubjectIds.length === 0) {
+        return res.status(403).json({ success: false, message: 'Access denied: No colleges or subjects assigned' });
+      }
+
+      // Check curriculum assignment
+      const curSubj = await pool.query(
+        `SELECT t.subject_id FROM assignments a
+         JOIN units u ON a.unit_id = u.id
+         JOIN topics t ON u.topic_id = t.id
+         WHERE a.id = $1`,
+        [assignmentId],
+      );
+      if (curSubj.rows.length > 0) {
+        if (!facilitatorSubjectIds.includes(curSubj.rows[0].subject_id)) {
+          return res.status(403).json({ success: false, message: 'Access denied: Assignment does not belong to your assigned subjects' });
+        }
+      } else {
+        // Check college assignment
+        const colSubj = await pool.query(
+          `SELECT ca.college_id FROM college_assignments ca WHERE ca.id = $1`,
+          [assignmentId],
+        );
+        if (colSubj.rows.length > 0) {
+          const ca = colSubj.rows[0];
+          if (!facilitatorCollegeIds.includes(ca.college_id)) {
+            return res.status(403).json({ success: false, message: 'Access denied: College not assigned to you' });
+          }
+        }
+      }
+    }
 
     // Check if evaluation exists
     const evalRes = await pool.query(
@@ -547,9 +608,6 @@ exports.getResultsByAssignment = async (req, res) => {
        ORDER BY created_at DESC LIMIT 1`,
       [assignmentId],
     );
-
-    const isFacilitator = req.user.role !== 'admin';
-    const facilitatorCollegeIds = req.user.college_ids || [];
 
     if (evalRes.rows.length > 0) {
       // Evaluation exists, fetch results just like getEvaluationResults
@@ -749,19 +807,43 @@ exports.getEvaluationResults = async (req, res) => {
     const { id } = req.params;
 
     const evalRes = await pool.query(
-      `SELECT e.*, COALESCE(a.title, c.title) as assignment_name
+      `SELECT e.*, COALESCE(a.title, c.title) as assignment_name,
+              t.subject_id as curriculum_subject_id,
+              c.college_id as college_assignment_college_id
        FROM evaluations e
        LEFT JOIN assignments a ON e.assignment_id = a.id
+       LEFT JOIN units u ON a.unit_id = u.id
+       LEFT JOIN topics t ON u.topic_id = t.id
        LEFT JOIN college_assignments c ON e.college_assignment_id = c.id
        WHERE e.id = $1`,
       [id],
     );
 
-    // Facilitators only see results for students in colleges they manage,
-    // matching the scoping already applied to submissions_count in the
-    // evaluation-filters list (admins see everything, unscoped).
+    if (evalRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Evaluation not found' });
+    }
+
+    const evaluation = evalRes.rows[0];
     const isFacilitator = req.user.role !== 'admin';
     const facilitatorCollegeIds = req.user.college_ids || [];
+    const facilitatorSubjectIds = req.user.subject_ids || [];
+
+    if (isFacilitator) {
+      if (facilitatorCollegeIds.length === 0 || facilitatorSubjectIds.length === 0) {
+        return res.status(403).json({ success: false, message: 'Access denied: No colleges or subjects assigned' });
+      }
+      if (evaluation.assignment_id && evaluation.curriculum_subject_id) {
+        if (!facilitatorSubjectIds.includes(evaluation.curriculum_subject_id)) {
+          return res.status(403).json({ success: false, message: 'Access denied: Assignment does not belong to your assigned subjects' });
+        }
+      }
+      if (evaluation.college_assignment_id && evaluation.college_assignment_college_id) {
+        if (!facilitatorCollegeIds.includes(evaluation.college_assignment_college_id)) {
+          return res.status(403).json({ success: false, message: 'Access denied: College not assigned to you' });
+        }
+      }
+    }
+
     const values = [id];
     let collegeFilter = '';
     if (isFacilitator) {

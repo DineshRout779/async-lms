@@ -143,11 +143,17 @@ exports.toggleSubjectAccess = async (req, res) => {
     } else {
       // Grant access: ensure facilitator is linked to subject first
       await pool.query(
-        'INSERT INTO facilitator_subjects (facilitator_id, subject_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        `INSERT INTO facilitator_subjects (facilitator_id, subject_id)
+         VALUES ($1, $2)
+         ON CONFLICT (facilitator_id, subject_id)
+         DO UPDATE SET is_deleted = false, updated_at = CURRENT_TIMESTAMP`,
         [facilitatorId, courseId],
       );
       await pool.query(
-        'INSERT INTO facilitator_colleges (facilitator_id, college_id) VALUES ($1, $2)',
+        `INSERT INTO facilitator_colleges (facilitator_id, college_id)
+         VALUES ($1, $2)
+         ON CONFLICT (facilitator_id, college_id)
+         DO UPDATE SET is_deleted = false, updated_at = CURRENT_TIMESTAMP`,
         [facilitatorId, collegeId],
       );
       logAction({ req, action: 'CREATE', entityType: 'facilitator_college', entityId: null, details: { facilitatorId, collegeId } });

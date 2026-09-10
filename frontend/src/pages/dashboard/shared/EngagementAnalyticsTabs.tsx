@@ -1028,6 +1028,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
         onClose={() => setIsModalOpen(false)}
         studentId={selectedStudentId}
         studentName={selectedStudentName}
+        subjectId={subject || undefined}
       />
     </div>
   );

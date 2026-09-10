@@ -362,11 +362,13 @@ export function StudentDetailsModal({
   onClose,
   studentId,
   studentName,
+  subjectId,
 }: {
   isOpen: boolean;
   onClose: () => void;
   studentId: string | null;
   studentName: string;
+  subjectId?: string;
 }) {
   const [subjects, setSubjects] = useState<SubjectGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -377,14 +379,18 @@ export function StudentDetailsModal({
       apiClient
         .get(`/facilitator/students/${studentId}/modules`)
         .then((res) => {
-          setSubjects(res.data.data);
+          let list = res.data.data || [];
+          if (subjectId) {
+            list = list.filter((s: SubjectGroup) => s.subject_id === subjectId);
+          }
+          setSubjects(list);
         })
         .catch((err) => console.error(err))
         .finally(() => setLoading(false));
     } else {
       setSubjects([]);
     }
-  }, [isOpen, studentId]);
+  }, [isOpen, studentId, subjectId]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
