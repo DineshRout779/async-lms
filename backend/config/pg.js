@@ -425,6 +425,12 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE ai_course_topics ADD COLUMN IF NOT EXISTS quiz_questions JSONB NOT NULL DEFAULT '[]'::jsonb`,
     );
+    await client.query(
+      `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS has_unpublished_changes BOOLEAN NOT NULL DEFAULT false`,
+    );
+    await client.query(
+      `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS last_published_at TIMESTAMPTZ`,
+    );
 
     // Last accessed tracking for "Continue Learning"
     await client.query(

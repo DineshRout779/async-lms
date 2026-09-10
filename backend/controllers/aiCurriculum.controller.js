@@ -97,6 +97,87 @@ function uniqueSlug(base, suffix) {
   return `${slugify(base)}-${suffix}`.substring(0, 80);
 }
 
+let columnsMigrated = false;
+async function ensureColumns() {
+  if (columnsMigrated) return;
+  try {
+    await pool.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS has_unpublished_changes BOOLEAN NOT NULL DEFAULT false`);
+    await pool.query(`ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS last_published_at TIMESTAMPTZ`);
+    // Link subject_id if null but matching subject exists by name
+    await pool.query(`
+      UPDATE ai_courses c
+      SET subject_id = s.id
+      FROM subjects s
+      WHERE c.subject_id IS NULL AND c.title = s.name AND c.status = 'published'
+    `);
+    // For any published course that was published and not edited since, reset has_unpublished_changes to false
+    await pool.query(`
+      UPDATE ai_courses
+      SET has_unpublished_changes = false
+      WHERE status = 'published' AND last_published_at IS NOT NULL AND updated_at <= last_published_at
+    `);
+    columnsMigrated = true;
+  } catch (err) {
+    console.error('ensureColumns error:', err);
+  }
+}
+
+// Helper to flag unpublished changes when a course's curriculum tree is modified
+async function markCourseUpdated(courseId) {
+  if (!courseId) return;
+  try {
+    await ensureColumns();
+    await pool.query(
+      `UPDATE ai_courses
+       SET has_unpublished_changes = CASE WHEN subject_id IS NOT NULL THEN true ELSE has_unpublished_changes END,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [courseId],
+    );
+  } catch (err) {
+    console.error('markCourseUpdated error:', err);
+  }
+}
+
+async function markModuleCourseUpdated(moduleId) {
+  if (!moduleId) return;
+  try {
+    const res = await pool.query(`SELECT course_id FROM ai_course_modules WHERE id = $1`, [moduleId]);
+    if (res.rows.length) await markCourseUpdated(res.rows[0].course_id);
+  } catch (err) {
+    console.error('markModuleCourseUpdated error:', err);
+  }
+}
+
+async function markTopicCourseUpdated(topicId) {
+  if (!topicId) return;
+  try {
+    const res = await pool.query(
+      `SELECT m.course_id FROM ai_course_topics t JOIN ai_course_modules m ON t.module_id = m.id WHERE t.id = $1`,
+      [topicId],
+    );
+    if (res.rows.length) await markCourseUpdated(res.rows[0].course_id);
+  } catch (err) {
+    console.error('markTopicCourseUpdated error:', err);
+  }
+}
+
+async function markLessonCourseUpdated(lessonId) {
+  if (!lessonId) return;
+  try {
+    const res = await pool.query(
+      `SELECT m.course_id FROM ai_course_lessons l
+       JOIN ai_course_topics t ON l.topic_id = t.id
+       JOIN ai_course_modules m ON t.module_id = m.id
+       WHERE l.id = $1`,
+      [lessonId],
+    );
+    if (res.rows.length) await markCourseUpdated(res.rows[0].course_id);
+  } catch (err) {
+    console.error('markLessonCourseUpdated error:', err);
+  }
+}
+
 // ─── Extract skills from JD ───────────────────────────────────────────────────
 
 exports.extractSkills = async (req, res) => {
@@ -251,16 +332,19 @@ exports.saveCourse = async (req, res) => {
 
 exports.listCourses = async (req, res) => {
   try {
+    await ensureColumns();
     const userId = req.user.id;
     const role = req.user.role;
     const { status } = req.query;
 
     let query = `
       SELECT c.*, u.full_name AS creator_name,
-             (SELECT count(*)::int FROM ai_course_modules m WHERE m.course_id = c.id) as module_count,
-             (SELECT count(*)::int FROM ai_course_topics t JOIN ai_course_modules m ON t.module_id = m.id WHERE m.course_id = c.id) as topic_count
+             COALESCE(c.has_unpublished_changes, false)::boolean as has_unpublished_changes,
+             (SELECT count(*)::int FROM ai_course_modules m WHERE m.course_id = c.id AND m.is_deleted = false) as module_count,
+             (SELECT count(*)::int FROM ai_course_topics t JOIN ai_course_modules m ON t.module_id = m.id WHERE m.course_id = c.id AND t.is_deleted = false AND m.is_deleted = false) as topic_count
       FROM ai_courses c
       JOIN users u ON c.created_by = u.id
+      LEFT JOIN subjects s ON (c.subject_id = s.id OR (c.subject_id IS NULL AND s.name = c.title))
     `;
     const params = [];
 
@@ -288,11 +372,13 @@ exports.listCourses = async (req, res) => {
 
 exports.getCourse = async (req, res) => {
   try {
+    await ensureColumns();
     const { id } = req.params;
 
     const courseRes = await pool.query(
       `SELECT c.*, u.full_name AS creator_name,
-              r.full_name AS reviewer_name
+              r.full_name AS reviewer_name,
+              COALESCE(c.has_unpublished_changes, false)::boolean as has_unpublished_changes
        FROM ai_courses c
        JOIN users u ON c.created_by = u.id
        LEFT JOIN users r ON c.reviewed_by = r.id
@@ -303,6 +389,41 @@ exports.getCourse = async (req, res) => {
 
     const course = courseRes.rows[0];
 
+    // Check published live tree if course has a published subject
+    let publishedTopicTitles = new Set();
+    let publishedUnitTitles = new Set();
+    let publishedSubtopicTitles = new Set();
+    const effectiveSubjectId = course.subject_id;
+
+    if (effectiveSubjectId) {
+      try {
+        const pubTopics = await pool.query(
+          `SELECT tp.id, tp.title FROM topics tp WHERE tp.subject_id = $1 AND tp.is_deleted = false`,
+          [effectiveSubjectId],
+        );
+        publishedTopicTitles = new Set(pubTopics.rows.map((r) => (r.title || '').trim().toLowerCase()));
+
+        const pubUnits = await pool.query(
+          `SELECT u.id, u.title FROM units u JOIN topics tp ON u.topic_id = tp.id WHERE tp.subject_id = $1 AND u.is_deleted = false`,
+          [effectiveSubjectId],
+        );
+        publishedUnitTitles = new Set(pubUnits.rows.map((r) => (r.title || '').trim().toLowerCase()));
+
+        const pubSubtopics = await pool.query(
+          `SELECT st.id, st.title FROM subtopics st JOIN units u ON st.unit_id = u.id JOIN topics tp ON u.topic_id = tp.id WHERE tp.subject_id = $1 AND st.is_deleted = false`,
+          [effectiveSubjectId],
+        );
+        publishedSubtopicTitles = new Set(pubSubtopics.rows.map((r) => (r.title || '').trim().toLowerCase()));
+      } catch (e) {
+        console.error('Error fetching published subject structure for change diffing:', e);
+      }
+    }
+
+    const lastPublishedTime = course.last_published_at ? new Date(course.last_published_at).getTime() : null;
+    let newModulesCount = 0;
+    let newTopicsCount = 0;
+    let newLessonsCount = 0;
+
     const modulesRes = await pool.query(
       `SELECT * FROM ai_course_modules WHERE course_id = $1 AND is_deleted = false ORDER BY order_index`,
       [id],
@@ -310,20 +431,50 @@ exports.getCourse = async (req, res) => {
 
     const modules = [];
     for (const mod of modulesRes.rows) {
+      const isModuleNew = Boolean(
+        effectiveSubjectId && (
+          !publishedTopicTitles.has((mod.title || '').trim().toLowerCase()) ||
+          (lastPublishedTime && new Date(mod.created_at).getTime() > lastPublishedTime)
+        )
+      );
+      if (isModuleNew) newModulesCount++;
+
       const topicsRes = await pool.query(
         `SELECT * FROM ai_course_topics WHERE module_id = $1 AND is_deleted = false ORDER BY order_index`,
         [mod.id],
       );
       const topics = [];
       for (const topic of topicsRes.rows) {
+        const isTopicNew = Boolean(
+          effectiveSubjectId && (
+            isModuleNew ||
+            !publishedUnitTitles.has((topic.title || '').trim().toLowerCase()) ||
+            (lastPublishedTime && new Date(topic.created_at).getTime() > lastPublishedTime)
+          )
+        );
+        if (isTopicNew) newTopicsCount++;
+
         const lessonsRes = await pool.query(
           `SELECT * FROM ai_course_lessons WHERE topic_id = $1 AND is_deleted = false ORDER BY order_index`,
           [topic.id],
         );
 
-        // Presign S3 URLs for lessons
+        // Presign S3 URLs for lessons and tag new / modified
         const signedLessons = await Promise.all(lessonsRes.rows.map(async (lesson) => {
-          const updatedLesson = { ...lesson };
+          const isLessonNew = Boolean(
+            effectiveSubjectId && (
+              isTopicNew ||
+              !publishedSubtopicTitles.has((lesson.title || '').trim().toLowerCase()) ||
+              (lastPublishedTime && new Date(lesson.created_at).getTime() > lastPublishedTime)
+            )
+          );
+          const isLessonModified = Boolean(
+            !isLessonNew && effectiveSubjectId && lastPublishedTime && lesson.updated_at &&
+            new Date(lesson.updated_at).getTime() > lastPublishedTime
+          );
+          if (isLessonNew) newLessonsCount++;
+
+          const updatedLesson = { ...lesson, is_new: isLessonNew, is_modified: isLessonModified };
           
           if (updatedLesson.video_url) {
             updatedLesson.video_url = await presignS3Url(updatedLesson.video_url);
@@ -358,9 +509,9 @@ exports.getCourse = async (req, res) => {
           return updatedLesson;
         }));
 
-        topics.push({ ...topic, lessons: signedLessons });
+        topics.push({ ...topic, is_new: isTopicNew, lessons: signedLessons });
       }
-      modules.push({ ...mod, topics });
+      modules.push({ ...mod, is_new: isModuleNew, topics });
     }
 
     // Review history
@@ -372,7 +523,14 @@ exports.getCourse = async (req, res) => {
       [id],
     );
 
-    res.json({ success: true, data: { ...course, modules, reviews: reviewsRes.rows } });
+    const pending_changes_summary = {
+      new_modules: newModulesCount,
+      new_topics: newTopicsCount,
+      new_lessons: newLessonsCount,
+      total: newModulesCount + newTopicsCount + newLessonsCount,
+    };
+
+    res.json({ success: true, data: { ...course, modules, pending_changes_summary, reviews: reviewsRes.rows } });
   } catch (err) {
     console.error('getCourse error:', err);
     serverError(res, err);
@@ -397,6 +555,7 @@ exports.updateCourse = async (req, res) => {
     }
     if (!updates.length) return res.status(400).json({ success: false, message: 'Nothing to update' });
     updates.push(`updated_at = NOW()`);
+    updates.push(`has_unpublished_changes = CASE WHEN subject_id IS NOT NULL THEN true ELSE has_unpublished_changes END`);
     values.push(id);
     await pool.query(`UPDATE ai_courses SET ${updates.join(', ')} WHERE id = $${i}`, values);
     logAction({ req, action: 'UPDATE', entityType: 'ai_course', entityId: id, details: { fields: Object.keys(req.body) } });
@@ -416,13 +575,17 @@ exports.submitForReview = async (req, res) => {
     if (!courseRes.rows.length) return res.status(404).json({ success: false, message: 'Not found' });
 
     const course = courseRes.rows[0];
-    const allowed = ['draft', 'changes_requested'];
+    const allowed = ['draft', 'changes_requested', 'published', 'approved', 'in_review'];
     if (!allowed.includes(course.status)) {
       return res.status(400).json({ success: false, message: `Cannot submit from status: ${course.status}` });
     }
 
     await pool.query(
-      `UPDATE ai_courses SET status = 'in_review', updated_at = NOW() WHERE id = $1`,
+      `UPDATE ai_courses
+       SET status = 'in_review',
+           has_unpublished_changes = CASE WHEN subject_id IS NOT NULL THEN true ELSE false END,
+           updated_at = NOW()
+       WHERE id = $1`,
       [id],
     );
 
@@ -430,17 +593,20 @@ exports.submitForReview = async (req, res) => {
     const admins = await pool.query(
       `SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.role_key = 'ADMIN'`,
     );
+    const isRevision = course.status === 'published' || course.status === 'approved';
     for (const admin of admins.rows) {
       notify({
         userId: admin.id,
         type: 'general',
-        title: 'Course Submitted for Review',
-        body: `"${course.title}" has been submitted for vetting.`,
+        title: isRevision ? 'Course Revisions Submitted for Review' : 'Course Submitted for Review',
+        body: isRevision
+          ? `Updates for "${course.title}" have been submitted for vetting.`
+          : `"${course.title}" has been submitted for vetting.`,
         link: `/dashboard/admin/ai-curriculum/${id}/review`,
       });
     }
 
-    logAction({ req, action: 'UPDATE', entityType: 'ai_course', entityId: id, details: { status: 'in_review' } });
+    logAction({ req, action: 'UPDATE', entityType: 'ai_course', entityId: id, details: { status: 'in_review', isRevision } });
     res.json({ success: true });
   } catch (err) {
     console.error('submitForReview error:', err);
@@ -524,21 +690,105 @@ exports.publishCourse = async (req, res) => {
     if (!courseRes.rows.length) return res.status(404).json({ success: false, message: 'Not found' });
     const course = courseRes.rows[0];
 
-    if (course.status !== 'approved') {
+    if (course.status !== 'approved' && !(course.status === 'published' && course.subject_id)) {
       return res.status(400).json({ success: false, message: 'Only approved courses can be published' });
     }
 
     await client.query('BEGIN');
 
-    // 1. Create Subject
-    const subjectSlug = uniqueSlug(course.title, Date.now());
-    const subjectRes = await client.query(
-      `INSERT INTO subjects (name, slug, description, is_published, order_index)
-       VALUES ($1, $2, $3, true, (SELECT COALESCE(MAX(order_index),0)+1 FROM subjects))
-       RETURNING id`,
-      [course.title, subjectSlug, `${course.role_focus} — ${course.domain} course`],
-    );
-    const subjectId = subjectRes.rows[0].id;
+    // 1. Create or Update Subject
+    let subjectId = course.subject_id;
+    if (subjectId) {
+      await client.query(
+        `UPDATE subjects SET name = $1, description = $2, is_published = true, updated_at = NOW() WHERE id = $3`,
+        [course.title, `${course.role_focus} — ${course.domain} course`, subjectId],
+      );
+
+      // Clean up previous published content tree under this subject to replace with the fresh vetted version
+      await client.query(
+        `DELETE FROM lesson_content WHERE subtopic_id IN (
+          SELECT st.id FROM subtopics st
+          JOIN units u ON st.unit_id = u.id
+          JOIN topics t ON u.topic_id = t.id
+          WHERE t.subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(
+        `DELETE FROM exercises WHERE subtopic_id IN (
+          SELECT st.id FROM subtopics st
+          JOIN units u ON st.unit_id = u.id
+          JOIN topics t ON u.topic_id = t.id
+          WHERE t.subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(
+        `DELETE FROM quiz_question_options WHERE question_id IN (
+          SELECT qq.id FROM quiz_questions qq
+          JOIN quizzes q ON qq.quiz_id = q.id
+          JOIN units u ON q.unit_id = u.id
+          JOIN topics t ON u.topic_id = t.id
+          WHERE t.subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(
+        `DELETE FROM quiz_questions WHERE quiz_id IN (
+          SELECT q.id FROM quizzes q
+          JOIN units u ON q.unit_id = u.id
+          JOIN topics t ON u.topic_id = t.id
+          WHERE t.subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(
+        `DELETE FROM quizzes WHERE unit_id IN (
+          SELECT u.id FROM units u
+          JOIN topics t ON u.topic_id = t.id
+          WHERE t.subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(
+        `DELETE FROM assignments WHERE unit_id IN (
+          SELECT u.id FROM units u
+          JOIN topics t ON u.topic_id = t.id
+          WHERE t.subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(
+        `DELETE FROM subtopics WHERE unit_id IN (
+          SELECT u.id FROM units u
+          JOIN topics t ON u.topic_id = t.id
+          WHERE t.subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(
+        `DELETE FROM units WHERE topic_id IN (
+          SELECT id FROM topics WHERE subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(
+        `DELETE FROM projects WHERE topic_id IN (
+          SELECT id FROM topics WHERE subject_id = $1
+        )`,
+        [subjectId],
+      );
+      await client.query(`DELETE FROM topics WHERE subject_id = $1`, [subjectId]);
+    } else {
+      const subjectSlug = uniqueSlug(course.title, Date.now());
+      const subjectRes = await client.query(
+        `INSERT INTO subjects (name, slug, description, is_published, order_index)
+         VALUES ($1, $2, $3, true, (SELECT COALESCE(MAX(order_index),0)+1 FROM subjects))
+         RETURNING id`,
+        [course.title, subjectSlug, `${course.role_focus} — ${course.domain} course`],
+      );
+      subjectId = subjectRes.rows[0].id;
+    }
 
     // 2. Fetch modules
     const modulesRes = await client.query(
@@ -687,7 +937,13 @@ exports.publishCourse = async (req, res) => {
 
     // 8. Update ai_course
     await client.query(
-      `UPDATE ai_courses SET status = 'published', subject_id = $1, updated_at = NOW() WHERE id = $2`,
+      `UPDATE ai_courses
+       SET status = 'published',
+           subject_id = $1,
+           has_unpublished_changes = false,
+           last_published_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $2`,
       [subjectId, id],
     );
 
@@ -731,6 +987,7 @@ exports.updateModule = async (req, res) => {
        practice_tasks ? JSON.stringify(practice_tasks) : null,
        case_studies ? JSON.stringify(case_studies) : null, id],
     );
+    await markModuleCourseUpdated(id);
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_module', entityId: id, details: { title } });
     res.json({ success: true });
   } catch (err) {
@@ -752,6 +1009,7 @@ exports.updateTopic = async (req, res) => {
     if (!sets.length) return res.status(400).json({ success: false, message: 'Nothing to update' });
     vals.push(id);
     await pool.query(`UPDATE ai_course_topics SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+    await markTopicCourseUpdated(id);
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_topic', entityId: id, details: { title } });
     res.json({ success: true });
   } catch (err) {
@@ -780,6 +1038,7 @@ exports.updateLesson = async (req, res) => {
     if (!sets.length) return res.status(400).json({ success: false, message: 'Nothing to update' });
     vals.push(id);
     await pool.query(`UPDATE ai_course_lessons SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+    await markLessonCourseUpdated(id);
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_lesson', entityId: id, details: { title } });
     res.json({ success: true });
   } catch (err) {
@@ -803,6 +1062,7 @@ exports.addModule = async (req, res) => {
        VALUES ($1,$2,'',${orderIndex},'[]','[]') RETURNING *`,
       [course_id, title],
     );
+    await markCourseUpdated(course_id);
     logAction({ req, action: 'CREATE', entityType: 'ai_course_module', entityId: result.rows[0].id, details: { title } });
     res.status(201).json({ success: true, data: { ...result.rows[0], topics: [] } });
   } catch (err) {
@@ -824,6 +1084,7 @@ exports.addTopic = async (req, res) => {
        VALUES ($1,$2,'',$3) RETURNING *`,
       [module_id, title, orderIndex],
     );
+    await markModuleCourseUpdated(module_id);
     logAction({ req, action: 'CREATE', entityType: 'ai_course_topic', entityId: result.rows[0].id, details: { title } });
     res.status(201).json({ success: true, data: { ...result.rows[0], lessons: [] } });
   } catch (err) {
@@ -847,6 +1108,7 @@ exports.addLesson = async (req, res) => {
        VALUES ($1,$2,'','','','[]',$3,15,NULL,'[]',NULL,$4) RETURNING *`,
       [topic_id, title, lesson_type || 'video', orderIndex],
     );
+    await markTopicCourseUpdated(topic_id);
     logAction({ req, action: 'CREATE', entityType: 'ai_course_lesson', entityId: result.rows[0].id, details: { title } });
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
@@ -878,6 +1140,7 @@ exports.deleteModule = async (req, res) => {
       [id],
     );
     await client.query('COMMIT');
+    await markCourseUpdated(modRes.rows[0].course_id);
     logAction({ req, action: 'DELETE', entityType: 'ai_course_module', entityId: id, details: { title: modRes.rows[0].title } });
     res.json({ success: true });
   } catch (err) {
@@ -906,6 +1169,7 @@ exports.deleteTopic = async (req, res) => {
       [id],
     );
     await client.query('COMMIT');
+    await markModuleCourseUpdated(topicRes.rows[0].module_id);
     logAction({ req, action: 'DELETE', entityType: 'ai_course_topic', entityId: id, details: { title: topicRes.rows[0].title } });
     res.json({ success: true });
   } catch (err) {
@@ -924,6 +1188,7 @@ exports.deleteLesson = async (req, res) => {
       [id],
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    await markTopicCourseUpdated(result.rows[0].topic_id);
     logAction({ req, action: 'DELETE', entityType: 'ai_course_lesson', entityId: id, details: { title: result.rows[0].title } });
     res.json({ success: true });
   } catch (err) {
@@ -936,13 +1201,15 @@ exports.deleteLesson = async (req, res) => {
 exports.reorderModules = async (req, res) => {
   const client = await pool.connect();
   try {
+    const { id } = req.params;
     // orderedIds: [{ id, order_index }]
     const { ordered_ids } = req.body;
     await client.query('BEGIN');
-    for (const { id, order_index } of ordered_ids) {
-      await client.query(`UPDATE ai_course_modules SET order_index = $1 WHERE id = $2`, [order_index, id]);
+    for (const { id: mId, order_index } of ordered_ids) {
+      await client.query(`UPDATE ai_course_modules SET order_index = $1 WHERE id = $2`, [order_index, mId]);
     }
     await client.query('COMMIT');
+    await markCourseUpdated(id);
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_module', entityId: null, details: { reordered: ordered_ids.length } });
     res.json({ success: true });
   } catch (err) {
@@ -958,12 +1225,14 @@ exports.reorderModules = async (req, res) => {
 exports.reorderTopics = async (req, res) => {
   const client = await pool.connect();
   try {
+    const { courseId } = req.params;
     const { ordered_ids } = req.body;
     await client.query('BEGIN');
-    for (const { id, order_index } of ordered_ids) {
-      await client.query(`UPDATE ai_course_topics SET order_index = $1 WHERE id = $2`, [order_index, id]);
+    for (const { id: tId, order_index } of ordered_ids) {
+      await client.query(`UPDATE ai_course_topics SET order_index = $1 WHERE id = $2`, [order_index, tId]);
     }
     await client.query('COMMIT');
+    await markCourseUpdated(courseId);
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_topic', entityId: null, details: { reordered: ordered_ids.length } });
     res.json({ success: true });
   } catch (err) {
@@ -1204,6 +1473,7 @@ exports.generateAndSaveUnits = async (req, res) => {
       created.push({ ...r.rows[0], lessons: [] });
     }
     await client.query('COMMIT');
+    await markModuleCourseUpdated(module_id);
     logAction({ req, action: 'CREATE', entityType: 'ai_course_topic', entityId: module_id, details: { created: created.length } });
     res.status(201).json({ success: true, data: created });
   } catch (err) {
@@ -1276,6 +1546,7 @@ exports.generateAndSaveSubtopics = async (req, res) => {
       created.push(r.rows[0]);
     }
     await client.query('COMMIT');
+    await markTopicCourseUpdated(topic_id);
     logAction({ req, action: 'CREATE', entityType: 'ai_course_lesson', entityId: topic_id, details: { created: created.length } });
     res.status(201).json({ success: true, data: created });
   } catch (err) {
@@ -1345,6 +1616,7 @@ exports.generateAndSaveLessonContent = async (req, res) => {
       `UPDATE ai_course_lessons SET ${updateFields} WHERE id = $${updateVals.length}`,
       updateVals,
     );
+    await markCourseUpdated(course_id);
 
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_lesson', entityId: id, details: { type } });
     res.json({ success: true, data: result });
@@ -1387,6 +1659,7 @@ exports.generateAndSaveUnitQuiz = async (req, res) => {
       `UPDATE ai_course_topics SET quiz_questions = $1 WHERE id = $2`,
       [JSON.stringify(result.quiz_questions), id],
     );
+    await markTopicCourseUpdated(id);
 
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_topic', entityId: id, details: { quiz_questions: true } });
     res.json({ success: true, data: result.quiz_questions });
@@ -1422,6 +1695,7 @@ exports.generateAndSaveUnitAssignment = async (req, res) => {
       `UPDATE ai_course_topics SET assignment = $1 WHERE id = $2`,
       [JSON.stringify(result.assignment), id],
     );
+    await markTopicCourseUpdated(id);
 
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_topic', entityId: id, details: { assignment: true } });
     res.json({ success: true, data: result.assignment });
@@ -1462,6 +1736,7 @@ exports.generateAndSaveCapstone = async (req, res) => {
       `UPDATE ai_course_modules SET capstone_project = $1 WHERE id = $2`,
       [JSON.stringify(result.capstone_project), id],
     );
+    await markModuleCourseUpdated(id);
 
     logAction({ req, action: 'UPDATE', entityType: 'ai_course_module', entityId: id, details: { capstone_project: true } });
     res.json({ success: true, data: result.capstone_project });

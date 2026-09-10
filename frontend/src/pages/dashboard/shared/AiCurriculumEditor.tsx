@@ -88,11 +88,7 @@ export default function AiCurriculumEditor() {
     load();
   }, [load]);
 
-  const canEdit = useMemo(
-    () =>
-      course ? ['draft', 'changes_requested'].includes(course.status) : false,
-    [course],
-  );
+  const canEdit = Boolean(course);
   const totalTopics = useMemo(
     () => (modules || []).reduce((s, m) => s + (m.topics || []).length, 0),
     [modules],
@@ -551,28 +547,23 @@ export default function AiCurriculumEditor() {
               </div>
               <p className='text-xs text-slate-500 mt-0.5 truncate'>
                 {modules.length} topics · {totalTopics} units · {totalLessons}{' '}
-                subtopics
-                {canEdit
-                  ? ' · Double-click to rename'
-                  : ' · Read-only'}
+                subtopics · Double-click to rename
               </p>
             </div>
           </div>
           <div className='flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0'>
-            {canEdit && (
-              <button
-                onClick={handleSaveDraft}
-                disabled={saving}
-                className='flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-50 transition-colors min-h-[36px]'
-              >
-                {saving ? (
-                  <Loader2 className='w-3.5 h-3.5 animate-spin' />
-                ) : (
-                  <Save className='w-3.5 h-3.5' />
-                )}{' '}
-                Save Draft
-              </button>
-            )}
+            <button
+              onClick={handleSaveDraft}
+              disabled={saving}
+              className='flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-50 transition-colors min-h-[36px]'
+            >
+              {saving ? (
+                <Loader2 className='w-3.5 h-3.5 animate-spin' />
+              ) : (
+                <Save className='w-3.5 h-3.5' />
+              )}{' '}
+              {course.status === 'published' ? 'Save Changes' : 'Save Draft'}
+            </button>
             <button
               onClick={() => navigate(`${base}/ai-curriculum/${id}/preview`)}
               className='flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors min-h-[36px]'
@@ -587,7 +578,7 @@ export default function AiCurriculumEditor() {
                 Review Course
               </button>
             )}
-            {canEdit && (
+            {!isAdmin && course.status !== 'in_review' && (
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
@@ -597,12 +588,17 @@ export default function AiCurriculumEditor() {
                   <Loader2 className='w-4 h-4 animate-spin' />
                 ) : (
                   <>
-                    Submit <ArrowRight className='w-4 h-4' />
+                    {course.status === 'published'
+                      ? 'Submit Updates'
+                      : course.status === 'changes_requested'
+                      ? 'Resubmit'
+                      : 'Submit'}{' '}
+                    <ArrowRight className='w-4 h-4' />
                   </>
                 )}
               </button>
             )}
-            {isAdmin && course.status === 'approved' && (
+            {isAdmin && (course.status === 'approved' || (course.status === 'published' && course.subject_id)) && (
               <button
                 onClick={handlePublish}
                 disabled={publishing}
@@ -613,7 +609,7 @@ export default function AiCurriculumEditor() {
                 ) : (
                   <Sparkles className='w-4 h-4' />
                 )}{' '}
-                Publish
+                {course.status === 'published' || course.subject_id ? 'Republish Course' : 'Publish Course'}
               </button>
             )}
           </div>
@@ -669,14 +665,71 @@ export default function AiCurriculumEditor() {
             )}
           </div>
         )}
-        {!canEdit && course.status !== 'changes_requested' && (
-          <div className='mt-3 text-xs sm:text-sm text-slate-500 bg-white border border-slate-200 rounded-xl px-4 py-2.5 sm:py-3 flex items-center gap-2'>
-            <span
-              className={`w-2 h-2 rounded-full shrink-0 ${course.status === 'published' ? 'bg-blue-400' : course.status === 'approved' ? 'bg-green-400' : 'bg-yellow-400'}`}
-            />
-            <span>
-              This course is <strong>{STATUS_LABELS[course.status]}</strong> —
-              editing is locked.
+        {course.status === 'published' && (
+          <div className='mt-3 text-xs sm:text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 sm:py-3 flex items-center gap-2.5'>
+            <span className='w-2 h-2 rounded-full bg-blue-500 shrink-0 animate-pulse' />
+            <div className='flex-1'>
+              <span className='font-semibold'>Live Course in Production:</span> Students are actively learning from the published version.
+              {course.has_unpublished_changes ? (
+                <span className='ml-1 text-amber-900 font-medium'>
+                  — <strong>New draft changes are pending.</strong> {isAdmin ? 'Review the changes and click "Republish Course" to make them live for students.' : 'When your revisions are ready, click "Submit Updates" for admin review.'}
+                </span>
+              ) : (
+                <span className='ml-1'>
+                  You can freely edit and save your working draft here without affecting active students. When your changes are complete, submit them for review so an Admin can republish.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+        {course.status === 'in_review' && (
+          <div className='mt-3 text-xs sm:text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 sm:py-3 flex items-center gap-2.5'>
+            <span className='w-2 h-2 rounded-full bg-amber-500 shrink-0' />
+            <div className='flex-1'>
+              <span className='font-semibold'>In Review:</span> This course is currently under review by an administrator. You can still refine and save your working draft.
+            </div>
+          </div>
+        )}
+        {course.status === 'approved' && (
+          <div className='mt-3 text-xs sm:text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 sm:py-3 flex items-center gap-2.5'>
+            <span className='w-2 h-2 rounded-full bg-emerald-500 shrink-0' />
+            <div className='flex-1'>
+              <span className='font-semibold'>Approved:</span> This course has been approved and is ready to be published to students.
+            </div>
+          </div>
+        )}
+
+        {/* Change diffing summary bar */}
+        {course.pending_changes_summary && course.pending_changes_summary.total > 0 && (
+          <div className='mt-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs'>
+            <div className='flex items-center gap-2.5 flex-wrap'>
+              <span className='flex h-2.5 w-2.5 relative shrink-0'>
+                <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75'></span>
+                <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500'></span>
+              </span>
+              <span className='text-xs sm:text-sm font-bold text-amber-950'>
+                {isAdmin ? 'New Changes Awaiting Review:' : 'Your Working Revisions:'}
+              </span>
+              <div className='flex items-center gap-1.5 flex-wrap'>
+                {course.pending_changes_summary.new_modules > 0 && (
+                  <span className='inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200'>
+                    +{course.pending_changes_summary.new_modules} new topic{course.pending_changes_summary.new_modules > 1 ? 's' : ''}
+                  </span>
+                )}
+                {course.pending_changes_summary.new_topics > 0 && (
+                  <span className='inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200'>
+                    +{course.pending_changes_summary.new_topics} new unit{course.pending_changes_summary.new_topics > 1 ? 's' : ''}
+                  </span>
+                )}
+                {course.pending_changes_summary.new_lessons > 0 && (
+                  <span className='inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-200'>
+                    +{course.pending_changes_summary.new_lessons} new subtopic{course.pending_changes_summary.new_lessons > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+            <span className='text-[11px] text-amber-800 font-medium'>
+              All additions are highlighted with green <span className='font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded'>New</span> badges in the tree below.
             </span>
           </div>
         )}
