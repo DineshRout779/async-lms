@@ -578,6 +578,15 @@ export default function AiCurriculumEditor() {
                 Review Course
               </button>
             )}
+            {isAdmin && course.status === 'published' && Boolean(course.has_unpublished_changes) && (
+              <button
+                onClick={() => navigate(`${base}/ai-curriculum/${id}/review`)}
+                className='flex items-center gap-1.5 px-4 sm:px-5 py-2 text-xs sm:text-sm font-semibold bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors min-h-[36px]'
+              >
+                <Sparkles className='w-3.5 h-3.5' />
+                Review Changes
+              </button>
+            )}
             {!isAdmin && course.status !== 'in_review' && (
               <button
                 onClick={handleSubmit}

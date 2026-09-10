@@ -187,7 +187,7 @@ function CourseCard({
         )}
         {isAdmin && course.status === 'published' && Boolean(course.has_unpublished_changes) && (
           <button
-            onClick={() => navigate(`${base}/ai-curriculum/${course.id}/edit`)}
+            onClick={() => navigate(`${base}/ai-curriculum/${course.id}/review`)}
             className='w-full sm:flex-1 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-amber-500 text-white rounded-full text-xs sm:text-[13px] font-semibold hover:bg-amber-600 transition-colors shadow-xs whitespace-nowrap min-h-[38px]'
           >
             <Sparkles className='w-3.5 h-3.5 shrink-0' />

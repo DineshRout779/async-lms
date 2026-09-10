@@ -316,7 +316,10 @@ export default function AiCurriculumReview() {
   const canSubmit =
     ['draft', 'changes_requested', 'published', 'approved'].includes(course.status) &&
     !isAdmin;
-  const isAdminReview = isAdmin && course.status === 'in_review';
+  const isAdminReview =
+    isAdmin &&
+    (course.status === 'in_review' ||
+      (course.status === 'published' && Boolean(course.has_unpublished_changes)));
 
   return (
     <div className='min-h-screen bg-slate-50 flex flex-col'>

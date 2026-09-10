@@ -632,7 +632,8 @@ exports.reviewCourse = async (req, res) => {
     if (!courseRes.rows.length) return res.status(404).json({ success: false, message: 'Not found' });
     const course = courseRes.rows[0];
 
-    if (course.status !== 'in_review') {
+    const isPendingPublishedRevision = course.status === 'published' && course.subject_id;
+    if (course.status !== 'in_review' && !isPendingPublishedRevision) {
       return res.status(400).json({ success: false, message: 'Course is not in review' });
     }
 
