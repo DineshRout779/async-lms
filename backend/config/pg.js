@@ -534,6 +534,14 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS role_focus TEXT`,
     );
+
+    // ── AI Course status & delta tracking columns ──
+    await client.query(
+      `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS has_unpublished_changes BOOLEAN NOT NULL DEFAULT false`,
+    );
+    await client.query(
+      `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS last_published_at TIMESTAMPTZ`,
+    );
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);
   } finally {
