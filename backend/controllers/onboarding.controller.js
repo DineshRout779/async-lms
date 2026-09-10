@@ -225,6 +225,17 @@ exports.selectFacilitatorColleges = async (req, res) => {
       .json({ message: 'A subject must be selected' });
   }
 
+  // Validate that the subject exists and is active/published
+  const validSubject = await pool.query(
+    'SELECT id FROM subjects WHERE id = $1 AND is_deleted = false AND is_published = true',
+    [chosenSubjectId],
+  );
+  if (validSubject.rows.length === 0) {
+    return res
+      .status(400)
+      .json({ message: 'Selected subject does not exist or is unavailable' });
+  }
+
   // Deduplicate: ON CONFLICT DO UPDATE cannot affect the same row twice in one statement
   const uniqueCollegeIds = [...new Set(college_ids)];
 

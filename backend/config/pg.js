@@ -490,15 +490,20 @@ pool.on('error', (err, client) => {
       CREATE INDEX IF NOT EXISTS idx_fac_subj_subj_id ON facilitator_subjects(subject_id) WHERE is_deleted = false;
     `);
 
-    // Backfill existing active facilitators so their existing dashboard is preserved
+    // Backfill existing active facilitators so their existing dashboard is preserved (runs only on initial setup)
     await client.query(`
-      INSERT INTO facilitator_subjects (facilitator_id, subject_id)
-      SELECT DISTINCT fc.facilitator_id, us.subject_id
-      FROM facilitator_colleges fc
-      JOIN student_profiles sp ON sp.college_id = fc.college_id
-      JOIN user_subjects us ON us.user_id = sp.user_id
-      WHERE fc.is_deleted = false
-      ON CONFLICT (facilitator_id, subject_id) DO NOTHING;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM facilitator_subjects LIMIT 1) THEN
+          INSERT INTO facilitator_subjects (facilitator_id, subject_id)
+          SELECT DISTINCT fc.facilitator_id, us.subject_id
+          FROM facilitator_colleges fc
+          JOIN student_profiles sp ON sp.college_id = fc.college_id
+          JOIN user_subjects us ON us.user_id = sp.user_id
+          WHERE fc.is_deleted = false
+          ON CONFLICT (facilitator_id, subject_id) DO NOTHING;
+        END IF;
+      END $$;
     `);
 
     // ── Soft delete: is_deleted flag on every table that previously used hard DELETE ──
@@ -523,14 +528,6 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS role_focus TEXT`,
     );
-
-
-    // ... rest of the tables
-    // Dump lessons for debugging
-    const dumpRes = await client.query(
-      'SELECT id, title, video_url, exercise_data, quiz_questions FROM ai_course_lessons',
-    );
-    // require('fs').writeFileSync('db_dump.json', JSON.stringify(dumpRes.rows, null, 2));
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);
   } finally {

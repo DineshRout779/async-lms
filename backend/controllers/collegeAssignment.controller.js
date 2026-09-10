@@ -451,12 +451,56 @@ exports.updateAssignment = async (req, res) => {
     }
 
     if (req.user.role === 'facilitator') {
-      const allowed = req.user.college_ids || [];
-      if (!allowed.includes(existing.rows[0].college_id)) {
+      const allowedColleges = req.user.college_ids || [];
+      const allowedSubjects = req.user.subject_ids || [];
+      const assignment = existing.rows[0];
+
+      if (!allowedColleges.includes(assignment.college_id)) {
         return res.status(403).json({
           success: false,
           message: 'You are not assigned to this college',
         });
+      }
+
+      const isAuthor = assignment.created_by === req.user.id;
+      let isSubjectAssigned = assignment.course === 'General';
+      if (!isSubjectAssigned && assignment.course && allowedSubjects.length > 0) {
+        const check = await pool.query(
+          `SELECT 1 FROM subjects 
+           WHERE (id::text = $1 OR slug = $1 OR name = $1) 
+             AND id = ANY($2::uuid[]) AND is_deleted = false`,
+          [assignment.course, allowedSubjects],
+        );
+        isSubjectAssigned = check.rows.length > 0;
+      }
+
+      if (!isAuthor && !isSubjectAssigned) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: You are not authorized to modify this assignment',
+        });
+      }
+
+      // If course is being changed, verify new course is allowed
+      if (course && course !== 'General') {
+        if (allowedSubjects.length === 0) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied: Cannot reassign to an unauthorized subject',
+          });
+        }
+        const newCourseCheck = await pool.query(
+          `SELECT 1 FROM subjects 
+           WHERE (id::text = $1 OR slug = $1 OR name = $1) 
+             AND id = ANY($2::uuid[]) AND is_deleted = false`,
+          [course, allowedSubjects],
+        );
+        if (newCourseCheck.rows.length === 0) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied: Cannot reassign to an unauthorized subject',
+          });
+        }
       }
     }
 
@@ -511,7 +555,7 @@ exports.deleteAssignment = async (req, res) => {
 
   try {
     const existing = await pool.query(
-      'SELECT college_id FROM college_assignments WHERE id = $1 AND is_deleted = false',
+      'SELECT id, college_id, course, created_by FROM college_assignments WHERE id = $1 AND is_deleted = false',
       [id],
     );
     if (!existing.rowCount) {
@@ -521,11 +565,33 @@ exports.deleteAssignment = async (req, res) => {
     }
 
     if (req.user.role === 'facilitator') {
-      const allowed = req.user.college_ids || [];
-      if (!allowed.includes(existing.rows[0].college_id)) {
+      const allowedColleges = req.user.college_ids || [];
+      const allowedSubjects = req.user.subject_ids || [];
+      const assignment = existing.rows[0];
+
+      if (!allowedColleges.includes(assignment.college_id)) {
         return res.status(403).json({
           success: false,
           message: 'You are not assigned to this college',
+        });
+      }
+
+      const isAuthor = assignment.created_by === req.user.id;
+      let isSubjectAssigned = assignment.course === 'General';
+      if (!isSubjectAssigned && assignment.course && allowedSubjects.length > 0) {
+        const check = await pool.query(
+          `SELECT 1 FROM subjects 
+           WHERE (id::text = $1 OR slug = $1 OR name = $1) 
+             AND id = ANY($2::uuid[]) AND is_deleted = false`,
+          [assignment.course, allowedSubjects],
+        );
+        isSubjectAssigned = check.rows.length > 0;
+      }
+
+      if (!isAuthor && !isSubjectAssigned) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: You are not authorized to delete this assignment',
         });
       }
     }

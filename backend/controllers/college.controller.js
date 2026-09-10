@@ -109,7 +109,7 @@ exports.getCollegesBySubject = async (req, res) => {
         EXISTS (
           SELECT 1 FROM facilitator_colleges fc
           JOIN facilitator_subjects fs ON fc.facilitator_id = fs.facilitator_id
-          WHERE fc.college_id = c.id AND fs.subject_id = $1 AND fc.is_deleted = false
+          WHERE fc.college_id = c.id AND fs.subject_id = $1 AND fc.is_deleted = false AND fs.is_deleted = false
         ) as assigned
       FROM public.colleges c
       WHERE c.is_deleted = false
@@ -125,40 +125,56 @@ exports.getCollegesBySubject = async (req, res) => {
 // Toggle college access via facilitator mapping
 exports.toggleSubjectAccess = async (req, res) => {
   const { courseId, collegeId } = req.body;
-  const facilitatorId = req.user.id; // From verifyToken middleware
+  const isAdmin = req.user.role === 'admin';
 
   try {
+    let targetFacilitatorIds = [];
+    if (req.body.facilitatorId) {
+      targetFacilitatorIds = [req.body.facilitatorId];
+    } else if (!isAdmin) {
+      targetFacilitatorIds = [req.user.id];
+    } else {
+      // Admin toggling institutional access: apply to all active facilitators in this college
+      const facRes = await pool.query(
+        'SELECT DISTINCT facilitator_id FROM facilitator_colleges WHERE college_id = $1 AND is_deleted = false',
+        [collegeId],
+      );
+      targetFacilitatorIds = facRes.rows.map((r) => r.facilitator_id);
+    }
+
+    if (targetFacilitatorIds.length === 0) {
+      return res.json({ success: true, message: 'No active facilitators found for this college' });
+    }
+
     const existing = await pool.query(
-      'SELECT id FROM facilitator_colleges WHERE facilitator_id = $1 AND college_id = $2 AND is_deleted = false',
-      [facilitatorId, collegeId],
+      `SELECT id, facilitator_id FROM facilitator_subjects 
+       WHERE facilitator_id = ANY($1::uuid[]) AND subject_id = $2 AND is_deleted = false`,
+      [targetFacilitatorIds, courseId],
     );
 
     if (existing.rowCount > 0) {
       // Revoke access
       await pool.query(
-        'UPDATE facilitator_colleges SET is_deleted = true WHERE id = $1 AND is_deleted = false',
-        [existing.rows[0].id],
+        `UPDATE facilitator_subjects SET is_deleted = true, updated_at = CURRENT_TIMESTAMP 
+         WHERE facilitator_id = ANY($1::uuid[]) AND subject_id = $2 AND is_deleted = false`,
+        [targetFacilitatorIds, courseId],
       );
-      logAction({ req, action: 'DELETE', entityType: 'facilitator_college', entityId: existing.rows[0].id, details: { facilitatorId, collegeId } });
+      logAction({ req, action: 'DELETE', entityType: 'facilitator_subject', entityId: null, details: { targetFacilitatorIds, courseId, collegeId } });
+      res.json({ success: true, message: 'Subject unassigned!' });
     } else {
-      // Grant access: ensure facilitator is linked to subject first
-      await pool.query(
-        `INSERT INTO facilitator_subjects (facilitator_id, subject_id)
-         VALUES ($1, $2)
-         ON CONFLICT (facilitator_id, subject_id)
-         DO UPDATE SET is_deleted = false, updated_at = CURRENT_TIMESTAMP`,
-        [facilitatorId, courseId],
-      );
-      await pool.query(
-        `INSERT INTO facilitator_colleges (facilitator_id, college_id)
-         VALUES ($1, $2)
-         ON CONFLICT (facilitator_id, college_id)
-         DO UPDATE SET is_deleted = false, updated_at = CURRENT_TIMESTAMP`,
-        [facilitatorId, collegeId],
-      );
-      logAction({ req, action: 'CREATE', entityType: 'facilitator_college', entityId: null, details: { facilitatorId, collegeId } });
+      // Grant access: link facilitators to subject
+      for (const fId of targetFacilitatorIds) {
+        await pool.query(
+          `INSERT INTO facilitator_subjects (facilitator_id, subject_id)
+           VALUES ($1, $2)
+           ON CONFLICT (facilitator_id, subject_id)
+           DO UPDATE SET is_deleted = false, updated_at = CURRENT_TIMESTAMP`,
+          [fId, courseId],
+        );
+      }
+      logAction({ req, action: 'CREATE', entityType: 'facilitator_subject', entityId: null, details: { targetFacilitatorIds, courseId, collegeId } });
+      res.json({ success: true, message: 'Subject assigned!' });
     }
-    res.json({ success: true, message: `Subject assigned!` });
   } catch (error) {
     serverError(res, error);
   }

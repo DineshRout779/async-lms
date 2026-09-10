@@ -359,7 +359,7 @@ exports.getAllUsers = async (req, res) => {
           ARRAY_AGG(s2.name ORDER BY s2.name) as subject_names
         FROM public.facilitator_subjects fs
         INNER JOIN public.subjects s2 ON s2.id = fs.subject_id
-        WHERE fs.facilitator_id = u.id AND fs.is_deleted = false
+        WHERE fs.facilitator_id = u.id AND fs.is_deleted = false AND s2.is_deleted = false
       ) as facilitator_subject_meta ON r.role_key = 'FACILITATOR'
       WHERE u.deleted_at IS NULL
       ORDER BY u.created_at DESC
@@ -606,7 +606,9 @@ exports.deleteUser = async (req, res) => {
     await pool.query(
       `UPDATE facilitator_subjects SET is_deleted = true WHERE facilitator_id = $1`,
       [id]
-    ).catch(() => {});
+    ).catch((err) => {
+      console.error('Failed to soft-delete facilitator_subjects on user delete:', err.message);
+    });
 
     res.json({ success: true, message: 'User moved to recycle bin' });
   } catch (err) {
@@ -664,11 +666,15 @@ exports.restoreUser = async (req, res) => {
     await pool.query(
       `UPDATE facilitator_colleges SET is_deleted = false WHERE facilitator_id = $1`,
       [id]
-    ).catch(() => {});
+    ).catch((err) => {
+      console.error('Failed to reactivate facilitator_colleges on user restore:', err.message);
+    });
     await pool.query(
       `UPDATE facilitator_subjects SET is_deleted = false WHERE facilitator_id = $1`,
       [id]
-    ).catch(() => {});
+    ).catch((err) => {
+      console.error('Failed to reactivate facilitator_subjects on user restore:', err.message);
+    });
 
     res.json({ success: true, message: 'User restored successfully' });
   } catch (err) {

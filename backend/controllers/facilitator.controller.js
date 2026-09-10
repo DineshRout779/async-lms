@@ -30,10 +30,10 @@ exports.getFacilitatorStats = async (req, res) => {
       pool.query(
         `SELECT COUNT(DISTINCT u.id) FROM public.users u 
          JOIN public.student_profiles sp ON u.id = sp.user_id 
-         JOIN public.user_subjects us ON us.user_id = u.id
+         LEFT JOIN public.user_subjects us ON us.user_id = u.id
          WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') 
            AND sp.college_id = ANY($1::uuid[]) 
-           AND (NOT $3::boolean OR us.subject_id = ANY($2::uuid[]))
+           AND (NOT $3::boolean OR us.subject_id = ANY($2::uuid[]) OR us.subject_id IS NULL)
            AND u.deleted_at IS NULL`,
         [collegeIds, subjectIds, isFacilitator],
       ),
@@ -54,10 +54,10 @@ exports.getFacilitatorStats = async (req, res) => {
       pool.query(
         `SELECT DISTINCT u.id, u.full_name, u.email, u.created_at FROM public.users u
          JOIN public.student_profiles sp ON u.id = sp.user_id
-         JOIN public.user_subjects us ON us.user_id = u.id
+         LEFT JOIN public.user_subjects us ON us.user_id = u.id
          WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') 
            AND sp.college_id = ANY($1::uuid[]) 
-           AND (NOT $3::boolean OR us.subject_id = ANY($2::uuid[]))
+           AND (NOT $3::boolean OR us.subject_id = ANY($2::uuid[]) OR us.subject_id IS NULL)
            AND u.deleted_at IS NULL
          ORDER BY u.created_at DESC LIMIT 5`,
         [collegeIds, subjectIds, isFacilitator],
@@ -114,7 +114,7 @@ exports.getFacilitatorStudents = async (req, res) => {
       JOIN public.roles r ON r.id = u.role_id
       JOIN public.student_profiles sp ON u.id = sp.user_id
       LEFT JOIN public.colleges c ON sp.college_id = c.id
-      JOIN public.user_subjects us ON us.user_id = u.id
+      LEFT JOIN public.user_subjects us ON us.user_id = u.id
       LEFT JOIN LATERAL (
         SELECT 
           COUNT(DISTINCT us2.subject_id)::int as enrolled_courses,
@@ -124,7 +124,7 @@ exports.getFacilitatorStudents = async (req, res) => {
       ) sm ON true
       WHERE u.role_id = (SELECT id FROM roles WHERE role_key = 'STUDENT') 
         AND sp.college_id = ANY($1::uuid[]) 
-        AND (NOT $3::boolean OR us.subject_id = ANY($2::uuid[]))
+        AND (NOT $3::boolean OR us.subject_id = ANY($2::uuid[]) OR us.subject_id IS NULL)
         AND u.deleted_at IS NULL
       GROUP BY u.id, u.full_name, u.email, sp.degree, sp.year, u.created_at, r.role_key, u.is_verified, c.name, c.short_code, sm.enrolled_courses, sm.progress_percent
       ORDER BY u.created_at DESC
@@ -1107,7 +1107,12 @@ exports.getAssignmentAnalytics = async (req, res) => {
       let collegeFacilitatorClause = '';
       if (isFacilitator) {
         collegeParams.push(facilitatorId, subjectIds);
-        collegeFacilitatorClause = `AND (ca.created_by = $3 OR ca.course IN (SELECT name FROM subjects WHERE id = ANY($4::uuid[])))`;
+        collegeFacilitatorClause = `AND (
+          ca.created_by = $3 
+          OR ca.course IN (SELECT id::text FROM subjects WHERE id = ANY($4::uuid[]))
+          OR ca.course IN (SELECT slug FROM subjects WHERE id = ANY($4::uuid[]))
+          OR ca.course IN (SELECT name FROM subjects WHERE id = ANY($4::uuid[]))
+        )`;
       }
       const collegeSubRes = await pool.query(
         `SELECT DISTINCT cas.student_id
@@ -1380,7 +1385,12 @@ exports.getBatchDashboard = async (req, res) => {
     let caFacilitatorClause = '';
     if (isFacilitator) {
       collegeAsgParams.push(facilitatorId, subjectIds);
-      caFacilitatorClause = `AND (ca.created_by = $3 OR ca.course IN (SELECT name FROM subjects WHERE id = ANY($4::uuid[])))`;
+      caFacilitatorClause = `AND (
+        ca.created_by = $3 
+        OR ca.course IN (SELECT id::text FROM subjects WHERE id = ANY($4::uuid[]))
+        OR ca.course IN (SELECT slug FROM subjects WHERE id = ANY($4::uuid[]))
+        OR ca.course IN (SELECT name FROM subjects WHERE id = ANY($4::uuid[]))
+      )`;
     }
     const asgRes = await pool.query(
       `SELECT COUNT(DISTINCT student_id) as submitted FROM (
@@ -1644,7 +1654,12 @@ exports.getStudentAnalytics = async (req, res) => {
     let caFacilitatorClause = '';
     if (isFacilitator) {
       collegeAsgTotalParams.push(facilitatorId, subjectIds);
-      caFacilitatorClause = `AND (created_by = $2 OR course IN (SELECT name FROM subjects WHERE id = ANY($3::uuid[])))`;
+      caFacilitatorClause = `AND (
+        created_by = $2 
+        OR course IN (SELECT id::text FROM subjects WHERE id = ANY($3::uuid[]))
+        OR course IN (SELECT slug FROM subjects WHERE id = ANY($3::uuid[]))
+        OR course IN (SELECT name FROM subjects WHERE id = ANY($3::uuid[]))
+      )`;
     }
     const collegeAsgTotalRes = await pool.query(
       `SELECT COUNT(*)::int as total FROM college_assignments WHERE college_id = ANY($1::uuid[]) AND is_deleted = false ${caFacilitatorClause}`,
@@ -1656,7 +1671,12 @@ exports.getStudentAnalytics = async (req, res) => {
     let caSubFacilitatorClause = '';
     if (isFacilitator) {
       collegeAsgParams.push(facilitatorId, subjectIds);
-      caSubFacilitatorClause = `AND (ca.created_by = $3 OR ca.course IN (SELECT name FROM subjects WHERE id = ANY($4::uuid[])))`;
+      caSubFacilitatorClause = `AND (
+        ca.created_by = $3 
+        OR ca.course IN (SELECT id::text FROM subjects WHERE id = ANY($4::uuid[]))
+        OR ca.course IN (SELECT slug FROM subjects WHERE id = ANY($4::uuid[]))
+        OR ca.course IN (SELECT name FROM subjects WHERE id = ANY($4::uuid[]))
+      )`;
     }
     const collegeAsgRes = await pool.query(
       `SELECT cas.student_id, COUNT(DISTINCT cas.assignment_id)::int as submitted_count

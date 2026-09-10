@@ -81,6 +81,20 @@ exports.runEvaluation = async (req, res) => {
         if (!collegeIds.includes(assignment.college_id)) {
           throw new Error('Access denied: Assignment belongs to a college not assigned to you');
         }
+        const isAuthor = assignment.created_by === req.user.id;
+        let isSubjectAssigned = assignment.course === 'General';
+        if (!isSubjectAssigned && assignment.course && subjectIds.length > 0) {
+          const check = await client.query(
+            `SELECT 1 FROM subjects 
+             WHERE (id::text = $1 OR slug = $1 OR name = $1) 
+               AND id = ANY($2::uuid[]) AND is_deleted = false`,
+            [assignment.course, subjectIds],
+          );
+          isSubjectAssigned = check.rows.length > 0;
+        }
+        if (!isAuthor && !isSubjectAssigned) {
+          throw new Error('Access denied: Assignment does not belong to your assigned subjects');
+        }
       }
     }
 
@@ -586,13 +600,27 @@ exports.getResultsByAssignment = async (req, res) => {
       } else {
         // Check college assignment
         const colSubj = await pool.query(
-          `SELECT ca.college_id FROM college_assignments ca WHERE ca.id = $1`,
+          `SELECT ca.college_id, ca.course, ca.created_by FROM college_assignments ca WHERE ca.id = $1`,
           [assignmentId],
         );
         if (colSubj.rows.length > 0) {
           const ca = colSubj.rows[0];
           if (!facilitatorCollegeIds.includes(ca.college_id)) {
             return res.status(403).json({ success: false, message: 'Access denied: College not assigned to you' });
+          }
+          const isAuthor = ca.created_by === req.user.id;
+          let isSubjectAssigned = ca.course === 'General';
+          if (!isSubjectAssigned && ca.course && facilitatorSubjectIds.length > 0) {
+            const check = await pool.query(
+              `SELECT 1 FROM subjects 
+               WHERE (id::text = $1 OR slug = $1 OR name = $1) 
+                 AND id = ANY($2::uuid[]) AND is_deleted = false`,
+              [ca.course, facilitatorSubjectIds],
+            );
+            isSubjectAssigned = check.rows.length > 0;
+          }
+          if (!isAuthor && !isSubjectAssigned) {
+            return res.status(403).json({ success: false, message: 'Access denied: Assignment does not belong to your assigned subjects' });
           }
         }
       }
@@ -809,7 +837,9 @@ exports.getEvaluationResults = async (req, res) => {
     const evalRes = await pool.query(
       `SELECT e.*, COALESCE(a.title, c.title) as assignment_name,
               t.subject_id as curriculum_subject_id,
-              c.college_id as college_assignment_college_id
+              c.college_id as college_assignment_college_id,
+              c.course as college_assignment_course,
+              c.created_by as college_assignment_created_by
        FROM evaluations e
        LEFT JOIN assignments a ON e.assignment_id = a.id
        LEFT JOIN units u ON a.unit_id = u.id
@@ -840,6 +870,20 @@ exports.getEvaluationResults = async (req, res) => {
       if (evaluation.college_assignment_id && evaluation.college_assignment_college_id) {
         if (!facilitatorCollegeIds.includes(evaluation.college_assignment_college_id)) {
           return res.status(403).json({ success: false, message: 'Access denied: College not assigned to you' });
+        }
+        const isAuthor = evaluation.college_assignment_created_by === req.user.id;
+        let isSubjectAssigned = evaluation.college_assignment_course === 'General';
+        if (!isSubjectAssigned && evaluation.college_assignment_course && facilitatorSubjectIds.length > 0) {
+          const check = await pool.query(
+            `SELECT 1 FROM subjects 
+             WHERE (id::text = $1 OR slug = $1 OR name = $1) 
+               AND id = ANY($2::uuid[]) AND is_deleted = false`,
+            [evaluation.college_assignment_course, facilitatorSubjectIds],
+          );
+          isSubjectAssigned = check.rows.length > 0;
+        }
+        if (!isAuthor && !isSubjectAssigned) {
+          return res.status(403).json({ success: false, message: 'Access denied: Assignment does not belong to your assigned subjects' });
         }
       }
     }
