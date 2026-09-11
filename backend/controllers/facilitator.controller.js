@@ -448,7 +448,6 @@ exports.getFacilitatorStudentModuleAnalytics = async (req, res) => {
         status,
       });
     });
-    console.log(`[getFacilitatorStudentModuleAnalytics] studentId=${studentId}, topics=${topicIds.length}, quizzes=${quizzesData.rows.length}`);
     lessonsData.rows.forEach(r => {
       lessonsByTopic[r.topic_id] = { completed: r.lessons_completed, total: r.lessons_total };
     });
@@ -845,8 +844,6 @@ exports.getAnalyticsQuizzes = async (req, res) => {
       subjectFilter = `AND t.subject_id = ANY($${params.length}::uuid[])`;
     }
 
-    console.log(`[getAnalyticsQuizzes] topic_id=${topic_id}, isFacilitator=${isFacilitator}`);
-
     const { rows } = await pool.query(
       `SELECT q.id, un.title as name
        FROM quizzes q
@@ -878,8 +875,6 @@ exports.getCourseAssignments = async (req, res) => {
       subjectFilter = `AND t.subject_id = ANY($${params.length}::uuid[])`;
     }
 
-    console.log(`[getCourseAssignments] topic_id=${topic_id}, isFacilitator=${isFacilitator}`);
-
     const { rows } = await pool.query(
       `SELECT a.id, a.title as name
        FROM assignments a
@@ -910,8 +905,6 @@ exports.getAnalyticsModuleProjects = async (req, res) => {
       params.push(subjectIds);
       subjectFilter = `AND t.subject_id = ANY($${params.length}::uuid[])`;
     }
-
-    console.log(`[getAnalyticsModuleProjects] topic_id=${topic_id}, isFacilitator=${isFacilitator}`);
 
     const { rows } = await pool.query(
       `SELECT p.id, p.title as name
@@ -977,18 +970,6 @@ exports.getQuizAnalytics = async (req, res) => {
       attParams.push(subjectIds);
       subjectClause += ` AND t.subject_id = ANY($${attParams.length}::uuid[])`;
     }
-
-    console.log('[getQuizAnalytics] Query filters:', {
-      college_id,
-      batch,
-      subject_id: hasSpecificSubject ? subject_id : 'all',
-      topic_id: hasSpecificTopic ? topic_id : 'all',
-      quiz_id: hasSpecificQuiz ? quiz_id : 'all',
-      role,
-      isFacilitator,
-      enrolledCount: enrolledIds.length,
-      subjectClause
-    });
 
     const qParamsWithPaging = [...attParams, qLimit, qOffset];
     const [attRes, questionRes, questionCountRes, usersRes, totalQuizzesRes] = await Promise.all([
@@ -1149,15 +1130,6 @@ exports.getQuizAnalytics = async (req, res) => {
     const avgScore = pctScores.length
       ? Math.round(pctScores.reduce((a, b) => a + b, 0) / pctScores.length)
       : 0;
-
-    console.log('[getQuizAnalytics] Summary metrics:', {
-      enrolled: enrolledIds.length,
-      attempted: attemptedCount,
-      passed: passedCount,
-      failed: failedCount,
-      notAttempted: notAttemptedCount,
-      avgScore
-    });
 
     const dist = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
     pctScores.forEach((s) => {
