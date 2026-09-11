@@ -386,7 +386,7 @@ export function StudentDetailsModal({
         .get(`/facilitator/students/${studentId}/modules`)
         .then((res) => {
           let list = res.data.data || [];
-          if (subjectId) {
+          if (subjectId && subjectId !== 'all') {
             list = list.filter((s: SubjectGroup) => s.subject_id === subjectId);
           }
           setSubjects(list);
@@ -424,7 +424,7 @@ export function StudentDetailsModal({
           const hasAttempt = q.status === 'Passed' || q.status === 'Failed' || (Number(q.attempts_count) > 0);
           const pct = hasAttempt && max > 0 ? Math.min(100, Math.round((sc / max) * 100)) : null;
           const finalStatus: 'Passed' | 'Failed' | 'Not Attempted' = hasAttempt
-            ? (pct !== null ? (pct >= 60 ? 'Passed' : 'Failed') : (q.status === 'Passed' ? 'Passed' : 'Failed'))
+            ? (q.status === 'Passed' ? 'Passed' : (q.status === 'Failed' ? 'Failed' : (pct !== null && pct >= 60 ? 'Passed' : 'Failed')))
             : 'Not Attempted';
 
           list.push({

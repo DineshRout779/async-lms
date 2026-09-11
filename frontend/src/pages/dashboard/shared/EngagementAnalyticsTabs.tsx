@@ -905,6 +905,7 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
               quiz: quizzes.find((q) => q.id === quiz)?.name,
             }}
             onSelectStudent={(student) => {
+              setStudentsModalOpen(false);
               setDrilldownStudent(student);
             }}
           />
@@ -912,7 +913,10 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
           {drilldownStudent && (
             <StudentDetailsModal
               isOpen={Boolean(drilldownStudent)}
-              onClose={() => setDrilldownStudent(null)}
+              onClose={() => {
+                setDrilldownStudent(null);
+                setStudentsModalOpen(true);
+              }}
               studentId={drilldownStudent.id}
               studentName={drilldownStudent.name}
               subjectId={subject}

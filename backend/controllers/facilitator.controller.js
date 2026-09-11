@@ -394,6 +394,7 @@ exports.getFacilitatorStudentModuleAnalytics = async (req, res) => {
                 u.topic_id, 
                 COALESCE((SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1), 0)::int as score,
                 COALESCE((SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1), 0)::int as attempts_count,
+                COALESCE((SELECT BOOL_OR(is_passed) FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1), false) as is_passed,
                 COALESCE(q.passing_score, 60)::int as passing_score
          FROM quizzes q
          JOIN units u ON q.unit_id = u.id
@@ -438,8 +439,8 @@ exports.getFacilitatorStudentModuleAnalytics = async (req, res) => {
       const max = r.max_score > 0 ? r.max_score : 100;
       const pct = (r.score / max) * 100;
       const isAttempted = r.attempts_count > 0;
-      const passingThreshold = r.passing_score && r.passing_score > 0 ? r.passing_score : 60;
-      const isPassed = isAttempted && pct >= passingThreshold;
+      // Authoritative pass/fail evaluation: check quiz_attempts.is_passed, with fallback to pct >= 60%
+      const isPassed = isAttempted && (r.is_passed === true || (r.is_passed === null && pct >= 60));
       const status = !isAttempted ? 'Pending' : (isPassed ? 'Passed' : 'Failed');
 
       quizzesByTopic[r.topic_id].push({
@@ -447,6 +448,7 @@ exports.getFacilitatorStudentModuleAnalytics = async (req, res) => {
         status,
       });
     });
+    console.log(`[getFacilitatorStudentModuleAnalytics] studentId=${studentId}, topics=${topicIds.length}, quizzes=${quizzesData.rows.length}`);
     lessonsData.rows.forEach(r => {
       lessonsByTopic[r.topic_id] = { completed: r.lessons_completed, total: r.lessons_total };
     });
@@ -705,8 +707,9 @@ exports.getFacilitatorColleges = async (req, res) => {
 // ─── Analytics helpers ────────────────────────────────────────────────────────
 
 async function getFacilitatorCollegeIds(facilitatorId, requestedCollegeId, role) {
+  const isSpecificCollege = requestedCollegeId && requestedCollegeId !== 'all' && requestedCollegeId.trim() !== '';
   if (role === 'admin') {
-    if (requestedCollegeId) return [requestedCollegeId];
+    if (isSpecificCollege) return [requestedCollegeId.trim()];
     const allRes = await pool.query('SELECT id AS college_id FROM colleges');
     return allRes.rows.map((r) => r.college_id);
   }
@@ -715,8 +718,8 @@ async function getFacilitatorCollegeIds(facilitatorId, requestedCollegeId, role)
     [facilitatorId],
   );
   const allowed = colRes.rows.map((r) => r.college_id);
-  if (requestedCollegeId) {
-    return allowed.includes(requestedCollegeId) ? [requestedCollegeId] : [];
+  if (isSpecificCollege) {
+    return allowed.includes(requestedCollegeId.trim()) ? [requestedCollegeId.trim()] : [];
   }
   return allowed;
 }
@@ -730,17 +733,20 @@ async function getEnrolledStudentIds(collegeIds, batch, subjectId, facilitatorSu
   let subjectJoin = '';
   let subjectClause = '';
 
-  if (batch) {
+  const hasSpecificBatch = batch && batch !== 'all' && batch.trim() !== '';
+  const hasSpecificSubject = subjectId && subjectId !== 'all' && subjectId.trim() !== '';
+
+  if (hasSpecificBatch) {
     if (batch === 'unknown') {
       batchClause = `AND sp.expected_graduation_year IS NULL`;
     } else {
-      params.push(batch);
+      params.push(batch.trim());
       batchClause = `AND sp.expected_graduation_year = $${params.length}`;
     }
   }
-  if (subjectId) {
+  if (hasSpecificSubject) {
     subjectJoin = 'JOIN user_subjects us ON us.user_id = sp.user_id';
-    params.push(subjectId);
+    params.push(subjectId.trim());
     subjectClause = `AND us.subject_id = $${params.length}::uuid`;
   } else if (facilitatorSubjectIds && facilitatorSubjectIds.length > 0) {
     subjectJoin = 'JOIN user_subjects us ON us.user_id = sp.user_id';
@@ -826,15 +832,29 @@ exports.getAnalyticsTopics = async (req, res) => {
 exports.getAnalyticsQuizzes = async (req, res) => {
   try {
     const { topic_id } = req.query;
-    if (!topic_id) return res.json({ success: true, data: [] });
+    if (!topic_id || topic_id === 'all' || topic_id.trim() === '') return res.json({ success: true, data: [] });
+
+    const isFacilitator = req.user.role === 'facilitator';
+    const subjectIds = req.user.subject_ids || [];
+
+    let subjectFilter = '';
+    const params = [topic_id.trim()];
+    if (isFacilitator) {
+      if (subjectIds.length === 0) return res.json({ success: true, data: [] });
+      params.push(subjectIds);
+      subjectFilter = `AND t.subject_id = ANY($${params.length}::uuid[])`;
+    }
+
+    console.log(`[getAnalyticsQuizzes] topic_id=${topic_id}, isFacilitator=${isFacilitator}`);
 
     const { rows } = await pool.query(
       `SELECT q.id, un.title as name
        FROM quizzes q
        JOIN units un ON q.unit_id = un.id
-       WHERE un.topic_id = $1::uuid
+       JOIN topics t ON t.id = un.topic_id
+       WHERE un.topic_id = $1::uuid ${subjectFilter}
        ORDER BY un.order_index`,
-      [topic_id]
+      params
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -845,15 +865,29 @@ exports.getAnalyticsQuizzes = async (req, res) => {
 exports.getCourseAssignments = async (req, res) => {
   try {
     const { topic_id } = req.query;
-    if (!topic_id) return res.json({ success: true, data: [] });
+    if (!topic_id || topic_id === 'all' || topic_id.trim() === '') return res.json({ success: true, data: [] });
+
+    const isFacilitator = req.user.role === 'facilitator';
+    const subjectIds = req.user.subject_ids || [];
+
+    let subjectFilter = '';
+    const params = [topic_id.trim()];
+    if (isFacilitator) {
+      if (subjectIds.length === 0) return res.json({ success: true, data: [] });
+      params.push(subjectIds);
+      subjectFilter = `AND t.subject_id = ANY($${params.length}::uuid[])`;
+    }
+
+    console.log(`[getCourseAssignments] topic_id=${topic_id}, isFacilitator=${isFacilitator}`);
 
     const { rows } = await pool.query(
       `SELECT a.id, a.title as name
        FROM assignments a
        JOIN units un ON a.unit_id = un.id
-       WHERE un.topic_id = $1::uuid
+       JOIN topics t ON t.id = un.topic_id
+       WHERE un.topic_id = $1::uuid ${subjectFilter}
        ORDER BY un.order_index, a.title`,
-      [topic_id]
+      params
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -864,14 +898,28 @@ exports.getCourseAssignments = async (req, res) => {
 exports.getAnalyticsModuleProjects = async (req, res) => {
   try {
     const { topic_id } = req.query;
-    if (!topic_id) return res.json({ success: true, data: [] });
+    if (!topic_id || topic_id === 'all' || topic_id.trim() === '') return res.json({ success: true, data: [] });
+
+    const isFacilitator = req.user.role === 'facilitator';
+    const subjectIds = req.user.subject_ids || [];
+
+    let subjectFilter = '';
+    const params = [topic_id.trim()];
+    if (isFacilitator) {
+      if (subjectIds.length === 0) return res.json({ success: true, data: [] });
+      params.push(subjectIds);
+      subjectFilter = `AND t.subject_id = ANY($${params.length}::uuid[])`;
+    }
+
+    console.log(`[getAnalyticsModuleProjects] topic_id=${topic_id}, isFacilitator=${isFacilitator}`);
 
     const { rows } = await pool.query(
-      `SELECT id, title as name
-       FROM projects
-       WHERE topic_id = $1::uuid
-       ORDER BY title`,
-      [topic_id]
+      `SELECT p.id, p.title as name
+       FROM projects p
+       JOIN topics t ON t.id = p.topic_id
+       WHERE p.topic_id = $1::uuid ${subjectFilter}
+       ORDER BY p.title`,
+      params
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -893,7 +941,11 @@ exports.getQuizAnalytics = async (req, res) => {
 
     const { college_id, batch, subject_id, topic_id, quiz_id, page, limit } = req.query;
 
-    if (isFacilitator && subject_id && !subjectIds.includes(subject_id)) {
+    const hasSpecificSubject = subject_id && subject_id !== 'all' && subject_id.trim() !== '';
+    const hasSpecificTopic = topic_id && topic_id !== 'all' && topic_id.trim() !== '';
+    const hasSpecificQuiz = quiz_id && quiz_id !== 'all' && quiz_id.trim() !== '';
+
+    if (isFacilitator && hasSpecificSubject && !subjectIds.includes(subject_id.trim())) {
       return res.json({ success: true, data: emptyQuizData() });
     }
 
@@ -902,25 +954,41 @@ exports.getQuizAnalytics = async (req, res) => {
     const colleges = await getFacilitatorCollegeIds(facilitatorId, college_id, role);
     if (!colleges.length) return res.json({ success: true, data: emptyQuizData() });
 
-    const enrolledIds = await getEnrolledStudentIds(colleges, batch, subject_id, isFacilitator ? subjectIds : null);
+    const enrolledIds = await getEnrolledStudentIds(colleges, batch, hasSpecificSubject ? subject_id.trim() : null, isFacilitator ? subjectIds : null);
     if (!enrolledIds.length) return res.json({ success: true, data: emptyQuizData() });
 
     const attParams = [enrolledIds];
     let subjectClause = '';
     
-    if (quiz_id) {
-      attParams.push(quiz_id);
-      subjectClause = `AND q.id = $${attParams.length}::uuid`;
-    } else if (topic_id) {
-      attParams.push(topic_id);
-      subjectClause = `AND t.id = $${attParams.length}::uuid`;
-    } else if (subject_id) {
-      attParams.push(subject_id);
-      subjectClause = `AND t.subject_id = $${attParams.length}::uuid`;
-    } else if (isFacilitator) {
-      attParams.push(subjectIds);
-      subjectClause = `AND t.subject_id = ANY($${attParams.length}::uuid[])`;
+    // 1. Specific filter (if provided and not 'all')
+    if (hasSpecificQuiz) {
+      attParams.push(quiz_id.trim());
+      subjectClause += ` AND q.id = $${attParams.length}::uuid`;
+    } else if (hasSpecificTopic) {
+      attParams.push(topic_id.trim());
+      subjectClause += ` AND t.id = $${attParams.length}::uuid`;
+    } else if (hasSpecificSubject) {
+      attParams.push(subject_id.trim());
+      subjectClause += ` AND t.subject_id = $${attParams.length}::uuid`;
     }
+
+    // 2. CRITICAL BOLA/IDOR FIX: Enforce facilitator subject scoping
+    if (isFacilitator) {
+      attParams.push(subjectIds);
+      subjectClause += ` AND t.subject_id = ANY($${attParams.length}::uuid[])`;
+    }
+
+    console.log('[getQuizAnalytics] Query filters:', {
+      college_id,
+      batch,
+      subject_id: hasSpecificSubject ? subject_id : 'all',
+      topic_id: hasSpecificTopic ? topic_id : 'all',
+      quiz_id: hasSpecificQuiz ? quiz_id : 'all',
+      role,
+      isFacilitator,
+      enrolledCount: enrolledIds.length,
+      subjectClause
+    });
 
     const qParamsWithPaging = [...attParams, qLimit, qOffset];
     const [attRes, questionRes, questionCountRes, usersRes, totalQuizzesRes] = await Promise.all([
@@ -1081,6 +1149,15 @@ exports.getQuizAnalytics = async (req, res) => {
     const avgScore = pctScores.length
       ? Math.round(pctScores.reduce((a, b) => a + b, 0) / pctScores.length)
       : 0;
+
+    console.log('[getQuizAnalytics] Summary metrics:', {
+      enrolled: enrolledIds.length,
+      attempted: attemptedCount,
+      passed: passedCount,
+      failed: failedCount,
+      notAttempted: notAttemptedCount,
+      avgScore
+    });
 
     const dist = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
     pctScores.forEach((s) => {
