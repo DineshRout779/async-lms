@@ -1691,7 +1691,7 @@ exports.getStudentAnalytics = async (req, res) => {
       return res.json({ success: true, data: [], total: 0 });
     }
 
-    const { college_id, batch, subject_id, topic_id, page, limit, search } = req.query;
+    const { college_id, batch, subject_id, topic_id, page, limit, search, active_filter, inactive_filter } = req.query;
 
     if (isFacilitator && subject_id && !subjectIds.includes(subject_id)) {
       return res.json({ success: true, data: [], total: 0 });

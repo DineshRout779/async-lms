@@ -60,6 +60,7 @@ type BatchDashData = {
 
 type StudentRow = {
   id: string; name: string; email: string;
+  last_active_at?: string | null;
   quiz_submitted_count: number; quiz_total_count: number;
   assignment_submitted_count: number; assignment_total_count: number; 
   project_submitted_count: number; project_total_count: number;
@@ -120,19 +121,19 @@ export function StatCard({
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-xl border border-slate-200 p-2 sm:p-3 flex flex-col justify-between h-full w-full transition-all duration-200 ${
+      className={`bg-white rounded-xl border border-slate-200 p-1.5 sm:p-3 flex flex-col justify-between h-full w-full transition-all duration-200 min-w-0 ${
         isClickable ? `cursor-pointer group ${schemeStyles.cardHover}` : ''
       }`}
     >
-      <div className="flex-1 flex items-end justify-center pb-1 min-h-[32px]">
-        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis">
+      <div className="flex-1 flex items-end justify-center pb-0.5 sm:pb-1 min-h-[26px] sm:min-h-[32px]">
+        <p className="text-[7.5px] sm:text-[9px] text-slate-500 font-bold uppercase tracking-tight text-center leading-tight">
           {label}
         </p>
       </div>
       <div className="text-center">
-        <p className={`text-lg xl:text-xl font-bold ${schemeStyles.text}`}>{value}</p>
+        <p className={`text-base sm:text-lg xl:text-xl font-bold ${schemeStyles.text}`}>{value}</p>
       </div>
-      <div className="min-h-[22px] mt-1 text-center flex items-center justify-center">
+      <div className="min-h-[18px] sm:min-h-[22px] mt-0.5 sm:mt-1 text-center flex items-center justify-center">
         {actionLabel && isClickable ? (
           <button
             type="button"
@@ -140,13 +141,13 @@ export function StatCard({
               e.stopPropagation();
               onClick?.();
             }}
-            className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-all ${schemeStyles.btn}`}
+            className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-md border transition-all ${schemeStyles.btn}`}
           >
             <span>{actionLabel}</span>
             <ArrowUpRight className="w-2.5 h-2.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </button>
         ) : sub ? (
-          <p className="text-[8px] text-slate-400 leading-none">{sub}</p>
+          <p className="text-[7.5px] sm:text-[8px] text-slate-400 leading-none truncate">{sub}</p>
         ) : null}
       </div>
     </div>
@@ -257,18 +258,22 @@ export function PaginationControls({
 }
 
 export function Select({
-  label, value, onChange, options, placeholder,
+  label, value, onChange, options, placeholder, disabled, className = '',
 }: {
   label: string; value: string; onChange: (v: string) => void;
   options: { id: string; name: string }[]; placeholder: string;
+  disabled?: boolean; className?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1 w-full sm:w-auto flex-1 min-w-[130px]">
-      <label className="text-xs font-medium text-slate-500">{label}</label>
+    <div className={`flex flex-col gap-1 min-w-0 transition-opacity ${disabled ? 'opacity-40 cursor-not-allowed' : ''} ${className || 'w-full sm:w-auto flex-1 min-w-[120px] sm:min-w-[130px]'}`}>
+      <label className="text-[11px] sm:text-xs font-medium text-slate-500 truncate">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="border border-slate-200 bg-white rounded-lg px-3 py-2 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 w-full sm:min-w-40 min-h-[38px]"
+        disabled={disabled}
+        className={`border border-slate-200 bg-white rounded-lg px-2.5 sm:px-3 py-2 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 w-full sm:min-w-36 min-h-[38px] transition-all truncate ${
+          disabled ? 'bg-slate-100/70 text-slate-400 cursor-not-allowed border-slate-200/50' : ''
+        }`}
       >
         <option value="">{placeholder}</option>
         {options.map((o) => (
@@ -278,6 +283,39 @@ export function Select({
     </div>
   );
 }
+
+export function formatLastActive(dateStr?: string | null): { text: string; isRecent: boolean } {
+  if (!dateStr) return { text: 'Never active', isRecent: false };
+  const date = new Date(dateStr);
+  const diffMs = Date.now() - date.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffHours < 1) return { text: 'Active just now', isRecent: true };
+  if (diffHours < 24) return { text: `Active ${diffHours}h ago`, isRecent: true };
+  if (diffDays === 1) return { text: 'Active yesterday', isRecent: true };
+  if (diffDays <= 7) return { text: `Active ${diffDays}d ago`, isRecent: false };
+  if (diffDays <= 30) return { text: `Active ${Math.floor(diffDays / 7)}w ago`, isRecent: false };
+  return { text: `Active ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, isRecent: false };
+}
+
+export const ACTIVE_OPTIONS = [
+  { id: 'overall', name: 'Overall Active' },
+  { id: '1', name: 'Active Today (24h)' },
+  { id: '2', name: 'Active in Last 2 Days' },
+  { id: '3', name: 'Active in Last 3 Days' },
+  { id: '7', name: 'Active in Last 7 Days' },
+  { id: '30', name: 'Active in Last 30 Days' },
+  { id: '365', name: 'Active in Last 1 Year' },
+];
+
+export const INACTIVE_OPTIONS = [
+  { id: 'never', name: 'Never Active' },
+  { id: '1', name: 'Inactive > 1 Day' },
+  { id: '2', name: 'Inactive > 2 Days' },
+  { id: '3', name: 'Inactive > 3 Days' },
+  { id: '7', name: 'Inactive > 7 Days' },
+  { id: '30', name: 'Inactive > 30 Days' },
+];
 
 const CHART_COLOR = '#4F46E5';
 const DIST_COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6'];
@@ -794,7 +832,7 @@ export function QuizTab({ colleges, batches, subjects }: { colleges: College[]; 
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
-      <div className="flex flex-wrap gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap items-end gap-2 sm:gap-2.5 lg:gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
@@ -1011,7 +1049,7 @@ export function AssignmentsTab({ colleges, batches, subjects }: { colleges: Coll
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap items-end gap-2 sm:gap-2.5 lg:gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
@@ -1151,7 +1189,7 @@ export function ProjectsTab({ colleges, batches, subjects }: { colleges: College
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
-      <div className="flex flex-wrap gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap items-end gap-2 sm:gap-2.5 lg:gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
@@ -1274,7 +1312,7 @@ export function BatchTab({ colleges, batches, subjects }: { colleges: College[];
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
-      <div className="flex flex-wrap gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:flex lg:flex-wrap items-end gap-2 sm:gap-2.5 lg:gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
@@ -1391,6 +1429,8 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
   const [batch, setBatch] = useState('');
   const [subject, setSubject] = useState('');
   const [topic, setTopic] = useState('');
+  const [activeFilter, setActiveFilter] = useState('');
+  const [inactiveFilter, setInactiveFilter] = useState('');
   const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<StudentRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -1425,6 +1465,8 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
       if (batch) params.set('batch', batch);
       if (subject) params.set('subject_id', subject);
       if (topic) params.set('topic_id', topic);
+      if (activeFilter) params.set('active_filter', activeFilter);
+      if (inactiveFilter) params.set('inactive_filter', inactiveFilter);
       if (debouncedSearch) params.set('search', debouncedSearch);
       params.set('page', String(p));
       params.set('limit', String(STUDENTS_PAGE_SIZE));
@@ -1439,7 +1481,7 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
     } finally {
       setLoading(false);
     }
-  }, [college, batch, subject, topic, debouncedSearch]);
+  }, [college, batch, subject, topic, activeFilter, inactiveFilter, debouncedSearch]);
 
   const handlePageChange = (p: number) => { setPage(p); load(p); };
 
@@ -1449,14 +1491,48 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
-      <div className="flex flex-wrap gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap items-end gap-2 sm:gap-2.5 lg:gap-3">
         <Select label="College" value={college} onChange={setCollege} options={colleges} placeholder="All Colleges" />
         <Select label="Batch" value={batch} onChange={setBatch} options={batches} placeholder="All Batches" />
         <Select label="Subject" value={subject} onChange={setSubject} options={subjects} placeholder="All Subjects" />
         <Select label="Module" value={topic} onChange={setTopic} options={topics} placeholder="All Modules" />
+        <Select
+          label="Active Filter"
+          value={activeFilter}
+          onChange={(v) => {
+            setActiveFilter(v);
+            if (v) setInactiveFilter('');
+          }}
+          options={ACTIVE_OPTIONS}
+          placeholder="Select Active"
+          disabled={Boolean(inactiveFilter)}
+        />
+        <Select
+          label="Inactive Filter"
+          value={inactiveFilter}
+          onChange={(v) => {
+            setInactiveFilter(v);
+            if (v) setActiveFilter('');
+          }}
+          options={INACTIVE_OPTIONS}
+          placeholder="Select Inactive"
+          disabled={Boolean(activeFilter)}
+        />
+        {(activeFilter || inactiveFilter) && (
+          <button
+            onClick={() => {
+              setActiveFilter('');
+              setInactiveFilter('');
+            }}
+            className="col-span-2 sm:col-span-1 lg:col-auto text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 px-3 py-2 rounded-lg transition-colors min-h-[38px] flex items-center justify-center gap-1.5 shrink-0 border border-rose-200/70"
+            title="Reset active/inactive filters"
+          >
+            <X className="w-3.5 h-3.5" /> Reset Status
+          </button>
+        )}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-3 lg:gap-4">
         <StatCard label="Quizzes Attempted" value={aggregates.quizzes_attempted} sub={`out of ${total} students`} />
         <StatCard label="Assignments Submitted" value={aggregates.assignments_submitted} sub={`out of ${total} students`} />
         <StatCard label="Projects Completed" value={aggregates.projects_completed} sub={`out of ${total} students`} />
@@ -1472,8 +1548,17 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
               placeholder="Search students..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all min-h-[36px]"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all min-h-[36px]"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs w-4 h-4 flex items-center justify-center rounded-full hover:bg-slate-100"
+                title="Clear search"
+              >
+                ×
+              </button>
+            )}
           </div>
         </div>
         
@@ -1491,6 +1576,15 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-slate-800 text-xs sm:text-sm truncate">{s.name}</p>
                       <p className="text-[11px] text-slate-400 truncate">{s.email}</p>
+                      {(() => {
+                        const { text, isRecent } = formatLastActive(s.last_active_at);
+                        return (
+                          <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/60 max-w-full">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isRecent ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                            <span className={`text-[10px] font-medium truncate ${isRecent ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`}>{text}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <button
                       onClick={() => {
@@ -1540,6 +1634,15 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                       <td className="px-4 sm:px-5 py-3 whitespace-nowrap">
                         <p className="font-semibold text-slate-800">{s.name}</p>
                         <p className="text-[11px] text-slate-400">{s.email}</p>
+                        {(() => {
+                          const { text, isRecent } = formatLastActive(s.last_active_at);
+                          return (
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isRecent ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                              <span className={`text-[10px] font-medium ${isRecent ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>{text}</span>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 sm:px-5 py-3 whitespace-nowrap">
                         <div className="inline-flex items-center gap-2 whitespace-nowrap">
