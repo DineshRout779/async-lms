@@ -1938,11 +1938,36 @@ exports.getStudentAnalytics = async (req, res) => {
     const projRes = await pool.query(pQuery, pParams);
     const projSubmittedMap = new Map(projRes.rows.map(r => [r.student_id, r.submitted_count]));
 
-    const data = namesRes.rows.map((s) => {
+    // Fetch Unified Last Activity Timestamps across all 7 action surfaces
+    const activityRes = await pool.query(
+      `SELECT active_actions.user_id, MAX(active_actions.activity_date) AS last_active_at
+       FROM (
+         SELECT user_id, completed_at AS activity_date FROM public.user_subtopic_progress WHERE user_id = ANY($1::uuid[]) AND completed_at IS NOT NULL
+         UNION ALL
+         SELECT user_id, COALESCE(attempted_at, created_at) AS activity_date FROM public.quiz_attempts WHERE user_id = ANY($1::uuid[]) AND (attempted_at IS NOT NULL OR created_at IS NOT NULL)
+         UNION ALL
+         SELECT user_id, submitted_at AS activity_date FROM public.exercise_submissions WHERE user_id = ANY($1::uuid[]) AND submitted_at IS NOT NULL
+         UNION ALL
+         SELECT user_id, submitted_at AS activity_date FROM public.assignment_submissions WHERE user_id = ANY($1::uuid[]) AND submitted_at IS NOT NULL
+         UNION ALL
+         SELECT user_id, submitted_at AS activity_date FROM public.project_submissions WHERE user_id = ANY($1::uuid[]) AND submitted_at IS NOT NULL
+         UNION ALL
+         SELECT student_id AS user_id, COALESCE(submitted_at, updated_at) AS activity_date FROM public.college_assignment_submissions WHERE student_id = ANY($1::uuid[]) AND (submitted_at IS NOT NULL OR updated_at IS NOT NULL)
+         UNION ALL
+         SELECT user_id, last_activity::timestamptz AS activity_date FROM public.user_streaks WHERE user_id = ANY($1::uuid[]) AND last_activity IS NOT NULL
+       ) active_actions
+       GROUP BY active_actions.user_id`,
+      [enrolledIds],
+    );
+    const lastActiveMap = new Map(activityRes.rows.map((r) => [r.user_id, r.last_active_at]));
+
+    let data = namesRes.rows.map((s) => {
+      const lastActive = lastActiveMap.get(s.id) || null;
       return {
         id: s.id,
         name: s.full_name,
         email: s.email,
+        last_active_at: lastActive,
         quiz_submitted_count: quizSubmittedMap.get(s.id) || 0,
         quiz_total_count: expectedQuizMap.get(s.id) || 0,
         assignment_submitted_count: (asgSubmittedMap.get(s.id) || 0) + (collegeAsgSubmittedMap.get(s.id) || 0),
@@ -1951,6 +1976,31 @@ exports.getStudentAnalytics = async (req, res) => {
         project_total_count: expectedProjMap.get(s.id) || 0,
       };
     });
+
+    // Apply Active / Inactive Filtering (In-Memory on Full Cohort)
+    const now = Date.now();
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    if (active_filter && active_filter !== 'all') {
+      if (active_filter === 'overall') {
+        data = data.filter((s) => s.last_active_at !== null || s.quiz_submitted_count > 0 || s.assignment_submitted_count > 0 || s.project_submitted_count > 0);
+      } else {
+        const days = parseInt(active_filter, 10);
+        if (!isNaN(days) && days > 0) {
+          const threshold = now - days * MS_PER_DAY;
+          data = data.filter((s) => s.last_active_at && new Date(s.last_active_at).getTime() >= threshold);
+        }
+      }
+    } else if (inactive_filter && inactive_filter !== 'all') {
+      if (inactive_filter === 'never') {
+        data = data.filter((s) => s.last_active_at === null && s.quiz_submitted_count === 0 && s.assignment_submitted_count === 0 && s.project_submitted_count === 0);
+      } else {
+        const days = parseInt(inactive_filter, 10);
+        if (!isNaN(days) && days > 0) {
+          const threshold = now - days * MS_PER_DAY;
+          data = data.filter((s) => !s.last_active_at || new Date(s.last_active_at).getTime() < threshold);
+        }
+      }
+    }
 
     const aggregates = {
       quizzes_attempted: data.filter((s) => s.quiz_submitted_count > 0).length,

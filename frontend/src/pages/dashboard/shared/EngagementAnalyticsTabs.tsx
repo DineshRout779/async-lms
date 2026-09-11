@@ -284,8 +284,11 @@ export function Select({
   );
 }
 
-export function formatLastActive(dateStr?: string | null): { text: string; isRecent: boolean } {
-  if (!dateStr) return { text: 'Never active', isRecent: false };
+export function formatLastActive(dateStr?: string | null, hasActivity?: boolean): { text: string; isRecent: boolean } {
+  if (!dateStr) {
+    if (hasActivity) return { text: 'Active in course', isRecent: false };
+    return { text: 'Never active', isRecent: false };
+  }
   const date = new Date(dateStr);
   const diffMs = Date.now() - date.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -1577,7 +1580,8 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                       <p className="font-bold text-slate-800 text-xs sm:text-sm truncate">{s.name}</p>
                       <p className="text-[11px] text-slate-400 truncate">{s.email}</p>
                       {(() => {
-                        const { text, isRecent } = formatLastActive(s.last_active_at);
+                        const hasActivity = (s.quiz_submitted_count || 0) > 0 || (s.assignment_submitted_count || 0) > 0 || (s.project_submitted_count || 0) > 0;
+                        const { text, isRecent } = formatLastActive(s.last_active_at, hasActivity);
                         return (
                           <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/60 max-w-full">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isRecent ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
@@ -1635,7 +1639,8 @@ export function StudentsTab({ colleges, batches, subjects }: { colleges: College
                         <p className="font-semibold text-slate-800">{s.name}</p>
                         <p className="text-[11px] text-slate-400">{s.email}</p>
                         {(() => {
-                          const { text, isRecent } = formatLastActive(s.last_active_at);
+                          const hasActivity = (s.quiz_submitted_count || 0) > 0 || (s.assignment_submitted_count || 0) > 0 || (s.project_submitted_count || 0) > 0;
+                          const { text, isRecent } = formatLastActive(s.last_active_at, hasActivity);
                           return (
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isRecent ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
