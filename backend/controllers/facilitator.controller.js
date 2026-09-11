@@ -385,11 +385,16 @@ exports.getFacilitatorStudentModuleAnalytics = async (req, res) => {
 
       // Fetch quizzes
       quizzesData = await pool.query(
-        `SELECT q.id, u.title, q.max_score, u.topic_id, 
-                COALESCE((SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1), 0) as score,
-                CASE WHEN EXISTS(SELECT 1 FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1 AND is_passed = true) THEN 'Passed'
-                     WHEN EXISTS(SELECT 1 FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1) THEN 'Failed'
-                     ELSE 'Pending' END as status
+        `SELECT q.id, u.title, 
+                COALESCE(
+                  NULLIF((SELECT SUM(qq.points) FROM quiz_questions qq WHERE qq.quiz_id = q.id AND qq.is_deleted = false), 0),
+                  q.max_score,
+                  100
+                )::int as max_score,
+                u.topic_id, 
+                COALESCE((SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1), 0)::int as score,
+                COALESCE((SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = q.id AND user_id = $1), 0)::int as attempts_count,
+                COALESCE(q.passing_score, 60)::int as passing_score
          FROM quizzes q
          JOIN units u ON q.unit_id = u.id
          WHERE u.topic_id = ANY($2::uuid[])`,
@@ -429,7 +434,19 @@ exports.getFacilitatorStudentModuleAnalytics = async (req, res) => {
 
     assignmentsData.rows.forEach(r => assignmentsByTopic[r.topic_id].push(r));
     projectsData.rows.forEach(r => projectsByTopic[r.topic_id].push(r));
-    quizzesData.rows.forEach(r => quizzesByTopic[r.topic_id].push(r));
+    quizzesData.rows.forEach(r => {
+      const max = r.max_score > 0 ? r.max_score : 100;
+      const pct = (r.score / max) * 100;
+      const isAttempted = r.attempts_count > 0;
+      const passingThreshold = r.passing_score && r.passing_score > 0 ? r.passing_score : 60;
+      const isPassed = isAttempted && pct >= passingThreshold;
+      const status = !isAttempted ? 'Pending' : (isPassed ? 'Passed' : 'Failed');
+
+      quizzesByTopic[r.topic_id].push({
+        ...r,
+        status,
+      });
+    });
     lessonsData.rows.forEach(r => {
       lessonsByTopic[r.topic_id] = { completed: r.lessons_completed, total: r.lessons_total };
     });
@@ -906,15 +923,22 @@ exports.getQuizAnalytics = async (req, res) => {
     }
 
     const qParamsWithPaging = [...attParams, qLimit, qOffset];
-    const [attRes, questionRes, questionCountRes] = await Promise.all([
+    const [attRes, questionRes, questionCountRes, usersRes, totalQuizzesRes] = await Promise.all([
       pool.query(
-        `SELECT qa.user_id, qa.score::float, qa.is_passed,
-                NULLIF((SELECT SUM(points) FROM quiz_questions WHERE quiz_id = q.id), 0)::float AS max_score
+        `SELECT qa.user_id, qa.quiz_id, 
+                MAX(qa.score)::float AS score, 
+                BOOL_OR(qa.is_passed) AS is_passed,
+                COALESCE(
+                  NULLIF((SELECT SUM(qq.points) FROM quiz_questions qq WHERE qq.quiz_id = q.id AND qq.is_deleted = false), 0),
+                  q.max_score,
+                  100
+                )::float AS max_score
          FROM quiz_attempts qa
          JOIN quizzes q ON q.id = qa.quiz_id
          JOIN units un ON un.id = q.unit_id
          JOIN topics t ON t.id = un.topic_id
-         WHERE qa.user_id = ANY($1::uuid[]) ${subjectClause}`,
+         WHERE qa.user_id = ANY($1::uuid[]) ${subjectClause}
+         GROUP BY qa.user_id, qa.quiz_id, q.id`,
         attParams,
       ),
       pool.query(
@@ -946,21 +970,109 @@ exports.getQuizAnalytics = async (req, res) => {
          WHERE $1::uuid[] IS NOT NULL ${subjectClause}`,
         attParams,
       ),
+      pool.query(
+        `SELECT u.id, u.full_name, u.email, c.name AS college_name, sp.year AS batch
+         FROM users u
+         LEFT JOIN student_profiles sp ON sp.user_id = u.id
+         LEFT JOIN colleges c ON c.id = sp.college_id
+         WHERE u.id = ANY($1::uuid[])
+         ORDER BY u.full_name`,
+        [enrolledIds],
+      ),
+      pool.query(
+        `SELECT COUNT(DISTINCT q.id)::int AS total
+         FROM quizzes q
+         JOIN units un ON un.id = q.unit_id
+         JOIN topics t ON t.id = un.topic_id
+         WHERE q.is_deleted = false AND un.is_deleted = false AND t.is_deleted = false
+           AND $1::uuid[] IS NOT NULL ${subjectClause}`,
+        attParams,
+      ),
     ]);
 
     const rows = attRes.rows;
     const attemptedSet = new Set(rows.map((r) => r.user_id));
-    const passedSet = new Set(rows.filter((r) => r.is_passed).map((r) => r.user_id));
+    const passedAttemptsSet = new Set(
+      rows.filter((r) => {
+        if (r.max_score && r.max_score > 0) {
+          return ((r.score / r.max_score) * 100) >= 60;
+        }
+        return r.is_passed;
+      }).map((r) => r.user_id)
+    );
     
-    // Calculate one average score per student
+    // Group scores, distinct quizzes attempted, and passed quizzes per student
     const studentScores = new Map();
+    const studentDistinctQuizzes = new Map();
+    const studentPassedQuizzes = new Map();
+
     rows.forEach(r => {
+      if (!studentDistinctQuizzes.has(r.user_id)) {
+        studentDistinctQuizzes.set(r.user_id, new Set());
+      }
+      if (!studentPassedQuizzes.has(r.user_id)) {
+        studentPassedQuizzes.set(r.user_id, new Set());
+      }
+      if (r.quiz_id) {
+        studentDistinctQuizzes.get(r.user_id).add(r.quiz_id);
+      }
+
       if (r.max_score && r.max_score > 0) {
         if (!studentScores.has(r.user_id)) studentScores.set(r.user_id, []);
-        const pct = Math.min(100, Math.max(0, (r.score / r.max_score) * 100));
+        const pct = Math.min(100, Math.max(0, Math.round((r.score / r.max_score) * 100)));
         studentScores.get(r.user_id).push(pct);
+        if (pct >= 60) {
+          studentPassedQuizzes.get(r.user_id).add(r.quiz_id);
+        }
       }
     });
+
+    const isSpecificQuiz = Boolean(quiz_id && quiz_id !== 'all');
+
+    const studentsList = usersRes.rows.map((u) => {
+      const isAttempted = attemptedSet.has(u.id);
+      const scores = studentScores.get(u.id);
+      const avgStudentScore = scores && scores.length > 0
+        ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+        : null;
+
+      let status = 'Not Attempted';
+      if (isAttempted) {
+        if (isSpecificQuiz) {
+          // Specific single quiz selected: use quiz attempt is_passed directly
+          status = passedAttemptsSet.has(u.id) ? 'Passed' : 'Failed';
+        } else {
+          // Overall / Aggregate view: Passed if average score >= 60%, else Failed
+          status = (avgStudentScore !== null && avgStudentScore >= 60) ? 'Passed' : 'Failed';
+        }
+      }
+
+      const distinctQuizzesCount = studentDistinctQuizzes.has(u.id)
+        ? studentDistinctQuizzes.get(u.id).size
+        : 0;
+
+      const passedQuizzesCount = studentPassedQuizzes.has(u.id)
+        ? studentPassedQuizzes.get(u.id).size
+        : 0;
+
+      return {
+        id: u.id,
+        name: u.full_name,
+        email: u.email,
+        college: u.college_name || '',
+        batch: u.batch || '',
+        status,
+        score_pct: avgStudentScore,
+        quizzes_attempted: distinctQuizzesCount,
+        quizzes_passed: passedQuizzesCount,
+        attempts_count: distinctQuizzesCount,
+      };
+    });
+
+    const passedCount = studentsList.filter((s) => s.status === 'Passed').length;
+    const failedCount = studentsList.filter((s) => s.status === 'Failed').length;
+    const attemptedCount = passedCount + failedCount;
+    const notAttemptedCount = enrolledIds.length - attemptedCount;
 
     const pctScores = Array.from(studentScores.values()).map(
       scores => scores.reduce((a, b) => a + b, 0) / scores.length
@@ -983,14 +1095,16 @@ exports.getQuizAnalytics = async (req, res) => {
       success: true,
       data: {
         enrolled: enrolledIds.length,
-        attempted: attemptedSet.size,
-        not_attempted: enrolledIds.length - attemptedSet.size,
-        passed: passedSet.size,
-        failed: attemptedSet.size - passedSet.size,
+        attempted: attemptedCount,
+        not_attempted: notAttemptedCount,
+        passed: passedCount,
+        failed: failedCount,
         avg_score_pct: avgScore,
         score_distribution: Object.entries(dist).map(([range, count]) => ({ range, count })),
         question_analytics: questionRes.rows,
         question_analytics_total: questionCountRes.rows[0]?.total ?? 0,
+        total_quizzes: totalQuizzesRes.rows[0]?.total ?? 0,
+        students: studentsList,
       },
     });
   } catch (err) {
@@ -1005,6 +1119,8 @@ function emptyQuizData() {
     score_distribution: ['0-20', '21-40', '41-60', '61-80', '81-100'].map((range) => ({ range, count: 0 })),
     question_analytics: [],
     question_analytics_total: 0,
+    total_quizzes: 0,
+    students: [],
   };
 }
 

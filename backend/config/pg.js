@@ -475,6 +475,7 @@ pool.on('error', (err, client) => {
         created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+      ALTER TABLE facilitator_subjects ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false;
     `);
 
     await client.query(`
@@ -498,6 +499,7 @@ pool.on('error', (err, client) => {
 
     // Backfill existing active facilitators so their existing dashboard is preserved (runs only on initial setup)
     await client.query(`
+      ALTER TABLE facilitator_colleges ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false;
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM facilitator_subjects LIMIT 1) THEN
