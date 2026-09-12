@@ -29,6 +29,21 @@ async function postToEvaluatorWithRetry(url, payload, config) {
     return axios.post(url, payload, config);
   }
 }
+
+function isAllowedGitUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== 'string') return false;
+  try {
+    const trimmed = urlStr.trim();
+    if (!trimmed) return false;
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    const allowed = ['github.com', 'gitlab.com', 'bitbucket.org'];
+    return allowed.some(h => host === h || host.endsWith('.' + h));
+  } catch {
+    return false;
+  }
+}
 exports.runEvaluation = async (req, res) => {
   const { assignmentId, evaluatorType: reqEvaluatorType, scope = 'pending' } = req.body;
 
@@ -183,25 +198,43 @@ exports.runEvaluation = async (req, res) => {
     let jobIdsAndLinks = []; // { jobId, statusUrl, submissionId, studentName, studentId }
 
     try {
-      // Filter out submissions with no link to prevent failing the entire batch
-      const validSubmissions = submissions.filter((s) => !!s.submission_link);
-      const invalidSubmissions = submissions.filter((s) => !s.submission_link);
+      // Filter out submissions with no link or non-git link to prevent failing the entire batch
+      const validSubmissions = submissions.filter((s) => isAllowedGitUrl(s.submission_link));
+      const invalidSubmissions = submissions.filter((s) => !isAllowedGitUrl(s.submission_link));
 
       if (invalidSubmissions.length > 0) {
         console.warn(
-          `Skipped ${invalidSubmissions.length} submissions due to missing repoUrl.`,
+          `Skipped ${invalidSubmissions.length} submissions due to missing or non-git repoUrl.`,
         );
         // Instantly mark them as failed in the DB
         for (const invalid of invalidSubmissions) {
+          let reason = 'No repository URL provided by student.';
+          if (invalid.submission_link) {
+            try {
+              const h = new URL(invalid.submission_link).hostname;
+              reason = `Invalid repository host (${h}). Submissions must be a public repository on GitHub, GitLab, or Bitbucket.`;
+            } catch {
+              reason = 'Invalid repository URL format. Must be a valid HTTP/HTTPS git repository URL.';
+            }
+          }
+          const failFeedback = JSON.stringify({
+            summary: reason,
+            strengths: [],
+            issues: [reason],
+            breakdown: [],
+          });
           await client.query(
             `INSERT INTO evaluation_results
              (evaluation_id, submission_id, student_id, student_name, status, marks, feedback)
-             VALUES ($1, $2, $3, $4, 'failed', 0, 'No repository URL provided by student.')`,
+             VALUES ($1, $2, $3, $4, 'failed', 0, $5::jsonb)
+             ON CONFLICT (evaluation_id, submission_id) DO UPDATE
+             SET status = 'failed', marks = 0, feedback = EXCLUDED.feedback`,
             [
               evaluation.id,
               invalid.submission_id || invalid.id,
               invalid.user_id || invalid.student_id,
               invalid.student_name,
+              failFeedback,
             ],
           );
         }
@@ -335,7 +368,9 @@ exports.runEvaluation = async (req, res) => {
         await client.query(
           `INSERT INTO evaluation_results
            (evaluation_id, submission_id, student_id, student_name, job_id, status, status_url)
-           VALUES ($1, $2, $3, $4, $5, 'pending', $6)`,
+           VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+           ON CONFLICT (evaluation_id, submission_id) DO UPDATE
+           SET job_id = EXCLUDED.job_id, status = 'pending', status_url = EXCLUDED.status_url`,
           [
             evaluation.id,
             j.submissionId,
@@ -1167,7 +1202,8 @@ exports.reEvaluateSubmission = async (req, res) => {
         await client.query(
           `INSERT INTO evaluation_results 
            (evaluation_id, submission_id, student_id, student_name, status, marks, feedback) 
-           VALUES ($1, $2, $3, $4, 'pending', 0, '-')`,
+           VALUES ($1, $2, $3, $4, 'pending', 0, '-')
+           ON CONFLICT (evaluation_id, submission_id) DO NOTHING`,
           [evaluationId, s.submission_id, s.user_id, s.student_name]
         );
       }
@@ -1236,16 +1272,31 @@ exports.reEvaluateSubmission = async (req, res) => {
       }
     }
 
-    const validSubmissions = submissions.filter((s) => !!s.submission_link);
-    const invalidSubmissions = submissions.filter((s) => !s.submission_link);
+    const validSubmissions = submissions.filter((s) => isAllowedGitUrl(s.submission_link));
+    const invalidSubmissions = submissions.filter((s) => !isAllowedGitUrl(s.submission_link));
 
     if (invalidSubmissions.length > 0) {
       for (const invalid of invalidSubmissions) {
+        let reason = 'No repository URL provided by student.';
+        if (invalid.submission_link) {
+          try {
+            const h = new URL(invalid.submission_link).hostname;
+            reason = `Invalid repository host (${h}). Submissions must be a public repository on GitHub, GitLab, or Bitbucket.`;
+          } catch {
+            reason = 'Invalid repository URL format. Must be a valid HTTP/HTTPS git repository URL.';
+          }
+        }
+        const failFeedback = JSON.stringify({
+          summary: reason,
+          strengths: [],
+          issues: [reason],
+          breakdown: [],
+        });
         await client.query(
           `UPDATE evaluation_results 
-           SET status = 'failed', marks = 0, feedback = 'No repository URL provided by student.' 
-           WHERE evaluation_id = $1 AND submission_id = $2`,
-          [evaluationId, invalid.submission_id || invalid.id]
+           SET status = 'failed', marks = 0, feedback = $1::jsonb 
+           WHERE evaluation_id = $2 AND submission_id = $3`,
+          [failFeedback, evaluationId, invalid.submission_id || invalid.id]
         );
       }
     }

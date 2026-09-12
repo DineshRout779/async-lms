@@ -544,6 +544,50 @@ pool.on('error', (err, client) => {
     await client.query(
       `ALTER TABLE ai_courses ADD COLUMN IF NOT EXISTS last_published_at TIMESTAMPTZ`,
     );
+
+    // ── Ensure unique constraint on evaluation_results(evaluation_id, submission_id) ──
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'evaluation_results') THEN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid = 'evaluation_results'::regclass
+              AND conname = 'uq_evaluation_results_eval_submission'
+          ) THEN
+            -- Safely deduplicate preserving completed submissions, highest marks, and newest rows
+            DELETE FROM evaluation_results
+            WHERE id IN (
+              SELECT id FROM (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                         PARTITION BY evaluation_id, submission_id
+                         ORDER BY 
+                           CASE 
+                             WHEN status = 'completed' THEN 1 
+                             WHEN status = 'failed' THEN 2 
+                             ELSE 3 
+                           END,
+                           marks DESC,
+                           created_at DESC
+                       ) AS rn
+                FROM evaluation_results
+                WHERE evaluation_id IS NOT NULL AND submission_id IS NOT NULL
+              ) ranked
+              WHERE rn > 1
+            );
+
+            ALTER TABLE evaluation_results
+              ADD CONSTRAINT uq_evaluation_results_eval_submission
+              UNIQUE (evaluation_id, submission_id);
+            RAISE NOTICE '[Migration] Created unique constraint on evaluation_results(evaluation_id, submission_id).';
+          END IF;
+        END IF;
+      EXCEPTION
+        WHEN others THEN
+          RAISE NOTICE '[Migration] Skipping evaluation_results constraint: %', SQLERRM;
+      END $$;
+    `);
   } catch (error) {
     console.log('❌ Database connection Failed: ', error);
   } finally {
