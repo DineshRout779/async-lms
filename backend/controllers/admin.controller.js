@@ -3941,7 +3941,7 @@ exports.getFacilitatorProfile = async (req, res) => {
         `SELECT DISTINCT s.id, s.name
          FROM facilitator_subjects fs
          JOIN subjects s ON fs.subject_id = s.id
-         WHERE fs.facilitator_id = $1
+         WHERE fs.facilitator_id = $1 AND fs.is_deleted = false AND s.is_deleted = false
          ORDER BY s.name`,
         [id],
       ),

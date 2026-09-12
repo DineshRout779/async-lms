@@ -118,16 +118,24 @@ async function issueSessionToken(user) {
   };
 
   if (user.role === 'facilitator') {
-    const colRes = await pool.query(
-      'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
-      [user.id],
-    );
+    const [colRes, subRes] = await Promise.all([
+      pool.query(
+        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
+        [user.id],
+      ),
+      pool.query(
+        'SELECT subject_id FROM facilitator_subjects WHERE facilitator_id = $1 AND is_deleted = false',
+        [user.id],
+      ),
+    ]);
     payload.college_ids = colRes.rows.map((r) => r.college_id);
+    payload.subject_ids = subRes.rows.map((r) => r.subject_id);
   }
 
   return {
     token: jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' }),
     collegeIds: payload.college_ids ?? [],
+    subjectIds: payload.subject_ids ?? [],
   };
 }
 
@@ -394,14 +402,22 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Fetch facilitator college scope if applicable
+    // Fetch facilitator college & subject scope if applicable
     let collegeIds = [];
+    let subjectIds = [];
     if (user.role === 'facilitator') {
-      const colRes = await pool.query(
-        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
-        [user.id],
-      );
+      const [colRes, subRes] = await Promise.all([
+        pool.query(
+          'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
+          [user.id],
+        ),
+        pool.query(
+          'SELECT subject_id FROM facilitator_subjects WHERE facilitator_id = $1 AND is_deleted = false',
+          [user.id],
+        ),
+      ]);
       collegeIds = colRes.rows.map((r) => r.college_id);
+      subjectIds = subRes.rows.map((r) => r.subject_id);
     }
 
     const token = jwt.sign(
@@ -412,6 +428,7 @@ exports.login = async (req, res) => {
         scope: user.must_change_password ? 'password_reset_only' : undefined,
         college_id: user.role === 'student' ? user.college_id : undefined,
         college_ids: user.role === 'facilitator' ? collegeIds : undefined,
+        subject_ids: user.role === 'facilitator' ? subjectIds : undefined,
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' },
@@ -880,16 +897,24 @@ exports.getMe = async (req, res) => {
 
     const user = userRes.rows[0];
     let collegeIds = [];
+    let subjectIds = [];
 
     if (user.role === 'facilitator') {
-      const colRes = await pool.query(
-        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
-        [userID],
-      );
+      const [colRes, subRes] = await Promise.all([
+        pool.query(
+          'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
+          [userID],
+        ),
+        pool.query(
+          'SELECT subject_id FROM facilitator_subjects WHERE facilitator_id = $1 AND is_deleted = false',
+          [userID],
+        ),
+      ]);
       collegeIds = colRes.rows.map((r) => r.college_id);
+      subjectIds = subRes.rows.map((r) => r.subject_id);
     }
 
-    res.json({ ...user, college_ids: collegeIds });
+    res.json({ ...user, college_ids: collegeIds, subject_ids: subjectIds });
   } catch (error) {
     // getMe is the session-bootstrap call on every app load; a silent failure
     // here looks like a broken login with nothing in the logs to explain it.
@@ -996,14 +1021,22 @@ exports.verifyEmail = async (req, res) => {
 
     const user = userRes.rows[0];
 
-    // Fetch facilitator college scope if applicable
+    // Fetch facilitator college & subject scope if applicable
     let collegeIds = [];
+    let subjectIds = [];
     if (user.role === 'facilitator') {
-      const colRes = await pool.query(
-        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
-        [user.id],
-      );
+      const [colRes, subRes] = await Promise.all([
+        pool.query(
+          'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
+          [user.id],
+        ),
+        pool.query(
+          'SELECT subject_id FROM facilitator_subjects WHERE facilitator_id = $1 AND is_deleted = false',
+          [user.id],
+        ),
+      ]);
       collegeIds = colRes.rows.map((r) => r.college_id);
+      subjectIds = subRes.rows.map((r) => r.subject_id);
     }
 
     const token = jwt.sign(
@@ -1013,6 +1046,7 @@ exports.verifyEmail = async (req, res) => {
         token_version: user.token_version,
         college_id: user.role === 'student' ? user.college_id : undefined,
         college_ids: user.role === 'facilitator' ? collegeIds : undefined,
+        subject_ids: user.role === 'facilitator' ? subjectIds : undefined,
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' },
@@ -1402,14 +1436,22 @@ exports.changePassword = async (req, res) => {
 
     const user = userRes.rows[0];
 
-    // Fetch facilitator college scope if applicable
+    // Fetch facilitator college & subject scope if applicable
     let collegeIds = [];
+    let subjectIds = [];
     if (user.role === 'facilitator') {
-      const colRes = await pool.query(
-        'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1',
-        [user.id]
-      );
+      const [colRes, subRes] = await Promise.all([
+        pool.query(
+          'SELECT college_id FROM facilitator_colleges WHERE facilitator_id = $1 AND is_deleted = false',
+          [user.id],
+        ),
+        pool.query(
+          'SELECT subject_id FROM facilitator_subjects WHERE facilitator_id = $1 AND is_deleted = false',
+          [user.id],
+        ),
+      ]);
       collegeIds = colRes.rows.map((r) => r.college_id);
+      subjectIds = subRes.rows.map((r) => r.subject_id);
     }
 
     const token = jwt.sign(
@@ -1420,6 +1462,7 @@ exports.changePassword = async (req, res) => {
         scope: undefined, // Fully clear the scope!
         college_id: user.role === 'student' ? user.college_id : undefined,
         college_ids: user.role === 'facilitator' ? collegeIds : undefined,
+        subject_ids: user.role === 'facilitator' ? subjectIds : undefined,
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
